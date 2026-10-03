@@ -1,0 +1,16 @@
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.xcarchive
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Codemagic
+.codemagic/
+.env
+
+# macOS
+.DS_Store

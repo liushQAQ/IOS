@@ -1,0 +1,33 @@
+workflows:
+  dsh-ios-build:
+    name: DeepSeek Harness iOS (unsigned IPA)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      xcode: 15.0
+    scripts:
+      - name: Archive (unsigned)
+        script: |
+          xcodebuild archive \
+            -project DSHios.xcodeproj \
+            -scheme DSHios \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/DSHios.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=NO
+      - name: Package Payload -> unsigned IPA
+        script: |
+          APP="build/DSHios.xcarchive/Products/Applications/DSHios.app"
+          test -d "$APP" || { echo "missing $APP"; exit 1; }
+          rm -rf Payload && mkdir -p Payload
+          cp -R "$APP" Payload/DSHios.app
+          rm -rf Payload/DSHios.app/_CodeSignature 2>/dev/null || true
+          rm -f  Payload/DSHios.app/embedded.mobileprovision 2>/dev/null || true
+          zip -qry DSHios-unsigned.ipa Payload
+          ls -lh DSHios-unsigned.ipa
+    artifacts:
+      - DSHios-unsigned.ipa
