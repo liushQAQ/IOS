@@ -111,12 +111,20 @@ final class SettingsViewController: UIViewController {
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
-        let footer = UITableViewHeaderFooterView(reuseIdentifier: nil)
-        var config = UIListContentHeaderFooterViewConfiguration()
-        config.text = "点击行直接打开该服务；右上角 + 添加新地址；左滑删除。列表保存在本机，电脑 IP 变化时只需编辑对应条目。"
-        config.textProperties.font = .preferredFont(forTextStyle: .footnote)
-        config.textProperties.color = .secondaryLabel
-        footer.contentConfiguration = config
+        let footer = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 72))
+        let footerLabel = UILabel()
+        footerLabel.text = "点击行直接打开该服务；右上角 + 添加新地址；左滑删除或编辑。列表保存在本机，电脑 IP 变化时只需编辑对应条目。"
+        footerLabel.font = .preferredFont(forTextStyle: .footnote)
+        footerLabel.textColor = .secondaryLabel
+        footerLabel.numberOfLines = 0
+        footerLabel.translatesAutoresizingMaskIntoConstraints = false
+        footer.addSubview(footerLabel)
+        NSLayoutConstraint.activate([
+            footerLabel.topAnchor.constraint(equalTo: footer.topAnchor, constant: 8),
+            footerLabel.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 20),
+            footerLabel.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -20),
+            footerLabel.bottomAnchor.constraint(lessThanOrEqualTo: footer.bottomAnchor, constant: -8),
+        ])
         tableView.tableFooterView = footer
     }
 
@@ -161,8 +169,8 @@ final class SettingsViewController: UIViewController {
             } else {
                 ServiceStore.add(item)
             }
-            self?.services = ServiceStore.load()
-            self?.tableView.reloadData()
+            self.services = ServiceStore.load()
+            self.tableView.reloadData()
         })
         present(alert, animated: true)
     }
