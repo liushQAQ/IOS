@@ -1,4 +1,5 @@
 import UIKit
+import Network
 
 // MARK: - 服务条目与存储
 
@@ -79,6 +80,8 @@ final class SettingsViewController: UIViewController {
     private let onSelect: (String) -> Void
     private var services: [ServiceItem] = []
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+    /// 原生在线状态探测：不依赖 web 会话，打开列表即用 TCP 探活，绿点=端口通。
+    private var online: [String: Bool] = [:]
 
     init(onSave: @escaping (String) -> Void, onSelect: @escaping (String) -> Void) {
         self.onSave = onSave
@@ -126,6 +129,46 @@ final class SettingsViewController: UIViewController {
             footerLabel.bottomAnchor.constraint(lessThanOrEqualTo: footer.bottomAnchor, constant: -8),
         ])
         tableView.tableFooterView = footer
+        probeAll()
+    }
+
+    // MARK: - 在线状态探测（原生 TCP，6 秒超时）
+
+    private func probeAll() {
+        for (index, item) in services.enumerated() {
+            probe(item.url) { [weak self] isUp in
+                guard let self else { return }
+                self.online[item.url] = isUp
+                if self.services.indices.contains(index) {
+                    self.tableView.reloadRows(at: [IndexPath(row: index, section: 0)], with: .none)
+                }
+            }
+        }
+    }
+
+    private func probe(_ urlString: String, completion: @escaping (Bool) -> Void) {
+        guard let comps = URLComponents(string: urlString),
+              let host = comps.host, !host.isEmpty else {
+            completion(false)
+            return
+        }
+        let port = UInt16(comps.port ?? (comps.scheme == "https" ? 443 : 80))
+        let connection = NWConnection(host: .init(host), port: .init(rawValue: port)!, using: .tcp)
+        connection.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                connection.cancel()
+                completion(true)
+            case .failed, .cancelled:
+                completion(false)
+            default:
+                break
+            }
+        }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 6) {
+            connection.cancel()
+        }
+        connection.start(queue: DispatchQueue.global(qos: .utility))
     }
 
     // MARK: - 添加 / 编辑
@@ -190,6 +233,14 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         config.secondaryText = item.url
         config.secondaryTextProperties.color = .secondaryLabel
         config.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
+        // 原生状态点：绿=端口可达，灰=不可达，透明=探测中
+        if let up = online[item.url] {
+            config.image = UIImage(systemName: "circle.fill")
+            config.imageProperties.tintColor = up ? .systemGreen : .systemGray3
+        } else {
+            config.image = UIImage(systemName: "circle.dotted")
+            config.imageProperties.tintColor = .tertiaryLabel
+        }
         cell.contentConfiguration = config
         cell.accessoryType = .disclosureIndicator
         return cell

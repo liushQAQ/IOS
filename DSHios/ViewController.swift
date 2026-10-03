@@ -48,6 +48,9 @@ final class ViewController: UIViewController {
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
         webView.translatesAutoresizingMaskIntoConstraints = false
+        // 首帧到达前保持透明：加载期间用户看到的是原生壳（地址栏+转圈），
+        // 不会出现"内容区一片白"的观感，也不会随 web 会话刷新而闪。
+        webView.alpha = 0
         view.addSubview(webView)
         self.webView = webView
 
@@ -171,14 +174,34 @@ final class ViewController: UIViewController {
         goButton.setTitle("加载", for: .normal)
         goButton.addTarget(self, action: #selector(loadTapped), for: .touchUpInside)
 
-        let settingsButton = UIButton(type: .system)
-        settingsButton.setImage(UIImage(systemName: "gearshape"), for: .normal)
-        settingsButton.addTarget(self, action: #selector(settingsTapped), for: .touchUpInside)
+        let servicesButton = UIButton(type: .system)
+        servicesButton.setImage(UIImage(systemName: "list.bullet"), for: .normal)
+        servicesButton.setTitle(" 服务", for: .normal)
+        servicesButton.titleLabel?.font = .preferredFont(forTextStyle: .footnote)
+        servicesButton.addTarget(self, action: #selector(servicesTapped), for: .touchUpInside)
+        servicesButton.setContentHuggingPriority(.required, for: .horizontal)
 
         bar.addArrangedSubview(textField)
         bar.addArrangedSubview(goButton)
-        bar.addArrangedSubview(settingsButton)
+        bar.addArrangedSubview(servicesButton)
         return bar
+    }
+
+    /// 原生服务切换入口：不依赖 web 页面是否已加载，随时可跳转任意已保存地址。
+    @objc private func servicesTapped() {
+        urlTextField.resignFirstResponder()
+        let sheet = UIAlertController(title: "服务列表", message: nil, preferredStyle: .actionSheet)
+        for item in ServiceStore.load() {
+            sheet.addAction(UIAlertAction(title: item.name, style: .default) { [weak self] _ in
+                self?.loadURLString(item.url)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "管理服务…", style: .default) { [weak self] _ in
+            self?.settingsTapped()
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = view
+        present(sheet, animated: true)
     }
 
     // MARK: - Loading
@@ -239,10 +262,22 @@ final class ViewController: UIViewController {
         UserDefaults.standard.set(trimmed, forKey: Keys.lastURL)
         urlTextField.text = finalString
         hideError()
+        // 新地址开始加载：先隐藏旧内容，避免残留上一个服务的画面
+        UIView.animate(withDuration: 0.12) {
+            self.webView.alpha = 0
+        }
         webView.load(URLRequest(url: url))
     }
 
     // MARK: - Error overlay
+
+    /// webView 只在内容就绪后显形，加载中/失败时露出的是原生壳（地址栏 + 转圈 / 错误提示）。
+    private func revealWebView() {
+        guard webView.alpha < 1 else { return }
+        UIView.animate(withDuration: 0.18) {
+            self.webView.alpha = 1
+        }
+    }
 
     private func showError(detail: String) {
         errorDetailLabel.text = detail
@@ -309,6 +344,15 @@ extension ViewController: WKNavigationDelegate {
         stopNavigationTimeout()
         // 完成即隐藏错误层（meta-refresh 握手页二跳也会走到这里）
         hideError()
+        // 内容首帧就绪后才显形：加载过程只显示原生壳，永不白屏
+        revealWebView()
+    }
+
+    /// Web 内容进程被系统回收（内存压力/后台）时自动重连，避免只剩空白页。
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        activityIndicator.startAnimating()
+        startNavigationTimeout()
+        webView.reload()
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
