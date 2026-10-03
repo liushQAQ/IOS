@@ -212,10 +212,13 @@ final class ViewController: UIViewController {
     }
 
     @objc private func settingsTapped() {
-        let settings = SettingsViewController { [weak self] newURL in
-            self?.urlTextField.text = newURL
-            self?.loadURLString(newURL)
-        }
+        let settings = SettingsViewController(
+            onSave: { [weak self] newURL in
+                self?.urlTextField.text = newURL
+            },
+            onSelect: { [weak self] newURL in
+                self?.loadURLString(newURL)
+            })
         navigationController?.pushViewController(settings, animated: true)
     }
 
