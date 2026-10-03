@@ -35,7 +35,7 @@ final class SettingsViewController: UIViewController {
         urlTextField.autocapitalizationType = .none
         urlTextField.autocorrectionType = .no
         urlTextField.keyboardType = .URL
-        urlTextField.placeholder = "http://<host>:<port>/dsh/"
+        urlTextField.placeholder = "http://<电脑IP>:3083/"
         urlTextField.text = UserDefaults.standard.string(forKey: "DSHios.lastURL")
 
         let hintLabel = UILabel()
@@ -43,9 +43,9 @@ final class SettingsViewController: UIViewController {
         hintLabel.font = .preferredFont(forTextStyle: .footnote)
         hintLabel.textColor = .secondaryLabel
         hintLabel.text = """
-        填入你的 DeepSeek Harness web 服务地址（局域网或公网均可）。
-        地址中可包含认证参数，例如：
-        http://192.168.1.100:3081/dsh/?password=xxx&token=xxx
+        填入电脑端 DSH Pocket 服务地址（局域网明文 HTTP，免密码）：
+        http://192.168.215.218:3083/
+        需电脑端 DSH Desktop 保持运行，手机与电脑在同一局域网。
         """
 
         let saveButton = UIButton(type: .system)
