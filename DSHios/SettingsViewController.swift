@@ -15,8 +15,8 @@ struct ServiceItem: Codable, Equatable {
 enum ServiceStore {
     static let key = "DSHios.services"
     static let seedVersionKey = "DSHios.servicesSeedVersion"
-    /// 种子版本：3 = 修闪退（探活回主线程）+ 条目带备注 + 外网换票结果缓存（信号差也能开）。
-    static let currentSeedVersion = 3
+    /// 种子版本：4 = 外网 DSH 地址去掉死 token，只留密码（8080 代理层自动换票）。
+    static let currentSeedVersion = 4
 
     /// 默认预置：实测能渲染网页页面的端口，同个端口局域网一条 + 外网一条，成对配置。
     /// DSH 对：局域网走 Pocket 3083（明文 HTTP，免密码，desk 端全权限）；
@@ -27,7 +27,7 @@ enum ServiceStore {
         ServiceItem(name: "DSH 主控", url: "http://192.168.215.218:3083/",
                     note: "局域网·全权限", resolverURL: nil),
         ServiceItem(name: "DSH 外网",
-                    url: "http://cn-hk-bgp-4.ofalias.net:47027/dsh/?password=Liu326766%40&token=0_dlRNXTE3cfdXUzG1KMXqcHb1nB2o2tlcfHHLp7Uo4",
+                    url: "http://cn-hk-bgp-4.ofalias.net:47027/dsh/?password=Liu326766%40",
                     note: "OpenFRP 穿透·自动换票",
                     resolverURL: "http://192.168.215.218:9009/api/dsh-url"),
         ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.215.218:9009/",
