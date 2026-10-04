@@ -6,6 +6,8 @@ import Network
 struct ServiceItem: Codable, Equatable {
     var name: String
     var url: String
+    /// 备注（可选）：显示在地址旁，便于区分用途。
+    var note: String?
     /// 外网入口专用：电脑端 token 每次重启都会变，先在局域网内向仪表盘换最新地址。
     var resolverURL: String?
 }
@@ -13,9 +15,8 @@ struct ServiceItem: Codable, Equatable {
 enum ServiceStore {
     static let key = "DSHios.services"
     static let seedVersionKey = "DSHios.servicesSeedVersion"
-    /// 种子版本：2 = 同一个端口配一对（局域网 + 外网 OpenFRP），只收能打开网页页面的入口。
-    /// 旧版本预置的一堆 API/401 端口全部移除。
-    static let currentSeedVersion = 2
+    /// 种子版本：3 = 修闪退（探活回主线程）+ 条目带备注 + 外网换票结果缓存（信号差也能开）。
+    static let currentSeedVersion = 3
 
     /// 默认预置：实测能渲染网页页面的端口，同个端口局域网一条 + 外网一条，成对配置。
     /// DSH 对：局域网走 Pocket 3083（明文 HTTP，免密码，desk 端全权限）；
@@ -23,14 +24,19 @@ enum ServiceStore {
     /// 仪表盘对：9009 自包含单页，外网带密码直达，无需换票。
     /// TTS 8210 外网 404（无外网入口），只配局域网一条。
     static let defaults: [ServiceItem] = [
-        ServiceItem(name: "DSH 主控（局域网·全权限）", url: "http://192.168.215.218:3083/"),
-        ServiceItem(name: "DSH 外网（OpenFRP 穿透）",
+        ServiceItem(name: "DSH 主控", url: "http://192.168.215.218:3083/",
+                    note: "局域网·全权限", resolverURL: nil),
+        ServiceItem(name: "DSH 外网",
                     url: "http://cn-hk-bgp-4.ofalias.net:47027/dsh/?password=Liu326766%40&token=0_dlRNXTE3cfdXUzG1KMXqcHb1nB2o2tlcfHHLp7Uo4",
+                    note: "OpenFRP 穿透·自动换票",
                     resolverURL: "http://192.168.215.218:9009/api/dsh-url"),
-        ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.215.218:9009/"),
-        ServiceItem(name: "端口仪表盘（外网·OpenFRP）",
-                    url: "http://cn-hk-bgp-4.ofalias.net:47027/?password=Liu326766%40"),
-        ServiceItem(name: "本地 TTS（局域网）", url: "http://192.168.215.218:8210/")
+        ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.215.218:9009/",
+                    note: nil, resolverURL: nil),
+        ServiceItem(name: "端口仪表盘（外网）",
+                    url: "http://cn-hk-bgp-4.ofalias.net:47027/?password=Liu326766%40",
+                    note: "OpenFRP 穿透", resolverURL: nil),
+        ServiceItem(name: "本地 TTS", url: "http://192.168.215.218:8210/",
+                    note: "局域网（外网无入口）", resolverURL: nil)
     ]
 
     static func load() -> [ServiceItem] {
@@ -77,23 +83,42 @@ enum ServiceStore {
 // MARK: - 外网地址换票
 
 enum ServiceResolver {
+    /// 换票结果缓存：地址 → 换到的最新地址 + 时间。
+    /// 局域网内换到一次后，出门（信号差/换网络）也用最近一次的有效地址，不至于退回死 token。
+    private static var cache: [String: (url: String, at: Date)] = [:]
+    private static var inflight: [String: Bool] = [:]
+    private static let cacheTTL: TimeInterval = 30 * 60
+
     /// 外网入口的 token 会随电脑端 3081 重启而失效。
-    /// 打开前先回局域网向 9009 仪表盘换一张最新的完整地址（/api/dsh-url），
-    /// 换不到（不在局域网 / 仪表盘没开 / 3081 没起）就退回预置地址，不阻塞用户。
+    /// 打开前先回局域网向 9009 仪表盘换一张最新的完整地址（/api/dsh-url）；
+    /// 优先用缓存（30 分钟内），局域网内换不到就退回缓存/预置地址，不阻塞用户。
     static func resolve(_ item: ServiceItem, completion: @escaping (String) -> Void) {
         guard let api = item.resolverURL, !api.isEmpty, let url = URL(string: api) else {
             completion(item.url)
             return
         }
+        // 有新鲜缓存直接用，不再等网络。
+        if let hit = cache[api], Date().timeIntervalSince(hit.at) < cacheTTL {
+            completion(hit.url)
+            return
+        }
+        // 并发去重：同一条目的换票请求只发一次，结果广播给所有等待者。
+        if inflight[api] == true {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { resolve(item, completion: completion) }
+            return
+        }
+        inflight[api] = true
         var request = URLRequest(url: url, timeoutInterval: 6)
         request.httpMethod = "GET"
         URLSession.shared.dataTask(with: request) { data, _, _ in
-            var resolved = item.url
+            inflight[api] = false
+            var resolved = cache[api]?.url ?? item.url
             if let data,
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let ok = json["ok"] as? Bool, ok,
                let external = json["externalUrl"] as? String, !external.isEmpty {
                 resolved = external
+                cache[api] = (external, Date())
             }
             DispatchQueue.main.async { completion(resolved) }
         }.resume()
@@ -146,7 +171,7 @@ final class SettingsViewController: UIViewController {
 
         let footer = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 72))
         let footerLabel = UILabel()
-        footerLabel.text = "点击行直接打开该服务；右上角 + 添加新地址；左滑删除或编辑。列表保存在本机，电脑 IP 变化时只需编辑对应条目。"
+        footerLabel.text = "点行打开该服务；右侧 ✎ 编辑（名称/地址/备注）；左滑删除。列表保存在本机，电脑 IP 变化时只需编辑对应条目。"
         footerLabel.font = .preferredFont(forTextStyle: .footnote)
         footerLabel.textColor = .secondaryLabel
         footerLabel.numberOfLines = 0
@@ -184,19 +209,27 @@ final class SettingsViewController: UIViewController {
         }
         let port = UInt16(comps.port ?? (comps.scheme == "https" ? 443 : 80))
         let connection = NWConnection(host: .init(host), port: .init(rawValue: port)!, using: .tcp)
+        // 只回调一次（.ready→cancel 会再触发 .cancelled），且回主线程刷 UI——
+        // 全局队列直接 reloadRows 会触发 "Main Thread Checker: UI API called on background thread" 导致闪退。
+        var finished = false
+        let finish: (Bool) -> Void = { up in
+            guard !finished else { return }
+            finished = true
+            connection.cancel()
+            DispatchQueue.main.async { completion(up) }
+        }
         connection.stateUpdateHandler = { state in
             switch state {
             case .ready:
-                connection.cancel()
-                completion(true)
-            case .failed, .cancelled:
-                completion(false)
+                finish(true)
+            case .failed, .waiting:
+                finish(false)
             default:
                 break
             }
         }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 6) {
-            connection.cancel()
+            finish(false)
         }
         connection.start(queue: DispatchQueue.global(qos: .utility))
     }
@@ -218,7 +251,7 @@ final class SettingsViewController: UIViewController {
     private func presentEditor(_ existing: (index: Int, item: ServiceItem)?) {
         let alert = UIAlertController(
             title: existing == nil ? "添加服务" : "编辑服务",
-            message: "名称与局域网地址",
+            message: "名称、地址与备注",
             preferredStyle: .alert)
 
         alert.addTextField { tf in
@@ -233,6 +266,11 @@ final class SettingsViewController: UIViewController {
             tf.autocorrectionType = .no
             tf.keyboardType = .URL
         }
+        alert.addTextField { tf in
+            tf.placeholder = "备注（可选，如：局域网·全权限）"
+            tf.text = existing?.item.note
+            tf.autocorrectionType = .no
+        }
 
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self] _ in
@@ -244,8 +282,11 @@ final class SettingsViewController: UIViewController {
             if !url.lowercased().hasPrefix("http://"), !url.lowercased().hasPrefix("https://") {
                 url = "http://" + url
             }
+            let note = alert.textFields?[2].text?.trimmingCharacters(in: .whitespaces)
             // 编辑已有条目时保留其换票地址（外网入口专用，用户改地址不改换票逻辑）。
-            let item = ServiceItem(name: name, url: url, resolverURL: existing?.item.resolverURL)
+            let item = ServiceItem(name: name, url: url,
+                                   note: (note?.isEmpty ?? true) ? nil : note,
+                                   resolverURL: existing?.item.resolverURL)
             if let existing {
                 ServiceStore.update(at: existing.index, with: item)
             } else {
@@ -253,6 +294,7 @@ final class SettingsViewController: UIViewController {
             }
             self.services = ServiceStore.load()
             self.tableView.reloadData()
+            self.probeAll()
         })
         present(alert, animated: true)
     }
@@ -269,9 +311,14 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         let item = services[indexPath.row]
         var config = cell.defaultContentConfiguration()
         config.text = item.name
-        config.secondaryText = item.url
+        if let note = item.note, !note.isEmpty {
+            config.secondaryText = note + " · " + item.url
+        } else {
+            config.secondaryText = item.url
+        }
         config.secondaryTextProperties.color = .secondaryLabel
         config.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
+        config.secondaryTextProperties.numberOfLines = 2
         // 原生状态点：绿=端口可达，灰=不可达，透明=探测中
         if let up = online[item.url] {
             config.image = UIImage(systemName: "circle.fill")
@@ -281,8 +328,21 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             config.imageProperties.tintColor = .tertiaryLabel
         }
         cell.contentConfiguration = config
-        cell.accessoryType = .disclosureIndicator
+        // 「编辑」按钮：点行=打开服务，点右侧编辑笔=改名称/地址/备注（不再只藏在左滑里）。
+        let editButton = UIButton(type: .system)
+        editButton.setImage(UIImage(systemName: "square.and.pencil"), for: .normal)
+        editButton.tintColor = .systemBlue
+        editButton.addTarget(self, action: #selector(editTapped(_:)), for: .touchUpInside)
+        cell.accessoryView = editButton
         return cell
+    }
+
+    /// 编辑按钮（cell.accessoryView 上的笔）：通过 hit-test 反查所在行。
+    @objc private func editTapped(_ sender: UIButton) {
+        let point = sender.convert(sender.bounds.center, to: tableView)
+        guard let indexPath = tableView.indexPathForRow(at: point),
+              services.indices.contains(indexPath.row) else { return }
+        presentEditor((indexPath.row, services[indexPath.row]))
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {

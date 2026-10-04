@@ -15,6 +15,8 @@ final class ViewController: UIViewController {
     private var navigationTimer: Timer?
     private var pathMonitor: NWPathMonitor?
     private var hasLoadedOnce = false
+    /// 401 token 页自动换票重试的防重入标志（防止 didFinish→重载→didFinish 死循环）。
+    private var isTokenRetryInFlight = false
 
     /// 默认加载地址：DSH Pocket（桌面端 LAN 代理，明文 HTTP，免密码）。
     /// 桌面端需保持运行；端口 3083 由 dsh-pocket settings.json 固定。
@@ -57,6 +59,20 @@ final class ViewController: UIViewController {
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        // 电脑端一些老页面（如 8210 TTS）没写 <meta name="viewport">，
+        // WKWebView 会按 980px 桌面宽渲染再整体缩小 → UI/按钮比例怪。
+        // 在每个页面文档开头注入标准移动端 viewport 修正（仅当页面自己没写时生效）。
+        let viewportFix = WKUserScript(source: """
+            (function() {
+              if (document.querySelector('meta[name="viewport"]')) return;
+              var m = document.createElement('meta');
+              m.name = 'viewport';
+              m.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+              document.head.appendChild(m);
+            })();
+            """,
+            injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        config.userContentController.addUserScript(viewportFix)
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
@@ -313,6 +329,7 @@ final class ViewController: UIViewController {
         UserDefaults.standard.set(trimmed, forKey: Keys.lastURL)
         hideError()
         hasLoadedOnce = false
+        isTokenRetryInFlight = false
         // 新地址开始加载：先隐藏旧内容，避免残留上一个服务的画面
         UIView.animate(withDuration: 0.12) {
             self.webView.alpha = 0
@@ -424,6 +441,47 @@ extension ViewController: WKNavigationDelegate {
         hasLoadedOnce = true
         // 内容首帧就绪后才显形：加载过程只显示原生加载态，永不白屏
         revealWebView()
+        detectStaleTokenPage()
+    }
+
+    /// 电脑端 DSH 重启后 token 会变：外网打开时 3081 直接回 401 文字页
+    /// （"dsh web authentication required…"），用户看到的就是白屏。
+    /// 这里在页面加载完成后读正文，命中特征就自动换最新 token 重试一次。
+    private func detectStaleTokenPage() {
+        guard !isTokenRetryInFlight else { return }
+        webView.evaluateJavaScript("document.body ? document.body.innerText.slice(0, 300) : ''") {
+            [weak self] result, _ in
+            guard let self,
+                  let text = result as? String,
+                  text.contains("dsh web authentication required") else { return }
+            self.retryWithFreshToken()
+        }
+    }
+
+    /// 找到当前地址对应的带 resolver 的服务条目（外网入口），重新换票后重载。
+    private func retryWithFreshToken() {
+        let current = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? ""
+        guard let item = ServiceStore.load().first(where: {
+            $0.resolverURL?.isEmpty == false && current.contains(hostOf($0.url))
+        }) else {
+            showError(detail: "DSH 已重启，token 失效。请回到局域网打开一次「DSH 外网」自动换票，或重启电脑端 DSH 后重试")
+            return
+        }
+        isTokenRetryInFlight = true
+        ServiceResolver.resolve(item) { [weak self] freshURL in
+            guard let self else { return }
+            self.isTokenRetryInFlight = false
+            // 只有换到的地址和当前不一样才值得重载，避免 401 页原地打转
+            if freshURL != current {
+                self.loadURLString(freshURL)
+            } else {
+                self.showError(detail: "token 已失效且暂换不到新票（需手机与电脑同一局域网）。回到局域网点开「DSH 外网」即可自动换票")
+            }
+        }
+    }
+
+    private func hostOf(_ urlString: String) -> String {
+        URL(string: urlString)?.host ?? urlString
     }
 
     /// Web 内容进程被系统回收（内存压力/后台）时自动重连，避免只剩空白页。
