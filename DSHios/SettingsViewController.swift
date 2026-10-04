@@ -101,6 +101,8 @@ final class SettingsViewController: UIViewController {
 
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .add, target: self, action: #selector(addTapped))
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .done, target: self, action: #selector(closeTapped))
 
         tableView.dataSource = self
         tableView.delegate = self
@@ -172,6 +174,14 @@ final class SettingsViewController: UIViewController {
     }
 
     // MARK: - 添加 / 编辑
+
+    @objc private func closeTapped() {
+        if presentingViewController != nil {
+            dismiss(animated: true)
+        } else {
+            navigationController?.popViewController(animated: true)
+        }
+    }
 
     @objc private func addTapped() {
         presentEditor(nil)
@@ -251,7 +261,11 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         let item = services[indexPath.row]
         onSave(item.url)
         onSelect(item.url)
-        navigationController?.popViewController(animated: true)
+        if presentingViewController != nil {
+            dismiss(animated: true)
+        } else {
+            navigationController?.popViewController(animated: true)
+        }
     }
 
     func tableView(_ tableView: UITableView,

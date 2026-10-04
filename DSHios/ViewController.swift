@@ -1,15 +1,20 @@
 import UIKit
 import WebKit
+import Network
 
+/// 主界面：全屏 WKWebView，与电脑桌面端 DSH 布局完全一致（无任何原生地址栏/工具栏遮挡）。
+/// 原生只在「连不上」时接管：错误浮层 + 重试；右下角一个半透明小按钮用于换地址/看版本。
 final class ViewController: UIViewController {
 
     private var webView: WKWebView!
     private var activityIndicator: UIActivityIndicatorView!
-    private var urlTextField: UITextField!
     private var errorOverlay: UIView!
     private var errorTitleLabel: UILabel!
     private var errorDetailLabel: UILabel!
+    private var menuButton: UIButton!
     private var navigationTimer: Timer?
+    private var pathMonitor: NWPathMonitor?
+    private var hasLoadedOnce = false
 
     /// 默认加载地址：DSH Pocket（桌面端 LAN 代理，明文 HTTP，免密码）。
     /// 桌面端需保持运行；端口 3083 由 dsh-pocket settings.json 固定。
@@ -22,28 +27,31 @@ final class ViewController: UIViewController {
         static let currentURLVersion = 2
     }
 
+    override var prefersStatusBarHidden: Bool { false }
+    override var preferredStatusBarStyle: UIStatusBarStyle { .default }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
         loadInitialURL()
+        startNetworkWatch()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil)
     }
 
     deinit {
         navigationTimer?.invalidate()
+        pathMonitor?.cancel()
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - UI
 
     private func setupUI() {
         view.backgroundColor = .systemBackground
-        title = "DeepSeek Harness"
-
-        // 关于按钮（原生壳自带）：版本号随时可查，不依赖 web 会话
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "info.circle"),
-            style: .plain,
-            target: self,
-            action: #selector(aboutTapped))
 
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
@@ -55,37 +63,32 @@ final class ViewController: UIViewController {
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
         webView.translatesAutoresizingMaskIntoConstraints = false
-        // 首帧到达前保持透明：加载期间用户看到的是原生壳（地址栏+转圈），
-        // 不会出现"内容区一片白"的观感，也不会随 web 会话刷新而闪。
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // 首帧到达前保持透明：加载期间露出的是原生加载态，不会白屏闪一下。
         webView.alpha = 0
         view.addSubview(webView)
         self.webView = webView
 
-        let activity = UIActivityIndicatorView(style: .medium)
+        let activity = UIActivityIndicatorView(style: .large)
         activity.hidesWhenStopped = true
+        activity.color = .secondaryLabel
         activity.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(activity)
         self.activityIndicator = activity
 
-        let toolbar = buildToolbar()
-        toolbar.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(toolbar)
-
         NSLayoutConstraint.activate([
-            toolbar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            toolbar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            toolbar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-
-            webView.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
+            // 全屏，与桌面端一致：不吃掉任何高度给原生控件
+            webView.topAnchor.constraint(equalTo: view.topAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            activity.centerXAnchor.constraint(equalTo: webView.centerXAnchor),
-            activity.centerYAnchor.constraint(equalTo: webView.centerYAnchor)
+            activity.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            activity.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
 
         setupErrorOverlay()
+        setupMenuButton()
     }
 
     /// 加载失败时的错误浮层（白屏根因修复：以前 didFail 只是停转圈，界面空白无提示）。
@@ -138,17 +141,23 @@ final class ViewController: UIViewController {
         retryButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
         retryButton.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
 
+        let changeButton = UIButton(type: .system)
+        changeButton.setTitle("换一个地址", for: .normal)
+        changeButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        changeButton.addTarget(self, action: #selector(menuTapped), for: .touchUpInside)
+
         container.addArrangedSubview(icon)
         container.addArrangedSubview(title)
         container.addArrangedSubview(detail)
         container.addArrangedSubview(hint)
         container.addArrangedSubview(retryButton)
+        container.addArrangedSubview(changeButton)
 
         NSLayoutConstraint.activate([
-            overlay.topAnchor.constraint(equalTo: webView.topAnchor),
-            overlay.leadingAnchor.constraint(equalTo: webView.leadingAnchor),
-            overlay.trailingAnchor.constraint(equalTo: webView.trailingAnchor),
-            overlay.bottomAnchor.constraint(equalTo: webView.bottomAnchor),
+            overlay.topAnchor.constraint(equalTo: view.topAnchor),
+            overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             container.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
             container.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 32),
@@ -160,42 +169,87 @@ final class ViewController: UIViewController {
         self.errorDetailLabel = detail
     }
 
-    private func buildToolbar() -> UIView {
-        let bar = UIStackView()
-        bar.axis = .horizontal
-        bar.spacing = 8
-        bar.alignment = .center
+    /// 右下角半透明小按钮：默认几乎不可见，点开才能换地址/看版本，不破坏「与桌面端一致」的观感。
+    private func setupMenuButton() {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "slider.horizontal.3"), for: .normal)
+        button.tintColor = .secondaryLabel
+        button.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.75)
+        button.layer.cornerRadius = 20
+        button.alpha = 0.35
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.addTarget(self, action: #selector(menuTapped), for: .touchUpInside)
+        view.addSubview(button)
 
-        let textField = UITextField()
-        textField.borderStyle = .roundedRect
-        textField.autocapitalizationType = .none
-        textField.autocorrectionType = .no
-        textField.keyboardType = .URL
-        textField.returnKeyType = .go
-        textField.placeholder = "DSH 服务地址"
-        textField.delegate = self
-        textField.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        self.urlTextField = textField
+        NSLayoutConstraint.activate([
+            button.widthAnchor.constraint(equalToConstant: 40),
+            button.heightAnchor.constraint(equalToConstant: 40),
+            button.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+            button.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
+        ])
+        self.menuButton = button
+    }
 
-        let goButton = UIButton(type: .system)
-        goButton.setTitle("加载", for: .normal)
-        goButton.addTarget(self, action: #selector(loadTapped), for: .touchUpInside)
+    // MARK: - 菜单（换地址 / 服务列表 / 版本）
 
-        let servicesButton = UIButton(type: .system)
-        servicesButton.setImage(UIImage(systemName: "list.bullet"), for: .normal)
-        servicesButton.setTitle(" 服务", for: .normal)
-        servicesButton.titleLabel?.font = .preferredFont(forTextStyle: .footnote)
-        servicesButton.addTarget(self, action: #selector(servicesTapped), for: .touchUpInside)
-        servicesButton.setContentHuggingPriority(.required, for: .horizontal)
+    @objc private func menuTapped() {
+        let sheet = UIAlertController(title: "DSH", message: nil, preferredStyle: .actionSheet)
 
-        bar.addArrangedSubview(textField)
-        bar.addArrangedSubview(goButton)
-        bar.addArrangedSubview(servicesButton)
-        return bar
+        let services = ServiceStore.load()
+        for item in services.prefix(6) {
+            sheet.addAction(UIAlertAction(title: item.name, style: .default) { [weak self] _ in
+                self?.loadURLString(item.url)
+            })
+        }
+
+        sheet.addAction(UIAlertAction(title: "全部服务…", style: .default) { [weak self] _ in
+            self?.openServiceList()
+        })
+        sheet.addAction(UIAlertAction(title: "手动输入地址…", style: .default) { [weak self] _ in
+            self?.promptForURL()
+        })
+        sheet.addAction(UIAlertAction(title: "刷新", style: .default) { [weak self] _ in
+            self?.webView.reload()
+        })
+        sheet.addAction(UIAlertAction(title: "关于", style: .default) { [weak self] _ in
+            self?.showAbout()
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    private func openServiceList() {
+        let settings = SettingsViewController(
+            onSave: { _ in },
+            onSelect: { [weak self] newURL in
+                self?.loadURLString(newURL)
+            })
+        let nav = UINavigationController(rootViewController: settings)
+        nav.modalPresentationStyle = .pageSheet
+        present(nav, animated: true)
+    }
+
+    private func promptForURL() {
+        let alert = UIAlertController(title: "服务地址", message: nil, preferredStyle: .alert)
+        alert.addTextField { tf in
+            tf.placeholder = "http://192.168.215.218:3083/"
+            tf.text = UserDefaults.standard.string(forKey: Keys.lastURL) ?? self.defaultURL
+            tf.autocapitalizationType = .none
+            tf.autocorrectionType = .no
+            tf.keyboardType = .URL
+            tf.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "加载", style: .default) { [weak self] _ in
+            guard let text = alert.textFields?.first?.text, !text.isEmpty else { return }
+            self?.loadURLString(text)
+        })
+        present(alert, animated: true)
     }
 
     /// 关于：版本号原生可见（读 Info.plist，回退到编译期常量）
-    @objc private func aboutTapped() {
+    private func showAbout() {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? AppDelegate.Version.marketing
         let build = info?["CFBundleVersion"] as? String ?? AppDelegate.Version.build
@@ -205,28 +259,11 @@ final class ViewController: UIViewController {
             版本：\(version) (\(build))
 
             默认服务：http://192.168.215.218:3083/
-            外壳为原生，内容区加载电脑端 DSH
+            联网即加载电脑端会话
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "好", style: .default))
         present(alert, animated: true)
-    }
-
-    /// 原生服务切换入口：不依赖 web 页面是否已加载，随时可跳转任意已保存地址。
-    @objc private func servicesTapped() {
-        urlTextField.resignFirstResponder()
-        let sheet = UIAlertController(title: "服务列表", message: nil, preferredStyle: .actionSheet)
-        for item in ServiceStore.load() {
-            sheet.addAction(UIAlertAction(title: item.name, style: .default) { [weak self] _ in
-                self?.loadURLString(item.url)
-            })
-        }
-        sheet.addAction(UIAlertAction(title: "管理服务…", style: .default) { [weak self] _ in
-            self?.settingsTapped()
-        })
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        sheet.popoverPresentationController?.sourceView = view
-        present(sheet, animated: true)
     }
 
     // MARK: - Loading
@@ -235,7 +272,6 @@ final class ViewController: UIViewController {
         migrateSavedURLIfNeeded()
         let saved = UserDefaults.standard.string(forKey: Keys.lastURL)
         let urlString = (saved?.isEmpty == false) ? saved! : defaultURL
-        urlTextField.text = urlString
         loadURLString(urlString)
     }
 
@@ -248,26 +284,12 @@ final class ViewController: UIViewController {
         UserDefaults.standard.set(Keys.currentURLVersion, forKey: Keys.urlVersion)
     }
 
-    @objc private func loadTapped() {
-        urlTextField.resignFirstResponder()
-        guard let text = urlTextField.text, !text.isEmpty else { return }
-        loadURLString(text)
-    }
-
     @objc private func retryTapped() {
-        guard let text = urlTextField.text, !text.isEmpty else { return }
-        loadURLString(text)
-    }
-
-    @objc private func settingsTapped() {
-        let settings = SettingsViewController(
-            onSave: { [weak self] newURL in
-                self?.urlTextField.text = newURL
-            },
-            onSelect: { [weak self] newURL in
-                self?.loadURLString(newURL)
-            })
-        navigationController?.pushViewController(settings, animated: true)
+        if let current = webView.url?.absoluteString, !current.isEmpty {
+            loadURLString(current)
+        } else {
+            loadInitialURL()
+        }
     }
 
     private func loadURLString(_ raw: String) {
@@ -285,8 +307,8 @@ final class ViewController: UIViewController {
         }
 
         UserDefaults.standard.set(trimmed, forKey: Keys.lastURL)
-        urlTextField.text = finalString
         hideError()
+        hasLoadedOnce = false
         // 新地址开始加载：先隐藏旧内容，避免残留上一个服务的画面
         UIView.animate(withDuration: 0.12) {
             self.webView.alpha = 0
@@ -294,9 +316,35 @@ final class ViewController: UIViewController {
         webView.load(URLRequest(url: url))
     }
 
+    // MARK: - 联网即加载
+
+    @objc private func appDidBecomeActive() {
+        // 回到前台：若当前是失败态或还没内容，立刻重连（桌面端会话是实时的）。
+        if !errorOverlay.isHidden || webView.url == nil || !hasLoadedOnce {
+            retryTapped()
+        }
+    }
+
+    /// 网络可达性监听：网络从无到有时自动加载，无需手动点刷新。
+    private func startNetworkWatch() {
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            guard let self else { return }
+            guard path.status == .satisfied else { return }
+            DispatchQueue.main.async {
+                // 只在「失败态」或「尚未加载」时自动重连，已经正常加载的不打断
+                if !self.errorOverlay.isHidden || self.webView.url == nil || !self.hasLoadedOnce {
+                    self.retryTapped()
+                }
+            }
+        }
+        monitor.start(queue: DispatchQueue.global(qos: .utility))
+        self.pathMonitor = monitor
+    }
+
     // MARK: - Error overlay
 
-    /// webView 只在内容就绪后显形，加载中/失败时露出的是原生壳（地址栏 + 转圈 / 错误提示）。
+    /// webView 只在内容就绪后显形，加载中/失败时露出的是原生加载态或错误提示。
     private func revealWebView() {
         guard webView.alpha < 1 else { return }
         UIView.animate(withDuration: 0.18) {
@@ -369,7 +417,8 @@ extension ViewController: WKNavigationDelegate {
         stopNavigationTimeout()
         // 完成即隐藏错误层（meta-refresh 握手页二跳也会走到这里）
         hideError()
-        // 内容首帧就绪后才显形：加载过程只显示原生壳，永不白屏
+        hasLoadedOnce = true
+        // 内容首帧就绪后才显形：加载过程只显示原生加载态，永不白屏
         revealWebView()
     }
 
@@ -404,14 +453,5 @@ extension ViewController: WKUIDelegate {
             webView.load(navigationAction.request)
         }
         return nil
-    }
-}
-
-// MARK: - UITextFieldDelegate
-
-extension ViewController: UITextFieldDelegate {
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        loadTapped()
-        return true
     }
 }

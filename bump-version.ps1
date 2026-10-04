@@ -1,18 +1,20 @@
 #!/usr/bin/env pwsh
-# 发版助手：递增版本号并同步所有版本来源。
+# Release helper: bump version and sync every version source.
 #
-#   .\bump-version.ps1            # 1.0.4 -> 1.0.5 （修订号 +1）
-#   .\bump-version.ps1 -Minor     # 1.0.4 -> 1.1.0
-#   .\bump-version.ps1 -Major     # 1.0.4 -> 2.0.0
-#   .\bump-version.ps1 -Set 1.2.3 # 直接指定
+#   powershell -ExecutionPolicy Bypass -File .\bump-version.ps1              # 1.0.4 -> 1.0.5
+#   powershell -ExecutionPolicy Bypass -File .\bump-version.ps1 -Minor       # -> 1.1.0
+#   powershell -ExecutionPolicy Bypass -File .\bump-version.ps1 -Major       # -> 2.0.0
+#   powershell -ExecutionPolicy Bypass -File .\bump-version.ps1 -Set 1.2.3   # explicit
 #
-# 同步的四个地方：
-#   1. VERSION                           展示版本唯一来源（CI 读取）
-#   2. DSHios.xcodeproj/project.pbxproj  MARKETING_VERSION（Debug + Release）
-#   3. DSHios/Info.plist                 DSHAppVersion
-#   4. DSHios/AppDelegate.swift          Version.marketing / Version.build
+# Synced sources:
+#   1. VERSION                            marketing version, read by CI
+#   2. DSHios.xcodeproj/project.pbxproj   MARKETING_VERSION (Debug + Release)
+#   3. DSHios/Info.plist                  DSHAppVersion
+#   4. DSHios/AppDelegate.swift           Version.marketing
 #
-# 构建号（CFBundleVersion）由 CI 用 GitHub run_number 自动注入，本地不写死。
+# CFBundleVersion (build) is injected by CI from github.run_number.
+# NOTE: keep this file pure ASCII. PowerShell 5.1 reads a BOM-less UTF-8
+# script as ANSI, which garbles non-ASCII comments and can break parsing.
 
 param(
     [switch]$Major,
@@ -21,50 +23,50 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-function Get-CurrentVersion {
-    Join-Path $root 'VERSION' | Get-Content -Raw | ForEach-Object { $_.Trim() }
+$root = $PSScriptRoot
+if (-not $root) { $root = Split-Path -Parent $MyInvocation.MyCommand.Path }
+if (-not $root) { $root = (Get-Location).Path }
+
+$enc = [System.Text.UTF8Encoding]::new($false)
+
+function Read-Text([string]$p) { [System.IO.File]::ReadAllText($p, [System.Text.UTF8Encoding]::new($false)) }
+function Write-Text([string]$p, [string]$t) { [System.IO.File]::WriteAllText($p, $t, [System.Text.UTF8Encoding]::new($false)) }
+
+$versionFile = Join-Path $root 'VERSION'
+$current = (Read-Text $versionFile).Trim()
+Write-Host "Current version: $current (root=$root)"
+
+if ([string]::IsNullOrEmpty($Set)) {
+    $parts = $current -split '\.'
+    if ($parts.Count -ne 3) { throw "Version must be x.y.z, got: $current" }
+    $maj = [int]$parts[0]
+    $min = [int]$parts[1]
+    $pat = [int]$parts[2]
+    if ($Major) { $maj = $maj + 1; $min = 0; $pat = 0 }
+    elseif ($Minor) { $min = $min + 1; $pat = 0 }
+    else { $pat = $pat + 1 }
+    $newStr = [string]::Format('{0}.{1}.{2}', $maj, $min, $pat)
+} else {
+    $newStr = $Set
 }
 
-function Step-Version([string]$v) {
-    $parts = $v.Split('.')
-    if ($parts.Count -ne 3) { throw "版本号必须是 x.y.z 格式，当前是 $v" }
-    $nums = $parts | ForEach-Object { [int]$_ }
-    if ($Set) { return ,([int[]]$Set.Split('.')) }
-    if ($Major) { return ,@($nums[0] + 1, 0, 0) }
-    if ($Minor) { return ,@($nums[0], $nums[1] + 1, 0) }
-    return ,@($nums[0], $nums[1], $nums[2] + 1)
-}
-
-$current = Get-CurrentVersion
-$new = Step-Version $current
-$newStr = $new -join '.'
-$build = [string]([int]$new[0] * 10000 + [int]$new[1] * 100 + [int]$new[2])
-
-Write-Host "版本: $current -> $newStr (build $build)"
+Write-Host "Bumping: $current -> $newStr"
 
 # 1. VERSION
-Set-Content -Path (Join-Path $root 'VERSION') -Value "$newStr`n" -NoNewline -Encoding ascii
+Write-Text $versionFile ($newStr + "`n")
 
-# 2. project.pbxproj（Debug + Release 两处）
+# 2. project.pbxproj (Debug + Release)
 $pbx = Join-Path $root 'DSHios.xcodeproj/project.pbxproj'
-(Get-Content $pbx -Raw) `
-    -replace 'MARKETING_VERSION = [0-9.]+;', "MARKETING_VERSION = $newStr;" |
-    Set-Content $pbx -NoNewline -Encoding utf8
+Write-Text $pbx ((Read-Text $pbx) -replace 'MARKETING_VERSION = [0-9.]+;', ('MARKETING_VERSION = ' + $newStr + ';'))
 
 # 3. Info.plist DSHAppVersion
 $plist = Join-Path $root 'DSHios/Info.plist'
-(Get-Content $plist -Raw) `
-    -replace '(<key>DSHAppVersion</key>\s*<string>)[0-9.]+(</string>)', "`${1}$newStr`$2" |
-    Set-Content $plist -NoNewline -Encoding utf8
+Write-Text $plist ((Read-Text $plist) -replace '(<key>DSHAppVersion</key>\s*<string>)[0-9.]+(</string>)', "`${1}$newStr`$2")
 
 # 4. AppDelegate.swift
 $app = Join-Path $root 'DSHios/AppDelegate.swift'
-(Get-Content $app -Raw) `
-    -replace 'static let marketing = "[0-9.]+"', "static let marketing = `"$newStr`"" `
-    -replace 'static let build = "[0-9]+"', "static let build = `"" + ([string]([int]$new[2] + 1)) + "`"" |
-    Set-Content $app -NoNewline -Encoding utf8
+Write-Text $app ((Read-Text $app) -replace 'static let marketing = "[0-9.]+"', ('static let marketing = "' + $newStr + '"'))
 
-Write-Host "已同步 VERSION / pbxproj / Info.plist / AppDelegate.swift"
-Write-Host "下一步: git add -A; git commit -m 'v$newStr'; git push"
+Write-Host "Synced VERSION / pbxproj / Info.plist / AppDelegate.swift"
+Write-Host "Next: git add -A; git commit -m 'v$newStr'; git push"
