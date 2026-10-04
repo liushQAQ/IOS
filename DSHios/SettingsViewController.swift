@@ -6,35 +6,37 @@ import Network
 struct ServiceItem: Codable, Equatable {
     var name: String
     var url: String
+    /// 外网入口专用：电脑端 token 每次重启都会变，先在局域网内向仪表盘换最新地址。
+    var resolverURL: String?
 }
 
 enum ServiceStore {
     static let key = "DSHios.services"
-    static let seededKey = "DSHios.servicesSeeded"
+    static let seedVersionKey = "DSHios.servicesSeedVersion"
+    /// 种子版本：2 = 同一个端口配一对（局域网 + 外网 OpenFRP），只收能打开网页页面的入口。
+    /// 旧版本预置的一堆 API/401 端口全部移除。
+    static let currentSeedVersion = 2
 
-    /// 默认预置：本机（192.168.215.218）所有在用的局域网服务端口。
-    /// 与电脑端 9009 仪表盘 services-config.json 对齐。
+    /// 默认预置：实测能渲染网页页面的端口，同个端口局域网一条 + 外网一条，成对配置。
+    /// DSH 对：局域网走 Pocket 3083（明文 HTTP，免密码，desk 端全权限）；
+    ///         外网走 OpenFRP 穿透到 9060 认证网关（token 会变，故附 resolver 自动换新）。
+    /// 仪表盘对：9009 自包含单页，外网带密码直达，无需换票。
+    /// TTS 8210 外网 404（无外网入口），只配局域网一条。
     static let defaults: [ServiceItem] = [
-        ServiceItem(name: "DSH 主控（desk端·全权限）", url: "http://192.168.215.218:3083/"),
-        ServiceItem(name: "DSH 网页端（headless）", url: "http://192.168.215.218:3084/"),
-        ServiceItem(name: "端口仪表盘（9009）", url: "http://192.168.215.218:9009/"),
-        ServiceItem(name: "反向代理（8080 统一入口）", url: "http://192.168.215.218:8080/"),
-        ServiceItem(name: "认证网关（9060）", url: "http://192.168.215.218:9060/"),
-        ServiceItem(name: "文件管理器（9050）", url: "http://192.168.215.218:9050/"),
-        ServiceItem(name: "本地搜索代理（8020）", url: "http://192.168.215.218:8020/"),
-        ServiceItem(name: "凡人修仙（8070）", url: "http://192.168.215.218:8070/"),
-        ServiceItem(name: "群聊图片生成（8030）", url: "http://192.168.215.218:8030/"),
-        ServiceItem(name: "点歌API（8200）", url: "http://192.168.215.218:8200/"),
-        ServiceItem(name: "WorkBuddy 账号切换（57890）", url: "http://192.168.215.218:57890/"),
-        ServiceItem(name: "OpenAI代理（8050·API）", url: "http://192.168.215.218:8050/"),
-        ServiceItem(name: "视频解析（8011·API）", url: "http://192.168.215.218:8011/"),
-        ServiceItem(name: "Video API（8120·API）", url: "http://192.168.215.218:8120/"),
-        ServiceItem(name: "TTS 语音（8210·API）", url: "http://192.168.215.218:8210/"),
+        ServiceItem(name: "DSH 主控（局域网·全权限）", url: "http://192.168.215.218:3083/"),
+        ServiceItem(name: "DSH 外网（OpenFRP 穿透）",
+                    url: "http://cn-hk-bgp-4.ofalias.net:47027/dsh/?password=Liu326766%40&token=0_dlRNXTE3cfdXUzG1KMXqcHb1nB2o2tlcfHHLp7Uo4",
+                    resolverURL: "http://192.168.215.218:9009/api/dsh-url"),
+        ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.215.218:9009/"),
+        ServiceItem(name: "端口仪表盘（外网·OpenFRP）",
+                    url: "http://cn-hk-bgp-4.ofalias.net:47027/?password=Liu326766%40"),
+        ServiceItem(name: "本地 TTS（局域网）", url: "http://192.168.215.218:8210/")
     ]
 
     static func load() -> [ServiceItem] {
-        if !UserDefaults.standard.bool(forKey: seededKey) {
-            UserDefaults.standard.set(true, forKey: seededKey)
+        // 种子升级：直接换成最新预置，清掉旧版本里打不开页面的一堆端口。
+        if UserDefaults.standard.integer(forKey: seedVersionKey) < currentSeedVersion {
+            UserDefaults.standard.set(currentSeedVersion, forKey: seedVersionKey)
             save(defaults)
             return defaults
         }
@@ -69,6 +71,32 @@ enum ServiceStore {
         guard items.indices.contains(index) else { return }
         items.remove(at: index)
         save(items)
+    }
+}
+
+// MARK: - 外网地址换票
+
+enum ServiceResolver {
+    /// 外网入口的 token 会随电脑端 3081 重启而失效。
+    /// 打开前先回局域网向 9009 仪表盘换一张最新的完整地址（/api/dsh-url），
+    /// 换不到（不在局域网 / 仪表盘没开 / 3081 没起）就退回预置地址，不阻塞用户。
+    static func resolve(_ item: ServiceItem, completion: @escaping (String) -> Void) {
+        guard let api = item.resolverURL, !api.isEmpty, let url = URL(string: api) else {
+            completion(item.url)
+            return
+        }
+        var request = URLRequest(url: url, timeoutInterval: 6)
+        request.httpMethod = "GET"
+        URLSession.shared.dataTask(with: request) { data, _, _ in
+            var resolved = item.url
+            if let data,
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let ok = json["ok"] as? Bool, ok,
+               let external = json["externalUrl"] as? String, !external.isEmpty {
+                resolved = external
+            }
+            DispatchQueue.main.async { completion(resolved) }
+        }.resume()
     }
 }
 
@@ -216,7 +244,8 @@ final class SettingsViewController: UIViewController {
             if !url.lowercased().hasPrefix("http://"), !url.lowercased().hasPrefix("https://") {
                 url = "http://" + url
             }
-            let item = ServiceItem(name: name, url: url)
+            // 编辑已有条目时保留其换票地址（外网入口专用，用户改地址不改换票逻辑）。
+            let item = ServiceItem(name: name, url: url, resolverURL: existing?.item.resolverURL)
             if let existing {
                 ServiceStore.update(at: existing.index, with: item)
             } else {
@@ -259,12 +288,16 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let item = services[indexPath.row]
-        onSave(item.url)
-        onSelect(item.url)
-        if presentingViewController != nil {
-            dismiss(animated: true)
-        } else {
-            navigationController?.popViewController(animated: true)
+        // 外网入口先换最新 token，换不到就用原地址（换票失败不拦人）。
+        ServiceResolver.resolve(item) { [weak self] url in
+            guard let self else { return }
+            self.onSave(url)
+            self.onSelect(url)
+            if self.presentingViewController != nil {
+                self.dismiss(animated: true)
+            } else {
+                self.navigationController?.popViewController(animated: true)
+            }
         }
     }
 

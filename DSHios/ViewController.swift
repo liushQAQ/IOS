@@ -198,7 +198,11 @@ final class ViewController: UIViewController {
         let services = ServiceStore.load()
         for item in services.prefix(6) {
             sheet.addAction(UIAlertAction(title: item.name, style: .default) { [weak self] _ in
-                self?.loadURLString(item.url)
+                guard let self else { return }
+                // 外网入口先回局域网换最新 token 再打开，避免用过期 token 撞 401。
+                ServiceResolver.resolve(item) { url in
+                    self.loadURLString(url)
+                }
             })
         }
 
