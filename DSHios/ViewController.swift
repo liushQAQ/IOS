@@ -38,6 +38,13 @@ final class ViewController: UIViewController {
         view.backgroundColor = .systemBackground
         title = "DeepSeek Harness"
 
+        // 关于按钮（原生壳自带）：版本号随时可查，不依赖 web 会话
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "info.circle"),
+            style: .plain,
+            target: self,
+            action: #selector(aboutTapped))
+
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
@@ -185,6 +192,24 @@ final class ViewController: UIViewController {
         bar.addArrangedSubview(goButton)
         bar.addArrangedSubview(servicesButton)
         return bar
+    }
+
+    /// 关于：版本号原生可见（读 Info.plist，回退到编译期常量）
+    @objc private func aboutTapped() {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? AppDelegate.Version.marketing
+        let build = info?["CFBundleVersion"] as? String ?? AppDelegate.Version.build
+        let alert = UIAlertController(
+            title: "DeepSeek Harness iOS",
+            message: """
+            版本：\(version) (\(build))
+
+            默认服务：http://192.168.215.218:3083/
+            外壳为原生，内容区加载电脑端 DSH
+            """,
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "好", style: .default))
+        present(alert, animated: true)
     }
 
     /// 原生服务切换入口：不依赖 web 页面是否已加载，随时可跳转任意已保存地址。
