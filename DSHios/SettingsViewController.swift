@@ -339,7 +339,8 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
 
     /// 编辑按钮（cell.accessoryView 上的笔）：通过 hit-test 反查所在行。
     @objc private func editTapped(_ sender: UIButton) {
-        let point = sender.convert(sender.bounds.center, to: tableView)
+        let center = CGPoint(x: sender.bounds.midX, y: sender.bounds.midY)
+        let point = sender.convert(center, to: tableView)
         guard let indexPath = tableView.indexPathForRow(at: point),
               services.indices.contains(indexPath.row) else { return }
         presentEditor((indexPath.row, services[indexPath.row]))
