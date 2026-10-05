@@ -17,6 +17,8 @@ final class ViewController: UIViewController {
     private var hasLoadedOnce = false
     /// 401 token 页自动换票重试的防重入标志（防止 didFinish→重载→didFinish 死循环）。
     private var isTokenRetryInFlight = false
+    /// 3083 Pocket 握手自动重试防重入（503 握手页 → 清 cookie 重载一次）。
+    private var isPocketRetryInFlight = false
 
     /// 默认加载地址：DSH Pocket（桌面端 LAN 代理，明文 HTTP，免密码）。
     /// 桌面端需保持运行；端口 3083 由 dsh-pocket settings.json 固定。
@@ -330,6 +332,8 @@ final class ViewController: UIViewController {
         hideError()
         hasLoadedOnce = false
         isTokenRetryInFlight = false
+        // 用户/代码显式换地址：解除 Pocket 重试防重入，让新地址能走完整握手
+        if !trimmed.contains("dsh-pocket-retry=1") { isPocketRetryInFlight = false }
         // 新地址开始加载：先隐藏旧内容，避免残留上一个服务的画面
         UIView.animate(withDuration: 0.12) {
             self.webView.alpha = 0
@@ -428,6 +432,27 @@ final class ViewController: UIViewController {
 // MARK: - WKNavigationDelegate
 
 extension ViewController: WKNavigationDelegate {
+    func webView(_ webView: WKWebView,
+                 decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        // DSH Pocket（3083）在 Safari/WKWebView 的 http://纯IP 源上 cookie 存不进 cookie jar
+        // （dsh-pocket issue #91）→ 握手永远完不成 → 503 错误页/白屏。
+        // 绕过：手动截获响应的 Set-Cookie，直接塞进 WKHTTPCookieStore ——
+        // store 层写入不受 ITP 限制，后续请求会正常携带。
+        if let httpRes = navigationResponse.response as? HTTPURLResponse,
+           let url = navigationResponse.response.url,
+           let fields = httpRes.allHeaderFields as? [String: String] {
+            let cookies = HTTPCookie.cookies(withResponseHeaderFields: fields, for: url)
+            if !cookies.isEmpty {
+                let store = webView.configuration.websiteDataStore.httpCookieStore
+                for c in cookies { store.setCookie(c, completionHandler: nil) }
+            }
+            // 识别 Pocket 握手过渡页（200 + x-dsh-pocket-handshake: transition）：
+            // cookie 已手动入库，meta refresh 之前的下一次 GET / 就能带上，无需干预。
+        }
+        decisionHandler(.allow)
+    }
+
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         activityIndicator.startAnimating()
         startNavigationTimeout()
@@ -442,6 +467,27 @@ extension ViewController: WKNavigationDelegate {
         // 内容首帧就绪后才显形：加载过程只显示原生加载态，永不白屏
         revealWebView()
         detectStaleTokenPage()
+        detectPocketHandshakeBlocked()
+    }
+
+    /// 3083 Pocket 握手失败兜底：代理重试计数耗尽后回 503「无法完成登录握手」页。
+    /// 正常情况下 cookie 已由 decidePolicyFor 手动入库，不应走到这里；若走到
+    /// （如 cookie 被系统清理），清计数参数重载一次。官方入口：/?dsh-pocket-retry=1。
+    private func detectPocketHandshakeBlocked() {
+        guard !isPocketRetryInFlight else { return }
+        webView.evaluateJavaScript("document.body ? document.body.innerText.slice(0, 300) : ''") {
+            [weak self] result, _ in
+            guard let self,
+                  let text = result as? String,
+                  text.contains("无法完成登录握手") else { return }
+            self.isPocketRetryInFlight = true
+            if var comps = URLComponents(url: self.webView.url ?? URL(string: self.defaultURL)!, resolvingAgainstBaseURL: false) {
+                let items = (comps.queryItems ?? []).filter { $0.name != "dsh-pocket-retry" }
+                comps.queryItems = items + [URLQueryItem(name: "dsh-pocket-retry", value: "1")]
+                if let retryURL = comps.url { self.loadURLString(retryURL.absoluteString); return }
+            }
+            self.loadURLString(self.defaultURL)
+        }
     }
 
     /// 电脑端 DSH 重启后 token 会变：外网打开时 3081 直接回 401 文字页
