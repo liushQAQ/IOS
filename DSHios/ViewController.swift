@@ -76,7 +76,8 @@ final class ViewController: UIViewController {
           var hasBR = typeof Promise.withResolvers === 'function';
           var hasAt = typeof Array.prototype.at === 'function';
           var hasOwn = typeof Object.hasOwn === 'function';
-          return JSON.stringify({ rootLen: len, rootKids: kids, withResolvers: hasBR, at: hasAt, hasOwn: hasOwn });
+          var hasTS = typeof Array.prototype.toSorted === 'function';
+          return JSON.stringify({ rootLen: len, rootKids: kids, withResolvers: hasBR, at: hasAt, hasOwn: hasOwn, toSorted: hasTS });
         })()
         """
         webView.evaluateJavaScript(check) { [weak self] result, error in
@@ -97,7 +98,7 @@ final class ViewController: UIViewController {
                 guard report else { return }
                 let details = [
                     "#root 文本长度=\(info["rootLen"] ?? "?") 子节点数=\(info["rootKids"] ?? "?")",
-                    "API: withResolvers=\(info["withResolvers"] ?? "?") at=\(info["at"] ?? "?") hasOwn=\(info["hasOwn"] ?? "?")"
+                    "API: withResolvers=\(info["withResolvers"] ?? "?") at=\(info["at"] ?? "?") hasOwn=\(info["hasOwn"] ?? "?") toSorted=\(info["toSorted"] ?? "?")"
                 ]
                 var parts = details
                 if !self.webErrors.isEmpty { parts.append("JS 异常：" + self.webErrors.joined(separator: " ｜ ")) }
@@ -180,6 +181,68 @@ final class ViewController: UIViewController {
             writable: true, configurable: true
           });
         }
+        """,
+        // Array.prototype.toSorted/toReversed/toSpliced/with、findLast/findLastIndex
+        // （ES2023，iOS 16.4 才进 Safari）。真机实证 iOS 16_3：
+        // 插件 bundle 里 `groups.toSorted(...)` / `rows.toSorted(...)` 直接抛
+        // "toSorted is not a function" → 插件树加载失败 → #root 空 = 白屏。
+        """
+        (function () {
+          function def(target, name, fn) {
+            if (typeof target[name] === 'function') return;
+            try { Object.defineProperty(target, name, { value: fn, writable: true, configurable: true }); } catch (e) {}
+          }
+          def(Array.prototype, 'toSorted', function (cmp) {
+            var a = Array.prototype.slice.call(this); return a.sort(cmp);
+          });
+          def(Array.prototype, 'toReversed', function () {
+            return Array.prototype.slice.call(this).reverse();
+          });
+          def(Array.prototype, 'toSpliced', function () {
+            var a = Array.prototype.slice.call(this);
+            a.splice.apply(a, Array.prototype.slice.call(arguments)); return a;
+          });
+          def(Array.prototype, 'with', function (i, v) {
+            var a = Array.prototype.slice.call(this), k = Number(i) || 0;
+            k = k < 0 ? a.length + k : k;
+            if (k < 0 || k >= a.length) throw new RangeError('Invalid index');
+            a[k] = v; return a;
+          });
+          def(Array.prototype, 'findLast', function (fn, t) {
+            for (var i = this.length - 1; i >= 0; i--) if (fn.call(t, this[i], i, this)) return this[i];
+          });
+          def(Array.prototype, 'findLastIndex', function (fn, t) {
+            for (var i = this.length - 1; i >= 0; i--) if (fn.call(t, this[i], i, this)) return i;
+            return -1;
+          });
+          def(Set.prototype, 'union', function (o) {
+            var r = new Set(this), s = o[Symbol.iterator]();
+            for (var n = s.next(); !n.done; n = s.next()) r.add(n.value);
+            return r;
+          });
+          def(Set.prototype, 'intersection', function (o) {
+            var r = new Set(), s = this[Symbol.iterator]();
+            for (var n = s.next(); !n.done; n = s.next()) if (o.has(n.value)) r.add(n.value);
+            return r;
+          });
+          def(Set.prototype, 'difference', function (o) {
+            var r = new Set(), s = this[Symbol.iterator]();
+            for (var n = s.next(); !n.done; n = s.next()) if (!o.has(n.value)) r.add(n.value);
+            return r;
+          });
+          if (typeof Object.groupBy !== 'function') {
+            Object.groupBy = function (it, fn) {
+              var r = Object.create(null), i = 0, s = it[Symbol.iterator]();
+              for (var n = s.next(); !n.done; n = s.next()) {
+                var k = fn(n.value, i++); (r[k] || (r[k] = [])).push(n.value);
+              }
+              return r;
+            };
+          }
+          if (typeof URL.canParse !== 'function') {
+            URL.canParse = function (u, b) { try { new URL(u, b); return true; } catch (e) { return false; } };
+          }
+        })();
         """,
         // 把 Web 内容的异常具名带到原生侧并浮到错误浮层，白屏不再是哑的。
         """
