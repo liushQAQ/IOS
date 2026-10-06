@@ -505,7 +505,13 @@ final class ViewController: UIViewController {
             self?.promptForURL()
         })
         sheet.addAction(UIAlertAction(title: "刷新", style: .default) { [weak self] _ in
-            self?.webView.reload()
+            // reloadFromOrigin 而不是 reload：后者允许复用 HTTP 缓存。
+            // 入口包（index-*.js）名字是构建期哈希、不是内容哈希，一旦被缓存住，
+            // 服务端修好了客户端也拿不到（白屏看起来「修不好」）。强制回源。
+            self?.webView.reloadFromOrigin()
+        })
+        sheet.addAction(UIAlertAction(title: "清除缓存并重载", style: .default) { [weak self] _ in
+            self?.clearWebCacheAndReload()
         })
         sheet.addAction(UIAlertAction(title: "关于", style: .default) { [weak self] _ in
             self?.showAbout()
@@ -513,6 +519,23 @@ final class ViewController: UIViewController {
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
         sheet.popoverPresentationController?.sourceView = menuButton
         present(sheet, animated: true)
+    }
+
+    /// 清空 WKWebView 的磁盘/内存缓存后重新加载。
+    /// 用途：服务端已修好但客户端仍在用缓存里的旧入口包时，一键恢复。
+    private func clearWebCacheAndReload() {
+        let target = webView.url?.absoluteString
+            ?? UserDefaults.standard.string(forKey: Keys.lastURL)
+            ?? defaultURL
+        let dataStore = webView.configuration.websiteDataStore
+        let types = WKWebsiteDataStore.allWebsiteDataTypes()
+        dataStore.removeData(ofTypes: types, modifiedSince: .distantPast) { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                // cookie 也一并清了，重新走一遍 Pocket 握手
+                self.loadURLString(target)
+            }
+        }
     }
 
     private func openServiceList() {
@@ -822,7 +845,7 @@ extension ViewController: WKNavigationDelegate {
         recordWebError("内容进程被系统回收（第 \(terminateCount) 次），已自动重载")
         activityIndicator.startAnimating()
         startNavigationTimeout()
-        webView.reload()
+        webView.reloadFromOrigin()
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
