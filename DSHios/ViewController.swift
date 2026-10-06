@@ -19,6 +19,90 @@ final class ViewController: UIViewController {
     private var isTokenRetryInFlight = false
     /// 3083 Pocket 握手自动重试防重入（503 握手页 → 清 cookie 重载一次）。
     private var isPocketRetryInFlight = false
+    /// 白屏自诊断采样计时器（多次采样把 JS 崩溃画到浮层，而不是留一个纯白屏）。
+    private var diagnoseTimers: [Timer] = []
+
+    private static func makeErrorBridge(owner: ViewController) -> WKScriptMessageHandler {
+        return ErrorBridge { [weak owner] message in
+            owner?.recordWebError(message)
+        }
+    }
+
+    private final class ErrorBridge: NSObject, WKScriptMessageHandler {
+        let onMessage: (String) -> Void
+        init(onMessage: @escaping (String) -> Void) { self.onMessage = onMessage }
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            if let text = message.body as? String { onMessage(text) }
+        }
+    }
+
+    /// 累积 Web 侧异常，最多保留最近 4 条，供自诊断浮层展示。
+    private func recordWebError(_ text: String) {
+        let line = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
+        guard !line.isEmpty else { return }
+        DispatchQueue.main.async {
+            if self.webErrors.count >= 4 { self.webErrors.removeFirst() }
+            if self.webErrors.last != line { self.webErrors.append(line) }
+        }
+    }
+
+    /// didFinish 后多次采样 #root：一直为空就说明 JS 崩了，把原因显示出来而不是白屏。
+    private func startWhiteScreenDiagnostics() {
+        diagnoseTimers.forEach { $0.invalidate() }
+        diagnoseTimers = [4.0, 9.0, 16.0].map { delay in
+            Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+                self?.sampleRoot()
+            }
+        }
+    }
+
+    private func stopWhiteScreenDiagnostics() {
+        diagnoseTimers.forEach { $0.invalidate() }
+        diagnoseTimers = []
+    }
+
+    private func sampleRoot() {
+        guard isViewLoaded, view.window != nil else { return }
+        let check = """
+        (function () {
+          var root = document.getElementById('root');
+          var len = root ? (root.innerText || '').trim().length : -1;
+          var kids = root ? root.children.length : -1;
+          var hasBR = typeof Promise.withResolvers === 'function';
+          var hasAt = typeof Array.prototype.at === 'function';
+          var hasOwn = typeof Object.hasOwn === 'function';
+          return JSON.stringify({ rootLen: len, rootKids: kids, withResolvers: hasBR, at: hasAt, hasOwn: hasOwn });
+        })()
+        """
+        webView.evaluateJavaScript(check) { [weak self] result, error in
+            guard let self else { return }
+            if let json = result as? String,
+               let data = json.data(using: .utf8),
+               let info = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let rootLen = info["rootLen"] as? Int ?? -1
+                // 页面已经渲染出内容：撤掉诊断，正常显示。
+                if rootLen > 0 {
+                    self.stopWhiteScreenDiagnostics()
+                    self.hideError()
+                    self.hasLoadedOnce = true
+                    self.revealWebView()
+                    return
+                }
+                let details = [
+                    "#root 文本长度=\(info["rootLen"] ?? "?") 子节点数=\(info["rootKids"] ?? "?")",
+                    "API: withResolvers=\(info["withResolvers"] ?? "?") at=\(info["at"] ?? "?") hasOwn=\(info["hasOwn"] ?? "?")"
+                ]
+                var parts = details
+                if !self.webErrors.isEmpty { parts.append("JS 异常：" + self.webErrors.joined(separator: " ｜ ")) }
+                self.showError(detail: "页面加载后未渲染（白屏）。\n" + parts.joined(separator: "\n"))
+            } else if let error {
+                self.showError(detail: "页面无响应，无法读取内容：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private var webErrors: [String] = []
 
     /// 默认加载地址：DSH Pocket（桌面端 LAN 代理，明文 HTTP，免密码）。
     /// 桌面端需保持运行；端口 3083 由 dsh-pocket settings.json 固定。
@@ -26,10 +110,86 @@ final class ViewController: UIViewController {
 
     private struct Keys {
         static let lastURL = "DSHios.lastURL"
-        /// 保存 URL 的格式版本：旧版本保存过坏的 3081/dsh/ 地址，需迁移到新默认值。
         static let urlVersion = "DSHios.urlVersion"
         static let currentURLVersion = 2
     }
+
+    /// iOS 16 缺失的关键 Web API 兜底。页面构建目标定得比 16 高，
+    /// 缺失任一都会导致启动脚本抛错白屏。每条只在原生不存在时补齐。
+    static let iosCompatShims: [String] = [
+        // Promise.withResolvers（iOS 17+）：页面用它发布 __DSH_BOOT_READY__。
+        """
+        if (typeof Promise.withResolvers !== 'function') {
+          Promise.withResolvers = function () {
+            var resolve, reject;
+            var promise = new Promise(function (res, rej) { resolve = res; reject = rej; });
+            return { promise: promise, resolve: resolve, reject: reject };
+          };
+        }
+        """,
+        // Array.prototype.at（iOS 15.4+）。
+        """
+        if (typeof Array.prototype.at !== 'function') {
+          Object.defineProperty(Array.prototype, 'at', {
+            value: function (i) {
+              var n = this.length, k = Number(i) || 0;
+              k = k < 0 ? n + k : k;
+              return (k >= 0 && k < n) ? this[k] : undefined;
+            },
+            writable: true, configurable: true
+          });
+        }
+        """,
+        // Object.hasOwn（iOS 15.4+）。
+        """
+        if (typeof Object.hasOwn !== 'function') {
+          Object.defineProperty(Object, 'hasOwn', {
+            value: function (o, p) { return Object.prototype.hasOwnProperty.call(o, p); },
+            writable: true, configurable: true
+          });
+        }
+        """,
+        // structuredClone（iOS 15.4+）：回退到 JSON 深拷贝。
+        """
+        if (typeof structuredClone !== 'function') {
+          globalThis.structuredClone = function (v) {
+            if (v === undefined) return undefined;
+            return JSON.parse(JSON.stringify(v));
+          };
+        }
+        """,
+        // Array.prototype.flat / flatMap（iOS 12+ 通常存在，保险补齐）。
+        """
+        if (typeof Array.prototype.flatMap !== 'function') {
+          Object.defineProperty(Array.prototype, 'flatMap', {
+            value: function (fn, thisArg) {
+              return this.reduce(function (acc, it, i, arr) {
+                var v = fn.call(thisArg, it, i, arr);
+                return acc.concat(Array.isArray(v) ? v : [v]);
+              }, []);
+            },
+            writable: true, configurable: true
+          });
+        }
+        """,
+        // 把 Web 内容的异常具名带到原生侧并浮到错误浮层，白屏不再是哑的。
+        """
+        (function () {
+          window.__dshReportError = function (parts) {
+            try {
+              window.webkit.messageHandlers.dshErrors.postMessage(String(parts));
+            } catch (e) {}
+          };
+          window.addEventListener('error', function (e) {
+            window.__dshReportError('JS错误: ' + (e.message || e) + ' @ ' + (e.filename || '').slice(-40) + ':' + (e.lineno || 0));
+          });
+          window.addEventListener('unhandledrejection', function (e) {
+            var r = e.reason;
+            window.__dshReportError('未处理Promise拒绝: ' + (r && r.message ? r.message : String(r)));
+          });
+        })();
+        """
+    ]
 
     override var prefersStatusBarHidden: Bool { false }
     override var preferredStatusBarStyle: UIStatusBarStyle { .default }
@@ -75,10 +235,20 @@ final class ViewController: UIViewController {
             """,
             injectionTime: .atDocumentStart, forMainFrameOnly: false)
         config.userContentController.addUserScript(viewportFix)
+        // iOS 16 的 WebKit 缺少桌面端构建默认可用的一部分较新 Web API，
+        // 任一缺失都会让首个内联脚本抛错 → #root 永远空 = 白屏。
+        // 在文档开始前注入最小语义等价的 polyfill（仅在原生缺失时生效）。
+        for src in Self.iosCompatShims {
+            config.userContentController.addUserScript(
+                WKUserScript(source: src,
+                             injectionTime: .atDocumentStart,
+                             forMainFrameOnly: false))
+        }
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
         webView.uiDelegate = self
+        config.userContentController.add(Self.makeErrorBridge(owner: self), name: "dshErrors")
         webView.allowsBackForwardNavigationGestures = true
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
@@ -330,6 +500,8 @@ final class ViewController: UIViewController {
 
         UserDefaults.standard.set(trimmed, forKey: Keys.lastURL)
         hideError()
+        stopWhiteScreenDiagnostics()
+        webErrors = []
         hasLoadedOnce = false
         isTokenRetryInFlight = false
         // 用户/代码显式换地址：解除 Pocket 重试防重入，让新地址能走完整握手
@@ -468,6 +640,7 @@ extension ViewController: WKNavigationDelegate {
         revealWebView()
         detectStaleTokenPage()
         detectPocketHandshakeBlocked()
+        startWhiteScreenDiagnostics()
     }
 
     /// 3083 Pocket 握手失败兜底：代理重试计数耗尽后回 503「无法完成登录握手」页。
