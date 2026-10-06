@@ -42,17 +42,21 @@ final class ViewController: UIViewController {
         let line = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
         guard !line.isEmpty else { return }
         DispatchQueue.main.async {
-            if self.webErrors.count >= 4 { self.webErrors.removeFirst() }
+            if self.webErrors.count >= 8 { self.webErrors.removeFirst() }
             if self.webErrors.last != line { self.webErrors.append(line) }
         }
     }
 
-    /// didFinish 后多次采样 #root：一直为空就说明 JS 崩了，把原因显示出来而不是白屏。
+    /// didFinish 后多次延时采样 #root。
+    /// 注意：didFinish 只代表 HTML 解析完，插件 bundle（约 14MB）还要再加载十几秒，
+    /// 因此前几次采样允许为空——只有最后一次（约 25 秒后）仍空才判定白屏，避免误报。
     private func startWhiteScreenDiagnostics() {
         diagnoseTimers.forEach { $0.invalidate() }
-        diagnoseTimers = [4.0, 9.0, 16.0].map { delay in
+        let delays: [TimeInterval] = [10.0, 18.0, 28.0]
+        diagnoseTimers = delays.enumerated().map { index, delay in
             Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-                self?.sampleRoot()
+                // 最后一次采样才允许报警；前几次只负责提前确认页面已渲染。
+                self?.sampleRoot(report: index == delays.count - 1)
             }
         }
     }
@@ -62,7 +66,7 @@ final class ViewController: UIViewController {
         diagnoseTimers = []
     }
 
-    private func sampleRoot() {
+    private func sampleRoot(report: Bool) {
         guard isViewLoaded, view.window != nil else { return }
         let check = """
         (function () {
@@ -89,12 +93,15 @@ final class ViewController: UIViewController {
                     self.revealWebView()
                     return
                 }
+                // 尚未到判定时刻：插件可能还在加载，不打扰。
+                guard report else { return }
                 let details = [
                     "#root 文本长度=\(info["rootLen"] ?? "?") 子节点数=\(info["rootKids"] ?? "?")",
                     "API: withResolvers=\(info["withResolvers"] ?? "?") at=\(info["at"] ?? "?") hasOwn=\(info["hasOwn"] ?? "?")"
                 ]
                 var parts = details
                 if !self.webErrors.isEmpty { parts.append("JS 异常：" + self.webErrors.joined(separator: " ｜ ")) }
+                self.errorTitleLabel.text = "页面白屏"
                 self.showError(detail: "页面加载后未渲染（白屏）。\n" + parts.joined(separator: "\n"))
             } else if let error {
                 self.showError(detail: "页面无响应，无法读取内容：\(error.localizedDescription)")
@@ -103,6 +110,8 @@ final class ViewController: UIViewController {
     }
 
     private var webErrors: [String] = []
+    /// Web 内容进程被系统回收的次数（内存压力导致白屏的重要嫌疑指标）。
+    private var terminateCount = 0
 
     /// 默认加载地址：DSH Pocket（桌面端 LAN 代理，明文 HTTP，免密码）。
     /// 桌面端需保持运行；端口 3083 由 dsh-pocket settings.json 固定。
@@ -187,6 +196,38 @@ final class ViewController: UIViewController {
             var r = e.reason;
             window.__dshReportError('未处理Promise拒绝: ' + (r && r.message ? r.message : String(r)));
           });
+        })();
+        """,
+        // 关键探针：DSH 前端唯一数据通道是 ws(s)://.../api/remote.mux。
+        // 若它在 iOS 上握手失败（401/挂起），页面就永远拿不到数据 = 白屏。
+        // 这里把每一次 WebSocket 的建连结果与关闭码上报原生，用于判定真因。
+        // 只上报，不改变任何行为。
+        """
+        (function () {
+          if (window.__dshWsProbe) return;
+          window.__dshWsProbe = true;
+          var report = function (s) {
+            try { window.webkit.messageHandlers.dshErrors.postMessage('WS ' + s); } catch (e) {}
+          };
+          var Native = window.WebSocket;
+          if (typeof Native !== 'function') return;
+          function Patched(url, protocols) {
+            var ws = protocols === undefined ? new Native(url) : new Native(url, protocols);
+            var shortUrl = String(url).replace(/^wss?:\\/\\//, '');
+            report('连接中 ' + shortUrl);
+            ws.addEventListener('open', function () { report('已连接 ' + shortUrl); });
+            ws.addEventListener('error', function () { report('连接失败 ' + shortUrl); });
+            ws.addEventListener('close', function (ev) {
+              report('关闭 code=' + ev.code + ' reason=' + (ev.reason || '') + ' ' + shortUrl);
+            });
+            return ws;
+          }
+          Patched.prototype = Native.prototype;
+          Patched.CONNECTING = Native.CONNECTING;
+          Patched.OPEN = Native.OPEN;
+          Patched.CLOSING = Native.CLOSING;
+          Patched.CLOSED = Native.CLOSED;
+          window.WebSocket = Patched;
         })();
         """
     ]
@@ -502,6 +543,7 @@ final class ViewController: UIViewController {
         hideError()
         stopWhiteScreenDiagnostics()
         webErrors = []
+        terminateCount = 0
         hasLoadedOnce = false
         isTokenRetryInFlight = false
         // 用户/代码显式换地址：解除 Pocket 重试防重入，让新地址能走完整握手
@@ -550,6 +592,10 @@ final class ViewController: UIViewController {
     }
 
     private func showError(detail: String) {
+        // 白屏诊断路径已把标题设成「页面白屏」，这里不要覆盖它；其余一律回到默认标题。
+        if errorTitleLabel.text != "页面白屏" {
+            errorTitleLabel.text = "无法连接到 DSH"
+        }
         errorDetailLabel.text = detail
         errorOverlay.isHidden = false
         errorOverlay.alpha = 0
@@ -560,6 +606,8 @@ final class ViewController: UIViewController {
 
     private func hideError() {
         errorOverlay.isHidden = true
+        // 回到默认标题，避免下一次连接类错误沿用「页面白屏」。
+        errorTitleLabel.text = "无法连接到 DSH"
     }
 
     /// 把 WKWebView 的 NSError 翻译成用户可读的提示。
@@ -704,7 +752,11 @@ extension ViewController: WKNavigationDelegate {
     }
 
     /// Web 内容进程被系统回收（内存压力/后台）时自动重连，避免只剩空白页。
+    /// 插件 bundle 合计十几 MB，iOS 上内存压力大时很容易被回收：
+    /// 一旦发生，#root 永远渲染不完 = 白屏。这里计数并上报，便于定位。
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        terminateCount += 1
+        recordWebError("内容进程被系统回收（第 \(terminateCount) 次），已自动重载")
         activityIndicator.startAnimating()
         startNavigationTimeout()
         webView.reload()
