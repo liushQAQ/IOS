@@ -12,6 +12,8 @@ final class ViewController: UIViewController {
     private var errorTitleLabel: UILabel!
     private var errorDetailLabel: UILabel!
     private var menuButton: UIButton!
+    /// 悬浮按钮的右缘约束：constant 越小越靠右，收起态为负值（把按钮推出屏幕外）。
+    private var menuTrailingConstraint: NSLayoutConstraint!
     private var navigationTimer: Timer?
     private var pathMonitor: NWPathMonitor?
     private var hasLoadedOnce = false
@@ -21,6 +23,31 @@ final class ViewController: UIViewController {
     private var isPocketRetryInFlight = false
     /// 白屏自诊断采样计时器（多次采样把 JS 崩溃画到浮层，而不是留一个纯白屏）。
     private var diagnoseTimers: [Timer] = []
+
+    /// 悬浮菜单按钮：收起时只从右缘露出一条把手，展开后完整可见。
+    private var menuButtonExpanded = false
+    /// 展开后的自动收起计时器（「不用了自动隐藏」）。
+    private var menuAutoHideTimer: Timer?
+
+    /// 悬浮按钮边长。
+    private static let menuButtonSide: CGFloat = 44
+    /// 收起时从右缘露出的宽度（贴边把手；够宽才好按住拖动，又不压住页面热区）。
+    private static let menuCollapsedPeek: CGFloat = 22
+    /// 展开态距右缘的间距。
+    private static let menuTrailingInset: CGFloat = 10
+    /// 展开后静置多久自动收起。
+    private static let menuAutoHideDelay: TimeInterval = 4.0
+
+    /// 收起态右缘约束值：正值把按钮推出屏幕，只留 `menuCollapsedPeek` 宽在屏内。
+    /// 约束语义是 `button.trailing = safeArea.trailing + constant`，
+    /// 所以正值 = 往屏幕右外侧推，负值 = 从右缘往内缩。
+    private static var menuCollapsedConstant: CGFloat {
+        menuButtonSide - menuCollapsedPeek
+    }
+    /// 展开态右缘约束值。
+    private static var menuExpandedConstant: CGFloat {
+        -menuTrailingInset
+    }
 
     private static func makeErrorBridge(owner: ViewController) -> WKScriptMessageHandler {
         return ErrorBridge { [weak owner] message in
@@ -312,6 +339,7 @@ final class ViewController: UIViewController {
 
     deinit {
         navigationTimer?.invalidate()
+        menuAutoHideTimer?.invalidate()
         pathMonitor?.cancel()
         NotificationCenter.default.removeObserver(self)
     }
@@ -436,7 +464,7 @@ final class ViewController: UIViewController {
         let changeButton = UIButton(type: .system)
         changeButton.setTitle("换一个地址", for: .normal)
         changeButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
-        changeButton.addTarget(self, action: #selector(menuTapped), for: .touchUpInside)
+        changeButton.addTarget(self, action: #selector(openMenuDirectly), for: .touchUpInside)
 
         container.addArrangedSubview(icon)
         container.addArrangedSubview(title)
@@ -461,30 +489,135 @@ final class ViewController: UIViewController {
         self.errorDetailLabel = detail
     }
 
-    /// 右下角半透明小按钮：默认几乎不可见，点开才能换地址/看版本，不破坏「与桌面端一致」的观感。
+    /// 右缘悬浮菜单按钮（半透明、可滑动、不用自动隐藏）。
+    ///
+    /// 旧实现把它钉死在右下角 40×40，正好压在页面的输入框/发送键上，点不动（用户报障）。
+    /// 现在改成「从右缘滑出」：
+    /// - 收起态只露出 `menuCollapsedPeek` 宽的一条把手，几乎不占页面热区；
+    /// - 手指在按钮上左右拖动可跟手展开/收起（`UIPanGestureRecognizer`），点一下也能切换；
+    /// - 展开后静置 `menuAutoHideDelay` 秒自动收起，不遮挡页面；
+    /// - 选右缘是因为 iOS 的「侧滑返回」手势占用左缘，放左缘会和系统手势打架。
     private func setupMenuButton() {
         let button = UIButton(type: .system)
-        button.setImage(UIImage(systemName: "slider.horizontal.3"), for: .normal)
         button.tintColor = .secondaryLabel
         button.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.75)
-        button.layer.cornerRadius = 20
-        button.alpha = 0.35
+        button.layer.cornerRadius = Self.menuButtonSide / 2
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOpacity = 0.18
+        button.layer.shadowRadius = 4
+        button.layer.shadowOffset = CGSize(width: 0, height: 1)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(menuTapped), for: .touchUpInside)
+        button.accessibilityLabel = "菜单"
+        button.accessibilityHint = "向左拖动可展开"
         view.addSubview(button)
 
+        self.menuTrailingConstraint = button.trailingAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.trailingAnchor,
+            constant: Self.menuCollapsedConstant)
         NSLayoutConstraint.activate([
-            button.widthAnchor.constraint(equalToConstant: 40),
-            button.heightAnchor.constraint(equalToConstant: 40),
-            button.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
-            button.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
+            button.widthAnchor.constraint(equalToConstant: Self.menuButtonSide),
+            button.heightAnchor.constraint(equalToConstant: Self.menuButtonSide),
+            self.menuTrailingConstraint,
+            // 竖直位置比正中略高：首启 hero 页的输入卡大约在 y=410 起，
+            // 上移 56pt 后把手完全落在它上方，不与输入框/发送键抢触点。
+            button.centerYAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.centerYAnchor, constant: -56)
         ])
+
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(menuPanned(_:)))
+        button.addGestureRecognizer(pan)
+
         self.menuButton = button
+        self.setMenuExpanded(false, animated: false)
     }
 
-    // MARK: - 菜单（换地址 / 服务列表 / 版本）
+    /// 收起 / 展开悬浮按钮。收起态把按钮大部分推出右缘，只留一条把手。
+    private func setMenuExpanded(_ expanded: Bool, animated: Bool) {
+        guard let button = menuButton, let constraint = menuTrailingConstraint else { return }
+        menuButtonExpanded = expanded
+        let constant = expanded
+            ? Self.menuExpandedConstant
+            : Self.menuCollapsedConstant
+        constraint.constant = constant
+        // 展开态更实一些（用户要「悬浮半透明」，收起态更淡，避免干扰阅读）。
+        let targetAlpha: CGFloat = expanded ? 0.9 : 0.5
 
+        let apply = {
+            button.alpha = targetAlpha
+            self.view.layoutIfNeeded()
+        }
+        // 收起时按钮大部分在屏外，居中的图标会被裁掉：换成「左箭头」并把图标整体
+        // 往可见的一侧（屏幕右缘）挪，展开后恢复成菜单图标，让把手自己说明「往左拉」。
+        let visible = expanded ? Self.menuButtonSide : Self.menuCollapsedPeek
+        let shift = (Self.menuButtonSide - visible) / 2
+        button.setImage(UIImage(systemName: expanded ? "slider.horizontal.3" : "chevron.left"),
+                        for: .normal)
+        // 纯图片按钮：内容中心偏移 = (left - right) / 2，正值向右。
+        button.imageEdgeInsets = UIEdgeInsets(top: 0, left: shift, bottom: 0, right: -shift)
+
+        if animated {
+            UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut], animations: apply)
+        } else {
+            apply()
+        }
+
+        menuAutoHideTimer?.invalidate()
+        menuAutoHideTimer = nil
+        if expanded {
+            menuAutoHideTimer = Timer.scheduledTimer(
+                withTimeInterval: Self.menuAutoHideDelay, repeats: false) { [weak self] _ in
+                self?.setMenuExpanded(false, animated: true)
+            }
+        }
+    }
+
+    /// 在按钮上左右拖动：跟手移动，松手后按位置决定展开或收起。
+    ///
+    /// 注意方向：按钮贴右缘，**向左滑（dx < 0）才是把它拉出来**，向右滑是推回屏外。
+    @objc private func menuPanned(_ gesture: UIPanGestureRecognizer) {
+        guard let constraint = menuTrailingConstraint else { return }
+        let base = menuButtonExpanded
+            ? Self.menuExpandedConstant
+            : Self.menuCollapsedConstant
+        // 约束值的合法区间：[展开值(小), 收起值(大)]。
+        let lower = Self.menuExpandedConstant
+        let upper = Self.menuCollapsedConstant
+        switch gesture.state {
+        case .changed:
+            let dx = gesture.translation(in: view).x
+            constraint.constant = min(max(base + dx, lower), upper)
+            menuAutoHideTimer?.invalidate()
+            menuAutoHideTimer = nil
+            view.layoutIfNeeded()
+        case .ended, .cancelled, .failed:
+            let dx = gesture.translation(in: view).x
+            let velocity = gesture.velocity(in: view).x
+            // 左滑过半、或左滑速度够快 → 展开；否则收起。
+            let threshold = Self.menuButtonSide / 2
+            let expand = (dx < -threshold) || (velocity < -400)
+            setMenuExpanded(expand, animated: true)
+        default:
+            break
+        }
+    }
+
+    /// 错误浮层上的「换一个地址」：不经过悬浮按钮的展开态，直接弹菜单。
+    @objc private func openMenuDirectly() {
+        presentMenuSheet()
+    }
+
+    /// 点一下：展开时直接弹菜单，收起时先展开。
     @objc private func menuTapped() {
+        guard menuButtonExpanded else {
+            setMenuExpanded(true, animated: true)
+            return
+        }
+        // 不打断自动收起计时器：菜单关掉后按钮也会自己收回去，不留遮挡。
+        presentMenuSheet()
+    }
+
+    private func presentMenuSheet() {
         let sheet = UIAlertController(title: "DSH", message: nil, preferredStyle: .actionSheet)
 
         let services = ServiceStore.load()
@@ -644,6 +777,8 @@ final class ViewController: UIViewController {
     // MARK: - 联网即加载
 
     @objc private func appDidBecomeActive() {
+        // 回前台先把悬浮按钮收回右缘，避免它停在上次展开的位置挡住页面。
+        setMenuExpanded(false, animated: false)
         // 回到前台：若当前是失败态或还没内容，立刻重连（桌面端会话是实时的）。
         if !errorOverlay.isHidden || webView.url == nil || !hasLoadedOnce {
             retryTapped()
