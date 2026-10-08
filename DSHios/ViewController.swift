@@ -154,6 +154,48 @@ final class ViewController: UIViewController {
     /// iOS 16 缺失的关键 Web API 兜底。页面构建目标定得比 16 高，
     /// 缺失任一都会导致启动脚本抛错白屏。每条只在原生不存在时补齐。
     static let iosCompatShims: [String] = [
+        // 移动端视觉与对比度增强：
+        // 降低模型选择菜单、二级/多级菜单毛玻璃透明度（原深色仅45%不透明度导致文字严重重叠），
+        // 提升至 96% 沉浸高对比度毛玻璃，字迹极度清晰。
+        """
+        (function() {
+          var style = document.createElement('style');
+          style.id = 'dsh-ios-glass-enhancement';
+          style.textContent = [
+            ':root {',
+            '  --dsw-menu-surface-fill: rgba(255, 255, 255, 0.96) !important;',
+            '  --dsw-menu-backdrop-filter: blur(28px) saturate(180%) !important;',
+            '}',
+            'body[data-ds-dark-theme] {',
+            '  --dsw-menu-surface-fill: rgba(22, 24, 29, 0.96) !important;',
+            '  --dsw-menu-backdrop-filter: blur(28px) saturate(180%) !important;',
+            '}',
+            '.VYXhfG_menu,',
+            '[data-menu-material="translucent"],',
+            '[data-menu-material],',
+            '[role="menu"],',
+            '[role="listbox"] {',
+            '  background-color: var(--dsw-menu-surface-fill) !important;',
+            '  backdrop-filter: var(--dsw-menu-backdrop-filter) !important;',
+            '  -webkit-backdrop-filter: var(--dsw-menu-backdrop-filter) !important;',
+            '  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--dsw-elevation-stroke-color, rgba(255, 255, 255, 0.12)) !important;',
+            '}',
+            '.VYXhfG_modelName,',
+            '.VYXhfG_cellLabel,',
+            '.VYXhfG_cellValue {',
+            '  font-weight: 500 !important;',
+            '  opacity: 1 !important;',
+            '}'
+          ].join('\\n');
+          function attach() {
+            if (!document.head) { setTimeout(attach, 10); return; }
+            if (!document.getElementById('dsh-ios-glass-enhancement')) {
+              document.head.appendChild(style);
+            }
+          }
+          attach();
+        })();
+        """,
         // Promise.withResolvers（iOS 17+）：页面用它发布 __DSH_BOOT_READY__。
         """
         if (typeof Promise.withResolvers !== 'function') {
