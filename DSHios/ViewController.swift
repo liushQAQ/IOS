@@ -395,6 +395,8 @@ final class ViewController: UIViewController {
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        // 绑定持久化数据存储，确保静态资源磁盘缓存生效
+        config.websiteDataStore = WKWebsiteDataStore.default()
         // 电脑端一些老页面（如 8210 TTS）没写 <meta name="viewport">，
         // WKWebView 会按 980px 桌面宽渲染再整体缩小 → UI/按钮比例怪。
         // 在每个页面文档开头注入标准移动端 viewport 修正（仅当页面自己没写时生效）。

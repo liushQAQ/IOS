@@ -17,6 +17,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // 开启 64MB 内存 + 256MB 磁盘 URL 缓存，让静态 JS/CSS/字体强缓存落盘，秒开页面
+        let memoryCapacity = 64 * 1024 * 1024
+        let diskCapacity = 256 * 1024 * 1024
+        let cache = URLCache(memoryCapacity: memoryCapacity, diskCapacity: diskCapacity, diskPath: "dsh_web_cache")
+        URLCache.shared = cache
         return true
     }
 
