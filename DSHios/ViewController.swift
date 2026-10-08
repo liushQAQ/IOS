@@ -835,8 +835,11 @@ final class ViewController: UIViewController {
             title: "DeepSeek Harness iOS",
             message: """
             版本：\(version) (\(build))
+            作者：liush734530963
+            开源仓库：
+            https://github.com/liush734530963/deepseek-harness-ios
 
-            默认服务：http://192.168.215.218:3083/
+            默认服务：http://192.168.215.218:3084/
             联网即加载电脑端会话
             """,
             preferredStyle: .alert)
