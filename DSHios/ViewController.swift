@@ -677,10 +677,12 @@ final class ViewController: UIViewController {
           window.WebSocket = Patched;
         })();
         """,
-        // 移动端工作台文件传输与下载桥接：
+        // 移动端工作台文件传输、原生分享与下载桥接：
         // 1. 拦截 `<a download="...">` 与 Blob/DataURL 点击，将二进制文件转送给原生保存/分享；
-        // 2. 在工作区文档预览的头部操作栏中，自动追加「保存到手机」下载按钮；
-        // 3. 支持将任意文本、代码、表格、图片等文件直接保存到 iOS「文件」或通过 AirDrop/微信分享。
+        // 2. 在交付物卡片（.JZoinq_file / [data-presented-files-row]）、文档预览栏（.YdIzba_header）、
+        //    会话文件树（[data-files-entry="file"]）与正文文件链接旁，一键注入「分享」按钮；
+        // 3. 点击「分享」按钮直接调起 iOS 本地原生 UIActivityViewController（存储到“文件”、隔空投送 AirDrop、微信分享等）；
+        // 4. 支持直接请求服务端 /api/file?path=... 获取工作区任意文件的无损原始二进制数据。
         """
         (function () {
           if (window.__dshDownloadBridgeInjected) return;
@@ -698,7 +700,41 @@ final class ViewController: UIViewController {
             }
           }
 
-          // 拦截链接点击（包含 download 属性，或 blob: / data: 协议的下载）
+          // 核心工具：通过绝对路径直接从 DSH 服务端 /api/file 拉取原文件并转送原生分享
+          function shareFileByPath(filePath, fileName) {
+            if (!filePath) return;
+            var name = fileName || filePath.split(/[\\\\/]/).pop() || 'file_' + Date.now();
+            var apiUrl = '/api/file?path=' + encodeURIComponent(filePath);
+
+            fetch(apiUrl).then(function(res) {
+              if (!res.ok) throw new Error('HTTP ' + res.status);
+              var mime = res.headers.get('content-type') || 'application/octet-stream';
+              return res.blob().then(function(blob) {
+                var reader = new FileReader();
+                reader.onloadend = function() {
+                  var b64 = (reader.result || '').split(',')[1] || '';
+                  sendFileToNative(name, mime, b64);
+                };
+                reader.readAsDataURL(blob);
+              });
+            }).catch(function(err) {
+              console.warn('[DSHios] Failed to fetch via /api/file, fallback to DOM text:', err);
+              // 如果通过接口拉取失败（如相对路径或离线），尝试从当前预览界面抓取
+              var previewBody = document.querySelector('.YdIzba_body');
+              if (previewBody) {
+                var text = previewBody.innerText || '';
+                var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                var reader = new FileReader();
+                reader.onloadend = function() {
+                  var b64 = (reader.result || '').split(',')[1] || '';
+                  sendFileToNative(name, 'text/plain', b64);
+                };
+                reader.readAsDataURL(blob);
+              }
+            });
+          }
+
+          // 拦截标准链接点击（包含 download 属性，或 blob: / data: 协议的下载）
           document.addEventListener('click', function (e) {
             var target = e.target && e.target.closest ? e.target.closest('a') : null;
             if (!target) return;
@@ -736,54 +772,115 @@ final class ViewController: UIViewController {
             }
           }, true);
 
-          // 监听并动态向右侧文档预览工具栏追加「保存到手机」悬浮导出能力
-          function ensureDownloadButton() {
+          // 动态注入 1：为每一张交付物卡片（.JZoinq_file / PresentedFileCard）注入原生「分享」按钮
+          function enrichDeliverableCards() {
+            var cards = document.querySelectorAll('.JZoinq_file');
+            cards.forEach(function(card) {
+              if (card.querySelector('.dsh-mobile-share-btn')) return;
+
+              // 尝试从卡片中提取文件绝对路径与文件名
+              var previewBtn = card.querySelector('button.JZoinq_cardPreview');
+              var nameEl = card.querySelector('.JZoinq_fileName');
+              var fileName = nameEl ? (nameEl.innerText || '').trim() : '';
+              var filePath = previewBtn ? (previewBtn.getAttribute('title') || '') : '';
+              if (!filePath && fileName) filePath = fileName;
+
+              var shareBtn = document.createElement('button');
+              shareBtn.type = 'button';
+              shareBtn.className = 'dsh-mobile-share-btn';
+              shareBtn.setAttribute('title', '分享 / 保存到手机');
+              shareBtn.style.cssText = 'height:24px;padding:0 8px;font-size:12px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;border:none;background:var(--dsw-alias-interactive-bg-hover, rgba(125,125,125,0.18));color:var(--dsw-alias-brand-primary, #007aff);font-weight:500;cursor:pointer;margin-left:auto;flex-shrink:0;';
+              shareBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg><span>分享</span>';
+
+              shareBtn.addEventListener('click', function(ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                // 优先取卡片上关联的绝对路径
+                var currentPath = previewBtn ? (previewBtn.getAttribute('title') || '') : filePath;
+                shareFileByPath(currentPath, fileName);
+              });
+
+              // 将按钮添加到卡片头部或尾部操作区
+              var fileBody = card.querySelector('.JZoinq_fileBody');
+              if (fileBody) {
+                fileBody.appendChild(shareBtn);
+              } else {
+                card.appendChild(shareBtn);
+              }
+            });
+          }
+
+          // 动态注入 2：向工作区文档预览工具栏（.YdIzba_header）追加「分享」按钮
+          function enrichPreviewHeader() {
             var headers = document.querySelectorAll('.YdIzba_header');
             headers.forEach(function(header) {
               if (header.querySelector('.dsh-mobile-download-btn')) return;
               var btn = document.createElement('button');
               btn.type = 'button';
               btn.className = 'dsh-mobile-download-btn';
-              btn.setAttribute('title', '保存到手机 / 分享');
-              btn.style.cssText = 'height:24px;padding:0 8px;font-size:12px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;border:none;background:var(--dsw-alias-interactive-bg-hover, rgba(125,125,125,0.15));color:var(--dsw-alias-label-primary, #333);cursor:pointer;margin-left:auto;flex-shrink:0;';
-              btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg><span>保存到手机</span>';
+              btn.setAttribute('title', '分享 / 保存到手机');
+              btn.style.cssText = 'height:26px;padding:0 9px;font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:5px;border-radius:6px;border:none;background:var(--dsw-alias-brand-primary, #007aff);color:#ffffff;cursor:pointer;margin-left:auto;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.15);';
+              btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg><span>分享到手机</span>';
               
               btn.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                // 抓取当前预览的文件内容
-                var previewBody = header.parentElement ? header.parentElement.querySelector('.YdIzba_body') : null;
-                var pathLabel = header.querySelector('.YdIzba_path');
-                var fname = pathLabel ? (pathLabel.innerText || '').trim().split(/[\\/]/).pop() : 'document.txt';
-                if (!fname) fname = 'document_' + Date.now() + '.txt';
 
-                if (previewBody) {
-                  // 如果是图片直接取 img src
-                  var img = previewBody.querySelector('img');
-                  if (img && img.src) {
-                    if (img.src.startsWith('data:')) {
-                      var p = img.src.split(',');
-                      var mime = (p[0].match(/:(.*?);/) || [])[1] || 'image/png';
-                      sendFileToNative(fname, mime, p[1] || '');
-                      return;
-                    }
+                var pathLabel = header.querySelector('.YdIzba_path');
+                var rawPath = pathLabel ? (pathLabel.getAttribute('title') || pathLabel.innerText || '').trim() : '';
+                var fname = rawPath ? rawPath.split(/[\\\\/]/).pop() : 'document.txt';
+
+                if (rawPath) {
+                  shareFileByPath(rawPath, fname);
+                } else {
+                  var previewBody = header.parentElement ? header.parentElement.querySelector('.YdIzba_body') : null;
+                  if (previewBody) {
+                    var text = previewBody.innerText || '';
+                    var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                    var reader = new FileReader();
+                    reader.onloadend = function() {
+                      var b64 = (reader.result || '').split(',')[1] || '';
+                      sendFileToNative(fname, 'text/plain', b64);
+                    };
+                    reader.readAsDataURL(blob);
                   }
-                  // 文本、代码、表格等内容导出
-                  var text = previewBody.innerText || '';
-                  var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-                  var reader = new FileReader();
-                  reader.onloadend = function() {
-                    var b64 = (reader.result || '').split(',')[1] || '';
-                    sendFileToNative(fname, 'text/plain', b64);
-                  };
-                  reader.readAsDataURL(blob);
                 }
               });
               header.appendChild(btn);
             });
           }
 
-          setInterval(ensureDownloadButton, 1000);
+          // 动态注入 3：向右侧边栏文件树的列表项追加轻量的分享图标
+          function enrichFilesTree() {
+            var fileRows = document.querySelectorAll('li[data-files-entry="file"]');
+            fileRows.forEach(function(row) {
+              if (row.querySelector('.dsh-mobile-tree-share')) return;
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'dsh-mobile-tree-share';
+              btn.setAttribute('title', '分享该文件');
+              btn.style.cssText = 'width:24px;height:24px;border:none;background:transparent;color:var(--dsw-alias-label-tertiary, #888);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;margin-left:auto;flex-shrink:0;';
+              btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>';
+
+              btn.addEventListener('click', function(ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                var labelEl = row.querySelector('[data-files-name]') || row.querySelector('span') || row;
+                var fileName = labelEl ? (labelEl.innerText || '').trim() : '';
+                var pathAttr = row.getAttribute('data-files-path') || row.getAttribute('title') || fileName;
+                shareFileByPath(pathAttr, fileName);
+              });
+
+              var container = row.querySelector('button') || row;
+              container.appendChild(btn);
+            });
+          }
+
+          setInterval(function() {
+            enrichDeliverableCards();
+            enrichPreviewHeader();
+            enrichFilesTree();
+          }, 800);
         })();
         """
     ]
