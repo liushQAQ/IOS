@@ -269,6 +269,78 @@ final class ViewController: UIViewController {
             '[data-slot="sidebar.right"], [data-slot="sidebar.left"] {',
             '  z-index: 10040 !important;',
             '}',
+            '/* 1. 修复左侧边栏切换按钮(Ctrl+Alt+B)与智能体预设头像/图标重叠碰撞问题 */',
+            '.ank0OG_header {',
+            '  column-gap: 8px !important;',
+            '}',
+            '.ank0OG_headerLeading {',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  gap: 6px !important;',
+            '  margin-inline-end: 6px !important;',
+            '  flex-shrink: 0 !important;',
+            '}',
+            '.ank0OG_titleRow {',
+            '  padding-inline-start: 4px !important;',
+            '  min-width: 0 !important;',
+            '}',
+            '/* 2. 修复右侧边栏(文件/终端/浏览器)在移动端展开后遮挡且缺乏快捷退出按钮 */',
+            '.dMHGga_panel[data-sidebar-right-open] {',
+            '  pointer-events: auto !important;',
+            '}',
+            '/* 右侧边栏展开时移动端半透明背景遮罩（点击即可收起退出） */',
+            '.dsh-mobile-sidebar-backdrop {',
+            '  position: fixed;',
+            '  inset: 0;',
+            '  background: rgba(0, 0, 0, 0.45);',
+            '  backdrop-filter: blur(4px);',
+            '  -webkit-backdrop-filter: blur(4px);',
+            '  z-index: 9998;',
+            '  opacity: 0;',
+            '  pointer-events: none;',
+            '  transition: opacity 0.2s ease;',
+            '}',
+            '.dsh-mobile-sidebar-backdrop.active {',
+            '  opacity: 1;',
+            '  pointer-events: auto;',
+            '}',
+            '/* 右侧边栏顶部浮动退出关闭按钮 */',
+            '.dsh-mobile-sidebar-close-btn {',
+            '  position: absolute;',
+            '  top: max(10px, env(safe-area-inset-top));',
+            '  right: 12px;',
+            '  z-index: 10005;',
+            '  width: 32px;',
+            '  height: 32px;',
+            '  border-radius: 16px;',
+            '  background: var(--dsw-alias-interactive-bg-hover, rgba(120, 120, 128, 0.24));',
+            '  color: var(--dsw-alias-label-primary, #ffffff);',
+            '  border: none;',
+            '  display: flex;',
+            '  align-items: center;',
+            '  justify-content: center;',
+            '  font-size: 18px;',
+            '  font-weight: 500;',
+            '  cursor: pointer;',
+            '  box-shadow: 0 2px 8px rgba(0,0,0,0.25);',
+            '}',
+            '/* 3. 修复设置主弹层与二/三级弹层(API Key、模型配置、二次确认)的层级深度冲突 */',
+            '.ZiQlkq_overlay {',
+            '  z-index: 10000 !important;',
+            '}',
+            '.ZiQlkq_panel {',
+            '  z-index: 10001 !important;',
+            '}',
+            '/* 确保下级模态弹窗、确认框、快捷选择框永远压在设置面板之上，不再被遮挡在底部 */',
+            '[role="dialog"]:not(.ZiQlkq_panel),',
+            '[aria-modal="true"]:not(.ZiQlkq_panel),',
+            '.ZKHwIG_dialog,',
+            '.p2h2LG_card,',
+            '.bqwvaa_menu,',
+            '[data-portal-menu],',
+            '[data-floating-ui-portal] > * {',
+            '  z-index: 10050 !important;',
+            '}',
             '/* 底部对话输入框与会话流留出移动端底部操作与安全区边距，避免被悬浮球或虚拟键盘遮挡 */',
             ':root {',
             '  --dsh-composer-dock-inset: 8px !important;',
@@ -328,6 +400,63 @@ final class ViewController: UIViewController {
                 }
               }
             }, true);
+          })();
+
+          // 移动端右侧边栏智能关闭辅助（遮罩与退出逻辑）
+          (function setupMobileSidebarRightWatcher() {
+            var backdrop = document.createElement('div');
+            backdrop.className = 'dsh-mobile-sidebar-backdrop';
+            document.body.appendChild(backdrop);
+
+            function toggleBackdrop(open) {
+              if (open) {
+                backdrop.classList.add('active');
+              } else {
+                backdrop.classList.remove('active');
+              }
+            }
+
+            backdrop.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              // 触发侧边栏折叠按钮
+              var toggle = document.querySelector('[data-sidebar-right-toggle]') || document.querySelector('.dMHGga_iconButton');
+              if (toggle) {
+                toggle.click();
+              } else {
+                // 模拟按下 Escape
+                window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+              }
+            });
+
+            // 监听 DOM 树中的 data-sidebar-right-open 变化
+            var obs = new MutationObserver(function() {
+              var panel = document.querySelector('.dMHGga_panel');
+              var isOpen = panel && panel.hasAttribute('data-sidebar-right-open');
+              toggleBackdrop(!!isOpen);
+
+              // 检查面板内部是否有退出按钮，没有则动态植入一个明显的关闭叉号
+              if (panel && isOpen) {
+                var existingClose = panel.querySelector('.dsh-mobile-sidebar-close-btn');
+                if (!existingClose) {
+                  var closeBtn = document.createElement('button');
+                  closeBtn.className = 'dsh-mobile-sidebar-close-btn';
+                  closeBtn.setAttribute('type', 'button');
+                  closeBtn.setAttribute('aria-label', '关闭侧边栏');
+                  closeBtn.innerHTML = '✕';
+                  closeBtn.addEventListener('click', function(evt) {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    var toggle = document.querySelector('[data-sidebar-right-toggle]') || document.querySelector('.dMHGga_iconButton');
+                    if (toggle) toggle.click();
+                    else window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+                  });
+                  panel.appendChild(closeBtn);
+                }
+              }
+            });
+
+            obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel'] });
           })();
         })();
         """,
