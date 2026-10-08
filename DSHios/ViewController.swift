@@ -1329,11 +1329,14 @@ final class ViewController: UIViewController {
             开源仓库：
             https://github.com/liush734530963/deepseek-harness-ios
 
-            支持官方原版 DSH 免改动联动
-            联网即加载电脑端会话
+            【更新日志与特性】
+            1. 支持交付物与工作区文件一键调起 iOS 本地分享（保存到文件/微信/AirDrop）
+            2. 底部 Token 统计自适应折行，告别滑动条
+            3. 右侧菜单与列表红点标明当前选中的服务地址
+            4. 官方原版 DSH 免改代码无缝接入支持
             """,
             preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "连接说明与教程", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
             self?.openConnectionGuide()
         })
         alert.addAction(UIAlertAction(title: "好", style: .cancel))

@@ -528,6 +528,10 @@ final class ConnectionGuideViewController: UIViewController {
         )
         stack.addArrangedSubview(step3)
 
+        // 步骤四：新增功能与体验说明（更新日志）
+        let updateCard = createUpdateLogCard()
+        stack.addArrangedSubview(updateCard)
+
         // 快捷操作按钮
         let actionBtn = UIButton(type: .system)
         actionBtn.setTitle("立即添加 / 输入电脑端服务地址", for: .normal)
@@ -681,5 +685,68 @@ final class ConnectionGuideViewController: UIViewController {
 
         return card
     }
+
+    private func createUpdateLogCard() -> UIView {
+        let card = UIView()
+        card.backgroundColor = .secondarySystemBackground
+        card.layer.cornerRadius = 12
+
+        let badgeLabel = UILabel()
+        badgeLabel.text = "最新更新日志"
+        badgeLabel.font = .systemFont(ofSize: 12, weight: .bold)
+        badgeLabel.textColor = .systemIndigo
+        badgeLabel.backgroundColor = .systemIndigo.withAlphaComponent(0.12)
+        badgeLabel.layer.cornerRadius = 4
+        badgeLabel.clipsToBounds = true
+        badgeLabel.textAlignment = .center
+
+        let hBadge = UIStackView(arrangedSubviews: [badgeLabel, UIView()])
+        hBadge.axis = .horizontal
+
+        let titleLabel = UILabel()
+        titleLabel.text = "功能特性与体验升级说明"
+        titleLabel.font = .preferredFont(forTextStyle: .headline)
+        titleLabel.textColor = .label
+
+        let logContent = """
+        🚀 1. 工作区文件/交付物一键分享与保存到手机：
+        • 会话生成的交付物卡片右侧直接新增原生「分享」按钮；
+        • 点击调起 iOS 系统级分享面板，支持「存储到“文件”」、微信分享、AirDrop 隔空投送；
+        • 文档预览顶部常驻「分享到手机」，文件树支持单个文件一键提取。
+
+        📱 2. 界面层次与移动端交互防遮挡优化：
+        • 底部 Token 统计数据支持自动换行自适应排列，告别横向拖动滑块；
+        • 右侧边栏展开后增加全屏半透明遮罩与退出把手，轻触任意区域即可收起；
+        • 修复模型选择弹窗在调起虚拟键盘或关闭软键盘时误关的冲突。
+
+        🔴 3. 当前服务选中态高亮与双版本打包：
+        • 右侧悬浮窗与服务列表中，当前连接的服务地址以醒目红点（🔴）及红色高亮展示；
+        • 每次发布自动产出包含个人配置的专属版与适合分发给他人使用的纯净版。
+        """
+
+        let contentLabel = UILabel()
+        contentLabel.text = logContent
+        contentLabel.font = .preferredFont(forTextStyle: .subheadline)
+        contentLabel.textColor = .secondaryLabel
+        contentLabel.numberOfLines = 0
+
+        let vStack = UIStackView(arrangedSubviews: [hBadge, titleLabel, contentLabel])
+        vStack.axis = .vertical
+        vStack.spacing = 10
+        vStack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(vStack)
+
+        NSLayoutConstraint.activate([
+            vStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 14),
+            vStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
+            vStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -14),
+            vStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -14),
+            badgeLabel.heightAnchor.constraint(equalToConstant: 22),
+            badgeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 80)
+        ])
+
+        return card
+    }
 }
+
 
