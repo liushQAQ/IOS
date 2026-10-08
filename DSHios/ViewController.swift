@@ -202,8 +202,8 @@ final class ViewController: UIViewController {
     /// 缺失任一都会导致启动脚本抛错白屏。每条只在原生不存在时补齐。
     static let iosCompatShims: [String] = [
         // 移动端视觉与对比度增强：
-        // 1. 降低模型选择菜单、二级/多级菜单毛玻璃透明度（原深色仅45%不透明度导致文字严重重叠），
-        //    提升至 96% 沉浸高对比度毛玻璃，字迹极度清晰。
+        // 1. 消除所有浮层/弹窗（包括Token用量弹窗、模型选择、右键菜单、设置面板）过透导致的文字重叠与背景干扰，
+        //    提升至 98% 接近纯色的高对比度背景（浅色模式白底 / 深色模式沉浸黑底），并辅以柔和阴影，字迹清晰锐利。
         // 2. 修复 iOS 键盘弹窗与模型选择菜单冲突问题：
         //    - 移动端点击模型选择时，输入框自动 focus 会调起虚拟软键盘；
         //    - 用户关闭软键盘或在虚拟键盘收起时，input 触发 blur，导致整个弹窗被误关。
@@ -215,22 +215,39 @@ final class ViewController: UIViewController {
           style.id = 'dsh-ios-glass-enhancement';
           style.textContent = [
             ':root {',
-            '  --dsw-menu-surface-fill: rgba(255, 255, 255, 0.96) !important;',
-            '  --dsw-menu-backdrop-filter: blur(28px) saturate(180%) !important;',
+            '  --dsw-menu-surface-fill: rgba(255, 255, 255, 0.98) !important;',
+            '  --dsw-specific-menu: rgba(255, 255, 255, 0.98) !important;',
+            '  --dsw-menu-backdrop-filter: blur(20px) saturate(140%) !important;',
             '}',
             'body[data-ds-dark-theme] {',
-            '  --dsw-menu-surface-fill: rgba(22, 24, 29, 0.96) !important;',
-            '  --dsw-menu-backdrop-filter: blur(28px) saturate(180%) !important;',
+            '  --dsw-menu-surface-fill: rgba(20, 22, 26, 0.98) !important;',
+            '  --dsw-specific-menu: rgba(20, 22, 26, 0.98) !important;',
+            '  --dsw-menu-backdrop-filter: blur(20px) saturate(140%) !important;',
             '}',
+            '/* 覆盖所有弹窗、Token用量面板、模型选择、会话列表、设置浮层，彻底告别半透明重叠 */',
+            '._7aoaqW_panel,',
+            '.lHqH9G_panel,',
+            '.fxu7oq_panel,',
             '.VYXhfG_menu,',
             '[data-menu-material="translucent"],',
             '[data-menu-material],',
             '[role="menu"],',
-            '[role="listbox"] {',
+            '[role="listbox"],',
+            '[role="dialog"],',
+            '.ZiQlkq_panel,',
+            '.ZKHwIG_dialog {',
             '  background-color: var(--dsw-menu-surface-fill) !important;',
             '  backdrop-filter: var(--dsw-menu-backdrop-filter) !important;',
             '  -webkit-backdrop-filter: var(--dsw-menu-backdrop-filter) !important;',
-            '  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--dsw-elevation-stroke-color, rgba(255, 255, 255, 0.12)) !important;',
+            '  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--dsw-elevation-stroke-color, rgba(255, 255, 255, 0.12)) !important;',
+            '}',
+            '/* Token用量弹层(_7aoaqW_panel)内部文字与进度条增强 */',
+            '._7aoaqW_panel {',
+            '  z-index: 10060 !important;',
+            '  color: var(--dsw-alias-label-primary) !important;',
+            '}',
+            '._7aoaqW_panel:before, .lHqH9G_panel:before, .fxu7oq_panel:before {',
+            '  background: var(--dsw-menu-surface-fill) !important;',
             '}',
             '.VYXhfG_modelName,',
             '.VYXhfG_cellLabel,',
