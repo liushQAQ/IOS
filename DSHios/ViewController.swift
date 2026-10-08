@@ -29,14 +29,14 @@ final class ViewController: UIViewController {
     /// 展开后的自动收起计时器（「不用了自动隐藏」）。
     private var menuAutoHideTimer: Timer?
 
-    /// 悬浮按钮边长。
-    private static let menuButtonSide: CGFloat = 44
-    /// 收起时从右缘露出的宽度（贴边把手；够宽才好按住拖动，又不压住页面热区）。
-    private static let menuCollapsedPeek: CGFloat = 22
+    /// 悬浮按钮边长（原 44pt 缩小为 36pt，减少视觉遮挡）。
+    private static let menuButtonSide: CGFloat = 36
+    /// 收起时从右缘露出的宽度（原 22pt 过宽遮挡页面右侧，缩窄至 10pt，只留精致灵巧的抓手，杜绝误触）。
+    private static let menuCollapsedPeek: CGFloat = 10
     /// 展开态距右缘的间距。
-    private static let menuTrailingInset: CGFloat = 10
-    /// 展开后静置多久自动收起。
-    private static let menuAutoHideDelay: TimeInterval = 4.0
+    private static let menuTrailingInset: CGFloat = 8
+    /// 展开后静置多久自动收起（原 4.0 秒缩短为 2.2 秒，操作后迅速避让页面）。
+    private static let menuAutoHideDelay: TimeInterval = 2.2
 
     /// 收起态右缘约束值：正值把按钮推出屏幕，只留 `menuCollapsedPeek` 宽在屏内。
     /// 约束语义是 `button.trailing = safeArea.trailing + constant`，
@@ -195,12 +195,43 @@ final class ViewController: UIViewController {
             '  font-weight: 500 !important;',
             '  opacity: 1 !important;',
             '}',
+            '/* 全局触控与滚动平滑加速（对齐原生体验） */',
+            '* {',
+            '  -webkit-tap-highlight-color: transparent;',
+            '}',
+            '.scrollable, [data-scrollable], [role="menu"], [role="listbox"], pre, code {',
+            '  -webkit-overflow-scrolling: touch !important;',
+            '}',
             '/* 保证模型选择弹层在软键盘弹出与收起时拥有固定层级与平滑交互，并且支持触摸滚动 */',
             '.VYXhfG_menu {',
             '  -webkit-overflow-scrolling: touch !important;',
+            '  z-index: 10050 !important;',
+            '  max-height: min(440px, 82vh) !important;',
+            '  transform: translateZ(0);',
             '}',
             '.VYXhfG_groups {',
             '  -webkit-overflow-scrolling: touch !important;',
+            '  max-height: min(380px, 72vh) !important;',
+            '  transform: translateZ(0);',
+            '}',
+            '/* 优化一级、二级、三级菜单与弹层移动端层叠排版，消除相互遮挡 */',
+            '.VYXhfG_cell {',
+            '  min-height: 40px !important;',
+            '  padding: 8px 12px !important;',
+            '}',
+            '.VYXhfG_option {',
+            '  min-height: 38px !important;',
+            '}',
+            '/* 二级与三级侧边/抽屉菜单适配 */',
+            '[data-slot="sidebar.right"], [data-slot="sidebar.left"] {',
+            '  z-index: 10040 !important;',
+            '}',
+            '/* 底部对话输入框与会话流留出移动端底部操作与安全区边距，避免被悬浮球或虚拟键盘遮挡 */',
+            ':root {',
+            '  --dsh-composer-dock-inset: 8px !important;',
+            '}',
+            '.uWtHQG_root {',
+            '  padding-bottom: max(14px, env(safe-area-inset-bottom)) !important;',
             '}'
           ].join('\\n');
           function attach() {
@@ -489,6 +520,13 @@ final class ViewController: UIViewController {
         webView.allowsBackForwardNavigationGestures = true
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // 丝滑滚动体验：启用原生惯性加速与回弹（同 Hermes Studio），消除粘滞感
+        webView.scrollView.decelerationRate = .fast
+        webView.scrollView.bounces = true
+        webView.scrollView.alwaysBounceVertical = false
+        webView.isOpaque = false
+        webView.backgroundColor = .systemBackground
+        webView.scrollView.backgroundColor = .systemBackground
         // 首帧到达前保持透明：加载期间露出的是原生加载态，不会白屏闪一下。
         webView.alpha = 0
         view.addSubview(webView)
@@ -653,8 +691,8 @@ final class ViewController: UIViewController {
             ? Self.menuExpandedConstant
             : Self.menuCollapsedConstant
         constraint.constant = constant
-        // 展开态更实一些（用户要「悬浮半透明」，收起态更淡，避免干扰阅读）。
-        let targetAlpha: CGFloat = expanded ? 0.9 : 0.5
+        // 展开态更实一些（用户要「悬浮半透明」，收起态更淡，避免干扰阅读：由 0.5 降至 0.28，极致灵动通透不挡屏）。
+        let targetAlpha: CGFloat = expanded ? 0.88 : 0.28
 
         let apply = {
             button.alpha = targetAlpha
