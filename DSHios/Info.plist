@@ -74,7 +74,7 @@
 		<true/>
 	</dict>
 	<key>DSHAppVersion</key>
-	<string>1.0.32</string>
+	<string>1.0.33</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>需要访问局域网内的 DeepSeek Harness 服务。</string>
 	<key>NSCameraUsageDescription</key>
