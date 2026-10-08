@@ -554,6 +554,17 @@ final class ConnectionGuideViewController: UIViewController {
         }
     }
 
+    @objc private func copyCommandTapped(_ sender: UIButton) {
+        let codeText = "dsh plugin --profile web add dsh-pocket -w"
+        UIPasteboard.general.string = codeText
+        sender.setTitle("已复制", for: .normal)
+        let feedback = UINotificationFeedbackGenerator()
+        feedback.notificationOccurred(.success)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            sender.setTitle("复制", for: .normal)
+        }
+    }
+
     private func createCardView(title: String, desc: String) -> UIView {
         let card = UIView()
         card.backgroundColor = .secondarySystemBackground
@@ -632,15 +643,7 @@ final class ConnectionGuideViewController: UIViewController {
             copyBtn.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
             copyBtn.setImage(UIImage(systemName: "doc.on.doc"), for: .normal)
             copyBtn.tintColor = .systemBlue
-            copyBtn.addAction(UIAction { [weak self] _ in
-                UIPasteboard.general.string = codeText
-                copyBtn.setTitle("已复制", for: .normal)
-                let feedback = UINotificationFeedbackGenerator()
-                feedback.notificationOccurred(.success)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    copyBtn.setTitle("复制", for: .normal)
-                }
-            }, for: .touchUpInside)
+            copyBtn.addTarget(self, action: #selector(copyCommandTapped), for: .touchUpInside)
 
             let hCode = UIStackView(arrangedSubviews: [codeLabel, copyBtn])
             hCode.axis = .horizontal

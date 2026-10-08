@@ -757,8 +757,10 @@ final class ViewController: UIViewController {
                 }
             }
             if isSelected {
-                // 如果系统支持，将字体颜色设置为红色强调
-                action.setValue(UIColor.systemRed, forKey: "titleTextColor")
+                // 如果系统支持，将字体颜色设置为红色强调（利用 responds(to:) 保护防止低版本 iOS KVC 闪退）
+                if action.responds(to: NSSelectorFromString("titleTextColor")) {
+                    action.setValue(UIColor.systemRed, forKey: "titleTextColor")
+                }
             }
             sheet.addAction(action)
         }
@@ -831,7 +833,7 @@ final class ViewController: UIViewController {
     private func promptForURL() {
         let alert = UIAlertController(title: "服务地址", message: nil, preferredStyle: .alert)
         alert.addTextField { tf in
-            tf.placeholder = "http://192.168.215.218:3083/"
+            tf.placeholder = "http://192.168.215.218:3084/"
             tf.text = UserDefaults.standard.string(forKey: Keys.lastURL) ?? self.defaultURL
             tf.autocapitalizationType = .none
             tf.autocorrectionType = .no
@@ -934,6 +936,18 @@ final class ViewController: UIViewController {
         // 回到前台：若当前是失败态或还没内容，立刻重连（桌面端会话是实时的）。
         if !errorOverlay.isHidden || webView.url == nil || !hasLoadedOnce {
             retryTapped()
+        } else if hasLoadedOnce {
+            // 当页面已经加载且从后台切回前台时，主动触发 WebSocket / 数据流唤醒，
+            // 确保正在进行的任务、对话执行状态与桌面端 100% 实时同步。
+            webView.evaluateJavaScript("""
+                (function() {
+                  try {
+                    window.dispatchEvent(new Event('focus'));
+                    document.dispatchEvent(new Event('visibilitychange'));
+                    if (window.__dshSyncActiveSession) { window.__dshSyncActiveSession(); }
+                  } catch(e) {}
+                })();
+            """, completionHandler: nil)
         }
     }
 
