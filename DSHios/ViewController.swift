@@ -143,7 +143,11 @@ final class ViewController: UIViewController {
 
     /// 默认加载地址：DSH Pocket（桌面端 LAN 代理，明文 HTTP，免密码）。
     /// 桌面端主控运行在 3084（DSH Desktop GUI 进程，持有全量活会话）。
+    #if PUBLIC_BUILD
+    private let defaultURL = "http://192.168.1.100:3084/"
+    #else
     private let defaultURL = "http://192.168.215.218:3084/"
+    #endif
 
     private struct Keys {
         static let lastURL = "DSHios.lastURL"
@@ -155,8 +159,13 @@ final class ViewController: UIViewController {
     /// 缺失任一都会导致启动脚本抛错白屏。每条只在原生不存在时补齐。
     static let iosCompatShims: [String] = [
         // 移动端视觉与对比度增强：
-        // 降低模型选择菜单、二级/多级菜单毛玻璃透明度（原深色仅45%不透明度导致文字严重重叠），
-        // 提升至 96% 沉浸高对比度毛玻璃，字迹极度清晰。
+        // 1. 降低模型选择菜单、二级/多级菜单毛玻璃透明度（原深色仅45%不透明度导致文字严重重叠），
+        //    提升至 96% 沉浸高对比度毛玻璃，字迹极度清晰。
+        // 2. 修复 iOS 键盘弹窗与模型选择菜单冲突问题：
+        //    - 移动端点击模型选择时，输入框自动 focus 会调起虚拟软键盘；
+        //    - 用户关闭软键盘或在虚拟键盘收起时，input 触发 blur，导致整个弹窗被误关。
+        //    - 解决方案：在移动端/触摸环境下，屏蔽对 .VYXhfG_search 的脚本自动聚焦（需用户主动触摸点击才聚焦输入）；
+        //    - 拦截输入框失焦事件（blur），防止关闭软键盘时级联关闭整个菜单。
         """
         (function() {
           var style = document.createElement('style');
@@ -185,6 +194,13 @@ final class ViewController: UIViewController {
             '.VYXhfG_cellValue {',
             '  font-weight: 500 !important;',
             '  opacity: 1 !important;',
+            '}',
+            '/* 保证模型选择弹层在软键盘弹出与收起时拥有固定层级与平滑交互，并且支持触摸滚动 */',
+            '.VYXhfG_menu {',
+            '  -webkit-overflow-scrolling: touch !important;',
+            '}',
+            '.VYXhfG_groups {',
+            '  -webkit-overflow-scrolling: touch !important;',
             '}'
           ].join('\\n');
           function attach() {
@@ -194,6 +210,51 @@ final class ViewController: UIViewController {
             }
           }
           attach();
+
+          // 修复 iOS 移动端虚拟键盘自动弹窗与收起导致菜单关闭
+          (function fixMobileModelSearchFocus() {
+            var origFocus = HTMLElement.prototype.focus;
+            var isTouchUser = true;
+            var allowNextFocus = false;
+
+            // 监听用户真人的手指触摸
+            document.addEventListener('touchstart', function(e) {
+              if (e.target && (e.target.matches && (e.target.matches('.VYXhfG_search') || e.target.matches('input[role="searchbox"]')))) {
+                allowNextFocus = true;
+              }
+            }, true);
+
+            // 当且仅当是 ModelSelect 里的快捷搜索框，并且是由代码自动化调用的 focus() 时拦截，避免一进入界面就轰炸弹出软键盘
+            HTMLElement.prototype.focus = function(options) {
+              if (this && this.classList && (this.classList.contains('VYXhfG_search') || this.getAttribute('role') === 'searchbox')) {
+                if (!allowNextFocus) {
+                  // 阻止无感知自动唤起软键盘
+                  return;
+                }
+                allowNextFocus = false;
+              }
+              return origFocus.apply(this, arguments);
+            };
+
+            // 监听 blur 事件捕获阶段：当搜索框失去焦点（比如用户轻触关闭软键盘、完成输入）时，
+            // 阻止该 blur 冒泡或把 relatedTarget 视作自身容器内部，避免 ModelSelect 触发 onBlur -> close()
+            window.addEventListener('blur', function(e) {
+              if (e.target && e.target.classList && (e.target.classList.contains('VYXhfG_search') || e.target.getAttribute('role') === 'searchbox')) {
+                e.stopImmediatePropagation();
+              }
+            }, true);
+
+            // 同时监听 focusout 事件
+            document.addEventListener('focusout', function(e) {
+              if (e.target && e.target.classList && (e.target.classList.contains('VYXhfG_search') || e.target.getAttribute('role') === 'searchbox')) {
+                // 如果菜单依然在屏幕上，阻止冒泡以防止外部组件认为点击了菜单外部而全部关闭
+                var menu = e.target.closest('.VYXhfG_menu') || document.querySelector('.VYXhfG_menu');
+                if (menu) {
+                  e.stopImmediatePropagation();
+                }
+              }
+            }, true);
+          })();
         })();
         """,
         // Promise.withResolvers（iOS 17+）：页面用它发布 __DSH_BOOT_READY__。
@@ -665,14 +726,33 @@ final class ViewController: UIViewController {
         let sheet = UIAlertController(title: "DSH", message: nil, preferredStyle: .actionSheet)
 
         let services = ServiceStore.load()
+        let currentURL = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? ""
+        let currentComps = URLComponents(string: currentURL)
+
         for item in services.prefix(6) {
-            sheet.addAction(UIAlertAction(title: item.name, style: .default) { [weak self] _ in
+            let isSelected: Bool = {
+                if item.url == currentURL { return true }
+                if let itemComps = URLComponents(string: item.url), let currentComps {
+                    if itemComps.host == currentComps.host && itemComps.port == currentComps.port {
+                        return true
+                    }
+                }
+                return false
+            }()
+
+            let title = isSelected ? "🔴 \(item.name) (当前)" : item.name
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
                 guard let self else { return }
                 // 外网入口先回局域网换最新 token 再打开，避免用过期 token 撞 401。
                 ServiceResolver.resolve(item) { url in
                     self.loadURLString(url)
                 }
-            })
+            }
+            if isSelected {
+                // 如果系统支持，将字体颜色设置为红色强调
+                action.setValue(UIColor.systemRed, forKey: "titleTextColor")
+            }
+            sheet.addAction(action)
         }
 
         sheet.addAction(UIAlertAction(title: "全部服务…", style: .default) { [weak self] _ in
@@ -716,7 +796,9 @@ final class ViewController: UIViewController {
     }
 
     private func openServiceList() {
+        let currentURL = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? defaultURL
         let settings = SettingsViewController(
+            currentURL: currentURL,
             onSave: { _ in },
             onSelect: { [weak self] newURL in
                 self?.loadURLString(newURL)

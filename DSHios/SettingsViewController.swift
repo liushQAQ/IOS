@@ -24,6 +24,16 @@ enum ServiceStore {
     ///         外网走 OpenFRP 穿透到 9060 认证网关（经 8080 反代直通 3084）。
     /// 仪表盘对：9009 自包含单页，外网带密码直达，无需换票。
     /// TTS 8210 外网 404（无外网入口），只配局域网一条。
+    #if PUBLIC_BUILD
+    static let defaults: [ServiceItem] = [
+        ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.1.100:3084/",
+                    note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
+        ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.1.100:9009/",
+                    note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
+        ServiceItem(name: "本地 TTS", url: "http://192.168.1.100:8210/",
+                    note: "局域网", resolverURL: nil)
+    ]
+    #else
     static let defaults: [ServiceItem] = [
         ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.215.218:3084/",
                     note: "局域网·全权限", resolverURL: nil),
@@ -42,6 +52,7 @@ enum ServiceStore {
         ServiceItem(name: "本地 TTS", url: "http://192.168.215.218:8210/",
                     note: "局域网（外网无入口）", resolverURL: nil)
     ]
+    #endif
 
     static func load() -> [ServiceItem] {
         // 种子升级：直接换成最新预置，清掉旧版本里打不开页面的一堆端口。
@@ -135,12 +146,14 @@ final class SettingsViewController: UIViewController {
 
     private let onSave: (String) -> Void
     private let onSelect: (String) -> Void
+    private var currentURL: String = ""
     private var services: [ServiceItem] = []
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     /// 原生在线状态探测：不依赖 web 会话，打开列表即用 TCP 探活，绿点=端口通。
     private var online: [String: Bool] = [:]
 
-    init(onSave: @escaping (String) -> Void, onSelect: @escaping (String) -> Void) {
+    init(currentURL: String = "", onSave: @escaping (String) -> Void, onSelect: @escaping (String) -> Void) {
+        self.currentURL = currentURL
         self.onSave = onSave
         self.onSelect = onSelect
         super.init(nibName: nil, bundle: nil)
@@ -314,13 +327,36 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         let cell = tableView.dequeueReusableCell(withIdentifier: "service", for: indexPath)
         let item = services[indexPath.row]
         var config = cell.defaultContentConfiguration()
-        config.text = item.name
+
+        let isSelected: Bool = {
+            if !currentURL.isEmpty {
+                if item.url == currentURL { return true }
+                if let itemComps = URLComponents(string: item.url),
+                   let currComps = URLComponents(string: currentURL) {
+                    if itemComps.host == currComps.host && itemComps.port == currComps.port {
+                        return true
+                    }
+                }
+            }
+            return false
+        }()
+
+        if isSelected {
+            config.text = "🔴 " + item.name + " (当前)"
+            config.textProperties.color = .systemRed
+            config.textProperties.font = .preferredFont(forTextStyle: .headline)
+        } else {
+            config.text = item.name
+            config.textProperties.color = .label
+            config.textProperties.font = .preferredFont(forTextStyle: .body)
+        }
+
         if let note = item.note, !note.isEmpty {
             config.secondaryText = note + " · " + item.url
         } else {
             config.secondaryText = item.url
         }
-        config.secondaryTextProperties.color = .secondaryLabel
+        config.secondaryTextProperties.color = isSelected ? .systemRed.withAlphaComponent(0.8) : .secondaryLabel
         config.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
         config.secondaryTextProperties.numberOfLines = 2
         // 原生状态点：绿=端口可达，灰=不可达，透明=探测中
