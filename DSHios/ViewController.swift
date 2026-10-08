@@ -64,6 +64,49 @@ final class ViewController: UIViewController {
         }
     }
 
+    private static func makeFileTransferBridge(owner: ViewController) -> WKScriptMessageHandler {
+        return FileTransferBridge { [weak owner] info in
+            owner?.handleIncomingFile(info)
+        }
+    }
+
+    private final class FileTransferBridge: NSObject, WKScriptMessageHandler {
+        let onFile: ([String: Any]) -> Void
+        init(onFile: @escaping ([String: Any]) -> Void) { self.onFile = onFile }
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            if let dict = message.body as? [String: Any] {
+                onFile(dict)
+            }
+        }
+    }
+
+    /// 接收前端导出的文件并唤起系统级保存与分享（ShareSheet / 保存到文件）
+    private func handleIncomingFile(_ info: [String: Any]) {
+        guard let name = info["name"] as? String,
+              let base64 = info["base64"] as? String,
+              let data = Data(base64Encoded: base64) else { return }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let tempDir = FileManager.default.temporaryDirectory
+            let targetURL = tempDir.appendingPathComponent(name)
+            do {
+                try data.write(to: targetURL)
+                let activityVC = UIActivityViewController(activityItems: [targetURL], applicationActivities: nil)
+                if let popover = activityVC.popoverPresentationController {
+                    popover.sourceView = self.menuButton ?? self.view
+                    popover.sourceRect = self.menuButton?.bounds ?? CGRect(x: self.view.bounds.midX, y: self.view.bounds.midY, width: 0, height: 0)
+                }
+                self.present(activityVC, animated: true)
+            } catch {
+                let alert = UIAlertController(title: "保存失败", message: error.localizedDescription, preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "好", style: .default))
+                self.present(alert, animated: true)
+            }
+        }
+    }
+
     /// 累积 Web 侧异常，最多保留最近 4 条，供自诊断浮层展示。
     private func recordWebError(_ text: String) {
         let line = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
@@ -453,6 +496,115 @@ final class ViewController: UIViewController {
           Patched.CLOSED = Native.CLOSED;
           window.WebSocket = Patched;
         })();
+        """,
+        // 移动端工作台文件传输与下载桥接：
+        // 1. 拦截 `<a download="...">` 与 Blob/DataURL 点击，将二进制文件转送给原生保存/分享；
+        // 2. 在工作区文档预览的头部操作栏中，自动追加「保存到手机」下载按钮；
+        // 3. 支持将任意文本、代码、表格、图片等文件直接保存到 iOS「文件」或通过 AirDrop/微信分享。
+        """
+        (function () {
+          if (window.__dshDownloadBridgeInjected) return;
+          window.__dshDownloadBridgeInjected = true;
+
+          function sendFileToNative(name, mime, base64) {
+            try {
+              window.webkit.messageHandlers.dshFileTransfer.postMessage({
+                name: name || 'file.dat',
+                mime: mime || 'application/octet-stream',
+                base64: base64
+              });
+            } catch (err) {
+              console.warn('[DSHios] File transfer bridge error:', err);
+            }
+          }
+
+          // 拦截链接点击（包含 download 属性，或 blob: / data: 协议的下载）
+          document.addEventListener('click', function (e) {
+            var target = e.target && e.target.closest ? e.target.closest('a') : null;
+            if (!target) return;
+            var href = target.getAttribute('href') || '';
+            var hasDownload = target.hasAttribute('download');
+            var downloadName = target.getAttribute('download') || '';
+
+            if (hasDownload || href.startsWith('blob:') || href.startsWith('data:')) {
+              if (href.startsWith('data:')) {
+                e.preventDefault();
+                e.stopPropagation();
+                var parts = href.split(',');
+                var mime = (parts[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream';
+                var b64 = parts[1] || '';
+                var fname = downloadName || 'download_' + Date.now();
+                sendFileToNative(fname, mime, b64);
+              } else if (href.startsWith('blob:')) {
+                e.preventDefault();
+                e.stopPropagation();
+                fetch(href).then(function(res) {
+                  var mime = res.headers.get('content-type') || 'application/octet-stream';
+                  return res.blob().then(function(b) {
+                    var reader = new FileReader();
+                    reader.onloadend = function() {
+                      var b64 = (reader.result || '').split(',')[1] || '';
+                      var fname = downloadName || 'file_' + Date.now();
+                      sendFileToNative(fname, mime, b64);
+                    };
+                    reader.readAsDataURL(b);
+                  });
+                }).catch(function(err) {
+                  console.error('[DSHios] blob download error:', err);
+                });
+              }
+            }
+          }, true);
+
+          // 监听并动态向右侧文档预览工具栏追加「保存到手机」悬浮导出能力
+          function ensureDownloadButton() {
+            var headers = document.querySelectorAll('.YdIzba_header');
+            headers.forEach(function(header) {
+              if (header.querySelector('.dsh-mobile-download-btn')) return;
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'dsh-mobile-download-btn';
+              btn.setAttribute('title', '保存到手机 / 分享');
+              btn.style.cssText = 'height:24px;padding:0 8px;font-size:12px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;border:none;background:var(--dsw-alias-interactive-bg-hover, rgba(125,125,125,0.15));color:var(--dsw-alias-label-primary, #333);cursor:pointer;margin-left:auto;flex-shrink:0;';
+              btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg><span>保存到手机</span>';
+              
+              btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                // 抓取当前预览的文件内容
+                var previewBody = header.parentElement ? header.parentElement.querySelector('.YdIzba_body') : null;
+                var pathLabel = header.querySelector('.YdIzba_path');
+                var fname = pathLabel ? (pathLabel.innerText || '').trim().split(/[\\/]/).pop() : 'document.txt';
+                if (!fname) fname = 'document_' + Date.now() + '.txt';
+
+                if (previewBody) {
+                  // 如果是图片直接取 img src
+                  var img = previewBody.querySelector('img');
+                  if (img && img.src) {
+                    if (img.src.startsWith('data:')) {
+                      var p = img.src.split(',');
+                      var mime = (p[0].match(/:(.*?);/) || [])[1] || 'image/png';
+                      sendFileToNative(fname, mime, p[1] || '');
+                      return;
+                    }
+                  }
+                  // 文本、代码、表格等内容导出
+                  var text = previewBody.innerText || '';
+                  var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                  var reader = new FileReader();
+                  reader.onloadend = function() {
+                    var b64 = (reader.result || '').split(',')[1] || '';
+                    sendFileToNative(fname, 'text/plain', b64);
+                  };
+                  reader.readAsDataURL(blob);
+                }
+              });
+              header.appendChild(btn);
+            });
+          }
+
+          setInterval(ensureDownloadButton, 1000);
+        })();
         """
     ]
 
@@ -517,6 +669,7 @@ final class ViewController: UIViewController {
         webView.navigationDelegate = self
         webView.uiDelegate = self
         config.userContentController.add(Self.makeErrorBridge(owner: self), name: "dshErrors")
+        config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")
         webView.allowsBackForwardNavigationGestures = true
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
