@@ -556,9 +556,9 @@ final class ViewController: UIViewController {
         hint.textAlignment = .center
         hint.text = """
         请确认：
-        1. 电脑端 DSH Desktop 正在运行
-        2. 手机与电脑在同一局域网
-        3. 电脑防火墙放行 3083 端口
+        1. 电脑端 DSH 正在运行（支持官方原版）
+        2. 手机与电脑在同一局域网 WiFi
+        3. 电脑端已安装并启用手机访问（dsh-pocket）
         """
 
         let retryButton = UIButton(type: .system)
@@ -571,12 +571,20 @@ final class ViewController: UIViewController {
         changeButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
         changeButton.addTarget(self, action: #selector(openMenuDirectly), for: .touchUpInside)
 
+        let guideButton = UIButton(type: .system)
+        guideButton.setTitle("📖 查看官方 DSH 连接教程与说明", for: .normal)
+        guideButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        guideButton.setImage(UIImage(systemName: "book.pages"), for: .normal)
+        guideButton.tintColor = .systemBlue
+        guideButton.addTarget(self, action: #selector(openConnectionGuide), for: .touchUpInside)
+
         container.addArrangedSubview(icon)
         container.addArrangedSubview(title)
         container.addArrangedSubview(detail)
         container.addArrangedSubview(hint)
         container.addArrangedSubview(retryButton)
         container.addArrangedSubview(changeButton)
+        container.addArrangedSubview(guideButton)
 
         NSLayoutConstraint.activate([
             overlay.topAnchor.constraint(equalTo: view.topAnchor),
@@ -758,6 +766,9 @@ final class ViewController: UIViewController {
         sheet.addAction(UIAlertAction(title: "全部服务…", style: .default) { [weak self] _ in
             self?.openServiceList()
         })
+        sheet.addAction(UIAlertAction(title: "连接说明与教程…", style: .default) { [weak self] _ in
+            self?.openConnectionGuide()
+        })
         sheet.addAction(UIAlertAction(title: "手动输入地址…", style: .default) { [weak self] _ in
             self?.promptForURL()
         })
@@ -776,6 +787,15 @@ final class ViewController: UIViewController {
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
         sheet.popoverPresentationController?.sourceView = menuButton
         present(sheet, animated: true)
+    }
+
+    @objc private func openConnectionGuide() {
+        let guide = ConnectionGuideViewController(onOpenInputURL: { [weak self] in
+            self?.promptForURL()
+        })
+        let nav = UINavigationController(rootViewController: guide)
+        nav.modalPresentationStyle = .pageSheet
+        present(nav, animated: true)
     }
 
     /// 清空 WKWebView 的磁盘/内存缓存后重新加载。
@@ -839,11 +859,14 @@ final class ViewController: UIViewController {
             开源仓库：
             https://github.com/liush734530963/deepseek-harness-ios
 
-            默认服务：http://192.168.215.218:3084/
+            支持官方原版 DSH 免改动联动
             联网即加载电脑端会话
             """,
             preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "好", style: .default))
+        alert.addAction(UIAlertAction(title: "连接说明与教程", style: .default) { [weak self] _ in
+            self?.openConnectionGuide()
+        })
+        alert.addAction(UIAlertAction(title: "好", style: .cancel))
         present(alert, animated: true)
     }
 
