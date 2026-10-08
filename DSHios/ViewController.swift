@@ -298,6 +298,30 @@ final class ViewController: UIViewController {
             '    z-index: 10050 !important;',
             '  }',
             '}',
+            '/* 移动端全级别菜单、弹窗、二级/三级插件浮层通用防溢出与自适应安全边界约束 */',
+            '@media (max-width: 768px) {',
+            '  [role="menu"],',
+            '  [role="listbox"],',
+            '  [role="dialog"],',
+            '  [data-menu-material],',
+            '  [data-menu-surface],',
+            '  .VYXhfG_menu,',
+            '  [class*="menu"],',
+            '  [class*="modal"],',
+            '  [class*="Modal"],',
+            '  [class*="popup"],',
+            '  [class*="Popup"],',
+            '  [class*="dropdown"],',
+            '  [class*="Dropdown"],',
+            '  [class*="dialog"],',
+            '  [class*="Dialog"] {',
+            '    max-width: calc(100vw - 20px) !important;',
+            '    max-height: calc(100vh - 40px) !important;',
+            '    box-sizing: border-box !important;',
+            '    overflow-y: auto !important;',
+            '    -webkit-overflow-scrolling: touch !important;',
+            '  }',
+            '}',
             '/* 优化一级、二级、三级菜单与弹层移动端层叠排版，消除相互遮挡 */',
             '.VYXhfG_cell {',
             '  min-height: 40px !important;',
@@ -642,6 +666,99 @@ final class ViewController: UIViewController {
                 window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
               }
             });
+
+            // 移动端全级别菜单、弹窗与插件浮层自适应贴边与防溢出看门狗
+            (function installMobileLayoutWatchdog() {
+              if (window.__dshMobileLayoutWatchdog) return;
+              window.__dshMobileLayoutWatchdog = true;
+
+              var PADDING = 10;
+
+              function adjustElement(el) {
+                if (!el || !(el instanceof HTMLElement)) return;
+                if (el.offsetParent === null && el.style.display === 'none') return;
+
+                var winW = window.innerWidth;
+                var winH = window.innerHeight;
+                if (winW > 768) return;
+
+                // 1. 宽度与高度安全限制
+                el.style.maxWidth = (winW - PADDING * 2) + 'px';
+                el.style.boxSizing = 'border-box';
+                el.style.maxHeight = (winH - PADDING * 2) + 'px';
+                el.style.overflowY = 'auto';
+                el.style.webkitOverflowScrolling = 'touch';
+
+                var rect = el.getBoundingClientRect();
+
+                // 2. 水平方向越界自动拉回安全区内
+                if (rect.right > winW - PADDING) {
+                  var overflowX = rect.right - (winW - PADDING);
+                  var currentLeft = parseFloat(el.style.left) || rect.left;
+                  var newLeft = Math.max(PADDING, currentLeft - overflowX);
+                  el.style.left = newLeft + 'px';
+                  el.style.right = 'auto';
+                }
+                if (rect.left < PADDING) {
+                  el.style.left = PADDING + 'px';
+                  el.style.right = 'auto';
+                }
+
+                // 3. 垂直方向越界自动拉回安全区内
+                if (rect.bottom > winH - PADDING) {
+                  var overflowY = rect.bottom - (winH - PADDING);
+                  var currentTop = parseFloat(el.style.top) || rect.top;
+                  var newTop = Math.max(PADDING, currentTop - overflowY);
+                  el.style.top = newTop + 'px';
+                  el.style.bottom = 'auto';
+                }
+                if (rect.top < PADDING) {
+                  el.style.top = PADDING + 'px';
+                  el.style.bottom = 'auto';
+                }
+              }
+
+              var TARGET_SELECTOR = [
+                '[role="menu"]',
+                '[role="listbox"]',
+                '[role="dialog"]',
+                '[data-menu-material]',
+                '[data-menu-surface]',
+                '.VYXhfG_menu',
+                '[class*="menu"]',
+                '[class*="modal"]',
+                '[class*="Modal"]',
+                '[class*="popup"]',
+                '[class*="Popup"]',
+                '[class*="dropdown"]',
+                '[class*="Dropdown"]',
+                '[class*="dialog"]',
+                '[class*="Dialog"]',
+                '[class*="_portal_"] > div',
+                '.dsh-po-modal-container'
+              ].join(',');
+
+              function scanAndAdjust() {
+                if (window.innerWidth > 768) return;
+                var candidates = document.querySelectorAll(TARGET_SELECTOR);
+                for (var i = 0; i < candidates.length; i++) {
+                  var node = candidates[i];
+                  var style = window.getComputedStyle(node);
+                  if (style.position === 'absolute' || style.position === 'fixed') {
+                    adjustElement(node);
+                  }
+                }
+              }
+
+              var observer = new MutationObserver(function() {
+                scanAndAdjust();
+              });
+              observer.observe(document.body, { childList: true, subtree: true });
+
+              window.addEventListener('resize', scanAndAdjust, { passive: true });
+              window.addEventListener('scroll', scanAndAdjust, { passive: true, capture: true });
+              setInterval(scanAndAdjust, 200);
+            })();
 
             // 监听 DOM 树中的 data-sidebar-right-open 变化
             var obs = new MutationObserver(function() {
@@ -1493,10 +1610,12 @@ final class ViewController: UIViewController {
             https://github.com/liush734530963/deepseek-harness-ios
 
             【更新日志与特性】
-            1. 支持交付物与工作区文件一键调起 iOS 本地分享（保存到文件/微信/AirDrop）
-            2. 底部 Token 统计自适应折行，告别滑动条
-            3. 右侧菜单与列表红点标明当前选中的服务地址
-            4. 官方原版 DSH 免改代码无缝接入支持
+            1. 全级别菜单/弹窗/二级三级插件浮层通用自适应贴边与防溢出
+            2. 提示词优化与思考强度设置浮层移动端自适应防溢出与居中排版
+            3. 支持工作区文件与交付物一键调起 iOS 本地分享（保存到文件/微信/AirDrop）
+            4. 修复切换会话与模型选择自动唤起软键盘问题
+            5. 修复顶部侧边栏按钮与会话标题文本重叠碰撞
+            6. 官方原版 DSH 免改代码无缝接入支持
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
