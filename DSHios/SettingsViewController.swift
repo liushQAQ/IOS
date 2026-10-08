@@ -15,17 +15,17 @@ struct ServiceItem: Codable, Equatable {
 enum ServiceStore {
     static let key = "DSHios.services"
     static let seedVersionKey = "DSHios.servicesSeedVersion"
-    /// 种子版本：7 = 精简配置，移除未安装的 Tailscale 项，自用保留纯粹实用的【局域网直连】与【OpenFRP 外网穿透】。
-    static let currentSeedVersion = 7
+    /// 种子版本：8 = 统一收拢至桌面端主控端口 3083，确保局域网与外网与当前电脑桌面窗口全量会话完全同步。
+    static let currentSeedVersion = 8
 
     /// 默认预置：实测能渲染网页页面的端口，同个端口局域网一条 + 外网一条，成对配置。
-    /// DSH 对：局域网走 Pocket 3084（桌面端主控事实源，明文 HTTP，免密码，全权限）；
-    ///         外网走 OpenFRP 穿透到 9060 认证网关（经 8080 反代直通 3084）。
+    /// DSH 对：局域网走 Pocket 3083（桌面端主控事实源，明文 HTTP，免密码，全权限）；
+    ///         外网走 OpenFRP 穿透到 9060 认证网关（经 8080 反代直通桌面端 3083）。
     /// 仪表盘对：9009 自包含单页，外网带密码直达，无需换票。
     /// TTS 8210 外网 404（无外网入口），只配局域网一条。
     #if PUBLIC_BUILD
     static let defaults: [ServiceItem] = [
-        ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.1.100:3084/",
+        ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.1.100:3083/",
                     note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
         ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.1.100:9009/",
                     note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
@@ -34,11 +34,11 @@ enum ServiceStore {
     ]
     #else
     static let defaults: [ServiceItem] = [
-        ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.215.218:3084/",
-                    note: "局域网直连·全权限·秒开", resolverURL: nil),
+        ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.215.218:3083/",
+                    note: "桌面端主控·全量同步·秒开", resolverURL: nil),
         ServiceItem(name: "DSH 外网（OpenFrp穿透）",
                     url: "http://cn-hk-bgp-4.ofalias.net:47027/dsh/?password=Liu326766%40",
-                    note: "出门随时用·自动换票",
+                    note: "直通桌面端·出门随时用",
                     resolverURL: "http://192.168.215.218:9009/api/dsh-url"),
         ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.215.218:9009/",
                     note: "局域网", resolverURL: nil),

@@ -142,17 +142,17 @@ final class ViewController: UIViewController {
     private var terminateCount = 0
 
     /// 默认加载地址：DSH Pocket（桌面端 LAN 代理，明文 HTTP，免密码）。
-    /// 桌面端主控运行在 3084（DSH Desktop GUI 进程，持有全量活会话）。
+    /// 桌面端主控运行在 3083（DSH Desktop GUI 进程，持有全量活会话）。
     #if PUBLIC_BUILD
-    private let defaultURL = "http://192.168.1.100:3084/"
+    private let defaultURL = "http://192.168.1.100:3083/"
     #else
-    private let defaultURL = "http://192.168.215.218:3084/"
+    private let defaultURL = "http://192.168.215.218:3083/"
     #endif
 
     private struct Keys {
         static let lastURL = "DSHios.lastURL"
         static let urlVersion = "DSHios.urlVersion"
-        static let currentURLVersion = 3
+        static let currentURLVersion = 4
     }
 
     /// iOS 16 缺失的关键 Web API 兜底。页面构建目标定得比 16 高，
