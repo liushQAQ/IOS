@@ -505,27 +505,69 @@ final class ViewController: UIViewController {
           }
           attach();
 
-          // 修复 iOS 移动端虚拟键盘自动弹窗与收起导致菜单关闭
-          (function fixMobileModelSearchFocus() {
+          // 修复 iOS 移动端输入框与搜索框自动聚焦导致键盘弹窗问题：
+          // 1. 切换会话时，Lexical 编辑器会自动调用 focusDraftEditor，导致切换会话直接弹出虚拟键盘；
+          // 2. 模型快捷选择面板打开时，搜索框会自动 focus，导致软键盘遮挡弹层并引发 blur 误关。
+          // 方案：在移动端，禁止一切由脚本代码发起的非用户触摸的主动 focus，仅允许用户真实手指触摸（touchstart/click）触发聚焦。
+          (function fixMobileInputAndSearchFocus() {
             var origFocus = HTMLElement.prototype.focus;
-            var isTouchUser = true;
-            var allowNextFocus = false;
+            var allowUserTouchFocus = false;
+            var touchResetTimer = null;
 
             // 监听用户真人的手指触摸
             document.addEventListener('touchstart', function(e) {
-              if (e.target && (e.target.matches && (e.target.matches('.VYXhfG_search') || e.target.matches('input[role="searchbox"]')))) {
-                allowNextFocus = true;
+              var target = e.target;
+              if (target && (
+                target.closest('.uWtHQG_input') ||
+                target.closest('[contenteditable="true"]') ||
+                target.closest('textarea') ||
+                target.closest('.VYXhfG_search') ||
+                target.closest('input[role="searchbox"]') ||
+                target.closest('input:not([type="button"]):not([type="submit"]):not([type="radio"]):not([type="checkbox"])')
+              )) {
+                allowUserTouchFocus = true;
+                clearTimeout(touchResetTimer);
+                // 允许在触摸后的 800ms 内触发真实的键盘聚焦
+                touchResetTimer = setTimeout(function() {
+                  allowUserTouchFocus = false;
+                }, 800);
               }
             }, true);
 
-            // 当且仅当是 ModelSelect 里的快捷搜索框，并且是由代码自动化调用的 focus() 时拦截，避免一进入界面就轰炸弹出软键盘
+            document.addEventListener('click', function(e) {
+              var target = e.target;
+              if (target && (
+                target.closest('.uWtHQG_input') ||
+                target.closest('[contenteditable="true"]') ||
+                target.closest('textarea') ||
+                target.closest('.VYXhfG_search') ||
+                target.closest('input[role="searchbox"]') ||
+                target.closest('input:not([type="button"]):not([type="submit"]):not([type="radio"]):not([type="checkbox"])')
+              )) {
+                allowUserTouchFocus = true;
+                clearTimeout(touchResetTimer);
+                touchResetTimer = setTimeout(function() {
+                  allowUserTouchFocus = false;
+                }, 800);
+              }
+            }, true);
+
+            // 拦截一切未经用户主动点击的自动化 .focus() 调用
             HTMLElement.prototype.focus = function(options) {
-              if (this && this.classList && (this.classList.contains('VYXhfG_search') || this.getAttribute('role') === 'searchbox')) {
-                if (!allowNextFocus) {
-                  // 阻止无感知自动唤起软键盘
+              var isTextInput = this && (
+                (this.classList && (this.classList.contains('uWtHQG_input') || this.classList.contains('VYXhfG_search'))) ||
+                this.getAttribute('role') === 'searchbox' ||
+                this.getAttribute('contenteditable') === 'true' ||
+                this.isContentEditable ||
+                this.tagName === 'TEXTAREA' ||
+                (this.tagName === 'INPUT' && !['button', 'submit', 'checkbox', 'radio', 'range', 'file'].includes(this.type))
+              );
+
+              if (isTextInput) {
+                if (!allowUserTouchFocus) {
+                  // 严禁脚本自动化弹起虚拟键盘（尤其是切换会话、打开模型菜单时）
                   return;
                 }
-                allowNextFocus = false;
               }
               return origFocus.apply(this, arguments);
             };
