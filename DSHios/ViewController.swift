@@ -351,14 +351,14 @@ final class ViewController: UIViewController {
             '[data-slot="sidebar.right"], [data-slot="sidebar.left"] {',
             '  z-index: 10040 !important;',
             '}',
-            '/* 顶部导航栏：采用与 dsh-pocket 完美协同的绝对定位布局，彻底消除侧边栏按钮高度差与重叠 */',
+            '/* 顶部导航栏：与 dsh-pocket 原生对齐，左右两端对称，操作图标集中在右侧 */',
             '[data-phase] header,',
             '.ank0OG_header {',
             '  position: relative !important;',
             '  box-sizing: border-box !important;',
             '  display: block !important;',
             '  min-height: 0 !important;',
-            '  padding: 8px 10px 0 10px !important;',
+            '  padding: 8px 12px 0 12px !important;',
             '  flex: none !important;',
             '}',
             '.ank0OG_headerLeading {',
@@ -375,12 +375,11 @@ final class ViewController: UIViewController {
             '  margin: 0 !important;',
             '  box-sizing: border-box !important;',
             '  width: 100% !important;',
-            '  gap: 6px !important;',
             '}',
-            '/* 左侧展开目录按钮：绝对定位在 left: 8px, top: 8px，与右侧按钮(y=8px, h=32px, 中心 y=24px)严格绝对水平齐平 */',
+            '/* 左侧展开目录按钮：统一 32x32，严格与右侧按钮在同一水平线上 (y=8px, h=32px) */',
             '[data-mobile-nav="toggle"] {',
             '  position: absolute !important;',
-            '  left: 8px !important;',
+            '  left: 10px !important;',
             '  top: 8px !important;',
             '  width: 32px !important;',
             '  height: 32px !important;',
@@ -405,20 +404,19 @@ final class ViewController: UIViewController {
             '[data-phase] header [class*="titleCluster"] {',
             '  flex: 1 1 auto !important;',
             '  min-width: 0 !important;',
-            '  max-width: 130px !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
             '  overflow: hidden !important;',
-            '  gap: 4px !important;',
+            '  gap: 6px !important;',
             '  height: 32px !important;',
             '  margin: 0 !important;',
             '  padding: 0 !important;',
             '}',
             '.ank0OG_crumbs,',
             '[data-phase] header [class*="crumbs"] {',
-            '  flex: 1 1 auto !important;',
-            '  min-width: 60px !important;',
-            '  max-width: 100% !important;',
+            '  flex: 0 1 auto !important;',
+            '  min-width: 40px !important;',
+            '  max-width: 120px !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
@@ -427,9 +425,6 @@ final class ViewController: UIViewController {
             '  height: 32px !important;',
             '}',
             '.ank0OG_crumbSeg {',
-            '  flex: 1 1 auto !important;',
-            '  min-width: 0 !important;',
-            '  max-width: 100% !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
@@ -437,9 +432,6 @@ final class ViewController: UIViewController {
             '}',
             '.ank0OG_crumb,',
             '.ank0OG_crumbCurrent {',
-            '  flex: 1 1 auto !important;',
-            '  min-width: 0 !important;',
-            '  max-width: 100% !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
@@ -449,13 +441,14 @@ final class ViewController: UIViewController {
             '  line-height: 20px !important;',
             '  padding: 2px 4px !important;',
             '}',
+            '/* 右侧操作按钮集合：严格靠右分布，还原到原版右侧位置 */',
             '.ank0OG_headerActions {',
+            '  margin-left: auto !important;',
             '  flex: 0 0 auto !important;',
             '  height: 32px !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
             '  gap: 4px !important;',
-            '  min-width: 0 !important;',
             '}',
             '/* 后台任务胶囊宽度约束 */',
             '._1Ihh1G_root,',
@@ -473,13 +466,17 @@ final class ViewController: UIViewController {
             '  display: flex !important;',
             '  align-items: center !important;',
             '  gap: 4px !important;',
-            '  margin-left: auto !important;',
+            '  margin-left: 4px !important;',
+            '  flex: 0 0 auto !important;',
             '}',
             '/* 统一右侧所有按钮尺寸为 32x32，严格水平居中 */',
             '.ank0OG_headerCorner button,',
             '.ank0OG_headerCorner [role="button"],',
             '.ank0OG_headerActions button,',
-            '.ank0OG_headerActions [role="button"] {',
+            '.ank0OG_headerActions [role="button"],',
+            'button[aria-label="打开右侧边栏"],',
+            '.iFjIhq_button {',
+            '  width: 32px !important;',
             '  height: 32px !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
@@ -1190,6 +1187,29 @@ final class ViewController: UIViewController {
             obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel'] });
             setInterval(syncPanelNav, 300);
           })();
+
+          // 核心守护：防止移动端软键盘弹起时网页整体被顶到 iOS 顶部状态栏之上
+          (function fixKeyboardViewportScroll() {
+            function lockScroll() {
+              if (window.scrollY > 0) window.scrollTo(0, 0);
+              if (document.documentElement.scrollTop > 0) document.documentElement.scrollTop = 0;
+              if (document.body.scrollTop > 0) document.body.scrollTop = 0;
+            }
+
+            window.addEventListener('scroll', lockScroll, { passive: false });
+            window.addEventListener('resize', lockScroll, { passive: true });
+
+            if (window.visualViewport) {
+              window.visualViewport.addEventListener('resize', lockScroll, { passive: true });
+              window.visualViewport.addEventListener('scroll', lockScroll, { passive: false });
+            }
+
+            document.addEventListener('focusin', function(e) {
+              setTimeout(lockScroll, 50);
+              setTimeout(lockScroll, 150);
+              setTimeout(lockScroll, 300);
+            }, true);
+          })();
         })();
         """,
         // 针对 iOS 15 的系统级兼容补丁（解决 iOS 15 白屏问题）：
@@ -1673,11 +1693,12 @@ final class ViewController: UIViewController {
         config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")
         webView.allowsBackForwardNavigationGestures = true
         webView.translatesAutoresizingMaskIntoConstraints = false
+        // 确保 WKWebView 整体滚动视图锁死，防止软键盘弹起时网页整体被顶到状态栏之上
         webView.scrollView.contentInsetAdjustmentBehavior = .never
-        // 丝滑滚动体验：启用原生惯性加速与回弹（同 Hermes Studio），消除粘滞感
-        webView.scrollView.decelerationRate = .fast
-        webView.scrollView.bounces = true
+        webView.scrollView.bounces = false
         webView.scrollView.alwaysBounceVertical = false
+        webView.scrollView.showsVerticalScrollIndicator = false
+        webView.scrollView.showsHorizontalScrollIndicator = false
         webView.isOpaque = false
         webView.backgroundColor = .systemBackground
         webView.scrollView.backgroundColor = .systemBackground
