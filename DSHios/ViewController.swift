@@ -487,9 +487,10 @@ final class ViewController: UIViewController {
             '  align-items: center !important;',
             '  justify-content: center !important;',
             '}',
-            '/* 2. 修复右侧边栏(文件/终端/浏览器)在移动端展开后遮挡且缺乏快捷退出按钮 */',
+            /* 2. 修复右侧边栏(文件/终端/浏览器/文档预览)在移动端展开后遮挡且缺乏快捷退出按钮 */
             '.dMHGga_panel[data-sidebar-right-open] {',
             '  pointer-events: auto !important;',
+            '  z-index: 10040 !important;',
             '}',
             '/* 右侧边栏展开时移动端半透明背景遮罩（点击即可收起退出） */',
             '.dsh-mobile-sidebar-backdrop {',
@@ -498,7 +499,7 @@ final class ViewController: UIViewController {
             '  background: rgba(0, 0, 0, 0.45);',
             '  backdrop-filter: blur(4px);',
             '  -webkit-backdrop-filter: blur(4px);',
-            '  z-index: 9998;',
+            '  z-index: 10035;',
             '  opacity: 0;',
             '  pointer-events: none;',
             '  transition: opacity 0.2s ease;',
@@ -507,25 +508,88 @@ final class ViewController: UIViewController {
             '  opacity: 1;',
             '  pointer-events: auto;',
             '}',
-            '/* 右侧边栏顶部浮动退出关闭按钮 */',
-            '.dsh-mobile-sidebar-close-btn {',
-            '  position: absolute;',
-            '  top: max(10px, env(safe-area-inset-top));',
-            '  right: 12px;',
-            '  z-index: 10005;',
-            '  width: 32px;',
-            '  height: 32px;',
-            '  border-radius: 16px;',
-            '  background: var(--dsw-alias-interactive-bg-hover, rgba(120, 120, 128, 0.24));',
-            '  color: var(--dsw-alias-label-primary, #ffffff);',
-            '  border: none;',
-            '  display: flex;',
-            '  align-items: center;',
-            '  justify-content: center;',
-            '  font-size: 18px;',
-            '  font-weight: 500;',
-            '  cursor: pointer;',
-            '  box-shadow: 0 2px 8px rgba(0,0,0,0.25);',
+            '/* 移动端全屏面板顶部固定常驻【返回对话】与【✕】退出按钮 */',
+            '.dsh-mobile-back-to-chat-btn {',
+            '  position: fixed !important;',
+            '  top: max(10px, env(safe-area-inset-top)) !important;',
+            '  left: 12px !important;',
+            '  z-index: 20050 !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  gap: 5px !important;',
+            '  height: 32px !important;',
+            '  padding: 0 12px 0 8px !important;',
+            '  border-radius: 16px !important;',
+            '  background: #007aff !important;',
+            '  color: #ffffff !important;',
+            '  border: none !important;',
+            '  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25) !important;',
+            '  font-size: 13px !important;',
+            '  font-weight: 600 !important;',
+            '  cursor: pointer !important;',
+            '}',
+            '.dsh-mobile-back-to-chat-btn svg {',
+            '  width: 14px !important;',
+            '  height: 14px !important;',
+            '}',
+            '.dsh-mobile-panel-close-btn {',
+            '  position: fixed !important;',
+            '  top: max(10px, env(safe-area-inset-top)) !important;',
+            '  right: 12px !important;',
+            '  z-index: 20050 !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
+            '  width: 32px !important;',
+            '  height: 32px !important;',
+            '  border-radius: 16px !important;',
+            '  background: rgba(120, 120, 128, 0.35) !important;',
+            '  backdrop-filter: blur(16px) !important;',
+            '  -webkit-backdrop-filter: blur(16px) !important;',
+            '  color: var(--dsw-alias-label-primary, #ffffff) !important;',
+            '  border: 1px solid rgba(255, 255, 255, 0.15) !important;',
+            '  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;',
+            '  font-size: 16px !important;',
+            '  cursor: pointer !important;',
+            '}',
+            '/* 右侧面板标题栏内边距，给返回和关闭按钮留出安全空间 */',
+            '.dMHGga_panel[data-sidebar-right-open] [data-dockkit-strip],',
+            '.dMHGga_panel[data-sidebar-right-open] .YdIzba_header {',
+            '  padding-left: 100px !important;',
+            '  padding-right: 50px !important;',
+            '}',
+            '/* 移动端文件预览【保存/分享到手机】高亮主按钮与电脑端打开降级 */',
+            '.dsh-mobile-save-file-btn {',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
+            '  gap: 6px !important;',
+            '  height: 36px !important;',
+            '  padding: 0 16px !important;',
+            '  border-radius: 18px !important;',
+            '  background: #007aff !important;',
+            '  color: #ffffff !important;',
+            '  font-size: 14px !important;',
+            '  font-weight: 600 !important;',
+            '  border: none !important;',
+            '  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.35) !important;',
+            '  cursor: pointer !important;',
+            '  margin-bottom: 8px !important;',
+            '}',
+            '/* 电脑端打开按钮在移动端降级为次要轮廓样式并标注来源 */',
+            '.PPCmka_split[data-open-target="file"] .PPCmka_main {',
+            '  font-size: 12px !important;',
+            '  opacity: 0.8 !important;',
+            '}',
+            '/* 暗黑模式高对比度强化 */',
+            'body[data-ds-dark-theme] .YdIzba_empty,',
+            'body[data-ds-dark-theme] [data-textpreview-unsupported] {',
+            '  color: #e5e7eb !important;',
+            '}',
+            'body[data-ds-dark-theme] .YdIzba_emptyLine {',
+            '  color: #e5e7eb !important;',
+            '  font-size: 14px !important;',
+            '  font-weight: 500 !important;',
             '}',
             '/* 3. 修复设置主弹层与二/三级弹层(API Key、模型配置、二次确认)的层级深度冲突 */',
             '.ZiQlkq_overlay {',
@@ -887,34 +951,110 @@ final class ViewController: UIViewController {
               setInterval(scanAndAdjust, 200);
             })();
 
+            // 关闭右侧面板函数
+            window.__dshCloseRightPanel = function() {
+              var toggle = document.querySelector('[data-sidebar-right-toggle]') || document.querySelector('button[aria-label="收起右侧边栏"]');
+              if (toggle) {
+                toggle.click();
+                return;
+              }
+              var closeTab = document.querySelector('[data-dockkit-strip] [aria-label*="关闭"]') || document.querySelector('[data-dockkit-strip] button[aria-label="关闭"]');
+              if (closeTab) {
+                closeTab.click();
+              }
+              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+            };
+
             // 监听 DOM 树中的 data-sidebar-right-open 变化
-            var obs = new MutationObserver(function() {
+            function syncPanelNav() {
               var panel = document.querySelector('.dMHGga_panel');
               var isOpen = panel && panel.hasAttribute('data-sidebar-right-open');
               toggleBackdrop(!!isOpen);
 
-              // 检查面板内部是否有退出按钮，没有则动态植入一个明显的关闭叉号
               if (panel && isOpen) {
-                var existingClose = panel.querySelector('.dsh-mobile-sidebar-close-btn');
-                if (!existingClose) {
-                  var closeBtn = document.createElement('button');
-                  closeBtn.className = 'dsh-mobile-sidebar-close-btn';
-                  closeBtn.setAttribute('type', 'button');
-                  closeBtn.setAttribute('aria-label', '关闭侧边栏');
-                  closeBtn.innerHTML = '✕';
-                  closeBtn.addEventListener('click', function(evt) {
-                    evt.preventDefault();
-                    evt.stopPropagation();
-                    var toggle = document.querySelector('[data-sidebar-right-toggle]') || document.querySelector('.dMHGga_iconButton');
-                    if (toggle) toggle.click();
-                    else window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+                // 1. 注入顶部返回对话与关闭按钮
+                var nav = panel.querySelector('.dsh-mobile-panel-nav');
+                if (!nav) {
+                  nav = document.createElement('div');
+                  nav.className = 'dsh-mobile-panel-nav';
+
+                  var backBtn = document.createElement('button');
+                  backBtn.className = 'dsh-mobile-back-to-chat-btn';
+                  backBtn.setAttribute('type', 'button');
+                  backBtn.setAttribute('aria-label', '返回对话');
+                  backBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg> 返回对话';
+                  backBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.__dshCloseRightPanel();
                   });
-                  panel.appendChild(closeBtn);
+
+                  var closeBtn = document.createElement('button');
+                  closeBtn.className = 'dsh-mobile-panel-close-btn';
+                  closeBtn.setAttribute('type', 'button');
+                  closeBtn.setAttribute('aria-label', '关闭面板');
+                  closeBtn.innerHTML = '✕';
+                  closeBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.__dshCloseRightPanel();
+                  });
+
+                  nav.appendChild(backBtn);
+                  nav.appendChild(closeBtn);
+                  panel.appendChild(nav);
+                }
+
+                // 2. 优化文件不可预览页面的操作按钮（将手机端无感的“电脑打开”改造为手机“保存/分享”+明确标注电脑端）
+                var emptyContainer = panel.querySelector('[data-textpreview-unsupported]');
+                if (emptyContainer) {
+                  var mobileSaveBtn = emptyContainer.querySelector('.dsh-mobile-save-file-btn');
+                  if (!mobileSaveBtn) {
+                    var pathEl = panel.querySelector('[data-textpreview-path]');
+                    var fullPath = pathEl ? (pathEl.getAttribute('title') || pathEl.textContent || '') : '';
+                    
+                    mobileSaveBtn = document.createElement('button');
+                    mobileSaveBtn.className = 'dsh-mobile-save-file-btn';
+                    mobileSaveBtn.setAttribute('type', 'button');
+                    mobileSaveBtn.innerHTML = '📥 保存 / 分享到手机';
+                    mobileSaveBtn.addEventListener('click', function(e) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (fullPath && window.__dshFetchAndShareFile) {
+                        window.__dshFetchAndShareFile(fullPath);
+                      } else {
+                        // 触发通用文件传输
+                        var down = document.querySelector('.dsh-mobile-download-btn');
+                        if (down) down.click();
+                      }
+                    });
+
+                    // 插入到 slot 容器前面，作为最醒目的主按钮
+                    var slot = emptyContainer.querySelector('[data-slot*="unpreviewable"]');
+                    if (slot) {
+                      emptyContainer.insertBefore(mobileSaveBtn, slot);
+                    } else {
+                      emptyContainer.appendChild(mobileSaveBtn);
+                    }
+                  }
+
+                  // 给原有的电脑端打开按钮增加明确的提示
+                  var pcBtn = emptyContainer.querySelector('.PPCmka_main');
+                  if (pcBtn && !pcBtn.dataset.dshPcAnnotated) {
+                    pcBtn.dataset.dshPcAnnotated = 'true';
+                    pcBtn.innerHTML = '🖥️ 在电脑端打开';
+                    pcBtn.addEventListener('click', function() {
+                      // 轻提示
+                      if (window.__dshToast) window.__dshToast('已通知电脑端打开该文件');
+                    }, true);
+                  }
                 }
               }
-            });
+            }
 
+            var obs = new MutationObserver(syncPanelNav);
             obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel'] });
+            setInterval(syncPanelNav, 300);
           })();
         })();
         """,
@@ -1595,13 +1735,11 @@ final class ViewController: UIViewController {
         presentMenuSheet()
     }
 
-    /// 点一下：展开时直接弹菜单，收起时先展开。
+    /// 点一下：无论当前是展开还是收起，直接弹出菜单（避免用户误以为无响应）。
     @objc private func menuTapped() {
-        guard menuButtonExpanded else {
-            setMenuExpanded(true, animated: true)
-            return
+        if !menuButtonExpanded {
+            setMenuExpanded(true, animated: false)
         }
-        // 不打断自动收起计时器：菜单关掉后按钮也会自己收回去，不留遮挡。
         presentMenuSheet()
     }
 
