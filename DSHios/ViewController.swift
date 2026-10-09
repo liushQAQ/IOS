@@ -1375,13 +1375,19 @@ final class ViewController: UIViewController {
               console.warn('[DSHios] Failed to fetch via /api/file:', err);
               // 如果是通过 dsh-resource:// 或相对路径，尝试反解真实路径重试
               if (filePath.startsWith('dsh-resource://file/')) {
-                var m = filePath.match(/^dsh-resource:\/\/file\/session\/[^/]+\/(.+)$/);
-                if (m && m[1]) {
-                  var decoded = '';
-                  try { decoded = decodeURIComponent(m[1]); } catch(e) { decoded = m[1]; }
-                  if (decoded && decoded !== filePath) {
-                    shareFileByPath(decoded, name);
-                    return;
+                var prefix = 'dsh-resource://file/session/';
+                var idx = filePath.indexOf(prefix);
+                if (idx !== -1) {
+                  var rest = filePath.substring(idx + prefix.length);
+                  var slashIdx = rest.indexOf('/');
+                  if (slashIdx !== -1) {
+                    var encodedPath = rest.substring(slashIdx + 1);
+                    var decoded = '';
+                    try { decoded = decodeURIComponent(encodedPath); } catch(e) { decoded = encodedPath; }
+                    if (decoded && decoded !== filePath) {
+                      shareFileByPath(decoded, name);
+                      return;
+                    }
                   }
                 }
               }
@@ -1487,9 +1493,15 @@ final class ViewController: UIViewController {
                   var textPreviewEl = document.querySelector('[data-textpreview-url]');
                   var resourceUrl = textPreviewEl ? textPreviewEl.getAttribute('data-textpreview-url') : '';
                   if (resourceUrl && resourceUrl.startsWith('dsh-resource://file/')) {
-                    var m = resourceUrl.match(/^dsh-resource:\/\/file\/session\/[^/]+\/(.+)$/);
-                    if (m && m[1]) {
-                      try { rawPath = decodeURIComponent(m[1]); } catch (e) { rawPath = m[1]; }
+                    var prefix = 'dsh-resource://file/session/';
+                    var idx = resourceUrl.indexOf(prefix);
+                    if (idx !== -1) {
+                      var rest = resourceUrl.substring(idx + prefix.length);
+                      var slashIdx = rest.indexOf('/');
+                      if (slashIdx !== -1) {
+                        var encodedPath = rest.substring(slashIdx + 1);
+                        try { rawPath = decodeURIComponent(encodedPath); } catch (e) { rawPath = encodedPath; }
+                      }
                     }
                   }
                 }
