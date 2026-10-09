@@ -354,7 +354,8 @@ final class ViewController: UIViewController {
             '  align-items: center !important;',
             '  padding-inline-start: 36px !important;',
             '  padding-inline-end: 0px !important;',
-            '  min-height: 32px !important;',
+            '  height: 28px !important;',
+            '  min-height: 28px !important;',
             '  box-sizing: border-box !important;',
             '  width: 100% !important;',
             '  gap: 6px !important;',
@@ -387,10 +388,11 @@ final class ViewController: UIViewController {
             '  width: 100% !important;',
             '  margin: 0 auto !important;',
             '}',
+            '/* 左侧展开目录按钮：高度精确与右侧边栏按钮(y=10px, h=28px)数学级水平对齐，图标严格居中 */',
             '[data-mobile-nav="toggle"] {',
             '  position: absolute !important;',
-            '  left: 8px !important;',
-            '  top: 12px !important;',
+            '  left: 14px !important;',
+            '  top: 10px !important;',
             '  transform: none !important;',
             '  z-index: 10 !important;',
             '  width: 28px !important;',
@@ -403,8 +405,8 @@ final class ViewController: UIViewController {
             '  border-radius: var(--dsw-radius-sm, 6px) !important;',
             '}',
             '[data-mobile-nav="toggle"] svg {',
-            '  width: 16px !important;',
-            '  height: 16px !important;',
+            '  width: 15px !important;',
+            '  height: 15px !important;',
             '  display: block !important;',
             '  margin: auto !important;',
             '}',
@@ -419,6 +421,17 @@ final class ViewController: UIViewController {
             '  align-items: center !important;',
             '  overflow: hidden !important;',
             '  gap: 4px !important;',
+            '  height: 28px !important;',
+            '}',
+            '.ank0OG_headerActions {',
+            '  height: 28px !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '}',
+            '.ank0OG_headerCorner {',
+            '  height: 28px !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
             '}',
             '.ank0OG_crumbs,',
             '[data-phase] header [class*="crumbs"] {',
@@ -429,6 +442,8 @@ final class ViewController: UIViewController {
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
             '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  height: 28px !important;',
             '}',
             '.ank0OG_crumbSeg {',
             '  min-width: 0 !important;',
@@ -782,52 +797,66 @@ final class ViewController: UIViewController {
           }
           attach();
 
-          // 修复 iOS 移动端输入框与搜索框自动聚焦导致键盘弹窗问题：
+          // 修复 iOS 移动端输入框与搜索框自动聚焦导致键盘弹窗与光标缺失问题：
           // 1. 切换会话时，Lexical 编辑器会自动调用 focusDraftEditor，导致切换会话直接弹出虚拟键盘；
-          // 2. 模型快捷选择面板打开时，搜索框会自动 focus，导致软键盘遮挡弹层并引发 blur 误关。
-          // 方案：在移动端，禁止一切由脚本代码发起的非用户触摸的主动 focus，仅允许用户真实手指触摸（touchstart/click）触发聚焦。
+          // 2. 模型快捷选择面板打开时，搜索框会自动 focus，导致软键盘遮挡弹层并引发 blur 误关；
+          // 3. 用户手指点击输入框时，iOS WebKit 的 contenteditable 容易因内部空节点无 Selection 而丢失可见光标。
+          // 方案：
+          // - 拦截代码自动触发的静默聚焦；
+          // - 当用户手指触摸或点击输入框时，立即授权聚焦并在下一个微任务主动创建 Selection 光标，确保光标 100% 出现。
           (function fixMobileInputAndSearchFocus() {
             var origFocus = HTMLElement.prototype.focus;
             var allowUserTouchFocus = false;
             var touchResetTimer = null;
 
-            // 监听用户真人的手指触摸
-            document.addEventListener('touchstart', function(e) {
-              var target = e.target;
-              if (target && (
-                target.closest('.uWtHQG_input') ||
-                target.closest('[contenteditable="true"]') ||
-                target.closest('textarea') ||
-                target.closest('.VYXhfG_search') ||
-                target.closest('input[role="searchbox"]') ||
-                target.closest('input:not([type="button"]):not([type="submit"]):not([type="radio"]):not([type="checkbox"])')
-              )) {
-                allowUserTouchFocus = true;
-                clearTimeout(touchResetTimer);
-                // 允许在触摸后的 800ms 内触发真实的键盘聚焦
-                touchResetTimer = setTimeout(function() {
-                  allowUserTouchFocus = false;
-                }, 800);
-              }
-            }, true);
+            function activateCaret(el) {
+              if (!el) return;
+              try {
+                var sel = window.getSelection();
+                if (sel) {
+                  var range = document.createRange();
+                  if (el.lastChild) {
+                    range.selectNodeContents(el);
+                    range.collapse(false);
+                  } else {
+                    range.setStart(el, 0);
+                    range.collapse(true);
+                  }
+                  sel.removeAllRanges();
+                  sel.addRange(range);
+                }
+              } catch (e) {}
+            }
 
-            document.addEventListener('click', function(e) {
+            function handleUserTouch(e) {
               var target = e.target;
-              if (target && (
-                target.closest('.uWtHQG_input') ||
-                target.closest('[contenteditable="true"]') ||
-                target.closest('textarea') ||
-                target.closest('.VYXhfG_search') ||
-                target.closest('input[role="searchbox"]') ||
-                target.closest('input:not([type="button"]):not([type="submit"]):not([type="radio"]):not([type="checkbox"])')
-              )) {
+              if (!target) return;
+              var inputEl = target.closest('.uWtHQG_input') ||
+                            target.closest('[contenteditable="true"]') ||
+                            target.closest('textarea') ||
+                            target.closest('.VYXhfG_search') ||
+                            target.closest('input[role="searchbox"]') ||
+                            target.closest('input:not([type="button"]):not([type="submit"]):not([type="radio"]):not([type="checkbox"])');
+
+              if (inputEl) {
                 allowUserTouchFocus = true;
                 clearTimeout(touchResetTimer);
                 touchResetTimer = setTimeout(function() {
                   allowUserTouchFocus = false;
-                }, 800);
+                }, 1200);
+
+                if (inputEl.classList.contains('uWtHQG_input') || inputEl.getAttribute('contenteditable') === 'true' || inputEl.isContentEditable) {
+                  setTimeout(function() {
+                    activateCaret(inputEl);
+                  }, 50);
+                }
               }
-            }, true);
+            }
+
+            // 监听用户真人的手指触摸与点击
+            document.addEventListener('touchstart', handleUserTouch, true);
+            document.addEventListener('touchend', handleUserTouch, true);
+            document.addEventListener('click', handleUserTouch, true);
 
             // 拦截一切未经用户主动点击的自动化 .focus() 调用
             HTMLElement.prototype.focus = function(options) {
@@ -845,6 +874,10 @@ final class ViewController: UIViewController {
                   // 严禁脚本自动化弹起虚拟键盘（尤其是切换会话、打开模型菜单时）
                   return;
                 }
+                var self = this;
+                setTimeout(function() {
+                  activateCaret(self);
+                }, 10);
               }
               return origFocus.apply(this, arguments);
             };
