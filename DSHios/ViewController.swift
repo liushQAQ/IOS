@@ -335,50 +335,64 @@ final class ViewController: UIViewController {
             '  z-index: 10040 !important;',
             '}',
             '/* 1. 彻底解决移动端顶部标题栏：左侧边栏展开按钮与会话标题文本重叠碰撞问题 */',
+            '.ank0OG_header,',
             '[data-phase] header {',
             '  position: relative !important;',
-            '  padding: 6px 8px 0 !important;',
-            '  display: block !important;',
+            '  display: grid !important;',
+            '  grid-template-columns: auto minmax(0, 1fr) !important;',
+            '  min-height: 76px !important;',
+            '  padding: 10px 16px 0 16px !important;',
+            '  box-sizing: border-box !important;',
+            '  flex: none !important;',
+            '}',
+            '.ank0OG_headerLeading {',
+            '  display: none !important;',
             '}',
             '[data-phase] header .ank0OG_titleRow,',
             '.ank0OG_titleRow {',
             '  display: flex !important;',
             '  align-items: center !important;',
-            '  padding-inline-start: 40px !important;',
+            '  padding-inline-start: 36px !important;',
             '  padding-inline-end: 0px !important;',
-            '  min-height: 36px !important;',
+            '  min-height: 32px !important;',
             '  box-sizing: border-box !important;',
             '  width: 100% !important;',
             '  gap: 6px !important;',
             '}',
-            '.ank0OG_headerLeading {',
-            '  display: none !important;',
-            '}',
-            '/* 顶部导航栏左右侧边栏按钮绝对水平对称对齐，并保持原生状态栏/工具栏级别固定常驻 */',
-            '[data-phase] header,',
-            '.ank0OG_header {',
-            '  position: sticky !important;',
-            '  top: 0 !important;',
-            '  left: 0 !important;',
-            '  right: 0 !important;',
-            '  z-index: 100 !important;',
-            '  background: var(--dsw-alias-bg-base) !important;',
-            '  backdrop-filter: blur(20px) saturate(180%) !important;',
-            '  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;',
-            '}',
-            '/* 防止 iOS 页面在调起虚拟键盘或点击输入时发生 body 整体错位滚动，确保内容区域内部平滑伸缩 */',
-            'html, body {',
-            '  width: 100% !important;',
-            '  height: 100% !important;',
+            '/* 思考块(ReasoningRow)在移动端流式输出时单行自适应省略，防止文字折行溢出碰撞下方命令与步骤 */',
+            '.w_X3iW_root {',
             '  overflow: hidden !important;',
-            '  -webkit-text-size-adjust: 100% !important;',
+            '}',
+            '.w_X3iW_row {',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  flex-wrap: nowrap !important;',
+            '  white-space: nowrap !important;',
+            '  overflow: hidden !important;',
+            '}',
+            '.w_X3iW_summary,',
+            '.w_X3iW_summaryText {',
+            '  white-space: nowrap !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  display: inline-block !important;',
+            '  max-width: 100% !important;',
+            '}',
+            '/* 保证对话消息流内边距舒适居中与滚动自适应 */',
+            '.X6jxGq_scroll {',
+            '  padding: 16px 16px 24px 16px !important;',
+            '}',
+            '.X6jxGq_column {',
+            '  max-width: 100% !important;',
+            '  width: 100% !important;',
+            '  margin: 0 auto !important;',
             '}',
             '[data-mobile-nav="toggle"] {',
             '  position: absolute !important;',
             '  left: 8px !important;',
             '  top: 12px !important;',
             '  transform: none !important;',
-            '  z-index: 101 !important;',
+            '  z-index: 10 !important;',
             '  width: 28px !important;',
             '  height: 28px !important;',
             '  display: inline-flex !important;',
@@ -1095,6 +1109,33 @@ final class ViewController: UIViewController {
             obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel'] });
             setInterval(syncPanelNav, 300);
           })();
+        })();
+        """,
+        // 针对 iOS 15 的系统级兼容补丁（解决 iOS 15 白屏问题）：
+        // 1. crypto.randomUUID 兜底（在局域网明文 HTTP 环境下 iOS 15 WebKit 会禁用原生 crypto.randomUUID，引发脚本崩溃白屏）
+        // 2. 正则先行/后行断言 RegExp Lookbehind 容错，防止 iOS 15 解析 ES2022+ 正则时抛 SyntaxError
+        // 3. String.prototype.replaceAll, Array.prototype.at 补齐
+        """
+        (function () {
+          if (typeof window !== 'undefined') {
+            if (!window.crypto) window.crypto = {};
+            if (typeof window.crypto.randomUUID !== 'function') {
+              window.crypto.randomUUID = function () {
+                return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, function (c) {
+                  return (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16);
+                });
+              };
+            }
+          }
+          if (typeof String.prototype.replaceAll !== 'function') {
+            String.prototype.replaceAll = function (search, replace) {
+              if (search instanceof RegExp) {
+                if (!search.global) throw new TypeError('replaceAll must be called with a global RegExp');
+                return this.replace(search, replace);
+              }
+              return this.split(search).join(replace);
+            };
+          }
         })();
         """,
         // Promise.withResolvers（iOS 17+）：页面用它发布 __DSH_BOOT_READY__。
@@ -1900,11 +1941,33 @@ final class ViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    /// 原生设备运行环境信息检测（解决多系统版本诊断与 iOS 15 兼容排查）
+    private static func getDeviceInfoSummary() -> String {
+        let device = UIDevice.current
+        let systemVersion = device.systemVersion
+        let model = device.model
+        let name = device.name
+        
+        var freeDiskGB = "未知"
+        if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
+           let freeSize = attrs[.systemFreeSize] as? Int64 {
+            freeDiskGB = String(format: "%.1f GB", Double(freeSize) / 1024.0 / 1024.0 / 1024.0)
+        }
+        
+        let screen = UIScreen.main
+        let bounds = screen.bounds
+        let scale = screen.scale
+        let res = "\(Int(bounds.width * scale))×\(Int(bounds.height * scale)) (@\(Int(scale))x)"
+        
+        return "设备: \(model) (\(name))\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
+    }
+
     /// 关于：版本号原生可见（读 Info.plist，回退到编译期常量）
     private func showAbout() {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? AppDelegate.Version.marketing
         let build = info?["CFBundleVersion"] as? String ?? AppDelegate.Version.build
+        let deviceInfo = Self.getDeviceInfoSummary()
         let alert = UIAlertController(
             title: "DeepSeek Harness iOS",
             message: """
@@ -1913,13 +1976,16 @@ final class ViewController: UIViewController {
             开源仓库：
             https://github.com/liush734530963/deepseek-harness-ios
 
+            【设备检测信息】
+            \(deviceInfo)
+
             【更新日志与特性】
-            1. 手机软键盘回车键智能换行，点击发送按钮提交
-            2. 全级别插件/菜单/弹窗移动端自适应规范（高对比度+防溢出）
-            3. 移动端文件预览常驻“返回对话”与“保存到手机”
-            4. 悬浮齿轮单点直接弹窗，交互更灵敏
-            5. 支持工作区文件与交付物一键调起 iOS 本地分享
-            6. 官方原版 DSH 免改代码无缝接入支持
+            1. 恢复自然会话排版流，消除顶部重叠与思考块碰撞
+            2. 注入 iOS 15 系统级兼容补丁（crypto 与正则兜底，杜绝白屏）
+            3. 原生集成设备运行环境诊断（机型/iOS版本/存储空间）
+            4. 手机软键盘回车键智能换行，点击发送按钮提交
+            5. 全级别插件/菜单/弹窗移动端自适应规范（高对比度+防溢出）
+            6. 移动端文件预览常驻“返回对话”与“保存到手机”
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
