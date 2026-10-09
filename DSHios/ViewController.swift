@@ -1755,8 +1755,28 @@ final class ViewController: UIViewController {
         self.errorDetailLabel = detail
     }
 
-    /// 动态生成灵动可爱的小鲸鱼图标（DeepSeek 灵动小鲸鱼矢量绘制）
+    /// 优先使用 fisharchive.cc 超清官方同人二次元鲸鱼娘立绘（圆形精美裁切 + 柔和高质感边框）
     private static func createCuteWhaleImage(size: CGSize, alpha: CGFloat = 1.0) -> UIImage {
+        if let mascot = UIImage(named: "WhaleMascot") {
+            let renderer = UIGraphicsImageRenderer(size: size)
+            return renderer.image { ctx in
+                let cgCtx = ctx.cgContext
+                cgCtx.setAlpha(alpha)
+                let rect = CGRect(origin: .zero, size: size)
+                // 绘制圆形裁剪
+                let circle = UIBezierPath(ovalIn: rect)
+                circle.addClip()
+                // 填充柔和浅海蓝微质感底色
+                UIColor(red: 0.92, green: 0.95, blue: 1.0, alpha: 1.0).setFill()
+                circle.fill()
+                mascot.draw(in: rect)
+                // 绘制细腻的半透明白微边框
+                let stroke = UIBezierPath(ovalIn: rect.insetBy(dx: 0.75, dy: 0.75))
+                stroke.lineWidth = 1.5
+                UIColor.white.withAlphaComponent(0.92).setStroke()
+                stroke.stroke()
+            }
+        }
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in
             let cgCtx = ctx.cgContext
@@ -1949,9 +1969,9 @@ final class ViewController: UIViewController {
             self.view.layoutIfNeeded()
         }
 
-        // 使用萌萌的小鲸鱼娘图标：
+        // 使用 fisharchive.cc 超清官方同人二次元鲸鱼娘头像：
         // 展开时完整居中显示；收起时只露出一半，鲸鱼头像依然清晰露出半张俏皮脸庞
-        let whaleImage = Self.createCuteWhaleImage(size: CGSize(width: 28, height: 28))
+        let whaleImage = Self.createCuteWhaleImage(size: CGSize(width: Self.menuButtonSide, height: Self.menuButtonSide))
         button.setImage(whaleImage, for: .normal)
 
         let visible = expanded ? Self.menuButtonSide : Self.menuCollapsedPeek
@@ -2012,6 +2032,14 @@ final class ViewController: UIViewController {
 
     /// 点一下：无论当前是展开还是收起，直接弹出菜单（避免用户误以为无响应）。
     @objc private func menuTapped() {
+        // fisharchive.cc 果冻 Q 弹物理动效 (Jelly Spring Animation)
+        UIView.animate(withDuration: 0.12, delay: 0, options: [.curveEaseIn], animations: {
+            self.menuButton?.transform = CGAffineTransform(scaleX: 1.25, y: 0.78)
+        }) { _ in
+            UIView.animate(withDuration: 0.38, delay: 0, usingSpringWithDamping: 0.35, initialSpringVelocity: 1.5, options: [], animations: {
+                self.menuButton?.transform = .identity
+            })
+        }
         if !menuButtonExpanded {
             setMenuExpanded(true, animated: false)
         }
