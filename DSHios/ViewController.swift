@@ -797,36 +797,15 @@ final class ViewController: UIViewController {
           }
           attach();
 
-          // 修复 iOS 移动端输入框与搜索框自动聚焦导致键盘弹窗与光标缺失问题：
+          // 修复 iOS 移动端输入框与搜索框自动聚焦导致键盘弹窗问题：
           // 1. 切换会话时，Lexical 编辑器会自动调用 focusDraftEditor，导致切换会话直接弹出虚拟键盘；
           // 2. 模型快捷选择面板打开时，搜索框会自动 focus，导致软键盘遮挡弹层并引发 blur 误关；
-          // 3. 用户手指点击输入框时，iOS WebKit 的 contenteditable 容易因内部空节点无 Selection 而丢失可见光标。
-          // 方案：
-          // - 拦截代码自动触发的静默聚焦；
-          // - 当用户手指触摸或点击输入框时，立即授权聚焦并在下一个微任务主动创建 Selection 光标，确保光标 100% 出现。
+          // 3. 保护移动端文本光标与选择自由：严禁在用户点击、滑动或打字时强行重置 Selection，
+          //    让用户可以在输入框内任意滑动光标、选择文字、移动插入点！
           (function fixMobileInputAndSearchFocus() {
             var origFocus = HTMLElement.prototype.focus;
             var allowUserTouchFocus = false;
             var touchResetTimer = null;
-
-            function activateCaret(el) {
-              if (!el) return;
-              try {
-                var sel = window.getSelection();
-                if (sel) {
-                  var range = document.createRange();
-                  if (el.lastChild) {
-                    range.selectNodeContents(el);
-                    range.collapse(false);
-                  } else {
-                    range.setStart(el, 0);
-                    range.collapse(true);
-                  }
-                  sel.removeAllRanges();
-                  sel.addRange(range);
-                }
-              } catch (e) {}
-            }
 
             function handleUserTouch(e) {
               var target = e.target;
@@ -843,13 +822,7 @@ final class ViewController: UIViewController {
                 clearTimeout(touchResetTimer);
                 touchResetTimer = setTimeout(function() {
                   allowUserTouchFocus = false;
-                }, 1200);
-
-                if (inputEl.classList.contains('uWtHQG_input') || inputEl.getAttribute('contenteditable') === 'true' || inputEl.isContentEditable) {
-                  setTimeout(function() {
-                    activateCaret(inputEl);
-                  }, 50);
-                }
+                }, 1500);
               }
             }
 
@@ -874,10 +847,6 @@ final class ViewController: UIViewController {
                   // 严禁脚本自动化弹起虚拟键盘（尤其是切换会话、打开模型菜单时）
                   return;
                 }
-                var self = this;
-                setTimeout(function() {
-                  activateCaret(self);
-                }, 10);
               }
               return origFocus.apply(this, arguments);
             };
@@ -1389,7 +1358,7 @@ final class ViewController: UIViewController {
           function shareFileByPath(filePath, fileName) {
             if (!filePath) return;
             var name = fileName || filePath.split(/[\\\\/]/).pop() || 'file_' + Date.now();
-            var apiUrl = '/api/file?path=' + encodeURIComponent(filePath);
+            var apiUrl = new URL('api/file?path=' + encodeURIComponent(filePath), window.location.href).href;
 
             fetch(apiUrl).then(function(res) {
               if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1403,19 +1372,20 @@ final class ViewController: UIViewController {
                 reader.readAsDataURL(blob);
               });
             }).catch(function(err) {
-              console.warn('[DSHios] Failed to fetch via /api/file, fallback to DOM text:', err);
-              // 如果通过接口拉取失败（如相对路径或离线），尝试从当前预览界面抓取
-              var previewBody = document.querySelector('.YdIzba_body');
-              if (previewBody) {
-                var text = previewBody.innerText || '';
-                var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-                var reader = new FileReader();
-                reader.onloadend = function() {
-                  var b64 = (reader.result || '').split(',')[1] || '';
-                  sendFileToNative(name, 'text/plain', b64);
-                };
-                reader.readAsDataURL(blob);
+              console.warn('[DSHios] Failed to fetch via /api/file:', err);
+              // 如果是通过 dsh-resource:// 或相对路径，尝试反解真实路径重试
+              if (filePath.startsWith('dsh-resource://file/')) {
+                var m = filePath.match(/^dsh-resource:\/\/file\/session\/[^/]+\/(.+)$/);
+                if (m && m[1]) {
+                  var decoded = '';
+                  try { decoded = decodeURIComponent(m[1]); } catch(e) { decoded = m[1]; }
+                  if (decoded && decoded !== filePath) {
+                    shareFileByPath(decoded, name);
+                    return;
+                  }
+                }
               }
+              // 严禁将界面上的「该格式文件暂时无法预览」等说明文字作为回退内容发送！
             });
           }
 
@@ -1511,24 +1481,22 @@ final class ViewController: UIViewController {
                 e.preventDefault();
                 e.stopPropagation();
 
-                var pathLabel = header.querySelector('.YdIzba_path');
+                var pathLabel = header.querySelector('.YdIzba_path') || document.querySelector('[data-textpreview-path]');
                 var rawPath = pathLabel ? (pathLabel.getAttribute('title') || pathLabel.innerText || '').trim() : '';
-                var fname = rawPath ? rawPath.split(/[\\\\/]/).pop() : 'document.txt';
+                if (!rawPath) {
+                  var textPreviewEl = document.querySelector('[data-textpreview-url]');
+                  var resourceUrl = textPreviewEl ? textPreviewEl.getAttribute('data-textpreview-url') : '';
+                  if (resourceUrl && resourceUrl.startsWith('dsh-resource://file/')) {
+                    var m = resourceUrl.match(/^dsh-resource:\/\/file\/session\/[^/]+\/(.+)$/);
+                    if (m && m[1]) {
+                      try { rawPath = decodeURIComponent(m[1]); } catch (e) { rawPath = m[1]; }
+                    }
+                  }
+                }
+                var fname = rawPath ? rawPath.split(/[\\\\/]/).pop() : 'file_' + Date.now();
 
                 if (rawPath) {
                   shareFileByPath(rawPath, fname);
-                } else {
-                  var previewBody = header.parentElement ? header.parentElement.querySelector('.YdIzba_body') : null;
-                  if (previewBody) {
-                    var text = previewBody.innerText || '';
-                    var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-                    var reader = new FileReader();
-                    reader.onloadend = function() {
-                      var b64 = (reader.result || '').split(',')[1] || '';
-                      sendFileToNative(fname, 'text/plain', b64);
-                    };
-                    reader.readAsDataURL(blob);
-                  }
                 }
               });
               header.appendChild(btn);
