@@ -1608,6 +1608,11 @@ final class ViewController: UIViewController {
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        // 兼容 iOS 14 / 15 低版本 WebKit 策略：
+        // 显式在 preferences 上允许 JavaScript 与跨域本地网络访问，避免 ITP 隐私策略拦截 http 局域网请求
+        config.preferences.javaScriptEnabled = true
+        config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
+        config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
         // 绑定持久化数据存储，确保静态资源磁盘缓存生效
         config.websiteDataStore = WKWebsiteDataStore.default()
         // 电脑端一些老页面（如 8210 TTS）没写 <meta name="viewport">，
