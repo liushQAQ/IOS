@@ -858,7 +858,7 @@ final class ViewController: UIViewController {
               }
             });
 
-            // 移动端全级别菜单、弹窗与插件浮层自适应贴边与防溢出看门狗
+            // 移动端全级别菜单、弹窗与插件浮层自适应贴边、高对比度与防溢出看门狗
             (function installMobileLayoutWatchdog() {
               if (window.__dshMobileLayoutWatchdog) return;
               window.__dshMobileLayoutWatchdog = true;
@@ -873,16 +873,24 @@ final class ViewController: UIViewController {
                 var winH = window.innerHeight;
                 if (winW > 768) return;
 
-                // 1. 宽度与高度安全限制
+                // 1. 宽度与高度安全限制与多级插件通用规范
                 el.style.maxWidth = (winW - PADDING * 2) + 'px';
                 el.style.boxSizing = 'border-box';
                 el.style.maxHeight = (winH - PADDING * 2) + 'px';
                 el.style.overflowY = 'auto';
                 el.style.webkitOverflowScrolling = 'touch';
 
+                // 2. 保证通用透明度规范：高对比度不透明背景（杜绝任何插件透明度过高导致文字穿透重叠）
+                var isDark = document.body && document.body.hasAttribute('data-ds-dark-theme');
+                if (!el.style.backgroundColor || el.style.backgroundColor === 'transparent' || el.style.backgroundColor.indexOf('rgba') !== -1) {
+                  el.style.setProperty('background-color', isDark ? 'rgba(22, 24, 29, 0.98)' : 'rgba(255, 255, 255, 0.98)', 'important');
+                  el.style.setProperty('backdrop-filter', 'blur(28px) saturate(180%)', 'important');
+                  el.style.setProperty('-webkit-backdrop-filter', 'blur(28px) saturate(180%)', 'important');
+                }
+
                 var rect = el.getBoundingClientRect();
 
-                // 2. 水平方向越界自动拉回安全区内
+                // 3. 水平方向越界自动拉回安全区内
                 if (rect.right > winW - PADDING) {
                   var overflowX = rect.right - (winW - PADDING);
                   var currentLeft = parseFloat(el.style.left) || rect.left;
@@ -895,7 +903,7 @@ final class ViewController: UIViewController {
                   el.style.right = 'auto';
                 }
 
-                // 3. 垂直方向越界自动拉回安全区内
+                // 4. 垂直方向越界自动拉回安全区内
                 if (rect.bottom > winH - PADDING) {
                   var overflowY = rect.bottom - (winH - PADDING);
                   var currentTop = parseFloat(el.style.top) || rect.top;
@@ -949,6 +957,37 @@ final class ViewController: UIViewController {
               window.addEventListener('resize', scanAndAdjust, { passive: true });
               window.addEventListener('scroll', scanAndAdjust, { passive: true, capture: true });
               setInterval(scanAndAdjust, 200);
+            })();
+
+            // 移动端聊天输入框回车/换行行为深度优化：
+            // 解决 iOS 软键盘在聊天输入框长按或轻点“确定/换行”无法正常换行的问题。
+            // 移动端交互铁律：手机软键盘上的 Return/换行键 专职负责文本插入换行；右侧独立的圆形蓝色发送按钮负责提交发送。
+            (function setupMobileEnterKeyNewline() {
+              window.addEventListener('keydown', function(e) {
+                var target = e.target;
+                if (!target) return;
+                var input = target.closest ? target.closest('.uWtHQG_input') : null;
+                if (input) {
+                  if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+                    // 将纯 Enter 事件无缝转换为 Shift+Enter 语义，通知 Lexical 编辑器执行段落换行而非发送提交！
+                    try {
+                      Object.defineProperty(e, 'shiftKey', { get: function() { return true; } });
+                    } catch (err) {}
+                  }
+                }
+              }, true);
+
+              // 自动为输入框设置 enterkeyhint="enter"，指示 iOS 虚拟键盘直接呈现标准的“换行”按键
+              function setInputEnterKeyHint() {
+                var inputs = document.querySelectorAll('.uWtHQG_input, [contenteditable="true"]');
+                inputs.forEach(function(el) {
+                  if (el.getAttribute('enterkeyhint') !== 'enter') {
+                    el.setAttribute('enterkeyhint', 'enter');
+                  }
+                });
+              }
+              setInputEnterKeyHint();
+              setInterval(setInputEnterKeyHint, 500);
             })();
 
             // 关闭右侧面板函数
@@ -1875,11 +1914,11 @@ final class ViewController: UIViewController {
             https://github.com/liush734530963/deepseek-harness-ios
 
             【更新日志与特性】
-            1. 全级别菜单/弹窗/二级三级插件浮层通用自适应贴边与防溢出
-            2. 提示词优化与思考强度设置浮层移动端自适应防溢出与居中排版
-            3. 支持工作区文件与交付物一键调起 iOS 本地分享（保存到文件/微信/AirDrop）
-            4. 修复切换会话与模型选择自动唤起软键盘问题
-            5. 修复顶部侧边栏按钮与会话标题文本重叠碰撞
+            1. 手机软键盘回车键智能换行，点击发送按钮提交
+            2. 全级别插件/菜单/弹窗移动端自适应规范（高对比度+防溢出）
+            3. 移动端文件预览常驻“返回对话”与“保存到手机”
+            4. 悬浮齿轮单点直接弹窗，交互更灵敏
+            5. 支持工作区文件与交付物一键调起 iOS 本地分享
             6. 官方原版 DSH 免改代码无缝接入支持
             """,
             preferredStyle: .alert)
