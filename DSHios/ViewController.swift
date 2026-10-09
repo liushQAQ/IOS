@@ -522,10 +522,10 @@ final class ViewController: UIViewController {
             '  opacity: 1;',
             '  pointer-events: auto;',
             '}',
-            '/* 移动端全屏面板顶部固定常驻【返回对话】与【✕】退出按钮 */',
+            '/* 移动端全屏面板顶部固定常驻【返回对话】与【✕】退出按钮（严格避开 iOS 顶部状态栏与灵动岛安全区） */',
             '.dsh-mobile-back-to-chat-btn {',
             '  position: fixed !important;',
-            '  top: max(10px, env(safe-area-inset-top)) !important;',
+            '  top: max(54px, calc(env(safe-area-inset-top) + 10px)) !important;',
             '  left: 12px !important;',
             '  z-index: 20050 !important;',
             '  display: inline-flex !important;',
@@ -548,7 +548,7 @@ final class ViewController: UIViewController {
             '}',
             '.dsh-mobile-panel-close-btn {',
             '  position: fixed !important;',
-            '  top: max(10px, env(safe-area-inset-top)) !important;',
+            '  top: max(54px, calc(env(safe-area-inset-top) + 10px)) !important;',
             '  right: 12px !important;',
             '  z-index: 20050 !important;',
             '  display: inline-flex !important;',
@@ -565,6 +565,16 @@ final class ViewController: UIViewController {
             '  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;',
             '  font-size: 16px !important;',
             '  cursor: pointer !important;',
+            '}',
+            '/* 全面排查：图片大图灯箱预览（ImageLightbox）、模态弹窗与所有全屏浮层的关闭按钮，严禁插入 iOS 系统状态栏 */',
+            '._close_1hos8_29,',
+            'button[aria-label="关闭"]._close_1hos8_29,',
+            '[class*="_close_1hos8_"],',
+            '._close_o6lrb_87,',
+            '[class*="_close_o6lrb_"] {',
+            '  top: max(54px, calc(env(safe-area-inset-top) + 12px)) !important;',
+            '  right: max(16px, calc(env(safe-area-inset-right) + 12px)) !important;',
+            '  z-index: 20050 !important;',
             '}',
             '/* 右侧面板标题栏内边距，给返回和关闭按钮留出安全空间 */',
             '.dMHGga_panel[data-sidebar-right-open] [data-dockkit-strip],',
@@ -931,16 +941,17 @@ final class ViewController: UIViewController {
                   el.style.right = 'auto';
                 }
 
-                // 4. 垂直方向越界自动拉回安全区内
+                // 4. 垂直方向越界自动拉回安全区内（严格保护 iOS 状态栏/灵动岛高度，避免顶入时间/电量指示区）
+                var TOP_SAFE = Math.max(54, PADDING);
                 if (rect.bottom > winH - PADDING) {
                   var overflowY = rect.bottom - (winH - PADDING);
                   var currentTop = parseFloat(el.style.top) || rect.top;
-                  var newTop = Math.max(PADDING, currentTop - overflowY);
+                  var newTop = Math.max(TOP_SAFE, currentTop - overflowY);
                   el.style.top = newTop + 'px';
                   el.style.bottom = 'auto';
                 }
-                if (rect.top < PADDING) {
-                  el.style.top = PADDING + 'px';
+                if (rect.top < TOP_SAFE) {
+                  el.style.top = TOP_SAFE + 'px';
                   el.style.bottom = 'auto';
                 }
               }
