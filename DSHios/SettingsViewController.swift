@@ -51,17 +51,12 @@ enum ServiceStore {
     #endif
 
     static func load() -> [ServiceItem] {
-        // 种子升级：直接换成最新预置，清掉旧版本里打不开页面的一堆端口。
-        if UserDefaults.standard.integer(forKey: seedVersionKey) < currentSeedVersion {
-            UserDefaults.standard.set(currentSeedVersion, forKey: seedVersionKey)
-            save(defaults)
-            return defaults
-        }
         guard let data = UserDefaults.standard.data(forKey: key),
-              let items = try? JSONDecoder().decode([ServiceItem].self, from: data) else {
+              let items = try? JSONDecoder().decode([ServiceItem].self, from: data),
+              !items.isEmpty else {
             return defaults
         }
-        return items.isEmpty ? defaults : items
+        return items
     }
 
     static func save(_ items: [ServiceItem]) {

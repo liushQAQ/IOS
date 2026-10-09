@@ -2201,19 +2201,9 @@ final class ViewController: UIViewController {
     // MARK: - Loading
 
     private func loadInitialURL() {
-        migrateSavedURLIfNeeded()
         let saved = UserDefaults.standard.string(forKey: Keys.lastURL)
         let urlString = (saved?.isEmpty == false) ? saved! : defaultURL
         loadURLString(urlString)
-    }
-
-    /// URL 格式迁移：v1 时代保存的地址（旧的 3081/dsh/ 直连地址）已失效，
-    /// 统一升级为 Pocket 地址，避免升级后仍加载坏地址导致白屏。
-    private func migrateSavedURLIfNeeded() {
-        let savedVersion = UserDefaults.standard.integer(forKey: Keys.urlVersion)
-        guard savedVersion < Keys.currentURLVersion else { return }
-        UserDefaults.standard.removeObject(forKey: Keys.lastURL)
-        UserDefaults.standard.set(Keys.currentURLVersion, forKey: Keys.urlVersion)
     }
 
     @objc private func retryTapped() {
