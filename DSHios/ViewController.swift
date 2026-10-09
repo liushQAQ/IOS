@@ -351,14 +351,14 @@ final class ViewController: UIViewController {
             '[data-slot="sidebar.right"], [data-slot="sidebar.left"] {',
             '  z-index: 10040 !important;',
             '}',
-            '/* 顶部导航栏：与 dsh-pocket 原生对齐，左右两端对称，操作图标集中在右侧 */',
+            '/* 顶部导航栏：左侧抽屉按钮与右侧所有操作图标基准高统一在 y=22px，高度28px，达到像素级平齐 */',
             '[data-phase] header,',
             '.ank0OG_header {',
             '  position: relative !important;',
             '  box-sizing: border-box !important;',
             '  display: block !important;',
             '  min-height: 0 !important;',
-            '  padding: 8px 12px 0 12px !important;',
+            '  padding: 22px 12px 0 12px !important;',
             '  flex: none !important;',
             '}',
             '.ank0OG_headerLeading {',
@@ -368,21 +368,21 @@ final class ViewController: UIViewController {
             '.ank0OG_titleRow {',
             '  display: flex !important;',
             '  align-items: center !important;',
-            '  height: 32px !important;',
-            '  min-height: 32px !important;',
+            '  height: 28px !important;',
+            '  min-height: 28px !important;',
             '  padding-left: 36px !important;',
             '  padding-right: 0px !important;',
             '  margin: 0 !important;',
             '  box-sizing: border-box !important;',
             '  width: 100% !important;',
             '}',
-            '/* 左侧展开目录按钮：统一 32x32，严格与右侧按钮在同一水平线上 (y=8px, h=32px) */',
+            '/* 左侧展开目录按钮：统一在 top: 22px, height: 28px, 宽度28px，严格与右侧按钮水平平齐 */',
             '[data-mobile-nav="toggle"] {',
             '  position: absolute !important;',
-            '  left: 10px !important;',
-            '  top: 8px !important;',
-            '  width: 32px !important;',
-            '  height: 32px !important;',
+            '  left: 12px !important;',
+            '  top: 22px !important;',
+            '  width: 28px !important;',
+            '  height: 28px !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '  justify-content: center !important;',
@@ -408,7 +408,7 @@ final class ViewController: UIViewController {
             '  align-items: center !important;',
             '  overflow: hidden !important;',
             '  gap: 6px !important;',
-            '  height: 32px !important;',
+            '  height: 28px !important;',
             '  margin: 0 !important;',
             '  padding: 0 !important;',
             '}',
@@ -416,13 +416,13 @@ final class ViewController: UIViewController {
             '[data-phase] header [class*="crumbs"] {',
             '  flex: 0 1 auto !important;',
             '  min-width: 40px !important;',
-            '  max-width: 120px !important;',
+            '  max-width: 140px !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
-            '  height: 32px !important;',
+            '  height: 28px !important;',
             '}',
             '.ank0OG_crumbSeg {',
             '  overflow: hidden !important;',
@@ -441,11 +441,11 @@ final class ViewController: UIViewController {
             '  line-height: 20px !important;',
             '  padding: 2px 4px !important;',
             '}',
-            '/* 右侧操作按钮集合：严格靠右分布，还原到原版右侧位置 */',
+            '/* 右侧操作按钮集合：严格靠右分布，还原到原版右侧位置，高度统一28px */',
             '.ank0OG_headerActions {',
             '  margin-left: auto !important;',
             '  flex: 0 0 auto !important;',
-            '  height: 32px !important;',
+            '  height: 28px !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
             '  gap: 4px !important;',
@@ -462,22 +462,22 @@ final class ViewController: UIViewController {
             '  white-space: nowrap !important;',
             '}',
             '.ank0OG_headerCorner {',
-            '  height: 32px !important;',
+            '  height: 28px !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
             '  gap: 4px !important;',
             '  margin-left: 4px !important;',
             '  flex: 0 0 auto !important;',
             '}',
-            '/* 统一右侧所有按钮尺寸为 32x32，严格水平居中 */',
+            '/* 统一顶栏所有操作按钮尺寸为 28x28，绝对水平平齐对齐 (deltaY = 0) */',
             '.ank0OG_headerCorner button,',
             '.ank0OG_headerCorner [role="button"],',
             '.ank0OG_headerActions button,',
             '.ank0OG_headerActions [role="button"],',
             'button[aria-label="打开右侧边栏"],',
             '.iFjIhq_button {',
-            '  width: 32px !important;',
-            '  height: 32px !important;',
+            '  width: 28px !important;',
+            '  height: 28px !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '  justify-content: center !important;',
@@ -770,26 +770,47 @@ final class ViewController: UIViewController {
             '.uWtHQG_root {',
             '  padding-bottom: max(14px, env(safe-area-inset-bottom)) !important;',
             '}',
-            '/* 移动端底部操作行防挤压重叠与发送/停止按钮绝对几何居中强化 */',
+            '/* 移动端底部操作行防挤压重叠与发送/停止按钮绝对几何居中强化 (适配 iPhone XR 及各类小屏) */',
             '.uWtHQG_row {',
             '  display: flex !important;',
             '  justify-content: space-between !important;',
             '  align-items: center !important;',
-            '  gap: 6px !important;',
+            '  gap: 4px !important;',
             '  flex-wrap: nowrap !important;',
             '  width: 100% !important;',
+            '  padding: 4px 6px !important;',
             '  box-sizing: border-box !important;',
             '}',
+            '/* 左侧辅助工具容器紧凑化：移动端隐藏文字标签，只保留清晰图标，为核心模型选择腾出空间 */',
             '.uWtHQG_tools {',
             '  flex: 0 0 auto !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
-            '  gap: 4px !important;',
+            '  gap: 2px !important;',
+            '}',
+            '.Vg9r4q_triggerLabel {',
+            '  display: none !important; /* 隐藏 完全权限 汉字，保留盾牌图标与下拉指示 */',
+            '}',
+            '.Vg9r4q_trigger {',
+            '  padding: 0 4px !important;',
+            '  height: 28px !important;',
+            '  gap: 2px !important;',
+            '}',
+            '/* 提示词优化插件紧凑化 */',
+            '.dsh-po-btn-opt span {',
+            '  display: none !important; /* 隐藏 优化 汉字，保留星星图标 */',
+            '}',
+            '.dsh-po-btn-opt {',
+            '  padding: 3px 5px !important;',
+            '}',
+            '.dsh-po-capsule {',
+            '  flex-shrink: 0 !important;',
+            '  margin-right: 2px !important;',
             '}',
             '.uWtHQG_trailing {',
             '  display: flex !important;',
             '  align-items: center !important;',
-            '  gap: 8px !important;',
+            '  gap: 6px !important;',
             '  min-width: 0 !important;',
             '  flex: 1 1 auto !important;',
             '  justify-content: flex-end !important;',
@@ -799,30 +820,52 @@ final class ViewController: UIViewController {
             '  align-items: center !important;',
             '  gap: 4px !important;',
             '  min-width: 0 !important;',
+            '  flex: 1 1 auto !important;',
+            '  justify-content: flex-end !important;',
+            '}',
+            '.VYXhfG_root {',
+            '  min-width: 0 !important;',
             '  flex: 0 1 auto !important;',
-            '  overflow: hidden !important;',
+            '  display: flex !important;',
             '}',
-            '.dsh-po-capsule {',
-            '  flex-shrink: 1 !important;',
-            '  min-width: 0 !important;',
-            '}',
+            '/* 模型选择核心按钮：获得充分空间，完整展示模型与思考等级，右侧与发送按钮保持至少 12px 独立间隙 */',
             '.VYXhfG_trigger {',
-            '  max-width: min(130px, 32vw) !important;',
+            '  max-width: min(180px, calc(100vw - 220px)) !important;',
             '  min-width: 0 !important;',
-            '  flex-shrink: 1 !important;',
-            '  padding: 0 4px !important;',
+            '  flex: 0 1 auto !important;',
+            '  height: 28px !important;',
+            '  padding: 0 6px !important;',
+            '  gap: 3px !important;',
+            '  font-size: 12px !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
             '}',
             '.VYXhfG_triggerLabel {',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
             '  overflow: hidden !important;',
+            '  font-size: 12px !important;',
+            '  font-weight: 500 !important;',
             '  min-width: 0 !important;',
+            '  flex: 0 1 auto !important;',
             '}',
-            '/* 发送/停止/暂停圆形按钮纯正几何居中（消除文字/下箭头重叠穿透与偏移歪斜） */',
+            '.VYXhfG_triggerEffort {',
+            '  font-size: 11px !important;',
+            '  flex: 0 0 auto !important;',
+            '  opacity: 0.85 !important;',
+            '  white-space: nowrap !important;',
+            '  display: inline-block !important;',
+            '  margin-left: 2px !important;',
+            '}',
+            '.VYXhfG_chevron {',
+            '  flex: 0 0 auto !important;',
+            '}',
+            '/* 发送/停止/暂停圆形按钮纯正几何居中（固定 34x34，独立布局永不被其他控件遮挡） */',
             '.uWtHQG_primary {',
             '  flex: 0 0 34px !important;',
             '  width: 34px !important;',
             '  height: 34px !important;',
+            '  min-width: 34px !important;',
             '  border-radius: 50% !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
@@ -2224,11 +2267,72 @@ final class ViewController: UIViewController {
         present(alert, animated: true)
     }
 
-    /// 原生设备运行环境信息检测（解决多系统版本诊断与 iOS 15 兼容排查）
+    /// 读取底层精准硬件标识符（如 "iPhone11,8" -> "iPhone XR", "iPhone13,4" -> "iPhone 12 Pro Max"）
+    private static func getHardwareModelIdentifier() -> String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let machineMirror = Mirror(reflecting: systemInfo.machine)
+        let identifier = machineMirror.children.reduce("") { identifier, element in
+            guard let value = element.value as? Int8, value != 0 else { return identifier }
+            return identifier + String(UnicodeScalar(UInt8(value)))
+        }
+        return identifier.isEmpty ? UIDevice.current.model : identifier
+    }
+
+    /// 将硬件标识符映射为大众熟知的具体商业机型名称
+    private static func getMarketingDeviceModel() -> String {
+        let id = getHardwareModelIdentifier()
+        switch id {
+        // iPhone XR / XS / X 系列
+        case "iPhone10,3", "iPhone10,6": return "iPhone X"
+        case "iPhone11,2": return "iPhone XS"
+        case "iPhone11,4", "iPhone11,6": return "iPhone XS Max"
+        case "iPhone11,8": return "iPhone XR"
+        // iPhone 11 系列
+        case "iPhone12,1": return "iPhone 11"
+        case "iPhone12,3": return "iPhone 11 Pro"
+        case "iPhone12,5": return "iPhone 11 Pro Max"
+        // iPhone 12 系列
+        case "iPhone13,1": return "iPhone 12 mini"
+        case "iPhone13,2": return "iPhone 12"
+        case "iPhone13,3": return "iPhone 12 Pro"
+        case "iPhone13,4": return "iPhone 12 Pro Max"
+        // iPhone 13 系列
+        case "iPhone14,4": return "iPhone 13 mini"
+        case "iPhone14,5": return "iPhone 13"
+        case "iPhone14,2": return "iPhone 13 Pro"
+        case "iPhone14,3": return "iPhone 13 Pro Max"
+        // iPhone 14 系列
+        case "iPhone14,7": return "iPhone 14"
+        case "iPhone14,8": return "iPhone 14 Plus"
+        case "iPhone15,2": return "iPhone 14 Pro"
+        case "iPhone15,3": return "iPhone 14 Pro Max"
+        // iPhone 15 系列
+        case "iPhone15,4": return "iPhone 15"
+        case "iPhone15,5": return "iPhone 15 Plus"
+        case "iPhone16,1": return "iPhone 15 Pro"
+        case "iPhone16,2": return "iPhone 15 Pro Max"
+        // iPhone 16 系列
+        case "iPhone17,3": return "iPhone 16"
+        case "iPhone17,4": return "iPhone 16 Plus"
+        case "iPhone17,1": return "iPhone 16 Pro"
+        case "iPhone17,2": return "iPhone 16 Pro Max"
+        // iPhone SE 系列
+        case "iPhone8,4":  return "iPhone SE (第1代)"
+        case "iPhone12,8": return "iPhone SE (第2代)"
+        case "iPhone14,6": return "iPhone SE (第3代)"
+        // 模拟器
+        case "i386", "x86_64", "arm64": return "iOS 模拟器 (\(UIDevice.current.model))"
+        default: return id.hasPrefix("iPhone") ? "\(id) (iPhone)" : id
+        }
+    }
+
+    /// 原生设备运行环境信息检测（精准识别具体机型如 iPhone XR、12 Pro Max 等）
     private static func getDeviceInfoSummary() -> String {
+        let marketingModel = getMarketingDeviceModel()
+        let hardwareId = getHardwareModelIdentifier()
         let device = UIDevice.current
         let systemVersion = device.systemVersion
-        let model = device.model
         let name = device.name
         
         var freeDiskGB = "未知"
@@ -2242,7 +2346,7 @@ final class ViewController: UIViewController {
         let scale = screen.scale
         let res = "\(Int(bounds.width * scale))×\(Int(bounds.height * scale)) (@\(Int(scale))x)"
         
-        return "设备: \(model) (\(name))\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
+        return "设备: \(marketingModel) [\(hardwareId)] (\(name))\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
     }
 
     /// 关于：版本号原生可见（读 Info.plist，回退到编译期常量）
