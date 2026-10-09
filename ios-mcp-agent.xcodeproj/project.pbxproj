@@ -1,0 +1,290 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B100000000000000000000B1 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000A1 /* AppDelegate.swift */; };
+		B100000000000000000000B2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000A2 /* SceneDelegate.swift */; };
+		B100000000000000000000B3 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000A3 /* ViewController.swift */; };
+		B100000000000000000000B4 /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000A4 /* SettingsViewController.swift */; };
+		B100000000000000000000B5 /* MCPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000A5 /* MCPClient.swift */; };
+		B100000000000000000000B6 /* AgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000A6 /* AgentRunner.swift */; };
+		B100000000000000000000B7 /* BuiltInModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000A7 /* BuiltInModels.swift */; };
+		B100000000000000000000B8 /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000A8 /* AboutViewController.swift */; };
+		B100000000000000000000B9 /* BackgroundKeeper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000A9 /* BackgroundKeeper.swift */; };
+		B100000000000000000000BA /* ElementParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000AB /* ElementParser.swift */; };
+		B100000000000000000000BB /* NetworkCompat.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000AC /* NetworkCompat.swift */; };
+		C100000000000000000000B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C100000000000000000000A1 /* Assets.xcassets */; };
+		C100000000000000000000B2 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C100000000000000000000A2 /* LaunchScreen.storyboard */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B100000000000000000000A1 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		B100000000000000000000A2 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		B100000000000000000000A3 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		B100000000000000000000A4 /* SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewController.swift; sourceTree = "<group>"; };
+		B100000000000000000000A5 /* MCPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPClient.swift; sourceTree = "<group>"; };
+		B100000000000000000000A6 /* AgentRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRunner.swift; sourceTree = "<group>"; };
+		B100000000000000000000A7 /* BuiltInModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuiltInModels.swift; sourceTree = "<group>"; };
+		B100000000000000000000A8 /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
+		B100000000000000000000A9 /* BackgroundKeeper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundKeeper.swift; sourceTree = "<group>"; };
+		B100000000000000000000AB /* ElementParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementParser.swift; sourceTree = "<group>"; };
+		B100000000000000000000AC /* NetworkCompat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkCompat.swift; sourceTree = "<group>"; };
+		C100000000000000000000A0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C100000000000000000000A1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C100000000000000000000A2 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		B100000000000000000000AA /* ios-mcp-agent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ios-mcp-agent.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B30000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B20000000000000000000003 = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000001 /* ios-mcp-agent */,
+				B20000000000000000000004 /* Frameworks */,
+				B20000000000000000000002 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B20000000000000000000001 /* ios-mcp-agent */ = {
+			isa = PBXGroup;
+			children = (
+				B100000000000000000000A1 /* AppDelegate.swift */,
+				B100000000000000000000A2 /* SceneDelegate.swift */,
+				B100000000000000000000A3 /* ViewController.swift */,
+				B100000000000000000000A4 /* SettingsViewController.swift */,
+				B100000000000000000000A5 /* MCPClient.swift */,
+				B100000000000000000000A6 /* AgentRunner.swift */,
+				B100000000000000000000A7 /* BuiltInModels.swift */,
+				B100000000000000000000A8 /* AboutViewController.swift */,
+				B100000000000000000000A9 /* BackgroundKeeper.swift */,
+				B100000000000000000000AB /* ElementParser.swift */,
+				B100000000000000000000AC /* NetworkCompat.swift */,
+				C100000000000000000000A0 /* Info.plist */,
+				C100000000000000000000A1 /* Assets.xcassets */,
+				C100000000000000000000A2 /* LaunchScreen.storyboard */,
+			);
+			path = "ios-mcp-agent";
+			sourceTree = "<group>";
+		};
+		B20000000000000000000002 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B100000000000000000000AA /* ios-mcp-agent.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B20000000000000000000004 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B40000000000000000000001 /* ios-mcp-agent */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B50000000000000000000002 /* Build configuration list for PBXNativeTarget "ios-mcp-agent" */;
+			buildPhases = (
+				B30000000000000000000001 /* Sources */,
+				B30000000000000000000003 /* Frameworks */,
+				B30000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "ios-mcp-agent";
+			productName = "ios-mcp-agent";
+			productReference = B100000000000000000000AA /* ios-mcp-agent.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B40000000000000000000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1400;
+				LastUpgradeCheck = 1400;
+				TargetAttributes = {
+					B40000000000000000000001 = {
+						CreatedOnToolsVersion = 14.0;
+					};
+				};
+			};
+			buildConfigurationList = B50000000000000000000001 /* Build configuration list for PBXProject "ios-mcp-agent" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				"zh-Hans",
+			);
+			mainGroup = B20000000000000000000003;
+			productRefGroup = B20000000000000000000002 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B40000000000000000000001 /* ios-mcp-agent */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B30000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C100000000000000000000B1 /* Assets.xcassets in Resources */,
+				C100000000000000000000B2 /* LaunchScreen.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B30000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B100000000000000000000B1 /* AppDelegate.swift in Sources */,
+				B100000000000000000000B2 /* SceneDelegate.swift in Sources */,
+				B100000000000000000000B3 /* ViewController.swift in Sources */,
+				B100000000000000000000B4 /* SettingsViewController.swift in Sources */,
+				B100000000000000000000B5 /* MCPClient.swift in Sources */,
+				B100000000000000000000B6 /* AgentRunner.swift in Sources */,
+				B100000000000000000000B7 /* BuiltInModels.swift in Sources */,
+				B100000000000000000000B8 /* AboutViewController.swift in Sources */,
+				B100000000000000000000B9 /* BackgroundKeeper.swift in Sources */,
+				B100000000000000000000BA /* ElementParser.swift in Sources */,
+				B100000000000000000000BB /* NetworkCompat.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		B60000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B60000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		B60000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "ios-mcp-agent/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "手机助手";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.local.iosmcpagent;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		B60000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "ios-mcp-agent/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "手机助手";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.local.iosmcpagent;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B50000000000000000000001 /* Build configuration list for PBXProject "ios-mcp-agent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B60000000000000000000001 /* Debug */,
+				B60000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B50000000000000000000002 /* Build configuration list for PBXNativeTarget "ios-mcp-agent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B60000000000000000000003 /* Debug */,
+				B60000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B40000000000000000000002 /* Project object */;
+}
