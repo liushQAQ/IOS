@@ -29,14 +29,14 @@ final class ViewController: UIViewController {
     /// 展开后的自动收起计时器（「不用了自动隐藏」）。
     private var menuAutoHideTimer: Timer?
 
-    /// 悬浮按钮边长（原 44pt 缩小为 36pt，减少视觉遮挡）。
-    private static let menuButtonSide: CGFloat = 36
-    /// 收起时从右缘露出的宽度（原 22pt 过宽遮挡页面右侧，缩窄至 10pt，只留精致灵巧的抓手，杜绝误触）。
-    private static let menuCollapsedPeek: CGFloat = 10
+    /// 悬浮按钮边长（44pt 精致小巧圆形）。
+    private static let menuButtonSide: CGFloat = 44
+    /// 收起时从右缘露出的宽度（隐藏一半，留 22pt 在屏内）。
+    private static let menuCollapsedPeek: CGFloat = 22
     /// 展开态距右缘的间距。
-    private static let menuTrailingInset: CGFloat = 8
-    /// 展开后静置多久自动收起（原 4.0 秒缩短为 2.2 秒，操作后迅速避让页面）。
-    private static let menuAutoHideDelay: TimeInterval = 2.2
+    private static let menuTrailingInset: CGFloat = 10
+    /// 展开后静置多久自动半隐藏（3 秒后自动隐藏一半）。
+    private static let menuAutoHideDelay: TimeInterval = 3.0
 
     /// 收起态右缘约束值：正值把按钮推出屏幕，只留 `menuCollapsedPeek` 宽在屏内。
     /// 约束语义是 `button.trailing = safeArea.trailing + constant`，
@@ -1697,6 +1697,89 @@ final class ViewController: UIViewController {
         self.errorDetailLabel = detail
     }
 
+    /// 动态生成灵动可爱的小鲸鱼图标（DeepSeek 灵动小鲸鱼矢量绘制）
+    private static func createCuteWhaleImage(size: CGSize, alpha: CGFloat = 1.0) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            let cgCtx = ctx.cgContext
+            cgCtx.setAlpha(alpha)
+
+            // 绘制底板与小鲸鱼：可爱圆润身体 + 呆萌小圆眼 + 微笑小嘴 + 翘起的小尾巴
+            // 采用 DeepSeek 经典品牌蓝 (#4D6BFE) 与海天蓝渐变
+            let w = size.width
+            let h = size.height
+
+            // 鲸鱼身体主轮廓
+            let bodyPath = UIBezierPath()
+            // 从尾巴上方开始
+            bodyPath.move(to: CGPoint(x: w * 0.88, y: h * 0.35))
+            // 尾巴凹槽
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.95, y: h * 0.22), controlPoint: CGPoint(x: w * 0.92, y: h * 0.26))
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.82, y: h * 0.48), controlPoint: CGPoint(x: w * 0.85, y: h * 0.38))
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.96, y: h * 0.62), controlPoint: CGPoint(x: w * 0.90, y: h * 0.58))
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.80, y: h * 0.55), controlPoint: CGPoint(x: w * 0.88, y: h * 0.64))
+            
+            // 下腹部（丰满可爱的圆弧肚皮）
+            bodyPath.addCurve(to: CGPoint(x: w * 0.16, y: h * 0.60),
+                              controlPoint1: CGPoint(x: w * 0.60, y: h * 0.78),
+                              controlPoint2: CGPoint(x: w * 0.30, y: h * 0.78))
+            
+            // 圆滚滚的头部
+            bodyPath.addCurve(to: CGPoint(x: w * 0.18, y: h * 0.28),
+                              controlPoint1: CGPoint(x: w * 0.04, y: h * 0.50),
+                              controlPoint2: CGPoint(x: w * 0.06, y: h * 0.30))
+            
+            // 萌萌的头顶与背鳍
+            bodyPath.addCurve(to: CGPoint(x: w * 0.55, y: h * 0.30),
+                              controlPoint1: CGPoint(x: w * 0.30, y: h * 0.24),
+                              controlPoint2: CGPoint(x: w * 0.45, y: h * 0.26))
+            // 背鳍
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.62, y: h * 0.16), controlPoint: CGPoint(x: w * 0.56, y: h * 0.20))
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.68, y: h * 0.36), controlPoint: CGPoint(x: w * 0.66, y: h * 0.25))
+            
+            // 连回尾柄
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.88, y: h * 0.35), controlPoint: CGPoint(x: w * 0.78, y: h * 0.40))
+            bodyPath.close()
+
+            // 填充鲸鱼身体主色
+            UIColor(red: 0.25, green: 0.45, blue: 0.98, alpha: 1.0).setFill()
+            bodyPath.fill()
+
+            // 可爱腮红（粉萌腮红圈）
+            let blushPath = UIBezierPath(ovalIn: CGRect(x: w * 0.20, y: h * 0.48, width: w * 0.12, height: h * 0.08))
+            UIColor(red: 1.0, green: 0.48, blue: 0.65, alpha: 0.85).setFill()
+            blushPath.fill()
+
+            // 灵动大眼睛（黑圆珠 + 亮闪闪高光）
+            let eyePath = UIBezierPath(ovalIn: CGRect(x: w * 0.22, y: h * 0.34, width: w * 0.10, height: w * 0.10))
+            UIColor(red: 0.08, green: 0.10, blue: 0.18, alpha: 1.0).setFill()
+            eyePath.fill()
+
+            // 眼睛白色高光小点
+            let sparklePath = UIBezierPath(ovalIn: CGRect(x: w * 0.235, y: h * 0.35, width: w * 0.038, height: w * 0.038))
+            UIColor.white.setFill()
+            sparklePath.fill()
+
+            // 可爱小鱼鳍（侧胸鳍）
+            let finPath = UIBezierPath()
+            finPath.move(to: CGPoint(x: w * 0.38, y: h * 0.52))
+            finPath.addQuadCurve(to: CGPoint(x: w * 0.48, y: h * 0.68), controlPoint: CGPoint(x: w * 0.46, y: h * 0.56))
+            finPath.addQuadCurve(to: CGPoint(x: w * 0.38, y: h * 0.52), controlPoint: CGPoint(x: w * 0.40, y: h * 0.65))
+            finPath.close()
+            UIColor(red: 0.18, green: 0.36, blue: 0.88, alpha: 0.9).setFill()
+            finPath.fill()
+
+            // 喷出的小水花（头顶萌萌的三瓣小水滴）
+            let spout1 = UIBezierPath(ovalIn: CGRect(x: w * 0.34, y: h * 0.12, width: w * 0.05, height: h * 0.08))
+            let spout2 = UIBezierPath(ovalIn: CGRect(x: w * 0.41, y: h * 0.06, width: w * 0.06, height: h * 0.10))
+            let spout3 = UIBezierPath(ovalIn: CGRect(x: w * 0.49, y: h * 0.10, width: w * 0.05, height: h * 0.08))
+            UIColor(red: 0.45, green: 0.78, blue: 1.0, alpha: 0.9).setFill()
+            spout1.fill()
+            spout2.fill()
+            spout3.fill()
+        }.withRenderingMode(.alwaysOriginal)
+    }
+
     /// 右缘悬浮菜单按钮（半透明、可滑动、不用自动隐藏）。
     ///
     /// 旧实现把它钉死在右下角 40×40，正好压在页面的输入框/发送键上，点不动（用户报障）。
@@ -1706,18 +1789,19 @@ final class ViewController: UIViewController {
     /// - 展开后静置 `menuAutoHideDelay` 秒自动收起，不遮挡页面；
     /// - 选右缘是因为 iOS 的「侧滑返回」手势占用左缘，放左缘会和系统手势打架。
     private func setupMenuButton() {
-        let button = UIButton(type: .system)
-        button.tintColor = .secondaryLabel
-        button.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.75)
+        let button = UIButton(type: .custom)
+        button.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.65)
         button.layer.cornerRadius = Self.menuButtonSide / 2
         button.layer.shadowColor = UIColor.black.cgColor
-        button.layer.shadowOpacity = 0.18
-        button.layer.shadowRadius = 4
-        button.layer.shadowOffset = CGSize(width: 0, height: 1)
+        button.layer.shadowOpacity = 0.22
+        button.layer.shadowRadius = 6
+        button.layer.shadowOffset = CGSize(width: -1, height: 2)
+        button.layer.borderWidth = 1.0
+        button.layer.borderColor = UIColor.white.withAlphaComponent(0.35).cgColor
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(menuTapped), for: .touchUpInside)
-        button.accessibilityLabel = "菜单"
-        button.accessibilityHint = "向左拖动可展开"
+        button.accessibilityLabel = "DSH 菜单"
+        button.accessibilityHint = "向左滑出或点击打开菜单"
         view.addSubview(button)
 
         self.menuTrailingConstraint = button.trailingAnchor.constraint(
@@ -1736,11 +1820,62 @@ final class ViewController: UIViewController {
         let pan = UIPanGestureRecognizer(target: self, action: #selector(menuPanned(_:)))
         button.addGestureRecognizer(pan)
 
+        // 添加右侧全屏幕边缘滑动手势：屏幕右边缘任何位置向左滑，均可呼出悬浮鲸鱼按钮
+        let edgePan = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(rightEdgePanned(_:)))
+        edgePan.edges = .right
+        edgePan.cancelsTouchesInView = false
+        view.addGestureRecognizer(edgePan)
+
         self.menuButton = button
         self.setMenuExpanded(false, animated: false)
     }
 
-    /// 收起 / 展开悬浮按钮。收起态把按钮大部分推出右缘，只留一条把手。
+    /// 右屏幕边缘左滑唤醒手势：在屏幕右边缘任意高度向左滑，即可流畅拉出小鲸鱼悬浮按钮
+    @objc private func rightEdgePanned(_ gesture: UIScreenEdgePanGestureRecognizer) {
+        guard let button = menuButton, let constraint = menuTrailingConstraint else { return }
+        switch gesture.state {
+        case .began:
+            menuAutoHideTimer?.invalidate()
+            menuAutoHideTimer = nil
+            // 随着手指高度略微调整小鲸鱼按钮垂直位置，贴合用户手指，体验极佳
+            let touchY = gesture.location(in: view).y
+            let safeTop = view.safeAreaInsets.top + 60
+            let safeBottom = view.bounds.height - view.safeAreaInsets.bottom - 100
+            let clampedY = min(max(touchY, safeTop), safeBottom)
+            
+            // 找到 centerY 约束并动态更新
+            for c in view.constraints {
+                if (c.firstItem === button && c.firstAttribute == .centerY) ||
+                   (c.secondItem === button && c.secondAttribute == .centerY) {
+                    c.constant = clampedY - (view.bounds.height / 2)
+                    break
+                }
+            }
+            view.layoutIfNeeded()
+        case .changed:
+            let translationX = gesture.translation(in: view).x // 向左滑 translationX < 0
+            // 从收起态 (menuCollapsedConstant) 逐渐拉向展开态 (menuExpandedConstant)
+            let base = Self.menuCollapsedConstant
+            let targetConstant = max(Self.menuExpandedConstant, base + translationX)
+            constraint.constant = targetConstant
+            let progress = min(1.0, max(0.0, -translationX / (Self.menuButtonSide)))
+            button.alpha = 0.20 + (progress * 0.70)
+            view.layoutIfNeeded()
+        case .ended, .cancelled:
+            let translationX = gesture.translation(in: view).x
+            let velocityX = gesture.velocity(in: view).x
+            // 只要向左划过 12pt 或速度大于 200，就完全展开；否则弹回半隐藏态
+            if translationX < -12 || velocityX < -200 {
+                setMenuExpanded(true, animated: true)
+            } else {
+                setMenuExpanded(false, animated: true)
+            }
+        default:
+            break
+        }
+    }
+
+    /// 收起 / 展开悬浮按钮。收起态隐藏一半（22pt 在屏内），透明度 20%，3 秒后自动隐藏。
     private func setMenuExpanded(_ expanded: Bool, animated: Bool) {
         guard let button = menuButton, let constraint = menuTrailingConstraint else { return }
         menuButtonExpanded = expanded
@@ -1748,24 +1883,25 @@ final class ViewController: UIViewController {
             ? Self.menuExpandedConstant
             : Self.menuCollapsedConstant
         constraint.constant = constant
-        // 展开态更实一些（用户要「悬浮半透明」，收起态更淡，避免干扰阅读：由 0.5 降至 0.28，极致灵动通透不挡屏）。
-        let targetAlpha: CGFloat = expanded ? 0.88 : 0.28
+        // 用户要求：收起态半屏隐藏一半，透明度 20%；展开态清晰可见 0.90
+        let targetAlpha: CGFloat = expanded ? 0.90 : 0.20
 
         let apply = {
             button.alpha = targetAlpha
             self.view.layoutIfNeeded()
         }
-        // 收起时按钮大部分在屏外，居中的图标会被裁掉：换成「左箭头」并把图标整体
-        // 往可见的一侧（屏幕右缘）挪，展开后恢复成菜单图标，让把手自己说明「往左拉」。
+
+        // 使用萌萌的小鲸鱼娘图标：
+        // 展开时完整居中显示；收起时只露出一半，鲸鱼头像依然清晰露出半张俏皮脸庞
+        let whaleImage = Self.createCuteWhaleImage(size: CGSize(width: 28, height: 28))
+        button.setImage(whaleImage, for: .normal)
+
         let visible = expanded ? Self.menuButtonSide : Self.menuCollapsedPeek
         let shift = (Self.menuButtonSide - visible) / 2
-        button.setImage(UIImage(systemName: expanded ? "slider.horizontal.3" : "chevron.left"),
-                        for: .normal)
-        // 纯图片按钮：内容中心偏移 = (left - right) / 2，正值向右。
         button.imageEdgeInsets = UIEdgeInsets(top: 0, left: shift, bottom: 0, right: -shift)
 
         if animated {
-            UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut], animations: apply)
+            UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.82, initialSpringVelocity: 0.5, options: [.curveEaseOut], animations: apply)
         } else {
             apply()
         }
@@ -1773,6 +1909,7 @@ final class ViewController: UIViewController {
         menuAutoHideTimer?.invalidate()
         menuAutoHideTimer = nil
         if expanded {
+            // 用户要求：展开后 3 秒自动隐藏一半
             menuAutoHideTimer = Timer.scheduledTimer(
                 withTimeInterval: Self.menuAutoHideDelay, repeats: false) { [weak self] _ in
                 self?.setMenuExpanded(false, animated: true)
