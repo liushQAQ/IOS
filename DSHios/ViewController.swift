@@ -27,10 +27,6 @@ final class ViewController: UIViewController {
     /// 白屏自诊断采样计时器（多次采样把 JS 崩溃画到浮层，而不是留一个纯白屏）。
     private var diagnoseTimers: [Timer] = []
 
-    /// App 内顶部通知浮条（当后台会话完成时弹出 3 秒通知，并伴随系统提示音）
-    private var taskBannerView: UIView?
-    private var taskBannerDismissTimer: Timer?
-
     /// 语音听写识别器与音频引擎（调用 iOS 原生语音听写）
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -96,129 +92,6 @@ final class ViewController: UIViewController {
         }
     }
 
-    private static func makeTaskNoticeBridge(owner: ViewController) -> WKScriptMessageHandler {
-        return TaskNoticeBridge { [weak owner] info in
-            owner?.handleTaskNotice(info)
-        }
-    }
-
-    private final class TaskNoticeBridge: NSObject, WKScriptMessageHandler {
-        let onNotice: ([String: Any]) -> Void
-        init(onNotice: @escaping ([String: Any]) -> Void) { self.onNotice = onNotice }
-        func userContentController(_ userContentController: WKUserContentController,
-                                   didReceive message: WKScriptMessage) {
-            if let dict = message.body as? [String: Any] {
-                onNotice(dict)
-            }
-        }
-    }
-
-    /// App 内任务完成顶部胶囊通知弹窗（3 秒自动消失，高保真状态栏矮胶囊，伴随清脆轻微提示音与触感）
-    private func handleTaskNotice(_ info: [String: Any]) {
-        guard let title = info["title"] as? String, !title.isEmpty else { return }
-        let text = "\(title)已完成，请切换会话查看"
-
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.showTaskCompletionBanner(text: text)
-        }
-    }
-
-    private func showTaskCompletionBanner(text: String) {
-        // 1. 播放系统级清脆完成音效与触感震动（零延迟、最克制不刺耳）
-        AudioServicesPlaySystemSound(1001) // Mail received / item sent subtle chime
-        let feedback = UINotificationFeedbackGenerator()
-        feedback.notificationOccurred(.success)
-
-        // 2. 移除旧的横幅
-        taskBannerDismissTimer?.invalidate()
-        taskBannerView?.removeFromSuperview()
-
-        // 3. 构建高保真迷你胶囊横幅（与 iOS 灵动岛/状态栏同等精致高度，不遮挡大面积屏幕）
-        let banner = UIView()
-        banner.backgroundColor = UIColor { trait in
-            trait.userInterfaceStyle == .dark
-                ? UIColor(red: 28/255.0, green: 30/255.0, blue: 36/255.0, alpha: 0.96)
-                : UIColor(red: 250/255.0, green: 250/255.0, blue: 252/255.0, alpha: 0.96)
-        }
-        banner.layer.cornerRadius = 18
-        banner.layer.shadowColor = UIColor.black.cgColor
-        banner.layer.shadowOffset = CGSize(width: 0, height: 4)
-        banner.layer.shadowRadius = 12
-        banner.layer.shadowOpacity = 0.18
-        banner.layer.borderWidth = 0.5
-        banner.layer.borderColor = UIColor.separator.cgColor
-        banner.translatesAutoresizingMaskIntoConstraints = false
-
-        let iconView = UIImageView()
-        let checkConfig = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
-        iconView.image = UIImage(systemName: "checkmark.circle.fill", withConfiguration: checkConfig)
-        iconView.tintColor = .systemGreen
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-
-        let label = UILabel()
-        label.text = text
-        label.font = .systemFont(ofSize: 12.5, weight: .semibold)
-        label.textColor = .label
-        label.lineBreakMode = .byTruncatingTail
-        label.translatesAutoresizingMaskIntoConstraints = false
-
-        banner.addSubview(iconView)
-        banner.addSubview(label)
-
-        NSLayoutConstraint.activate([
-            iconView.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 12),
-            iconView.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 16),
-            iconView.heightAnchor.constraint(equalToConstant: 16),
-
-            label.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
-            label.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -14),
-            label.centerYAnchor.constraint(equalTo: banner.centerYAnchor)
-        ])
-
-        view.addSubview(banner)
-        self.taskBannerView = banner
-
-        let topInset = view.safeAreaInsets.top > 0 ? view.safeAreaInsets.top : 24
-        let initialTop = banner.topAnchor.constraint(equalTo: view.topAnchor, constant: topInset - 40)
-        let targetTop = banner.topAnchor.constraint(equalTo: view.topAnchor, constant: topInset + 4)
-
-        NSLayoutConstraint.activate([
-            initialTop,
-            banner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            banner.heightAnchor.constraint(equalToConstant: 36),
-            banner.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, constant: -32)
-        ])
-
-        view.layoutIfNeeded()
-        banner.alpha = 0
-        banner.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
-
-        // 4. 平滑弹出动画
-        UIView.animate(withDuration: 0.38, delay: 0, usingSpringWithDamping: 0.76, initialSpringVelocity: 0.5, options: [.curveEaseOut]) {
-            initialTop.isActive = false
-            targetTop.isActive = true
-            banner.alpha = 1
-            banner.transform = .identity
-            self.view.layoutIfNeeded()
-        }
-
-        // 5. 3 秒后自动优雅收起消失
-        taskBannerDismissTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self, weak banner] _ in
-            guard let banner = banner else { return }
-            UIView.animate(withDuration: 0.28, animations: {
-                banner.alpha = 0
-                banner.transform = CGAffineTransform(translationX: 0, y: -20)
-            }) { _ in
-                banner.removeFromSuperview()
-                if self?.taskBannerView === banner {
-                    self?.taskBannerView = nil
-                }
-            }
-        }
-    }
-
     /// 接收前端导出的文件并唤起系统级保存与分享（ShareSheet / 保存到文件）
     private func handleIncomingFile(_ info: [String: Any]) {
         guard let name = info["name"] as? String,
@@ -241,6 +114,33 @@ final class ViewController: UIViewController {
                 let alert = UIAlertController(title: "保存失败", message: error.localizedDescription, preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "好", style: .default))
                 self.present(alert, animated: true)
+            }
+        }
+    }
+
+    private static func makeVoiceInputBridge(owner: ViewController) -> WKScriptMessageHandler {
+        VoiceInputBridge { [weak owner] dict in
+            guard let self = owner,
+                  let action = dict["action"] as? String else { return }
+            if action == "toggle" {
+                DispatchQueue.main.async {
+                    self.toggleVoiceDictation()
+                }
+            } else if action == "stop" {
+                DispatchQueue.main.async {
+                    self.stopVoiceDictation()
+                }
+            }
+        }
+    }
+
+    private final class VoiceInputBridge: NSObject, WKScriptMessageHandler {
+        let onAction: ([String: Any]) -> Void
+        init(onAction: @escaping ([String: Any]) -> Void) { self.onAction = onAction }
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            if let dict = message.body as? [String: Any] {
+                onAction(dict)
             }
         }
     }
@@ -489,83 +389,53 @@ final class ViewController: UIViewController {
             '[data-slot="sidebar.right"], [data-slot="sidebar.left"] {',
             '  z-index: 10040 !important;',
             '}',
-            '/* 平板与手机端专属层叠优化：确保侧边栏抽屉与左下角设置按钮永远绝对置顶在聊天输入框之上 */',
-            '[data-mobile-nav="frame"] {',
-            '  z-index: 99999 !important;',
-            '}',
-            '[data-mobile-nav="frame"] > :first-child,',
-            '.CZPbNW_sidebarCol,',
-            '.WYye1W_root,',
-            '.WYye1W_sidebarArea {',
-            '  z-index: 99999 !important;',
-            '  background: var(--dsw-alias-bg-base, #ffffff) !important;',
-            '  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18) !important;',
-            '}',
-            'body[data-ds-dark-theme] [data-mobile-nav="frame"] > :first-child,',
-            'body[data-ds-dark-theme] .CZPbNW_sidebarCol,',
-            'body[data-ds-dark-theme] .WYye1W_root {',
-            '  background: var(--dsw-alias-bg-base, #16181d) !important;',
-            '  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5) !important;',
-            '}',
-            '/* 抽屉底部设置区域与设置按钮强制最顶层高亮可点 */',
-            '.WYye1W_footer,',
-            '.WYye1W_settingsArea,',
-            '.ZiQlkq_trigger,',
-            'button.ZiQlkq_trigger {',
-            '  position: relative !important;',
-            '  z-index: 100000 !important;',
-            '}',
-            '/* 限制右侧中央对话列与底部输入座层级（z-index: 1），绝对不可盖过左侧抽屉（z-index: 99999） */',
-            '.CZPbNW_centerCol,',
-            '.ank0OG_composerSeat,',
-            '.uWtHQG_dock,',
-            '.uWtHQG_root {',
-            '  z-index: 1 !important;',
-            '}',
-            '/* 顶部导航栏：左侧抽屉按钮与右侧所有操作图标基准高统一在 y=22px，高度28px，达到像素级平齐 */',
-            '/* 修复移动端顶部工具栏整体高度与基准线 */',
+            '/* 顶部导航栏：完全采用统一 Flex 居中流，所有按钮与文本统一在一条水平线上居中对齐 */',
             '[data-phase] header,',
             '.ank0OG_header {',
-            '  min-height: 76px !important;',
-            '  height: auto !important;',
-            '  padding: 8px 12px 0 12px !important;',
             '  box-sizing: border-box !important;',
             '  display: flex !important;',
             '  flex-direction: column !important;',
-            '  position: relative !important;',
+            '  min-height: 0 !important;',
+            '  padding: 8px 10px 0 10px !important;',
+            '  flex: none !important;',
             '}',
             '.ank0OG_headerLeading {',
+            '  display: none !important;',
+            '}',
+            '/* 隐藏顶栏 Windows/桌面系统文件资源管理器打开图标 */',
+            '.PPCmka_menuAnchor,',
+            '.PPCmka_split,',
+            '[data-slot="conversation.session.header.utilities"] {',
             '  display: none !important;',
             '}',
             '[data-phase] header .ank0OG_titleRow,',
             '.ank0OG_titleRow {',
             '  display: flex !important;',
-            '  flex-direction: row !important;',
             '  align-items: center !important;',
             '  height: 32px !important;',
             '  min-height: 32px !important;',
-            '  max-height: 32px !important;',
-            '  padding-left: 36px !important;',
-            '  padding-right: 0px !important;',
+            '  padding: 0 !important;',
             '  margin: 0 !important;',
             '  box-sizing: border-box !important;',
             '  width: 100% !important;',
-            '  position: relative !important;',
+            '  gap: 6px !important;',
             '}',
-            '/* 左侧展开目录按钮：统一在 top: 0px, height: 28px, 宽度28px，严格垂直居中并与右侧按钮水平平齐 */',
+            '/* 左侧展开目录按钮：保持 1.0.54 原样，不改动左侧侧边栏按钮 */',
             '[data-mobile-nav="toggle"] {',
-            '  position: absolute !important;',
-            '  left: 0px !important;',
-            '  top: 0px !important;',
-            '  width: 28px !important;',
-            '  height: 28px !important;',
+            '  position: static !important;',
+            '  transform: none !important;',
+            '  top: auto !important;',
+            '  left: auto !important;',
+            '  flex: 0 0 32px !important;',
+            '  width: 32px !important;',
+            '  height: 32px !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '  justify-content: center !important;',
             '  padding: 0 !important;',
             '  margin: 0 !important;',
             '  border-radius: var(--dsw-radius-sm, 6px) !important;',
-            '  z-index: 20 !important;',
+            '  order: -1 !important;',
             '}',
             '[data-mobile-nav="toggle"] svg {',
             '  width: 16px !important;',
@@ -576,135 +446,72 @@ final class ViewController: UIViewController {
             '[data-mobile-nav="files"] {',
             '  display: none !important;',
             '}',
-            '/* 手机端隐藏电脑端特有的「在资源管理器打开」组合按钮，防止撑爆移动端顶栏 */',
-            '.PPCmka_main,',
-            '.PPCmka_chevron {',
-            '  display: none !important;',
-            '}',
-            '/* 首页/未选中会话时的悬浮FAB目录按钮：恢复圆润胶囊按钮视觉并固定在舒适的左上角安全区 */',
-            '[data-mobile-nav="fab"],',
-            'button[data-mobile-nav="fab"] {',
-            '  position: fixed !important;',
-            '  top: max(12px, calc(env(safe-area-inset-top, 0px) + 6px)) !important;',
-            '  left: 12px !important;',
-            '  width: 34px !important;',
-            '  height: 34px !important;',
-            '  border-radius: 10px !important;',
-            '  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.12)) !important;',
-            '  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12) !important;',
-            '  background: var(--dsw-alias-bg-base, #ffffff) !important;',
-            '  padding: 0 !important;',
-            '  margin: 0 !important;',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '  justify-content: center !important;',
-            '  color: var(--dsw-alias-label-primary, #1f2329) !important;',
-            '  z-index: 9999 !important;',
-            '}',
-            'body[data-ds-dark-theme] [data-mobile-nav="fab"],',
-            'body[data-ds-dark-theme] button[data-mobile-nav="fab"] {',
-            '  background: var(--dsw-alias-bg-base, #1e2025) !important;',
-            '  border-color: rgba(255, 255, 255, 0.15) !important;',
-            '  color: #f0f2f5 !important;',
-            '}',
-            '[data-mobile-nav="fab"]:hover {',
-            '  background: var(--dsw-alias-interactive-bg-hover) !important;',
-            '}',
-            '[data-mobile-nav="fab"] svg {',
-            '  width: 17px !important;',
-            '  height: 17px !important;',
-            '  display: block !important;',
-            '  margin: auto !important;',
-            '}',
+            '/* 顶栏会话标题右移，预留充足安全间距，严禁与左侧侧边栏按钮重叠 */',
             '.ank0OG_titleCluster,',
             '[data-phase] header [class*="titleCluster"] {',
-            '  flex: 1 1 auto !important;',
+            '  flex: 1 1 0% !important;',
             '  min-width: 0 !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
             '  overflow: hidden !important;',
-            '  gap: 6px !important;',
-            '  height: 28px !important;',
+            '  gap: 4px !important;',
+            '  height: 32px !important;',
             '  margin: 0 !important;',
-            '  padding: 0 !important;',
+            '  padding: 0 0 0 8px !important;',
+            '  box-sizing: border-box !important;',
+            '}',
+            '.ank0OG_headerActions {',
+            '  height: 32px !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  gap: 4px !important;',
+            '}',
+            '.ank0OG_headerCorner {',
+            '  height: 32px !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  gap: 4px !important;',
+            '  margin-left: auto !important;',
+            '}',
+            '/* 统一右侧所有按钮尺寸为 32x32，严格水平居中 */',
+            '.ank0OG_headerCorner button,',
+            '.ank0OG_headerCorner [role="button"],',
+            '.ank0OG_headerActions button,',
+            '.ank0OG_headerActions [role="button"] {',
+            '  height: 32px !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
             '}',
             '.ank0OG_crumbs,',
             '[data-phase] header [class*="crumbs"] {',
             '  flex: 0 1 auto !important;',
-            '  min-width: 40px !important;',
-            '  max-width: 140px !important;',
+            '  min-width: 0 !important;',
+            '  max-width: 120px !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
-            '  height: 28px !important;',
+            '  height: 32px !important;',
             '}',
             '.ank0OG_crumbSeg {',
+            '  min-width: 0 !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
-            '  display: inline-flex !important;',
             '}',
             '.ank0OG_crumb,',
             '.ank0OG_crumbCurrent {',
+            '  max-width: 100% !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
             '  display: inline-block !important;',
             '  font-weight: 600 !important;',
-            '  font-size: 14px !important;',
+            '  font-size: 15px !important;',
             '  line-height: 22px !important;',
             '  padding: 2px 4px !important;',
-            '}',
-            '/* 右侧操作按钮集合：严格靠右分布，还原到原版右侧位置，高度统一28px */',
-            '.ank0OG_headerActions {',
-            '  margin-left: auto !important;',
-            '  flex: 0 0 auto !important;',
-            '  height: 28px !important;',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '  gap: 4px !important;',
-            '}',
-            '/* 后台任务胶囊宽度约束与横向单行排列 */',
-            '._1Ihh1G_root,',
-            '._1Ihh1G_trigger {',
-            '  max-width: 105px !important;',
-            '  height: 24px !important;',
-            '  overflow: hidden !important;',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '  white-space: nowrap !important;',
-            '  padding: 0 4px !important;',
-            '}',
-            '._1Ihh1G_count {',
-            '  font-size: 11px !important;',
-            '  overflow: hidden !important;',
-            '  text-overflow: ellipsis !important;',
-            '  white-space: nowrap !important;',
-            '}',
-            '.ank0OG_headerCorner {',
-            '  height: 28px !important;',
-            '  display: flex !important;',
-            '  align-items: center !important;',
-            '  gap: 4px !important;',
-            '  margin-left: 4px !important;',
-            '  flex: 0 0 auto !important;',
-            '}',
-            '/* 统一顶栏所有操作按钮尺寸为 28x28，绝对水平平齐对齐 (deltaY = 0) */',
-            '.ank0OG_headerCorner button,',
-            '.ank0OG_headerCorner [role="button"],',
-            '.ank0OG_headerActions button,',
-            '.ank0OG_headerActions [role="button"],',
-            'button[aria-label="打开右侧边栏"],',
-            '.iFjIhq_button {',
-            '  width: 28px !important;',
-            '  height: 28px !important;',
-            '  margin-top: 0 !important;',
-            '  margin-bottom: 0 !important;',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '  justify-content: center !important;',
             '}',
             '/* 调整标签页切换行 */',
             '.ank0OG_tabs {',
@@ -908,22 +715,9 @@ final class ViewController: UIViewController {
             '/* 3. 修复设置主弹层与二/三级弹层(API Key、模型配置、二次确认)的层级深度冲突 */',
             '.ZiQlkq_overlay {',
             '  z-index: 10000 !important;',
-            '  overflow-x: hidden !important;',
             '}',
             '.ZiQlkq_panel {',
             '  z-index: 10001 !important;',
-            '  overflow-x: hidden !important;',
-            '  width: min(800px, calc(100vw - 16px)) !important;',
-            '  max-width: calc(100vw - 16px) !important;',
-            '}',
-            '.ZiQlkq_content,',
-            '.ZiQlkq_options,',
-            '.ZiQlkq_navList,',
-            '.ZiQlkq_nav {',
-            '  overflow-x: hidden !important;',
-            '  max-width: 100% !important;',
-            '  word-break: break-word !important;',
-            '  overflow-wrap: anywhere !important;',
             '}',
             '/* 确保下级模态弹窗、确认框、快捷选择框永远压在设置面板之上，不再被遮挡在底部 */',
             '[role="dialog"]:not(.ZiQlkq_panel),',
@@ -1007,7 +801,51 @@ final class ViewController: UIViewController {
             '.uWtHQG_root {',
             '  padding-bottom: max(14px, env(safe-area-inset-bottom)) !important;',
             '}',
-            '/* 移动端底部操作行防挤压重叠与发送/停止按钮绝对几何居中强化 (适配 iPhone XR 及各类小屏) */',
+            '/* 会话框 + 号对齐居中，防止图标偏下或未居中 */',
+            '.uWtHQG_add {',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
+            '  padding: 0 !important;',
+            '  width: 28px !important;',
+            '  height: 28px !important;',
+            '  box-sizing: border-box !important;',
+            '}',
+            '.uWtHQG_add svg {',
+            '  display: block !important;',
+            '  margin: auto !important;',
+            '  width: 14px !important;',
+            '  height: 14px !important;',
+            '}',
+            '/* 原生语音输入按钮样式与动画 */',
+            '.dsh-mobile-voice-btn {',
+            '  width: 28px !important;',
+            '  height: 28px !important;',
+            '  border-radius: 50% !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
+            '  border: none !important;',
+            '  background: transparent !important;',
+            '  color: var(--dsw-alias-label-secondary, #666) !important;',
+            '  cursor: pointer !important;',
+            '  padding: 0 !important;',
+            '  margin: 0 !important;',
+            '  flex: 0 0 28px !important;',
+            '  transition: all 0.2s ease !important;',
+            '}',
+            '.dsh-mobile-voice-btn.recording {',
+            '  background: #ff3b30 !important;',
+            '  color: #ffffff !important;',
+            '  box-shadow: 0 0 10px rgba(255, 59, 48, 0.6) !important;',
+            '  animation: dshVoicePulse 1.2s infinite ease-in-out !important;',
+            '}',
+            '@keyframes dshVoicePulse {',
+            '  0% { transform: scale(1); }',
+            '  50% { transform: scale(1.12); }',
+            '  100% { transform: scale(1); }',
+            '}',
+            '/* 移动端底部操作行防挤压重叠与紧凑布局 */',
             '.uWtHQG_row {',
             '  display: flex !important;',
             '  justify-content: space-between !important;',
@@ -1015,39 +853,18 @@ final class ViewController: UIViewController {
             '  gap: 4px !important;',
             '  flex-wrap: nowrap !important;',
             '  width: 100% !important;',
-            '  padding: 4px 6px !important;',
             '  box-sizing: border-box !important;',
             '}',
-            '/* 左侧辅助工具容器紧凑化：移动端隐藏文字标签，只保留清晰图标，为核心模型选择腾出空间 */',
             '.uWtHQG_tools {',
             '  flex: 0 0 auto !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
-            '  gap: 2px !important;',
-            '}',
-            '.Vg9r4q_triggerLabel {',
-            '  display: none !important; /* 隐藏 完全权限 汉字，保留盾牌图标与下拉指示 */',
-            '}',
-            '.Vg9r4q_trigger {',
-            '  padding: 0 4px !important;',
-            '  height: 28px !important;',
-            '  gap: 2px !important;',
-            '}',
-            '/* 提示词优化插件紧凑化 */',
-            '.dsh-po-btn-opt span {',
-            '  display: none !important; /* 隐藏 优化 汉字，保留星星图标 */',
-            '}',
-            '.dsh-po-btn-opt {',
-            '  padding: 3px 5px !important;',
-            '}',
-            '.dsh-po-capsule {',
-            '  flex-shrink: 0 !important;',
-            '  margin-right: 2px !important;',
+            '  gap: 3px !important;',
             '}',
             '.uWtHQG_trailing {',
             '  display: flex !important;',
             '  align-items: center !important;',
-            '  gap: 6px !important;',
+            '  gap: 4px !important;',
             '  min-width: 0 !important;',
             '  flex: 1 1 auto !important;',
             '  justify-content: flex-end !important;',
@@ -1057,133 +874,45 @@ final class ViewController: UIViewController {
             '  align-items: center !important;',
             '  gap: 4px !important;',
             '  min-width: 0 !important;',
-            '  flex: 1 1 auto !important;',
-            '  justify-content: flex-end !important;',
-            '}',
-            '.VYXhfG_root {',
-            '  min-width: 0 !important;',
             '  flex: 0 1 auto !important;',
-            '  display: flex !important;',
+            '  overflow: hidden !important;',
             '}',
-            '/* 模型选择核心按钮：获得充分空间，完整展示模型与思考等级，右侧与发送按钮保持至少 12px 独立间隙 */',
+            '.dsh-po-capsule {',
+            '  flex-shrink: 1 !important;',
+            '  min-width: 0 !important;',
+            '}',
             '.VYXhfG_trigger {',
-            '  max-width: min(180px, calc(100vw - 220px)) !important;',
+            '  max-width: min(115px, 28vw) !important;',
             '  min-width: 0 !important;',
-            '  flex: 0 1 auto !important;',
-            '  height: 28px !important;',
-            '  padding: 0 6px !important;',
-            '  gap: 3px !important;',
-            '  font-size: 12px !important;',
-            '  display: flex !important;',
-            '  align-items: center !important;',
+            '  flex-shrink: 1 !important;',
+            '  padding: 0 4px !important;',
             '}',
             '.VYXhfG_triggerLabel {',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
             '  overflow: hidden !important;',
-            '  font-size: 12px !important;',
-            '  font-weight: 500 !important;',
             '  min-width: 0 !important;',
-            '  flex: 0 1 auto !important;',
             '}',
-            '.VYXhfG_triggerEffort {',
-            '  font-size: 11px !important;',
-            '  flex: 0 0 auto !important;',
-            '  opacity: 0.85 !important;',
-            '  white-space: nowrap !important;',
-            '  display: inline-block !important;',
-            '  margin-left: 2px !important;',
-            '}',
-            '.VYXhfG_chevron {',
-            '  flex: 0 0 auto !important;',
-            '}',
-            '/* 发送/停止/暂停圆形按钮纯正几何居中（统一 28x28，与 + 号和底栏图标严格水平对齐） */',
-            '.uWtHQG_add,',
-            'button[aria-label="添加"],',
-            'button.uWtHQG_add {',
-            '  width: 28px !important;',
-            '  height: 28px !important;',
-            '  min-width: 28px !important;',
-            '  min-height: 28px !important;',
-            '  border-radius: 50% !important;',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '  justify-content: center !important;',
-            '  padding: 0 !important;',
-            '  margin: 0 !important;',
-            '  box-sizing: border-box !important;',
-            '  line-height: 1 !important;',
-            '}',
-            '.uWtHQG_add svg,',
-            'button[aria-label="添加"] svg {',
-            '  width: 14px !important;',
-            '  height: 14px !important;',
-            '  display: block !important;',
-            '  margin: auto !important;',
-            '}',
-            '.uWtHQG_primary,',
-            'button.uWtHQG_primary {',
+            '/* 发送/停止/暂停圆形按钮纯正几何居中（消除文字/下箭头重叠穿透与偏移歪斜） */',
+            '.uWtHQG_primary {',
             '  flex: 0 0 28px !important;',
             '  width: 28px !important;',
             '  height: 28px !important;',
-            '  min-width: 28px !important;',
-            '  min-height: 28px !important;',
             '  border-radius: 50% !important;',
-            '  display: inline-flex !important;',
+            '  display: flex !important;',
             '  align-items: center !important;',
             '  justify-content: center !important;',
             '  padding: 0 !important;',
             '  margin: 0 !important;',
             '  transform: none !important;',
             '  box-sizing: border-box !important;',
-            '  line-height: 1 !important;',
             '}',
-            '.uWtHQG_primary svg,',
-            'button.uWtHQG_primary svg {',
+            '.uWtHQG_primary svg {',
             '  display: block !important;',
-            '  margin: auto !important;',
+            '  margin: 0 !important;',
             '  width: 14px !important;',
             '  height: 14px !important;',
             '  flex-shrink: 0 !important;',
-            '}',
-            '/* 语音听写输入按钮：优雅注入输入框左下角 + 号旁，高度28px，保持整行图标严谨水平对齐 */',
-            '.dsh-voice-input-btn {',
-            '  width: 28px !important;',
-            '  height: 28px !important;',
-            '  min-width: 28px !important;',
-            '  min-height: 28px !important;',
-            '  border-radius: 50% !important;',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '  justify-content: center !important;',
-            '  padding: 0 !important;',
-            '  margin: 0 !important;',
-            '  border: none !important;',
-            '  background: transparent !important;',
-            '  color: var(--dsw-alias-label-secondary, #6b7280) !important;',
-            '  cursor: pointer !important;',
-            '  outline: none !important;',
-            '  box-sizing: border-box !important;',
-            '  transition: all 0.15s ease !important;',
-            '}',
-            '.dsh-voice-input-btn:active {',
-            '  transform: scale(0.92) !important;',
-            '  color: var(--dsw-alias-brand-primary, #3b82f6) !important;',
-            '}',
-            '.dsh-voice-input-btn.is-recording {',
-            '  color: #ef4444 !important;',
-            '  background: rgba(239, 68, 68, 0.12) !important;',
-            '  animation: dshVoicePulse 1.2s infinite ease-in-out !important;',
-            '}',
-            '@keyframes dshVoicePulse {',
-            '  0%, 100% { transform: scale(1); opacity: 1; }',
-            '  50% { transform: scale(1.1); opacity: 0.8; }',
-            '}',
-            '.dsh-voice-input-btn svg {',
-            '  width: 15px !important;',
-            '  height: 15px !important;',
-            '  display: block !important;',
-            '  margin: auto !important;',
             '}'
           ].join('\\n');
           function attach() {
@@ -1266,6 +995,72 @@ final class ViewController: UIViewController {
                 }
               }
             }, true);
+          })();
+
+          // 移动端会话输入框原生语音输入按钮注入与文本流式输入处理
+          (function setupMobileVoiceInputBridge() {
+            function updateVoiceButtonState(active) {
+              var btn = document.querySelector('.dsh-mobile-voice-btn');
+              if (!btn) return;
+              if (active) {
+                btn.classList.add('recording');
+                btn.setAttribute('title', '正在录音...再次点击停止');
+              } else {
+                btn.classList.remove('recording');
+                btn.setAttribute('title', '点击进行语音输入');
+              }
+            }
+
+            window.__dshVoiceStateUpdate = function(active, text) {
+              updateVoiceButtonState(active);
+              if (text && text.length > 0) {
+                var inputEl = document.querySelector('.uWtHQG_input') ||
+                              document.querySelector('[contenteditable="true"]') ||
+                              document.querySelector('textarea');
+                if (inputEl) {
+                  inputEl.focus();
+                  if (inputEl.isContentEditable || inputEl.getAttribute('contenteditable') === 'true') {
+                    document.execCommand('insertText', false, text);
+                  } else {
+                    var start = inputEl.selectionStart || inputEl.value.length;
+                    var end = inputEl.selectionEnd || inputEl.value.length;
+                    var val = inputEl.value || '';
+                    inputEl.value = val.substring(0, start) + text + val.substring(end);
+                    inputEl.selectionStart = inputEl.selectionEnd = start + text.length;
+                    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                  }
+                }
+              }
+            };
+
+            function ensureVoiceButton() {
+              var tools = document.querySelector('.uWtHQG_tools');
+              if (!tools) return;
+              if (tools.querySelector('.dsh-mobile-voice-btn')) return;
+
+              var voiceBtn = document.createElement('button');
+              voiceBtn.type = 'button';
+              voiceBtn.className = 'dsh-mobile-voice-btn';
+              voiceBtn.setAttribute('title', '点击进行语音输入');
+              voiceBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>';
+
+              voiceBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dshVoiceInput) {
+                  window.webkit.messageHandlers.dshVoiceInput.postMessage({ action: 'toggle' });
+                }
+              });
+
+              var addBtn = tools.querySelector('.uWtHQG_add');
+              if (addBtn && addBtn.nextSibling) {
+                tools.insertBefore(voiceBtn, addBtn.nextSibling);
+              } else {
+                tools.appendChild(voiceBtn);
+              }
+            }
+
+            setInterval(ensureVoiceButton, 600);
           })();
 
           // 移动端右侧边栏智能关闭辅助（遮罩与退出逻辑）
@@ -1532,79 +1327,6 @@ final class ViewController: UIViewController {
             var obs = new MutationObserver(syncPanelNav);
             obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel'] });
             setInterval(syncPanelNav, 300);
-          })();
-
-          // 核心守护：防止移动端软键盘弹起时网页整体被顶到 iOS 顶部状态栏之上
-          (function fixKeyboardViewportScroll() {
-            function lockScroll() {
-              if (window.scrollY > 0) window.scrollTo(0, 0);
-              if (document.documentElement.scrollTop > 0) document.documentElement.scrollTop = 0;
-              if (document.body.scrollTop > 0) document.body.scrollTop = 0;
-            }
-
-            window.addEventListener('scroll', lockScroll, { passive: false });
-            window.addEventListener('resize', lockScroll, { passive: true });
-
-            if (window.visualViewport) {
-              window.visualViewport.addEventListener('resize', lockScroll, { passive: true });
-              window.visualViewport.addEventListener('scroll', lockScroll, { passive: false });
-            }
-
-            document.addEventListener('focusin', function(e) {
-              setTimeout(lockScroll, 50);
-              setTimeout(lockScroll, 150);
-              setTimeout(lockScroll, 300);
-            }, true);
-          })();
-
-          // 核心监听：后台任务完成通知（当后台会话或任务执行完成时，向 iOS 原生派发弹窗通知与声音）
-          (function monitorBackgroundTaskCompletion() {
-            var lastLiveCount = null;
-            var notifiedSessionMap = {};
-
-            function checkTaskChanges() {
-              try {
-                // 1. 监测顶部后台任务指示器 (ui-jobs)
-                var countEl = document.querySelector('._1Ihh1G_count');
-                if (countEl) {
-                  var text = countEl.textContent || '';
-                  var match = text.match(/(\\d+)/);
-                  var currentCount = match ? parseInt(match[1], 10) : 0;
-                  if (lastLiveCount !== null && lastLiveCount > 0 && currentCount < lastLiveCount) {
-                    // 后台任务计数减少，表示有任务已完成
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dshTaskNotice) {
-                      window.webkit.messageHandlers.dshTaskNotice.postMessage({
-                        title: '后台任务'
-                      });
-                    }
-                  }
-                  lastLiveCount = currentCount;
-                }
-
-                // 2. 监测左侧抽屉中其他会话的未读完成状态（状态圆点变成静态完成）
-                var sessionItems = document.querySelectorAll('[role="treeitem"]');
-                sessionItems.forEach(function(item) {
-                  var titleEl = item.querySelector('[class*="label"], [class*="title"]') || item;
-                  var title = (titleEl.textContent || '').trim().slice(0, 16);
-                  var isRunning = item.querySelector('[data-state="ongoing"], .dsw-state-ongoing, [class*="spinner"]') !== null;
-                  var isDone = item.querySelector('[data-state="done"], .dsw-state-done, [class*="Checkmark"]') !== null;
-
-                  if (title && isRunning) {
-                    notifiedSessionMap[title] = 'running';
-                  } else if (title && isDone && notifiedSessionMap[title] === 'running') {
-                    // 该会话由运行中转为已完成！触发通知
-                    notifiedSessionMap[title] = 'notified';
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dshTaskNotice) {
-                      window.webkit.messageHandlers.dshTaskNotice.postMessage({
-                        title: '会话【' + title + '】'
-                      });
-                    }
-                  }
-                });
-              } catch(e) {}
-            }
-
-            setInterval(checkTaskChanges, 1500);
           })();
         })();
         """,
@@ -2011,125 +1733,10 @@ final class ViewController: UIViewController {
             });
           }
 
-          // 动态注入 3：向输入框操作栏（.uWtHQG_tools / +号旁）注入原生语音听写按钮
-          function enrichVoiceInputButton() {
-            var toolBars = document.querySelectorAll('.uWtHQG_tools');
-            toolBars.forEach(function(toolbar) {
-              if (toolbar.querySelector('.dsh-voice-input-btn')) return;
-              var btn = document.createElement('button');
-              btn.type = 'button';
-              btn.className = 'dsh-voice-input-btn';
-              btn.setAttribute('aria-label', '语音输入');
-              btn.setAttribute('title', '语音输入（点击开始，再次点击完成）');
-              btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>';
-
-              btn.addEventListener('click', function(ev) {
-                ev.preventDefault();
-                ev.stopPropagation();
-                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dshVoiceInput) {
-                  window.webkit.messageHandlers.dshVoiceInput.postMessage({ action: 'toggle' });
-                }
-              });
-
-              var addBtn = toolbar.querySelector('.uWtHQG_add') || toolbar.querySelector('button');
-              if (addBtn && addBtn.nextSibling) {
-                toolbar.insertBefore(btn, addBtn.nextSibling);
-              } else {
-                toolbar.appendChild(btn);
-              }
-            });
-          }
-
-          window.__dshVoiceStateUpdate = function(state, text) {
-            var btns = document.querySelectorAll('.dsh-voice-input-btn');
-            btns.forEach(function(btn) {
-              if (state === 'recording') {
-                btn.classList.add('is-recording');
-                btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>';
-              } else {
-                btn.classList.remove('is-recording');
-                btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>';
-              }
-            });
-            if (text) {
-              var editor = document.querySelector('.uWtHQG_input') ||
-                           document.querySelector('[contenteditable="true"]') ||
-                           document.querySelector('textarea');
-              if (editor) {
-                if (editor.tagName === 'TEXTAREA' || editor.tagName === 'INPUT') {
-                  editor.focus();
-                  editor.value = (editor.value ? editor.value + ' ' : '') + text;
-                  editor.dispatchEvent(new Event('input', { bubbles: true }));
-                  editor.dispatchEvent(new Event('change', { bubbles: true }));
-                } else {
-                  // Lexical / contenteditable 富文本编辑器：必须使用标准 insertText 命令或 InputEvent 注入
-                  editor.focus();
-                  var inserted = false;
-                  try {
-                    inserted = document.execCommand('insertText', false, text);
-                  } catch (e) {
-                    inserted = false;
-                  }
-
-                  if (!inserted) {
-                    try {
-                      var inputEvt = new InputEvent('beforeinput', {
-                        inputType: 'insertText',
-                        data: text,
-                        bubbles: true,
-                        cancelable: true
-                      });
-                      editor.dispatchEvent(inputEvt);
-
-                      var textEvt = new InputEvent('input', {
-                        inputType: 'insertText',
-                        data: text,
-                        bubbles: true
-                      });
-                      editor.dispatchEvent(textEvt);
-                    } catch (e) {}
-                  }
-
-                  // 触发合成输入事件确保底部高度自适应刷新
-                  editor.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-              }
-            }
-          };
-
-          // 动态注入 5：第一次打开 DSH 页面时，如果左侧侧边栏处于折叠态（或停留在无会话欢迎页），默认自动展开左侧侧边栏
-          var hasAutoOpenedSidebarOnce = false;
-          function ensureInitialSidebarOpen() {
-            if (hasAutoOpenedSidebarOnce) return;
-            var frame = document.querySelector('[data-mobile-nav="frame"]') || document.querySelector('.CZPbNW_frame');
-            if (!frame) return;
-            var isCollapsed = document.documentElement.hasAttribute('data-sidebar-collapsed') ||
-                              frame.hasAttribute('data-sidebar-collapsed');
-            if (isCollapsed) {
-              var toggle = document.querySelector('button[aria-label="打开侧边栏"]') ||
-                           document.querySelector('.WYye1W_toggle') ||
-                           document.querySelector('[data-mobile-nav="fab"]') ||
-                           document.querySelector('[data-mobile-nav="toggle"]');
-              if (toggle) {
-                hasAutoOpenedSidebarOnce = true;
-                toggle.click();
-              }
-            } else {
-              // 原本已展开，标记完成
-              hasAutoOpenedSidebarOnce = true;
-            }
-          }
-
-          setTimeout(ensureInitialSidebarOpen, 180);
-          setTimeout(ensureInitialSidebarOpen, 450);
-          setTimeout(ensureInitialSidebarOpen, 900);
-          setTimeout(ensureInitialSidebarOpen, 1500);
-
           setInterval(function() {
             enrichDeliverableCards();
             enrichPreviewHeader();
             enrichFilesTree();
-            enrichVoiceInputButton();
           }, 800);
         })();
         """
@@ -2202,17 +1809,14 @@ final class ViewController: UIViewController {
         webView.uiDelegate = self
         config.userContentController.add(Self.makeErrorBridge(owner: self), name: "dshErrors")
         config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")
-        config.userContentController.add(Self.makeTaskNoticeBridge(owner: self), name: "dshTaskNotice")
         config.userContentController.add(Self.makeVoiceInputBridge(owner: self), name: "dshVoiceInput")
-        // 禁止左滑/右滑手势触发 WebView 跨 URL 前进/后退导航，防止用户意外退出当前服务地址
-        webView.allowsBackForwardNavigationGestures = false
+        webView.allowsBackForwardNavigationGestures = true
         webView.translatesAutoresizingMaskIntoConstraints = false
-        // 确保 WKWebView 整体滚动视图锁死，防止软键盘弹起时网页整体被顶到状态栏之上
         webView.scrollView.contentInsetAdjustmentBehavior = .never
-        webView.scrollView.bounces = false
+        // 丝滑滚动体验：启用原生惯性加速与回弹（同 Hermes Studio），消除粘滞感
+        webView.scrollView.decelerationRate = .fast
+        webView.scrollView.bounces = true
         webView.scrollView.alwaysBounceVertical = false
-        webView.scrollView.showsVerticalScrollIndicator = false
-        webView.scrollView.showsHorizontalScrollIndicator = false
         webView.isOpaque = false
         webView.backgroundColor = .systemBackground
         webView.scrollView.backgroundColor = .systemBackground
@@ -2738,72 +2342,11 @@ final class ViewController: UIViewController {
         present(alert, animated: true)
     }
 
-    /// 读取底层精准硬件标识符（如 "iPhone11,8" -> "iPhone XR", "iPhone13,4" -> "iPhone 12 Pro Max"）
-    private static func getHardwareModelIdentifier() -> String {
-        var systemInfo = utsname()
-        uname(&systemInfo)
-        let machineMirror = Mirror(reflecting: systemInfo.machine)
-        let identifier = machineMirror.children.reduce("") { identifier, element in
-            guard let value = element.value as? Int8, value != 0 else { return identifier }
-            return identifier + String(UnicodeScalar(UInt8(value)))
-        }
-        return identifier.isEmpty ? UIDevice.current.model : identifier
-    }
-
-    /// 将硬件标识符映射为大众熟知的具体商业机型名称
-    private static func getMarketingDeviceModel() -> String {
-        let id = getHardwareModelIdentifier()
-        switch id {
-        // iPhone XR / XS / X 系列
-        case "iPhone10,3", "iPhone10,6": return "iPhone X"
-        case "iPhone11,2": return "iPhone XS"
-        case "iPhone11,4", "iPhone11,6": return "iPhone XS Max"
-        case "iPhone11,8": return "iPhone XR"
-        // iPhone 11 系列
-        case "iPhone12,1": return "iPhone 11"
-        case "iPhone12,3": return "iPhone 11 Pro"
-        case "iPhone12,5": return "iPhone 11 Pro Max"
-        // iPhone 12 系列
-        case "iPhone13,1": return "iPhone 12 mini"
-        case "iPhone13,2": return "iPhone 12"
-        case "iPhone13,3": return "iPhone 12 Pro"
-        case "iPhone13,4": return "iPhone 12 Pro Max"
-        // iPhone 13 系列
-        case "iPhone14,4": return "iPhone 13 mini"
-        case "iPhone14,5": return "iPhone 13"
-        case "iPhone14,2": return "iPhone 13 Pro"
-        case "iPhone14,3": return "iPhone 13 Pro Max"
-        // iPhone 14 系列
-        case "iPhone14,7": return "iPhone 14"
-        case "iPhone14,8": return "iPhone 14 Plus"
-        case "iPhone15,2": return "iPhone 14 Pro"
-        case "iPhone15,3": return "iPhone 14 Pro Max"
-        // iPhone 15 系列
-        case "iPhone15,4": return "iPhone 15"
-        case "iPhone15,5": return "iPhone 15 Plus"
-        case "iPhone16,1": return "iPhone 15 Pro"
-        case "iPhone16,2": return "iPhone 15 Pro Max"
-        // iPhone 16 系列
-        case "iPhone17,3": return "iPhone 16"
-        case "iPhone17,4": return "iPhone 16 Plus"
-        case "iPhone17,1": return "iPhone 16 Pro"
-        case "iPhone17,2": return "iPhone 16 Pro Max"
-        // iPhone SE 系列
-        case "iPhone8,4":  return "iPhone SE (第1代)"
-        case "iPhone12,8": return "iPhone SE (第2代)"
-        case "iPhone14,6": return "iPhone SE (第3代)"
-        // 模拟器
-        case "i386", "x86_64", "arm64": return "iOS 模拟器 (\(UIDevice.current.model))"
-        default: return id
-        }
-    }
-
-    /// 原生设备运行环境信息检测（精准识别具体机型如 iPhone XR、12 Pro Max 等）
+    /// 原生设备运行环境信息检测（解决多系统版本诊断与 iOS 15 兼容排查）
     private static func getDeviceInfoSummary() -> String {
-        let marketingModel = getMarketingDeviceModel()
-        let hardwareId = getHardwareModelIdentifier()
         let device = UIDevice.current
         let systemVersion = device.systemVersion
+        let model = device.model
         let name = device.name
         
         var freeDiskGB = "未知"
@@ -2817,7 +2360,7 @@ final class ViewController: UIViewController {
         let scale = screen.scale
         let res = "\(Int(bounds.width * scale))×\(Int(bounds.height * scale)) (@\(Int(scale))x)"
         
-        return "设备: \(marketingModel) [\(hardwareId)] (\(name))\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
+        return "设备: \(model) (\(name))\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
     }
 
     /// 关于：版本号原生可见（读 Info.plist，回退到编译期常量）
@@ -3131,6 +2674,139 @@ extension ViewController: WKNavigationDelegate {
         stopNavigationTimeout()
         showError(detail: readableMessage(for: error))
     }
+
+    // MARK: - 原生语音输入（SFSpeechRecognizer + AVAudioEngine）
+
+    private func toggleVoiceDictation() {
+        if isDictating {
+            stopVoiceDictation()
+            return
+        }
+
+        SFSpeechRecognizer.requestAuthorization { [weak self] authStatus in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                guard authStatus == .authorized else {
+                    self.notifyWebVoiceState(active: false, text: nil)
+                    let alert = UIAlertController(title: "未开启语音识别权限", message: "请在 iOS 系统「设置 → 隐私与安全性 → 语音识别」中允许本应用使用语音识别。", preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "好", style: .default))
+                    self.present(alert, animated: true)
+                    return
+                }
+
+                AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
+                    DispatchQueue.main.async {
+                        guard let self = self else { return }
+                        if granted {
+                            self.startVoiceDictation()
+                        } else {
+                            self.notifyWebVoiceState(active: false, text: nil)
+                            let alert = UIAlertController(title: "未开启麦克风权限", message: "请在 iOS 系统「设置 → 隐私与安全性 → 麦克风」中允许本应用访问麦克风。", preferredStyle: .alert)
+                            alert.addAction(UIAlertAction(title: "好", style: .default))
+                            self.present(alert, animated: true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func startVoiceDictation() {
+        if audioEngine.isRunning {
+            stopVoiceDictation()
+        }
+
+        guard let recognizer = speechRecognizer, recognizer.isAvailable else {
+            notifyWebVoiceState(active: false, text: nil)
+            return
+        }
+
+        do {
+            recognitionTask?.cancel()
+            recognitionTask = nil
+
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            request.shouldReportPartialResults = true
+            self.recognitionRequest = request
+
+            let inputNode = audioEngine.inputNode
+            lastRecognizedText = ""
+            isDictating = true
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            notifyWebVoiceState(active: true, text: nil)
+
+            recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+                guard let self = self else { return }
+                if let result = result {
+                    let fullText = result.bestTranscription.formattedString
+                    if fullText != self.lastRecognizedText {
+                        let delta: String
+                        if fullText.hasPrefix(self.lastRecognizedText) {
+                            delta = String(fullText.dropFirst(self.lastRecognizedText.count))
+                        } else {
+                            delta = fullText
+                        }
+                        self.lastRecognizedText = fullText
+                        if !delta.isEmpty {
+                            DispatchQueue.main.async {
+                                self.notifyWebVoiceState(active: self.isDictating, text: delta)
+                            }
+                        }
+                    }
+                }
+
+                if error != nil || (result?.isFinal ?? false) {
+                    DispatchQueue.main.async {
+                        if self.isDictating {
+                            self.stopVoiceDictation()
+                        }
+                    }
+                }
+            }
+
+            let recordingFormat = inputNode.outputFormat(forBus: 0)
+            inputNode.removeTap(onBus: 0)
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+                self?.recognitionRequest?.append(buffer)
+            }
+
+            audioEngine.prepare()
+            try audioEngine.start()
+        } catch {
+            stopVoiceDictation()
+        }
+    }
+
+    private func stopVoiceDictation() {
+        isDictating = false
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        notifyWebVoiceState(active: false, text: nil)
+    }
+
+    private func notifyWebVoiceState(active: Bool, text: String?) {
+        let activeStr = active ? "true" : "false"
+        if let text = text,
+           let data = try? JSONSerialization.data(withJSONObject: [text]),
+           let jsonArr = String(data: data, encoding: .utf8) {
+            let js = "if (window.__dshVoiceStateUpdate) { window.__dshVoiceStateUpdate(\(activeStr), \(jsonArr)[0]); }"
+            webView.evaluateJavaScript(js, completionHandler: nil)
+        } else {
+            let js = "if (window.__dshVoiceStateUpdate) { window.__dshVoiceStateUpdate(\(activeStr), null); }"
+            webView.evaluateJavaScript(js, completionHandler: nil)
+        }
+    }
 }
 
 // MARK: - WKUIDelegate
@@ -3144,166 +2820,5 @@ extension ViewController: WKUIDelegate {
             webView.load(navigationAction.request)
         }
         return nil
-    }
-}
-
-// MARK: - 原生语音听写扩展 (SFSpeechRecognizer + AVAudioEngine)
-
-extension ViewController {
-
-    static func makeVoiceInputBridge(owner: ViewController) -> WKScriptMessageHandler {
-        VoiceInputBridge { [weak owner] dict in
-            guard let self = owner,
-                  let action = dict["action"] as? String else { return }
-            if action == "toggle" {
-                DispatchQueue.main.async {
-                    self.toggleVoiceDictation()
-                }
-            }
-        }
-    }
-
-    private final class VoiceInputBridge: NSObject, WKScriptMessageHandler {
-        let onAction: ([String: Any]) -> Void
-        init(onAction: @escaping ([String: Any]) -> Void) { self.onAction = onAction }
-        func userContentController(_ userContentController: WKUserContentController,
-                                   didReceive message: WKScriptMessage) {
-            if let dict = message.body as? [String: Any] {
-                onAction(dict)
-            }
-        }
-    }
-
-    private func toggleVoiceDictation() {
-        if isDictating {
-            stopVoiceDictation()
-        } else {
-            requestSpeechAuthorizationAndStart()
-        }
-    }
-
-    private func requestSpeechAuthorizationAndStart() {
-        SFSpeechRecognizer.requestAuthorization { [weak self] authStatus in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                switch authStatus {
-                case .authorized:
-                    AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                        DispatchQueue.main.async {
-                            if granted {
-                                self.startVoiceDictation()
-                            } else {
-                                self.showVoiceNotice("麦克风未授权，请在“设置-隐私”开启麦克风权限")
-                            }
-                        }
-                    }
-                case .denied, .restricted:
-                    self.showVoiceNotice("语音识别未授权，请在“设置-隐私”中开启语音识别")
-                case .notDetermined:
-                    break
-                @unknown default:
-                    break
-                }
-            }
-        }
-    }
-
-    private func startVoiceDictation() {
-        if audioEngine.isRunning {
-            stopVoiceDictation()
-            return
-        }
-
-        recognitionTask?.cancel()
-        recognitionTask = nil
-
-        let audioSession = AVAudioSession.sharedInstance()
-        do {
-            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-        } catch {
-            print("[Voice] AudioSession setup error: \(error)")
-            return
-        }
-
-        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        guard let recognitionRequest = recognitionRequest else { return }
-        recognitionRequest.shouldReportPartialResults = true
-        lastRecognizedText = ""
-
-        let inputNode = audioEngine.inputNode
-        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
-            guard let self else { return }
-            var isFinal = false
-            if let result = result {
-                let transcription = result.bestTranscription.formattedString
-                if !transcription.isEmpty && transcription != self.lastRecognizedText {
-                    // 计算出当前新追加的增量文字（或整段文字）
-                    let delta: String
-                    if transcription.hasPrefix(self.lastRecognizedText) {
-                        let startIndex = transcription.index(transcription.startIndex, offsetBy: self.lastRecognizedText.count)
-                        delta = String(transcription[startIndex...])
-                    } else {
-                        delta = transcription
-                    }
-                    self.lastRecognizedText = transcription
-
-                    if !delta.isEmpty {
-                        let escaped = delta.replacingOccurrences(of: "\\", with: "\\\\")
-                            .replacingOccurrences(of: "\"", with: "\\\"")
-                            .replacingOccurrences(of: "\n", with: "\\n")
-                            .replacingOccurrences(of: "\r", with: "")
-                        self.webView.evaluateJavaScript("window.__dshVoiceStateUpdate && window.__dshVoiceStateUpdate('recording', \"\(escaped)\");", completionHandler: nil)
-                    }
-                }
-                isFinal = result.isFinal
-            }
-
-            if error != nil || isFinal {
-                self.stopVoiceDictation()
-            }
-        }
-
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-            self.recognitionRequest?.append(buffer)
-        }
-
-        audioEngine.prepare()
-        do {
-            try audioEngine.start()
-            isDictating = true
-            // 触觉轻微反馈
-            let generator = UIImpactFeedbackGenerator(style: .medium)
-            generator.impactOccurred()
-            webView.evaluateJavaScript("window.__dshVoiceStateUpdate && window.__dshVoiceStateUpdate('recording', '');", completionHandler: nil)
-        } catch {
-            print("[Voice] AudioEngine start failed: \(error)")
-            stopVoiceDictation()
-        }
-    }
-
-    private func stopVoiceDictation() {
-        if !isDictating && !audioEngine.isRunning { return }
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
-        recognitionTask?.cancel()
-        recognitionTask = nil
-        isDictating = false
-
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-
-        // 触觉轻微反馈提示停止
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.impactOccurred()
-        webView.evaluateJavaScript("window.__dshVoiceStateUpdate && window.__dshVoiceStateUpdate('idle', '');", completionHandler: nil)
-    }
-
-    private func showVoiceNotice(_ message: String) {
-        let alert = UIAlertController(title: "提示", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "好", style: .default))
-        present(alert, animated: true)
     }
 }

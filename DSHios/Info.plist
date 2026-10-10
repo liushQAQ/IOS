@@ -88,6 +88,6 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>需要访问麦克风以支持语音输入。</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>需要使用语音识别将您的语音实时转换为文本输入到会话中。</string>
+	<string>需要使用语音识别将您的语音实时转为文本输入。</string>
 </dict>
 </plist>
