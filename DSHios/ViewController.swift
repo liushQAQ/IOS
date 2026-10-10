@@ -1,6 +1,7 @@
 import UIKit
 import WebKit
 import Network
+import AudioToolbox
 
 /// 主界面：全屏 WKWebView，与电脑桌面端 DSH 布局完全一致（无任何原生地址栏/工具栏遮挡）。
 /// 原生只在「连不上」时接管：错误浮层 + 重试；右下角一个半透明小按钮用于换地址/看版本。
@@ -23,6 +24,10 @@ final class ViewController: UIViewController {
     private var isPocketRetryInFlight = false
     /// 白屏自诊断采样计时器（多次采样把 JS 崩溃画到浮层，而不是留一个纯白屏）。
     private var diagnoseTimers: [Timer] = []
+
+    /// App 内顶部通知浮条（当后台会话完成时弹出 3 秒通知，并伴随系统提示音）
+    private var taskBannerView: UIView?
+    private var taskBannerDismissTimer: Timer?
 
     /// 悬浮菜单按钮：收起时只从右缘露出一条把手，展开后完整可见。
     private var menuButtonExpanded = false
@@ -77,6 +82,129 @@ final class ViewController: UIViewController {
                                    didReceive message: WKScriptMessage) {
             if let dict = message.body as? [String: Any] {
                 onFile(dict)
+            }
+        }
+    }
+
+    private static func makeTaskNoticeBridge(owner: ViewController) -> WKScriptMessageHandler {
+        return TaskNoticeBridge { [weak owner] info in
+            owner?.handleTaskNotice(info)
+        }
+    }
+
+    private final class TaskNoticeBridge: NSObject, WKScriptMessageHandler {
+        let onNotice: ([String: Any]) -> Void
+        init(onNotice: @escaping ([String: Any]) -> Void) { self.onNotice = onNotice }
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            if let dict = message.body as? [String: Any] {
+                onNotice(dict)
+            }
+        }
+    }
+
+    /// App 内任务完成顶部胶囊通知弹窗（3 秒自动消失，高保真状态栏矮胶囊，伴随清脆轻微提示音与触感）
+    private func handleTaskNotice(_ info: [String: Any]) {
+        guard let title = info["title"] as? String, !title.isEmpty else { return }
+        let text = "\(title)已完成，请切换会话查看"
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.showTaskCompletionBanner(text: text)
+        }
+    }
+
+    private func showTaskCompletionBanner(text: String) {
+        // 1. 播放系统级清脆完成音效与触感震动（零延迟、最克制不刺耳）
+        AudioServicesPlaySystemSound(1001) // Mail received / item sent subtle chime
+        let feedback = UINotificationFeedbackGenerator()
+        feedback.notificationOccurred(.success)
+
+        // 2. 移除旧的横幅
+        taskBannerDismissTimer?.invalidate()
+        taskBannerView?.removeFromSuperview()
+
+        // 3. 构建高保真迷你胶囊横幅（与 iOS 灵动岛/状态栏同等精致高度，不遮挡大面积屏幕）
+        let banner = UIView()
+        banner.backgroundColor = UIColor { trait in
+            trait.userInterfaceStyle == .dark
+                ? UIColor(red: 28/255.0, green: 30/255.0, blue: 36/255.0, alpha: 0.96)
+                : UIColor(red: 250/255.0, green: 250/255.0, blue: 252/255.0, alpha: 0.96)
+        }
+        banner.layer.cornerRadius = 18
+        banner.layer.shadowColor = UIColor.black.cgColor
+        banner.layer.shadowOffset = CGSize(width: 0, height: 4)
+        banner.layer.shadowRadius = 12
+        banner.layer.shadowOpacity = 0.18
+        banner.layer.borderWidth = 0.5
+        banner.layer.borderColor = UIColor.separator.cgColor
+        banner.translatesAutoresizingMaskIntoConstraints = false
+
+        let iconView = UIImageView()
+        let checkConfig = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+        iconView.image = UIImage(systemName: "checkmark.circle.fill", withConfiguration: checkConfig)
+        iconView.tintColor = .systemGreen
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+
+        let label = UILabel()
+        label.text = text
+        label.font = .systemFont(ofSize: 12.5, weight: .semibold)
+        label.textColor = .label
+        label.lineBreakMode = .byTruncatingTail
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        banner.addSubview(iconView)
+        banner.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            iconView.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 12),
+            iconView.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 16),
+            iconView.heightAnchor.constraint(equalToConstant: 16),
+
+            label.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
+            label.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -14),
+            label.centerYAnchor.constraint(equalTo: banner.centerYAnchor)
+        ])
+
+        view.addSubview(banner)
+        self.taskBannerView = banner
+
+        let topInset = view.safeAreaInsets.top > 0 ? view.safeAreaInsets.top : 24
+        let initialTop = banner.topAnchor.constraint(equalTo: view.topAnchor, constant: topInset - 40)
+        let targetTop = banner.topAnchor.constraint(equalTo: view.topAnchor, constant: topInset + 4)
+
+        NSLayoutConstraint.activate([
+            initialTop,
+            banner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            banner.heightAnchor.constraint(equalToConstant: 36),
+            banner.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, constant: -32)
+        ])
+
+        view.layoutIfNeeded()
+        banner.alpha = 0
+        banner.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+
+        // 4. 平滑弹出动画
+        UIView.animate(withDuration: 0.38, delay: 0, usingSpringWithDamping: 0.76, initialSpringVelocity: 0.5, options: [.curveEaseOut]) {
+            initialTop.isActive = false
+            targetTop.isActive = true
+            banner.alpha = 1
+            banner.transform = .identity
+            self.view.layoutIfNeeded()
+        }
+
+        // 5. 3 秒后自动优雅收起消失
+        taskBannerDismissTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self, weak banner] _ in
+            guard let banner = banner else { return }
+            UIView.animate(withDuration: 0.28, animations: {
+                banner.alpha = 0
+                banner.transform = CGAffineTransform(translationX: 0, y: -20)
+            }) { _ in
+                banner.removeFromSuperview()
+                if self?.taskBannerView === banner {
+                    self?.taskBannerView = nil
+                }
             }
         }
     }
@@ -1297,6 +1425,56 @@ final class ViewController: UIViewController {
               setTimeout(lockScroll, 300);
             }, true);
           })();
+
+          // 核心监听：后台任务完成通知（当后台会话或任务执行完成时，向 iOS 原生派发弹窗通知与声音）
+          (function monitorBackgroundTaskCompletion() {
+            var lastLiveCount = null;
+            var notifiedSessionMap = {};
+
+            function checkTaskChanges() {
+              try {
+                // 1. 监测顶部后台任务指示器 (ui-jobs)
+                var countEl = document.querySelector('._1Ihh1G_count');
+                if (countEl) {
+                  var text = countEl.textContent || '';
+                  var match = text.match(/(\\d+)/);
+                  var currentCount = match ? parseInt(match[1], 10) : 0;
+                  if (lastLiveCount !== null && lastLiveCount > 0 && currentCount < lastLiveCount) {
+                    // 后台任务计数减少，表示有任务已完成
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dshTaskNotice) {
+                      window.webkit.messageHandlers.dshTaskNotice.postMessage({
+                        title: '后台任务'
+                      });
+                    }
+                  }
+                  lastLiveCount = currentCount;
+                }
+
+                // 2. 监测左侧抽屉中其他会话的未读完成状态（状态圆点变成静态完成）
+                var sessionItems = document.querySelectorAll('[role="treeitem"]');
+                sessionItems.forEach(function(item) {
+                  var titleEl = item.querySelector('[class*="label"], [class*="title"]') || item;
+                  var title = (titleEl.textContent || '').trim().slice(0, 16);
+                  var isRunning = item.querySelector('[data-state="ongoing"], .dsw-state-ongoing, [class*="spinner"]') !== null;
+                  var isDone = item.querySelector('[data-state="done"], .dsw-state-done, [class*="Checkmark"]') !== null;
+
+                  if (title && isRunning) {
+                    notifiedSessionMap[title] = 'running';
+                  } else if (title && isDone && notifiedSessionMap[title] === 'running') {
+                    // 该会话由运行中转为已完成！触发通知
+                    notifiedSessionMap[title] = 'notified';
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dshTaskNotice) {
+                      window.webkit.messageHandlers.dshTaskNotice.postMessage({
+                        title: '会话【' + title + '】'
+                      });
+                    }
+                  }
+                });
+              } catch(e) {}
+            }
+
+            setInterval(checkTaskChanges, 1500);
+          })();
         })();
         """,
         // 针对 iOS 15 的系统级兼容补丁（解决 iOS 15 白屏问题）：
@@ -1778,6 +1956,7 @@ final class ViewController: UIViewController {
         webView.uiDelegate = self
         config.userContentController.add(Self.makeErrorBridge(owner: self), name: "dshErrors")
         config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")
+        config.userContentController.add(Self.makeTaskNoticeBridge(owner: self), name: "dshTaskNotice")
         webView.allowsBackForwardNavigationGestures = true
         webView.translatesAutoresizingMaskIntoConstraints = false
         // 确保 WKWebView 整体滚动视图锁死，防止软键盘弹起时网页整体被顶到状态栏之上
@@ -2367,7 +2546,7 @@ final class ViewController: UIViewController {
         case "iPhone14,6": return "iPhone SE (第3代)"
         // 模拟器
         case "i386", "x86_64", "arm64": return "iOS 模拟器 (\(UIDevice.current.model))"
-        default: return id.hasPrefix("iPhone") ? "\(id) (iPhone)" : id
+        default: return id
         }
     }
 
