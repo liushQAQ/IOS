@@ -3063,15 +3063,25 @@ extension ViewController: WKUIDelegate {
 
 extension ViewController {
 
-    static func makeVoiceInputBridge(owner: ViewController) -> ScriptMessageHandler {
-        ScriptMessageHandler { [weak owner] msg in
+    static func makeVoiceInputBridge(owner: ViewController) -> WKScriptMessageHandler {
+        VoiceInputBridge { [weak owner] dict in
             guard let self = owner,
-                  let dict = msg.body as? [String: Any],
                   let action = dict["action"] as? String else { return }
             if action == "toggle" {
                 DispatchQueue.main.async {
                     self.toggleVoiceDictation()
                 }
+            }
+        }
+    }
+
+    private final class VoiceInputBridge: NSObject, WKScriptMessageHandler {
+        let onAction: ([String: Any]) -> Void
+        init(onAction: @escaping ([String: Any]) -> Void) { self.onAction = onAction }
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            if let dict = message.body as? [String: Any] {
+                onAction(dict)
             }
         }
     }
