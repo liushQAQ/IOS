@@ -392,6 +392,7 @@ final class ViewController: UIViewController {
             '/* 顶部导航栏：完全采用统一 Flex 居中流，所有按钮与文本统一在一条水平线上居中对齐 */',
             '[data-phase] header,',
             '.ank0OG_header {',
+            '  position: relative !important;',
             '  box-sizing: border-box !important;',
             '  display: flex !important;',
             '  flex-direction: column !important;',
@@ -408,34 +409,38 @@ final class ViewController: UIViewController {
             '[data-slot="conversation.session.header.utilities"] {',
             '  display: none !important;',
             '}',
+            '/* 隐藏每个工作步骤文件路径后面的“复制”按钮 */',
+            '[data-mobile-nav="copy-file"] {',
+            '  display: none !important;',
+            '}',
             '[data-phase] header .ank0OG_titleRow,',
             '.ank0OG_titleRow {',
             '  display: flex !important;',
             '  align-items: center !important;',
             '  height: 32px !important;',
             '  min-height: 32px !important;',
-            '  padding: 0 !important;',
+            '  padding-left: 42px !important;',
+            '  padding-right: 0 !important;',
             '  margin: 0 !important;',
             '  box-sizing: border-box !important;',
             '  width: 100% !important;',
             '  gap: 6px !important;',
             '}',
-            '/* 左侧展开目录按钮：保持 1.0.54 原样，不改动左侧侧边栏按钮 */',
+            '/* 左侧展开目录按钮：固定在左上角 x=8px, y=8px (28x28)，右侧 titleRow 留出 42px 安全区，确保标题和成员按钮整体右移绝不重叠 */',
             '[data-mobile-nav="toggle"] {',
-            '  position: static !important;',
+            '  position: absolute !important;',
             '  transform: none !important;',
-            '  top: auto !important;',
-            '  left: auto !important;',
-            '  flex: 0 0 32px !important;',
-            '  width: 32px !important;',
-            '  height: 32px !important;',
+            '  top: 8px !important;',
+            '  left: 8px !important;',
+            '  width: 28px !important;',
+            '  height: 28px !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '  justify-content: center !important;',
             '  padding: 0 !important;',
             '  margin: 0 !important;',
             '  border-radius: var(--dsw-radius-sm, 6px) !important;',
-            '  order: -1 !important;',
+            '  z-index: 100 !important;',
             '}',
             '[data-mobile-nav="toggle"] svg {',
             '  width: 16px !important;',
@@ -446,7 +451,7 @@ final class ViewController: UIViewController {
             '[data-mobile-nav="files"] {',
             '  display: none !important;',
             '}',
-            '/* 顶栏会话标题右移，预留充足安全间距，严禁与左侧侧边栏按钮重叠 */',
+            '/* 顶栏会话标题与成员按钮同步右移，严禁与左侧侧边栏按钮重叠 */',
             '.ank0OG_titleCluster,',
             '[data-phase] header [class*="titleCluster"] {',
             '  flex: 1 1 0% !important;',
@@ -454,10 +459,10 @@ final class ViewController: UIViewController {
             '  display: flex !important;',
             '  align-items: center !important;',
             '  overflow: hidden !important;',
-            '  gap: 4px !important;',
+            '  gap: 6px !important;',
             '  height: 32px !important;',
             '  margin: 0 !important;',
-            '  padding: 0 0 0 8px !important;',
+            '  padding: 0 !important;',
             '  box-sizing: border-box !important;',
             '}',
             '.ank0OG_headerActions {',
@@ -747,18 +752,20 @@ final class ViewController: UIViewController {
             '/* 支持自动折行/多行展示，字体与边距精细化自适应，保证所有指标 100% 完整可见无需滑块 */',
             '.uWtHQG_dock {',
             '  flex-wrap: wrap !important;',
-            '  gap: 4px 8px !important;',
+            '  gap: 3px 6px !important;',
             '  justify-content: center !important;',
             '  width: 100% !important;',
             '  max-width: 100% !important;',
+            '  box-sizing: border-box !important;',
             '  overflow: visible !important;',
-            '  padding: 4px 6px !important;',
+            '  padding: 2px 8px !important;',
             '}',
             '.z4IYsq_root, [data-composer-stats] {',
             '  flex-wrap: wrap !important;',
-            '  gap: 4px 6px !important;',
+            '  gap: 3px 6px !important;',
             '  justify-content: center !important;',
             '  max-width: 100% !important;',
+            '  box-sizing: border-box !important;',
             '  overflow: visible !important;',
             '}',
             '.z4IYsq_anchor {',
@@ -767,12 +774,14 @@ final class ViewController: UIViewController {
             '}',
             '.z4IYsq_pill {',
             '  font-size: 11px !important;',
-            '  padding: 1px 6px !important;',
+            '  padding: 2px 6px !important;',
             '  gap: 4px !important;',
             '  max-width: 100% !important;',
             '  white-space: normal !important;',
+            '  word-break: break-all !important;',
             '  text-align: center !important;',
-            '  line-height: 16px !important;',
+            '  line-height: 15px !important;',
+            '  display: inline-block !important;',
             '}',
             '.z4IYsq_pill svg {',
             '  width: 12px !important;',
@@ -785,21 +794,25 @@ final class ViewController: UIViewController {
             '}',
             '._7aoaqW_trigger {',
             '  font-size: 11px !important;',
-            '  padding: 1px 6px !important;',
+            '  padding: 2px 6px !important;',
             '  gap: 4px !important;',
-            '  line-height: 16px !important;',
+            '  line-height: 15px !important;',
+            '  white-space: normal !important;',
             '}',
             '._7aoaqW_trigger svg {',
             '  width: 12px !important;',
             '  height: 12px !important;',
             '  flex-shrink: 0 !important;',
             '}',
-            '/* 底部对话输入框与会话流留出移动端底部操作与安全区边距，避免被悬浮球或虚拟键盘遮挡 */',
+            '/* 底部对话输入框与会话流留出移动端底部操作与安全区边距，紧凑贴合底部 */',
             ':root {',
-            '  --dsh-composer-dock-inset: 8px !important;',
+            '  --dsh-composer-dock-inset: 2px !important;',
             '}',
             '.uWtHQG_root {',
-            '  padding-bottom: max(14px, env(safe-area-inset-bottom)) !important;',
+            '  padding-bottom: max(6px, env(safe-area-inset-bottom)) !important;',
+            '}',
+            '.ank0OG_composerSeat {',
+            '  padding-bottom: 2px !important;',
             '}',
             '/* 会话框 + 号对齐居中，防止图标偏下或未居中 */',
             '.uWtHQG_add {',
@@ -926,7 +939,8 @@ final class ViewController: UIViewController {
           // 修复 iOS 移动端输入框与搜索框自动聚焦导致键盘弹窗问题：
           // 1. 切换会话时，Lexical 编辑器会自动调用 focusDraftEditor，导致切换会话直接弹出虚拟键盘；
           // 2. 模型快捷选择面板打开时，搜索框会自动 focus，导致软键盘遮挡弹层并引发 blur 误关；
-          // 3. 保护移动端文本光标与选择自由：严禁在用户点击、滑动或打字时强行重置 Selection，
+          // 3. 点击会话框 + 号展开命令/文件弹窗时，禁止自动聚焦输入框弹出虚拟键盘；并为命令菜单右上角添加快捷 ✕ 关闭按钮；
+          // 4. 保护移动端文本光标与选择自由：严禁在用户点击、滑动或打字时强行重置 Selection，
           //    让用户可以在输入框内任意滑动光标、选择文字、移动插入点！
           (function fixMobileInputAndSearchFocus() {
             var origFocus = HTMLElement.prototype.focus;
@@ -936,6 +950,13 @@ final class ViewController: UIViewController {
             function handleUserTouch(e) {
               var target = e.target;
               if (!target) return;
+
+              // 如果用户点击的是 + 号按钮或命令弹窗菜单内部，严禁唤起虚拟键盘
+              if (target.closest('.uWtHQG_add') || target.closest('[data-trigger-menu]') || target.closest('.bqwvaa_menu')) {
+                allowUserTouchFocus = false;
+                return;
+              }
+
               var inputEl = target.closest('.uWtHQG_input') ||
                             target.closest('[contenteditable="true"]') ||
                             target.closest('textarea') ||
@@ -957,7 +978,7 @@ final class ViewController: UIViewController {
             document.addEventListener('touchend', handleUserTouch, true);
             document.addEventListener('click', handleUserTouch, true);
 
-            // 拦截一切未经用户主动点击的自动化 .focus() 调用
+            // 拦截一切未经用户主动点击文本区域的自动化 .focus() 调用
             HTMLElement.prototype.focus = function(options) {
               var isTextInput = this && (
                 (this.classList && (this.classList.contains('uWtHQG_input') || this.classList.contains('VYXhfG_search'))) ||
@@ -970,12 +991,56 @@ final class ViewController: UIViewController {
 
               if (isTextInput) {
                 if (!allowUserTouchFocus) {
-                  // 严禁脚本自动化弹起虚拟键盘（尤其是切换会话、打开模型菜单时）
+                  // 严禁脚本自动化弹起虚拟键盘（尤其是切换会话、打开模型菜单、点击+号展开选项时）
                   return;
                 }
               }
               return origFocus.apply(this, arguments);
             };
+
+            // 全局关闭命令/选项弹窗辅助函数
+            window.__dshDismissCommandMenu = function() {
+              if (document.activeElement && document.activeElement.blur) {
+                document.activeElement.blur();
+              }
+              var menu = document.querySelector('.bqwvaa_menu, [data-trigger-menu]');
+              if (menu) {
+                var fiberKey = Object.keys(menu).find(function(k) { return k.startsWith('__reactFiber$'); });
+                var fiber = fiberKey ? menu[fiberKey] : null;
+                while (fiber) {
+                  if (fiber.memoizedProps && typeof fiber.memoizedProps.onDismiss === 'function') {
+                    fiber.memoizedProps.onDismiss();
+                    return true;
+                  }
+                  fiber = fiber.return;
+                }
+              }
+              return false;
+            };
+
+            // 自动为弹出命令/选项菜单右上角挂载明显的 ✕ 关闭按钮，方便随时轻触关闭
+            setInterval(function() {
+              var menu = document.querySelector('.bqwvaa_menu, [data-trigger-menu]');
+              if (!menu) return;
+              if (menu.querySelector('.dsh-mobile-menu-close-btn')) return;
+
+              var closeBtn = document.createElement('button');
+              closeBtn.type = 'button';
+              closeBtn.className = 'dsh-mobile-menu-close-btn';
+              closeBtn.setAttribute('aria-label', '关闭选项菜单');
+              closeBtn.innerHTML = '✕';
+              closeBtn.style.cssText = 'position:absolute; top:8px; right:8px; z-index:120; width:26px; height:26px; border-radius:50%; background:rgba(120,120,128,0.2); border:none; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; color:var(--dsw-alias-label-secondary, #666); cursor:pointer; padding:0;';
+
+              function handleCloseClick(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.__dshDismissCommandMenu();
+              }
+
+              closeBtn.addEventListener('click', handleCloseClick, true);
+              closeBtn.addEventListener('touchend', handleCloseClick, true);
+              menu.appendChild(closeBtn);
+            }, 150);
 
             // 监听 blur 事件捕获阶段：当搜索框失去焦点（比如用户轻触关闭软键盘、完成输入）时，
             // 阻止该 blur 冒泡或把 relatedTarget 视作自身容器内部，避免 ModelSelect 触发 onBlur -> close()
