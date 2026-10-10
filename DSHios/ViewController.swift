@@ -37,6 +37,7 @@ final class ViewController: UIViewController {
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
     private var isDictating = false
+    private var lastRecognizedText = ""
 
     /// 悬浮菜单按钮：收起时只从右缘露出一条把手，展开后完整可见。
     private var menuButtonExpanded = false
@@ -2050,20 +2051,40 @@ final class ViewController: UIViewController {
                            document.querySelector('textarea');
               if (editor) {
                 if (editor.tagName === 'TEXTAREA' || editor.tagName === 'INPUT') {
+                  editor.focus();
                   editor.value = (editor.value ? editor.value + ' ' : '') + text;
                   editor.dispatchEvent(new Event('input', { bubbles: true }));
+                  editor.dispatchEvent(new Event('change', { bubbles: true }));
                 } else {
-                  var p = editor.querySelector('p');
-                  if (!p) {
-                    p = document.createElement('p');
-                    editor.appendChild(p);
+                  // Lexical / contenteditable 富文本编辑器：必须使用标准 insertText 命令或 InputEvent 注入
+                  editor.focus();
+                  var inserted = false;
+                  try {
+                    inserted = document.execCommand('insertText', false, text);
+                  } catch (e) {
+                    inserted = false;
                   }
-                  var span = p.querySelector('span');
-                  if (!span) {
-                    span = document.createElement('span');
-                    p.appendChild(span);
+
+                  if (!inserted) {
+                    try {
+                      var inputEvt = new InputEvent('beforeinput', {
+                        inputType: 'insertText',
+                        data: text,
+                        bubbles: true,
+                        cancelable: true
+                      });
+                      editor.dispatchEvent(inputEvt);
+
+                      var textEvt = new InputEvent('input', {
+                        inputType: 'insertText',
+                        data: text,
+                        bubbles: true
+                      });
+                      editor.dispatchEvent(textEvt);
+                    } catch (e) {}
                   }
-                  span.textContent = (span.textContent ? span.textContent + ' ' : '') + text;
+
+                  // 触发合成输入事件确保底部高度自适应刷新
                   editor.dispatchEvent(new Event('input', { bubbles: true }));
                 }
               }
@@ -3174,6 +3195,7 @@ extension ViewController {
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest = recognitionRequest else { return }
         recognitionRequest.shouldReportPartialResults = true
+        lastRecognizedText = ""
 
         let inputNode = audioEngine.inputNode
         recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
@@ -3181,13 +3203,24 @@ extension ViewController {
             var isFinal = false
             if let result = result {
                 let transcription = result.bestTranscription.formattedString
-                // 实时将语音文字推送到网页输入框
-                if !transcription.isEmpty {
-                    let escaped = transcription.replacingOccurrences(of: "\\", with: "\\\\")
-                        .replacingOccurrences(of: "\"", with: "\\\"")
-                        .replacingOccurrences(of: "\n", with: "\\n")
-                        .replacingOccurrences(of: "\r", with: "")
-                    self.webView.evaluateJavaScript("window.__dshVoiceStateUpdate && window.__dshVoiceStateUpdate('recording', \"\(escaped)\");", completionHandler: nil)
+                if !transcription.isEmpty && transcription != self.lastRecognizedText {
+                    // 计算出当前新追加的增量文字（或整段文字）
+                    let delta: String
+                    if transcription.hasPrefix(self.lastRecognizedText) {
+                        let startIndex = transcription.index(transcription.startIndex, offsetBy: self.lastRecognizedText.count)
+                        delta = String(transcription[startIndex...])
+                    } else {
+                        delta = transcription
+                    }
+                    self.lastRecognizedText = transcription
+
+                    if !delta.isEmpty {
+                        let escaped = delta.replacingOccurrences(of: "\\", with: "\\\\")
+                            .replacingOccurrences(of: "\"", with: "\\\"")
+                            .replacingOccurrences(of: "\n", with: "\\n")
+                            .replacingOccurrences(of: "\r", with: "")
+                        self.webView.evaluateJavaScript("window.__dshVoiceStateUpdate && window.__dshVoiceStateUpdate('recording', \"\(escaped)\");", completionHandler: nil)
+                    }
                 }
                 isFinal = result.isFinal
             }
