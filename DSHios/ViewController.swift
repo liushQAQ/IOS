@@ -2,6 +2,8 @@ import UIKit
 import WebKit
 import Network
 import AudioToolbox
+import Speech
+import AVFoundation
 
 /// 主界面：全屏 WKWebView，与电脑桌面端 DSH 布局完全一致（无任何原生地址栏/工具栏遮挡）。
 /// 原生只在「连不上」时接管：错误浮层 + 重试；右下角一个半透明小按钮用于换地址/看版本。
@@ -28,6 +30,13 @@ final class ViewController: UIViewController {
     /// App 内顶部通知浮条（当后台会话完成时弹出 3 秒通知，并伴随系统提示音）
     private var taskBannerView: UIView?
     private var taskBannerDismissTimer: Timer?
+
+    /// 语音听写识别器与音频引擎（调用 iOS 原生语音听写）
+    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private let audioEngine = AVAudioEngine()
+    private var isDictating = false
 
     /// 悬浮菜单按钮：收起时只从右缘露出一条把手，展开后完整可见。
     private var menuButtonExpanded = false
@@ -509,11 +518,11 @@ final class ViewController: UIViewController {
             '  width: 100% !important;',
             '  position: relative !important;',
             '}',
-            '/* 左侧展开目录按钮：统一在 top: 2px, height: 28px, 宽度28px，严格垂直居中并与右侧按钮水平平齐 */',
+            '/* 左侧展开目录按钮：统一在 top: 0px, height: 28px, 宽度28px，严格垂直居中并与右侧按钮水平平齐 */',
             '[data-mobile-nav="toggle"] {',
             '  position: absolute !important;',
             '  left: 0px !important;',
-            '  top: 2px !important;',
+            '  top: 0px !important;',
             '  width: 28px !important;',
             '  height: 28px !important;',
             '  display: inline-flex !important;',
@@ -1096,6 +1105,45 @@ final class ViewController: UIViewController {
             '  width: 14px !important;',
             '  height: 14px !important;',
             '  flex-shrink: 0 !important;',
+            '}',
+            '/* 语音听写输入按钮：优雅注入输入框左下角 + 号旁，高度28px，保持整行图标严谨水平对齐 */',
+            '.dsh-voice-input-btn {',
+            '  width: 28px !important;',
+            '  height: 28px !important;',
+            '  min-width: 28px !important;',
+            '  min-height: 28px !important;',
+            '  border-radius: 50% !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
+            '  padding: 0 !important;',
+            '  margin: 0 !important;',
+            '  border: none !important;',
+            '  background: transparent !important;',
+            '  color: var(--dsw-alias-label-secondary, #6b7280) !important;',
+            '  cursor: pointer !important;',
+            '  outline: none !important;',
+            '  box-sizing: border-box !important;',
+            '  transition: all 0.15s ease !important;',
+            '}',
+            '.dsh-voice-input-btn:active {',
+            '  transform: scale(0.92) !important;',
+            '  color: var(--dsw-alias-brand-primary, #3b82f6) !important;',
+            '}',
+            '.dsh-voice-input-btn.is-recording {',
+            '  color: #ef4444 !important;',
+            '  background: rgba(239, 68, 68, 0.12) !important;',
+            '  animation: dshVoicePulse 1.2s infinite ease-in-out !important;',
+            '}',
+            '@keyframes dshVoicePulse {',
+            '  0%, 100% { transform: scale(1); opacity: 1; }',
+            '  50% { transform: scale(1.1); opacity: 0.8; }',
+            '}',
+            '.dsh-voice-input-btn svg {',
+            '  width: 15px !important;',
+            '  height: 15px !important;',
+            '  display: block !important;',
+            '  margin: auto !important;',
             '}'
           ].join('\\n');
           function attach() {
@@ -1923,10 +1971,77 @@ final class ViewController: UIViewController {
             });
           }
 
+          // 动态注入 3：向输入框操作栏（.uWtHQG_tools / +号旁）注入原生语音听写按钮
+          function enrichVoiceInputButton() {
+            var toolBars = document.querySelectorAll('.uWtHQG_tools');
+            toolBars.forEach(function(toolbar) {
+              if (toolbar.querySelector('.dsh-voice-input-btn')) return;
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'dsh-voice-input-btn';
+              btn.setAttribute('aria-label', '语音输入');
+              btn.setAttribute('title', '语音输入（点击开始，再次点击完成）');
+              btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>';
+
+              btn.addEventListener('click', function(ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dshVoiceInput) {
+                  window.webkit.messageHandlers.dshVoiceInput.postMessage({ action: 'toggle' });
+                }
+              });
+
+              var addBtn = toolbar.querySelector('.uWtHQG_add') || toolbar.querySelector('button');
+              if (addBtn && addBtn.nextSibling) {
+                toolbar.insertBefore(btn, addBtn.nextSibling);
+              } else {
+                toolbar.appendChild(btn);
+              }
+            });
+          }
+
+          window.__dshVoiceStateUpdate = function(state, text) {
+            var btns = document.querySelectorAll('.dsh-voice-input-btn');
+            btns.forEach(function(btn) {
+              if (state === 'recording') {
+                btn.classList.add('is-recording');
+                btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>';
+              } else {
+                btn.classList.remove('is-recording');
+                btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>';
+              }
+            });
+            if (text) {
+              var editor = document.querySelector('.uWtHQG_input') ||
+                           document.querySelector('[contenteditable="true"]') ||
+                           document.querySelector('textarea');
+              if (editor) {
+                if (editor.tagName === 'TEXTAREA' || editor.tagName === 'INPUT') {
+                  editor.value = (editor.value ? editor.value + ' ' : '') + text;
+                  editor.dispatchEvent(new Event('input', { bubbles: true }));
+                } else {
+                  var p = editor.querySelector('p');
+                  if (!p) {
+                    p = document.createElement('p');
+                    editor.appendChild(p);
+                  }
+                  var span = p.querySelector('span');
+                  if (!span) {
+                    span = document.createElement('span');
+                    p.appendChild(span);
+                  }
+                  span.textContent = (span.textContent ? span.textContent + ' ' : '') + text;
+                  editor.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+              }
+            }
+          };
+
           setInterval(function() {
             enrichDeliverableCards();
             enrichPreviewHeader();
             enrichFilesTree();
+            enrichVoiceInputButton();
           }, 800);
         })();
         """
@@ -2000,6 +2115,7 @@ final class ViewController: UIViewController {
         config.userContentController.add(Self.makeErrorBridge(owner: self), name: "dshErrors")
         config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")
         config.userContentController.add(Self.makeTaskNoticeBridge(owner: self), name: "dshTaskNotice")
+        config.userContentController.add(Self.makeVoiceInputBridge(owner: self), name: "dshVoiceInput")
         // 禁止左滑/右滑手势触发 WebView 跨 URL 前进/后退导航，防止用户意外退出当前服务地址
         webView.allowsBackForwardNavigationGestures = false
         webView.translatesAutoresizingMaskIntoConstraints = false
@@ -2940,5 +3056,144 @@ extension ViewController: WKUIDelegate {
             webView.load(navigationAction.request)
         }
         return nil
+    }
+}
+
+// MARK: - 原生语音听写扩展 (SFSpeechRecognizer + AVAudioEngine)
+
+extension ViewController {
+
+    static func makeVoiceInputBridge(owner: ViewController) -> ScriptMessageHandler {
+        ScriptMessageHandler { [weak owner] msg in
+            guard let self = owner,
+                  let dict = msg.body as? [String: Any],
+                  let action = dict["action"] as? String else { return }
+            if action == "toggle" {
+                DispatchQueue.main.async {
+                    self.toggleVoiceDictation()
+                }
+            }
+        }
+    }
+
+    private func toggleVoiceDictation() {
+        if isDictating {
+            stopVoiceDictation()
+        } else {
+            requestSpeechAuthorizationAndStart()
+        }
+    }
+
+    private func requestSpeechAuthorizationAndStart() {
+        SFSpeechRecognizer.requestAuthorization { [weak self] authStatus in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch authStatus {
+                case .authorized:
+                    AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                        DispatchQueue.main.async {
+                            if granted {
+                                self.startVoiceDictation()
+                            } else {
+                                self.showVoiceNotice("麦克风未授权，请在“设置-隐私”开启麦克风权限")
+                            }
+                        }
+                    }
+                case .denied, .restricted:
+                    self.showVoiceNotice("语音识别未授权，请在“设置-隐私”中开启语音识别")
+                case .notDetermined:
+                    break
+                @unknown default:
+                    break
+                }
+            }
+        }
+    }
+
+    private func startVoiceDictation() {
+        if audioEngine.isRunning {
+            stopVoiceDictation()
+            return
+        }
+
+        recognitionTask?.cancel()
+        recognitionTask = nil
+
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch {
+            print("[Voice] AudioSession setup error: \(error)")
+            return
+        }
+
+        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+        guard let recognitionRequest = recognitionRequest else { return }
+        recognitionRequest.shouldReportPartialResults = true
+
+        let inputNode = audioEngine.inputNode
+        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+            guard let self else { return }
+            var isFinal = false
+            if let result = result {
+                let transcription = result.bestTranscription.formattedString
+                // 实时将语音文字推送到网页输入框
+                if !transcription.isEmpty {
+                    let escaped = transcription.replacingOccurrences(of: "\\", with: "\\\\")
+                        .replacingOccurrences(of: "\"", with: "\\\"")
+                        .replacingOccurrences(of: "\n", with: "\\n")
+                        .replacingOccurrences(of: "\r", with: "")
+                    self.webView.evaluateJavaScript("window.__dshVoiceStateUpdate && window.__dshVoiceStateUpdate('recording', \"\(escaped)\");", completionHandler: nil)
+                }
+                isFinal = result.isFinal
+            }
+
+            if error != nil || isFinal {
+                self.stopVoiceDictation()
+            }
+        }
+
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+            self.recognitionRequest?.append(buffer)
+        }
+
+        audioEngine.prepare()
+        do {
+            try audioEngine.start()
+            isDictating = true
+            // 触觉轻微反馈
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            webView.evaluateJavaScript("window.__dshVoiceStateUpdate && window.__dshVoiceStateUpdate('recording', '');", completionHandler: nil)
+        } catch {
+            print("[Voice] AudioEngine start failed: \(error)")
+            stopVoiceDictation()
+        }
+    }
+
+    private func stopVoiceDictation() {
+        if !isDictating && !audioEngine.isRunning { return }
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        isDictating = false
+
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+
+        // 触觉轻微反馈提示停止
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+        webView.evaluateJavaScript("window.__dshVoiceStateUpdate && window.__dshVoiceStateUpdate('idle', '');", completionHandler: nil)
+    }
+
+    private func showVoiceNotice(_ message: String) {
+        let alert = UIAlertController(title: "提示", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "好", style: .default))
+        present(alert, animated: true)
     }
 }

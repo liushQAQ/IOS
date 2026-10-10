@@ -74,7 +74,7 @@
 		<true/>
 	</dict>
 	<key>DSHAppVersion</key>
-	<string>1.0.60</string>
+	<string>1.0.61</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>需要访问局域网内的电脑端 DeepSeek Harness 服务与通信接口。</string>
 	<key>NSBonjourServices</key>
@@ -87,5 +87,7 @@
 	<string>需要访问相机以扫描二维码等功能。</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>需要访问麦克风以支持语音输入。</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>需要使用语音识别将您的语音实时转换为文本输入到会话中。</string>
 </dict>
 </plist>
