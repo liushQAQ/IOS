@@ -581,32 +581,38 @@ final class ViewController: UIViewController {
             '.PPCmka_chevron {',
             '  display: none !important;',
             '}',
-            '/* 首页/未选中会话时的悬浮FAB目录按钮：固定在左上角 (top: 10px, left: 12px, 28x28)，严格与右侧按钮平齐 */',
+            '/* 首页/未选中会话时的悬浮FAB目录按钮：恢复圆润胶囊按钮视觉并固定在舒适的左上角安全区 */',
             '[data-mobile-nav="fab"],',
             'button[data-mobile-nav="fab"] {',
             '  position: fixed !important;',
-            '  top: 10px !important;',
+            '  top: max(12px, calc(env(safe-area-inset-top, 0px) + 6px)) !important;',
             '  left: 12px !important;',
-            '  width: 28px !important;',
-            '  height: 28px !important;',
-            '  border-radius: var(--dsw-radius-sm, 6px) !important;',
-            '  border: none !important;',
-            '  box-shadow: none !important;',
-            '  background: transparent !important;',
+            '  width: 34px !important;',
+            '  height: 34px !important;',
+            '  border-radius: 10px !important;',
+            '  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.12)) !important;',
+            '  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12) !important;',
+            '  background: var(--dsw-alias-bg-base, #ffffff) !important;',
             '  padding: 0 !important;',
             '  margin: 0 !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '  justify-content: center !important;',
-            '  color: var(--dsw-alias-label-secondary) !important;',
+            '  color: var(--dsw-alias-label-primary, #1f2329) !important;',
             '  z-index: 9999 !important;',
+            '}',
+            'body[data-ds-dark-theme] [data-mobile-nav="fab"],',
+            'body[data-ds-dark-theme] button[data-mobile-nav="fab"] {',
+            '  background: var(--dsw-alias-bg-base, #1e2025) !important;',
+            '  border-color: rgba(255, 255, 255, 0.15) !important;',
+            '  color: #f0f2f5 !important;',
             '}',
             '[data-mobile-nav="fab"]:hover {',
             '  background: var(--dsw-alias-interactive-bg-hover) !important;',
             '}',
             '[data-mobile-nav="fab"] svg {',
-            '  width: 16px !important;',
-            '  height: 16px !important;',
+            '  width: 17px !important;',
+            '  height: 17px !important;',
             '  display: block !important;',
             '  margin: auto !important;',
             '}',
@@ -2090,6 +2096,34 @@ final class ViewController: UIViewController {
               }
             }
           };
+
+          // 动态注入 5：第一次打开 DSH 页面时，如果左侧侧边栏处于折叠态（或停留在无会话欢迎页），默认自动展开左侧侧边栏
+          var hasAutoOpenedSidebarOnce = false;
+          function ensureInitialSidebarOpen() {
+            if (hasAutoOpenedSidebarOnce) return;
+            var frame = document.querySelector('[data-mobile-nav="frame"]') || document.querySelector('.CZPbNW_frame');
+            if (!frame) return;
+            var isCollapsed = document.documentElement.hasAttribute('data-sidebar-collapsed') ||
+                              frame.hasAttribute('data-sidebar-collapsed');
+            if (isCollapsed) {
+              var toggle = document.querySelector('button[aria-label="打开侧边栏"]') ||
+                           document.querySelector('.WYye1W_toggle') ||
+                           document.querySelector('[data-mobile-nav="fab"]') ||
+                           document.querySelector('[data-mobile-nav="toggle"]');
+              if (toggle) {
+                hasAutoOpenedSidebarOnce = true;
+                toggle.click();
+              }
+            } else {
+              // 原本已展开，标记完成
+              hasAutoOpenedSidebarOnce = true;
+            }
+          }
+
+          setTimeout(ensureInitialSidebarOpen, 180);
+          setTimeout(ensureInitialSidebarOpen, 450);
+          setTimeout(ensureInitialSidebarOpen, 900);
+          setTimeout(ensureInitialSidebarOpen, 1500);
 
           setInterval(function() {
             enrichDeliverableCards();
