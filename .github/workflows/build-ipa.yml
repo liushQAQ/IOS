@@ -56,7 +56,9 @@ jobs:
           rm -f  Payload/DSHios.app/embedded.mobileprovision 2>/dev/null || true
           zip -qry DSHios-personal-unsigned.ipa Payload
           cp DSHios-personal-unsigned.ipa "DSHios-personal-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}.ipa"
-          ls -lh DSHios-personal-*.ipa
+          cp DSHios-personal-unsigned.ipa "DSHios-personal-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}.tipa"
+          cp DSHios-personal-unsigned.ipa DSHios-personal-unsigned.tipa
+          ls -lh DSHios-personal-*.ipa DSHios-personal-*.tipa
 
       # ==========================================
       # 2. 编译打包：公开发行版（纯净版，剔除外网地址与密钥）
@@ -89,30 +91,39 @@ jobs:
           rm -f  Payload/DSHios.app/embedded.mobileprovision 2>/dev/null || true
           zip -qry DSHios-public-unsigned.ipa Payload
           cp DSHios-public-unsigned.ipa "DSHios-public-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}.ipa"
-          ls -lh DSHios-public-*.ipa
+          cp DSHios-public-unsigned.ipa "DSHios-public-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}.tipa"
+          cp DSHios-public-unsigned.ipa DSHios-public-unsigned.tipa
+          ls -lh DSHios-public-*.ipa DSHios-public-*.tipa
 
       # 默认通用名称（兼容以往老脚本取名习惯，默认使用个人版）
       - name: Prepare default alias
         run: |
           cp DSHios-personal-unsigned.ipa DSHios-unsigned.ipa
+          cp DSHios-personal-unsigned.ipa DSHios-unsigned.tipa
 
       - name: Upload Personal IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: DSHios-personal-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}
-          path: DSHios-personal-unsigned.ipa
+          path: |
+            DSHios-personal-unsigned.ipa
+            DSHios-personal-unsigned.tipa
           if-no-files-found: error
 
       - name: Upload Public IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: DSHios-public-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}
-          path: DSHios-public-unsigned.ipa
+          path: |
+            DSHios-public-unsigned.ipa
+            DSHios-public-unsigned.tipa
           if-no-files-found: error
 
       - name: Upload Standard IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: DSHios-unsigned-ipa
-          path: DSHios-unsigned.ipa
+          path: |
+            DSHios-unsigned.ipa
+            DSHios-unsigned.tipa
           if-no-files-found: error
