@@ -1062,6 +1062,168 @@ final class ViewController: UIViewController {
             }, true);
           })();
 
+          // 移动端图片预览支持双指无极放大缩小、单指平移拖拽与双击缩放重置
+          (function setupMobileImagePinchZoom() {
+            function bindImageZoom(imgEl, containerEl) {
+              if (!imgEl || imgEl.dataset.dshPinchBound === '1') return;
+              imgEl.dataset.dshPinchBound = '1';
+
+              var scale = 1;
+              var minScale = 1;
+              var maxScale = 6;
+              var tx = 0;
+              var ty = 0;
+
+              var startDist = 0;
+              var startScale = 1;
+              var startMidX = 0;
+              var startMidY = 0;
+              var startTx = 0;
+              var startTy = 0;
+
+              var isPanning = false;
+              var panStartX = 0;
+              var panStartY = 0;
+              var lastTapTime = 0;
+
+              imgEl.style.touchAction = 'none';
+              imgEl.style.userSelect = 'none';
+              imgEl.style.webkitUserSelect = 'none';
+              imgEl.style.transformOrigin = 'center center';
+              imgEl.style.willChange = 'transform';
+              if (containerEl) {
+                containerEl.style.touchAction = 'none';
+                containerEl.style.overflow = 'hidden';
+              }
+
+              function applyTransform(animated) {
+                imgEl.style.transition = animated ? 'transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none';
+                if (scale <= 1.01) {
+                  scale = 1;
+                  tx = 0;
+                  ty = 0;
+                }
+                imgEl.style.transform = 'translate3d(' + tx.toFixed(1) + 'px, ' + ty.toFixed(1) + 'px, 0) scale(' + scale.toFixed(3) + ')';
+              }
+
+              function getDistance(t1, t2) {
+                var dx = t2.clientX - t1.clientX;
+                var dy = t2.clientY - t1.clientY;
+                return Math.sqrt(dx * dx + dy * dy);
+              }
+
+              var target = containerEl || imgEl;
+
+              target.addEventListener('touchstart', function(e) {
+                if (e.target && e.target.closest('button')) return;
+                if (e.touches.length === 2) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  isPanning = false;
+                  startDist = getDistance(e.touches[0], e.touches[1]);
+                  startScale = scale;
+                  startMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                  startMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                  startTx = tx;
+                  startTy = ty;
+                } else if (e.touches.length === 1) {
+                  var now = Date.now();
+                  if (now - lastTapTime < 280) {
+                    // 双击快速切换 1x <-> 2.5x 缩放
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (scale > 1.05) {
+                      scale = 1;
+                      tx = 0;
+                      ty = 0;
+                    } else {
+                      scale = 2.5;
+                      tx = 0;
+                      ty = 0;
+                    }
+                    applyTransform(true);
+                    lastTapTime = 0;
+                    return;
+                  }
+                  lastTapTime = now;
+
+                  if (scale > 1.01) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    isPanning = true;
+                    panStartX = e.touches[0].clientX;
+                    panStartY = e.touches[0].clientY;
+                    startTx = tx;
+                    startTy = ty;
+                  }
+                }
+              }, { passive: false });
+
+              target.addEventListener('touchmove', function(e) {
+                if (e.touches.length === 2 && startDist > 0) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  var dist = getDistance(e.touches[0], e.touches[1]);
+                  var newScale = startScale * (dist / startDist);
+                  if (newScale < 0.7) newScale = 0.7;
+                  if (newScale > maxScale) newScale = maxScale;
+                  scale = newScale;
+
+                  var midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                  var midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                  tx = startTx + (midX - startMidX);
+                  ty = startTy + (midY - startMidY);
+                  applyTransform(false);
+                } else if (e.touches.length === 1 && isPanning && scale > 1.01) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  tx = startTx + (e.touches[0].clientX - panStartX);
+                  ty = startTy + (e.touches[0].clientY - panStartY);
+                  applyTransform(false);
+                }
+              }, { passive: false });
+
+              target.addEventListener('touchend', function(e) {
+                if (e.touches.length === 0) {
+                  isPanning = false;
+                  startDist = 0;
+                  if (scale < minScale) {
+                    scale = 1;
+                    tx = 0;
+                    ty = 0;
+                    applyTransform(true);
+                  }
+                } else if (e.touches.length === 1) {
+                  startDist = 0;
+                  if (scale > 1.01) {
+                    isPanning = true;
+                    panStartX = e.touches[0].clientX;
+                    panStartY = e.touches[0].clientY;
+                    startTx = tx;
+                    startTy = ty;
+                  }
+                }
+              }, { passive: false });
+            }
+
+            setInterval(function() {
+              // 1. 对话流点击图片弹出的全屏 ImageLightbox (role="dialog" + img)
+              var dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+              dialogs.forEach(function(dlg) {
+                var img = dlg.querySelector('img');
+                if (img && dlg.children.length <= 4) {
+                  bindImageZoom(img, dlg);
+                }
+              });
+              // 2. 右侧栏文件图片预览区的原图
+              var docImgs = document.querySelectorAll('[data-image-preview] img, [data-document-zoom-surface] img');
+              docImgs.forEach(function(img) {
+                var container = img.closest('[data-image-preview]') || img.parentElement;
+                bindImageZoom(img, container);
+              });
+            }, 250);
+          })();
+
           // 移动端会话输入框原生语音输入按钮注入与文本流式输入处理
           (function setupMobileVoiceInputBridge() {
             function updateVoiceButtonState(active) {
@@ -2407,11 +2569,92 @@ final class ViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    /// 精确解析 iOS 物理硬件标识符（如 iPhone15,3 -> iPhone 14 Pro Max，iPhone11,8 -> iPhone XR）
+    private static func getExactDeviceModel() -> String {
+        #if targetEnvironment(simulator)
+        let identifier = ProcessInfo().environment["SIMULATOR_MODEL_IDENTIFIER"] ?? "Simulator"
+        #else
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let machineMirror = Mirror(reflecting: systemInfo.machine)
+        let identifier = machineMirror.children.reduce("") { identifier, element in
+            guard let value = element.value as? Int8, value != 0 else { return identifier }
+            return identifier + String(UnicodeScalar(UInt8(value)))
+        }
+        #endif
+
+        let modelMap: [String: String] = [
+            // iPhone 系列
+            "iPhone10,1": "iPhone 8", "iPhone10,4": "iPhone 8",
+            "iPhone10,2": "iPhone 8 Plus", "iPhone10,5": "iPhone 8 Plus",
+            "iPhone10,3": "iPhone X", "iPhone10,6": "iPhone X",
+            "iPhone11,2": "iPhone XS",
+            "iPhone11,4": "iPhone XS Max", "iPhone11,6": "iPhone XS Max",
+            "iPhone11,8": "iPhone XR",
+            "iPhone12,1": "iPhone 11",
+            "iPhone12,3": "iPhone 11 Pro",
+            "iPhone12,5": "iPhone 11 Pro Max",
+            "iPhone12,8": "iPhone SE (2nd gen)",
+            "iPhone13,1": "iPhone 12 mini",
+            "iPhone13,2": "iPhone 12",
+            "iPhone13,3": "iPhone 12 Pro",
+            "iPhone13,4": "iPhone 12 Pro Max",
+            "iPhone14,4": "iPhone 13 mini",
+            "iPhone14,5": "iPhone 13",
+            "iPhone14,2": "iPhone 13 Pro",
+            "iPhone14,3": "iPhone 13 Pro Max",
+            "iPhone14,6": "iPhone SE (3rd gen)",
+            "iPhone14,7": "iPhone 14",
+            "iPhone14,8": "iPhone 14 Plus",
+            "iPhone15,2": "iPhone 14 Pro",
+            "iPhone15,3": "iPhone 14 Pro Max",
+            "iPhone15,4": "iPhone 15",
+            "iPhone15,5": "iPhone 15 Plus",
+            "iPhone16,1": "iPhone 15 Pro",
+            "iPhone16,2": "iPhone 15 Pro Max",
+            "iPhone17,1": "iPhone 16 Pro",
+            "iPhone17,2": "iPhone 16 Pro Max",
+            "iPhone17,3": "iPhone 16",
+            "iPhone17,4": "iPhone 16 Plus",
+            // iPad 系列
+            "iPad11,1": "iPad mini (5th gen)", "iPad11,2": "iPad mini (5th gen)",
+            "iPad14,1": "iPad mini (6th gen)", "iPad14,2": "iPad mini (6th gen)",
+            "iPad11,3": "iPad Air (3rd gen)", "iPad11,4": "iPad Air (3rd gen)",
+            "iPad13,1": "iPad Air (4th gen)", "iPad13,2": "iPad Air (4th gen)",
+            "iPad13,16": "iPad Air (5th gen)", "iPad13,17": "iPad Air (5th gen)",
+            "iPad14,8": "iPad Air 11-inch (M2)", "iPad14,9": "iPad Air 11-inch (M2)",
+            "iPad14,10": "iPad Air 13-inch (M2)", "iPad14,11": "iPad Air 13-inch (M2)",
+            "iPad8,1": "iPad Pro 11-inch (1st gen)", "iPad8,2": "iPad Pro 11-inch (1st gen)",
+            "iPad8,3": "iPad Pro 11-inch (1st gen)", "iPad8,4": "iPad Pro 11-inch (1st gen)",
+            "iPad8,9": "iPad Pro 11-inch (2nd gen)", "iPad8,10": "iPad Pro 11-inch (2nd gen)",
+            "iPad13,4": "iPad Pro 11-inch (3rd gen)", "iPad13,5": "iPad Pro 11-inch (3rd gen)",
+            "iPad13,6": "iPad Pro 11-inch (3rd gen)", "iPad13,7": "iPad Pro 11-inch (3rd gen)",
+            "iPad14,3": "iPad Pro 11-inch (4th gen)", "iPad14,4": "iPad Pro 11-inch (4th gen)",
+            "iPad16,3": "iPad Pro 11-inch (M4)", "iPad16,4": "iPad Pro 11-inch (M4)",
+            "iPad8,5": "iPad Pro 12.9-inch (3rd gen)", "iPad8,6": "iPad Pro 12.9-inch (3rd gen)",
+            "iPad8,7": "iPad Pro 12.9-inch (3rd gen)", "iPad8,8": "iPad Pro 12.9-inch (3rd gen)",
+            "iPad8,11": "iPad Pro 12.9-inch (4th gen)", "iPad8,12": "iPad Pro 12.9-inch (4th gen)",
+            "iPad13,8": "iPad Pro 12.9-inch (5th gen)", "iPad13,9": "iPad Pro 12.9-inch (5th gen)",
+            "iPad13,10": "iPad Pro 12.9-inch (5th gen)", "iPad13,11": "iPad Pro 12.9-inch (5th gen)",
+            "iPad14,5": "iPad Pro 12.9-inch (6th gen)", "iPad14,6": "iPad Pro 12.9-inch (6th gen)",
+            "iPad16,5": "iPad Pro 13-inch (M4)", "iPad16,6": "iPad Pro 13-inch (M4)"
+        ]
+
+        if let exactName = modelMap[identifier] {
+            return exactName
+        }
+        if identifier.starts(with: "iPhone") || identifier.starts(with: "iPad") {
+            return identifier
+        }
+        let fallback = UIDevice.current.model
+        return fallback.isEmpty ? "iOS 设备" : fallback
+    }
+
     /// 原生设备运行环境信息检测（解决多系统版本诊断与 iOS 15 兼容排查）
     private static func getDeviceInfoSummary() -> String {
         let device = UIDevice.current
         let systemVersion = device.systemVersion
-        let model = device.model
+        let exactModel = getExactDeviceModel()
         let name = device.name
         
         var freeDiskGB = "未知"
@@ -2425,7 +2668,8 @@ final class ViewController: UIViewController {
         let scale = screen.scale
         let res = "\(Int(bounds.width * scale))×\(Int(bounds.height * scale)) (@\(Int(scale))x)"
         
-        return "设备: \(model) (\(name))\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
+        let deviceDisplay = name.isEmpty ? exactModel : "\(exactModel) (\(name))"
+        return "设备: \(deviceDisplay)\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
     }
 
     /// 关于：版本号原生可见（读 Info.plist，回退到编译期常量）
@@ -2445,13 +2689,12 @@ final class ViewController: UIViewController {
             【设备检测信息】
             \(deviceInfo)
 
-            【更新日志与特性】
-            1. 恢复自然会话排版流，消除顶部重叠与思考块碰撞
-            2. 注入 iOS 15 系统级兼容补丁（crypto 与正则兜底，杜绝白屏）
-            3. 原生集成设备运行环境诊断（机型/iOS版本/存储空间）
-            4. 手机软键盘回车键智能换行，点击发送按钮提交
-            5. 全级别插件/菜单/弹窗移动端自适应规范（高对比度+防溢出）
-            6. 移动端文件预览常驻“返回对话”与“保存到手机”
+            【最新更新日志 (v1.0.66)】
+            1. 🔍 图片无极手势缩放：点击图片弹出的全屏大图和文件图片支持双指放大缩小、双击缩放与拖拽平移；
+            2. 📱 精确硬件型号识别：重构底层 utsname 硬件映射表，精准识别 iPhone XR、14 Pro Max 等具体机型，移除宽泛的 (iphone) 占位；
+            3. 🎯 顶栏与成员按钮右移防重叠：固定左侧按钮安全间距，会话标题与成员按钮整体右移绝不碰撞；
+            4. 📊 底部统计卡片自适应：用量与 Token 自动换行无横向溢出，收紧底部留白更贴合屏幕；
+            5. ✕ 快捷关闭菜单：点击 + 号不弹软键盘，弹出的指令/文件选项面板右上角新增 ✕ 快速关闭按钮。
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in

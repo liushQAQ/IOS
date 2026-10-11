@@ -687,7 +687,7 @@ final class ConnectionGuideViewController: UIViewController {
         card.layer.cornerRadius = 12
 
         let badgeLabel = UILabel()
-        badgeLabel.text = "最新更新日志"
+        badgeLabel.text = "最新更新日志 (v1.0.66)"
         badgeLabel.font = .systemFont(ofSize: 12, weight: .bold)
         badgeLabel.textColor = .systemIndigo
         badgeLabel.backgroundColor = .systemIndigo.withAlphaComponent(0.12)
@@ -704,22 +704,26 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.textColor = .label
 
         let logContent = """
-        🛡️ 1. 全级别菜单/弹窗/二级三级插件浮层通用自适应防溢出：
-        • 全局内置移动端布局安全看门狗，所有插件浮层、下拉菜单与多级弹窗自动适配手机屏幕；
-        • 彻底杜绝水平超出视口或撑爆屏幕，保证居中并支持内部触摸平滑滚动。
+        🔍 1. 图片双指无极放大缩小与平移：
+        • 点击对话消息中的图片展开全屏大图时，支持双指自由缩放（最大支持 6 倍无损放大）；
+        • 放大状态下支持单指自由平移拖拽查看细节，双击图片可快速重置回原始比例；
+        • 侧边栏文件预览区图片同步支持双指手势缩放。
 
-        🚀 2. 工作区文件/交付物一键分享与保存到手机：
-        • 会话生成的交付物卡片右侧直接新增原生「分享」按钮；
-        • 点击调起 iOS 系统级分享面板，支持「存储到“文件”」、微信分享、AirDrop 隔空投送；
-        • 文档预览顶部常驻「分享到手机」，文件树支持单个文件一键提取。
+        📱 2. 精确 iOS 硬件机型识别：
+        • 重构底层 utsname 硬件型号解析映射表，精准识别 iPhone XR、iPhone 14 Pro Max、iPad Pro 等精确设备名；
+        • 彻底清除以前宽泛的 (iphone) 笼统名称，环境诊断信息清晰专业。
 
-        📱 3. 界面层次与移动端交互防遮挡优化：
-        • 底部 Token 统计数据支持自动换行自适应排列，告别横向拖动滑块；
-        • 右侧边栏展开后增加全屏半透明遮罩与退出把手，轻触任意区域即可收起；
-        • 修复模型选择与切换会话时自动唤起软键盘问题。
+        🎯 3. 顶栏标题与成员按钮防重叠对齐：
+        • 修复插件动态注入导致的左侧按钮悬浮遮挡问题，标题与成员按钮整体右移预留安全间距；
+        • 隐藏每个工作步骤后冗余的“复制”按钮，界面清爽干净。
 
-        🔴 4. 当前服务选中态高亮标记：
-        • 右侧悬浮窗与服务列表中，当前连接的服务地址以醒目红点（🔴）及高亮展示，方便清晰识别当前工作节点。
+        ✕ 4. + 号菜单软键盘抑制与快捷关闭：
+        • 点击输入框左侧 + 号只展开功能选项，严禁自动弹出虚拟键盘将面板顶出屏幕；
+        • 选项弹窗右上角挂载专属 ✕ 快速关闭按钮，轻触即可随心关闭。
+
+        📊 5. 底部用量与 Token 自动换行：
+        • 统计卡片长文本支持灵活换行自适应，告别横向溢出与滑块拖动；
+        • 底部留白进一步精细化收紧，界面贴合度更高。
         """
 
         let contentLabel = UILabel()
