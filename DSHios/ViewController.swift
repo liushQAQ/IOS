@@ -2327,14 +2327,29 @@ final class ViewController: UIViewController {
             var h = Math.max(0, px || 0);
             document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
           };
-          // v1.0.75：标题簇按内容收缩后靠右。样式表规则会被页面后注入的样式盖掉，
-          // 实测只有内联 !important 能稳住，所以直接写到元素上，并在重渲染后补一次。
+          // v1.0.77：顶栏顺序固定为
+          //   目录按钮（靠最左）— 会话标题（居中）— 智能体按钮 — 右侧边栏按钮（靠最右，不动）。
+          // 页面原始顺序是「标题、目录、智能体」且三者都在标题簇里，样式表改不动顺序，
+          // 所以直接重排 DOM：目录按钮提到标题行第一个，标题簇只留标题和智能体并居中。
+          // 内联 !important 才能压住页面后注入的样式。
           function shiftTitleCluster() {
-            var list = document.querySelectorAll('[class*="titleCluster"]');
-            for (var i = 0; i < list.length; i++) {
-              list[i].style.setProperty('flex', '0 0 auto', 'important');
-              list[i].style.setProperty('width', 'auto', 'important');
-              list[i].style.setProperty('margin-left', 'auto', 'important');
+            var rows = document.querySelectorAll('[class*="titleRow"]');
+            for (var i = 0; i < rows.length; i++) {
+              var row = rows[i];
+              var cluster = row.querySelector('[class*="titleCluster"]');
+              var dir = row.querySelector('button[aria-label="打开目录"], button[aria-label="收起目录"], button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
+              if (dir && dir.parentNode !== row) row.insertBefore(dir, row.firstChild);
+              if (dir) {
+                dir.style.setProperty('margin-left', '0', 'important');
+                dir.style.setProperty('margin-right', '0', 'important');
+                dir.style.setProperty('order', '0', 'important');
+              }
+              if (cluster) {
+                cluster.style.setProperty('flex', '1 1 auto', 'important');
+                cluster.style.setProperty('width', 'auto', 'important');
+                cluster.style.setProperty('margin-left', '0', 'important');
+                cluster.style.setProperty('justify-content', 'center', 'important');
+              }
             }
           }
           shiftTitleCluster();
