@@ -17,6 +17,7 @@ final class AboutViewController: UIViewController {
         手机助手 (ios-mcp-agent)
         版本：v\(version) (Build \(build))
         开发者：liush
+        开源主页：https://github.com/liush734530963/ios-mcp-agent-public
 
         【功能原理与环境边界】
         1. 越狱设备（已装 iOS-MCP 8090 端口）：

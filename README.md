@@ -3,6 +3,7 @@
 装在 iPhone 上。输入一句话，模型自己拆成步骤，App 把每一步原样转发给本机 ios-mcp（`127.0.0.1:8090`）。App 不决定怎么点、怎么滑。
 
 开发者：liush
+开源主页：https://github.com/liush734530963/ios-mcp-agent-public
 
 ---
 
