@@ -16,7 +16,7 @@ final class AboutViewController: UIViewController {
         text.text = """
         手机助手 (ios-mcp-agent)
         版本：v\(version) (Build \(build))
-        开发者：liush（GitHub: liush734530963）
+        开发者：liush
         开源主页：https://github.com/liush734530963/ios-mcp-agent-public
 
         【功能原理与环境边界】
@@ -51,10 +51,11 @@ final class AboutViewController: UIViewController {
         - 对标成熟越狱实测的动态根环境探测引擎 (EnvironmentDetector)。
 
         ==============================
-        📖 使用前检查
+        📖 使用前检查与 iOS-MCP 安装指引
         ==============================
-        1. 若需 AI 自动化点击与自动输密码解锁，请确保设备已越狱并开启 iOS MCP (http://127.0.0.1:8090/health 返回 status:ok)。
-        2. 若为纯巨魔未越狱设备，可直接进入右上角「定时/工作流」使用系统外观切换、软注销与伪熄屏打卡。
+        1. 若需 AI 自动化点击与自动输密码解锁，请确保设备已越狱并安装 iOS-MCP 插件 (GitHub: witchan/iOS-MCP)。
+        2. 确保在设备上开启服务后，Safari 打开 http://127.0.0.1:8090/health 能看到 status:ok。
+        3. 若为纯巨魔未越狱设备，无需安装 iOS-MCP，可直接进入右上角「定时/工作流」使用系统外观切换、软注销与伪熄屏打卡。
         """
         text.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(text)

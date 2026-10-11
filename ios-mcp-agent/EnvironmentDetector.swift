@@ -155,18 +155,21 @@ final class EnvironmentDetector {
         return false
     }
 
-    /// 快速异步探测本机 8090 端口 iOS-MCP 服务连通性
+    /// 快速异步探测本机 8090 端口 iOS-MCP 服务连通性 (/health 优先，兼容 /tools)
     func checkMcpReachability(port: Int = 8090) async -> Bool {
-        guard let url = URL(string: "http://127.0.0.1:\(port)/tools") else { return false }
-        var req = URLRequest(url: url)
-        req.timeoutInterval = 1.2
-        do {
-            let (_, resp) = try await NetworkCompat.data(for: req, session: .shared)
-            if let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
-                return true
+        let endpoints = ["http://127.0.0.1:\(port)/health", "http://127.0.0.1:\(port)/tools"]
+        for ep in endpoints {
+            guard let url = URL(string: ep) else { continue }
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 1.0
+            do {
+                let (_, resp) = try await NetworkCompat.data(for: req, session: .shared)
+                if let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+                    return true
+                }
+            } catch {
+                continue
             }
-        } catch {
-            return false
         }
         return false
     }

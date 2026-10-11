@@ -216,7 +216,7 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
 
             if indexPath.row == 0 {
                 // 真实环境探针卡片
-                let mcpStatus = rep.isMcpReachable ? "🟢 iOS-MCP 8090 运行中" : "🔴 iOS-MCP 8090 未连接"
+                let mcpStatus = rep.isMcpReachable ? "🟢 iOS-MCP 8090 运行中" : "🔴 iOS-MCP 8090 未就绪"
                 let jbStatus = rep.isJailbroken ? "🔓 \(rep.flavor.rawValue)" : (rep.isTrollStore ? "🧌 \(rep.flavor.rawValue)" : "🔒 原生沙盒环境")
                 cell.textLabel?.text = "设备状态: \(jbStatus) | \(mcpStatus)"
                 cell.textLabel?.textColor = rep.isJailbroken ? .systemGreen : (rep.isTrollStore ? .systemOrange : .secondaryLabel)
@@ -225,8 +225,9 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
                 if let jbPath = rep.jbRoot {
                     desc += "• 越狱根路径: \(jbPath)\n"
                 }
-                desc += "• 8090 服务状态: \(rep.isMcpReachable ? "已连通，具备 SpringBoard 深度注入与全功能驱动能力" : "未检测到服务，真锁屏下无法模拟硬件点击")"
+                desc += "• 8090 服务状态: \(rep.isMcpReachable ? "已连通，具备 SpringBoard 深度注入与全功能驱动能力" : "未检测到服务 (点击可查看安装与排查指引)")"
                 cell.detailTextLabel?.text = desc
+                cell.accessoryType = rep.isMcpReachable ? .none : .detailDisclosureButton
             } else {
                 // 锁屏能力决策指南
                 cell.textLabel?.text = "锁屏触发指南与能力边界判定"
@@ -294,7 +295,11 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        if indexPath.section == 1 {
+        if indexPath.section == 0 {
+            if indexPath.row == 0 {
+                showMcpGuideAlert()
+            }
+        } else if indexPath.section == 1 {
             if indexPath.row < CronEngine.shared.quickActions.count {
                 // 点击立即执行
                 let item = CronEngine.shared.quickActions[indexPath.row]
@@ -311,9 +316,43 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
 
     // 点击 accessory 详情按钮进行编辑修改
     func tableView(_ tableView: UITableView, accessoryButtonTappedForRowWith indexPath: IndexPath) {
-        if indexPath.section == 1 && indexPath.row < CronEngine.shared.quickActions.count {
+        if indexPath.section == 0 && indexPath.row == 0 {
+            showMcpGuideAlert()
+        } else if indexPath.section == 1 && indexPath.row < CronEngine.shared.quickActions.count {
             editQuickAction(at: indexPath.row)
         }
+    }
+
+    private func showMcpGuideAlert() {
+        let alert = UIAlertController(
+            title: "iOS-MCP 安装与运行指引",
+            message: """
+            【为什么需要 iOS-MCP 服务？】
+            iOS-MCP 是运行在 iPhone 本地的自动化守护进程（默认端口 8090）。在已越狱设备上，它借助 SpringBoard 注入能力，实现真锁屏密码输入解锁、屏幕点击滑动以及原生 UI 元素树的高速解析。
+
+            【未检测到 8090 时的安装与排查指引】
+            1. 环境支持：
+               - 需要设备越狱环境（如 Dopamine、RootHide 等）并安装 ElleKit 框架；
+               - 纯巨魔环境 (TrollStore 未越狱) 无法注入 SpringBoard，因此无法运行该服务端（但纯巨魔可使用右上角「定时/工作流」的伪熄屏打卡与系统外观切换）。
+            2. 安装越狱插件：
+               - 在越狱包管理器（Sileo / Zebra）中搜索安装 iOS-MCP 插件或安装其 Deb 包；
+            3. 验证连通性：
+               - 在 Safari 打开 http://127.0.0.1:8090/health，若显示 {"status":"ok"} 则表示就绪。
+            4. 官方开源项目主页：
+               - https://github.com/witchan/iOS-MCP
+            """,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Safari 打开项目主页", style: .default, handler: { _ in
+            if let url = URL(string: "https://github.com/witchan/iOS-MCP") {
+                UIApplication.shared.open(url)
+            }
+        }))
+        alert.addAction(UIAlertAction(title: "重新探测 (8090)", style: .default, handler: { [weak self] _ in
+            self?.refreshEnvironment()
+        }))
+        alert.addAction(UIAlertAction(title: "我知道了", style: .cancel))
+        present(alert, animated: true)
     }
 
     func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
