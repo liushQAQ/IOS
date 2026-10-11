@@ -506,9 +506,13 @@ final class ViewController: UIViewController {
             '  display: none !important;',
             '}',
             '/* 顶栏会话标题与成员按钮同步右移，严禁与左侧侧边栏按钮重叠 */',
+            '/* v1.0.75：flex:1 会把标题簇拉满整行，标题文字仍贴在最左边、右边空出两百多像素。',
+            '   改成按内容收缩并用 margin-left:auto 把空位吃到左边，整组靠右贴近右侧边栏按钮。 */',
             '.ank0OG_titleCluster,',
             '[data-phase] header [class*="titleCluster"] {',
-            '  flex: 1 1 0% !important;',
+            '  flex: 0 0 auto !important;',
+            '  width: auto !important;',
+            '  margin-left: auto !important;',
             '  min-width: 0 !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
@@ -2208,12 +2212,18 @@ final class ViewController: UIViewController {
             '  justify-content: center !important;',
             '  flex: none !important;',
             '  order: -1 !important;',
+            '  margin-left: 0 !important;',
             '  z-index: auto !important;',
             '}',
             '',
-            '[data-phase] header [class*="titleCluster"],',
-            '.ank0OG_titleCluster {',
-            '  flex: 1 1 auto !important;',
+            'html body [data-phase] header [class*="titleCluster"],',
+            'html body .ank0OG_titleCluster {',
+            '  /* v1.0.75：原来 flex:1 把标题簇拉成 326px，标题只占左边 57px，右边空两百多像素。',
+            '     按内容收缩后，margin-left:auto 把空位吃到左边，',
+            '     标题、目录、智能体按钮整组靠右，贴近右侧边栏按钮。 */',
+            '  flex: 0 1 auto !important;',
+            '  width: auto !important;',
+            '  margin-left: auto !important;',
             '  min-width: 0 !important;',
             '  height: auto !important;',
             '  min-height: 32px !important;',
@@ -2232,7 +2242,7 @@ final class ViewController: UIViewController {
             '  align-items: center !important;',
             '  gap: 4px !important;',
             '  flex: none !important;',
-            '  margin-left: auto !important;',
+            '  margin-left: 0 !important;',
             '}',
             '[data-phase] header [class*="headerCorner"],',
             '.ank0OG_headerCorner {',
@@ -2311,6 +2321,24 @@ final class ViewController: UIViewController {
             root.appendChild(style);
           }
           inject();
+          // v1.0.75：标题簇按内容收缩后靠右。样式表规则会被页面后注入的样式盖掉，
+          // 实测只有内联 !important 能稳住，所以直接写到元素上，并在重渲染后补一次。
+          function shiftTitleCluster() {
+            var list = document.querySelectorAll('[class*="titleCluster"]');
+            for (var i = 0; i < list.length; i++) {
+              list[i].style.setProperty('flex', '0 0 auto', 'important');
+              list[i].style.setProperty('width', 'auto', 'important');
+              list[i].style.setProperty('margin-left', 'auto', 'important');
+            }
+          }
+          shiftTitleCluster();
+          var moShift = new MutationObserver(shiftTitleCluster);
+          function watchShift() {
+            var root = document.body || document.documentElement;
+            if (!root) { setTimeout(watchShift, 50); return; }
+            moShift.observe(root, { childList: true, subtree: true });
+          }
+          watchShift();
           // v1.0.74：文件夹按钮（data-mobile-nav=files）与右侧边栏按钮重叠。
           // 页面用运行时样式把它设成 display:flex，!important 都压不住，直接从 DOM 移除，
           // 并用观察器防止页面重渲染时把它加回来。
