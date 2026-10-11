@@ -2164,10 +2164,10 @@ final class ViewController: UIViewController {
             '  z-index: 1020 !important;',
             '  display: flex !important;',
             '  flex-direction: column !important;',
-            '  /* v1.0.74：真机顶栏与状态栏之间空出约 60px。viewport-fit=cover 下',
-            '     env(safe-area-inset-top) 在 WKWebView 里取不到，这里的 calc 实际是 0+8，',
-            '     空白来自页面自身布局，所以直接把顶栏上内边距收到 2px。 */',
-            '  padding: 2px 8px 0 8px !important;',
+            '  /* v1.0.76：上内边距取状态栏高度。--dsh-statusbar 由原生侧按机型下发',
+            '     （无刘海 20pt、刘海 47pt、灵动岛 59pt，横竖屏也会变），env() 取不到时用它兜底，',
+            '     两者都没有才退回 20px。不写死，换机型自动匹配。 */',
+            '  padding: calc(max(env(safe-area-inset-top, 0px), var(--dsh-statusbar, 20px)) + 2px) 8px 0 8px !important;',
             '  min-height: 0 !important;',
             '  flex: none !important;',
             '  box-sizing: border-box !important;',
@@ -2321,6 +2321,12 @@ final class ViewController: UIViewController {
             root.appendChild(style);
           }
           inject();
+          // v1.0.76：原生侧把状态栏高度（CSS 像素）下发到这里。
+          // 写成 CSS 变量，顶栏 padding 用它，换机型、转屏都跟着变。
+          window.__dshSetStatusBar = function (px) {
+            var h = Math.max(0, px || 0);
+            document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
+          };
           // v1.0.75：标题簇按内容收缩后靠右。样式表规则会被页面后注入的样式盖掉，
           // 实测只有内联 !important 能稳住，所以直接写到元素上，并在重渲染后补一次。
           function shiftTitleCluster() {
@@ -2596,6 +2602,18 @@ final class ViewController: UIViewController {
         guard webView != nil, webViewTopConstraint != nil else { return }
         // 旋转/刘海变化时，外部网页页面的顶部避让量跟着刷新
         updateTopSafeAreaFor(url: webView.url)
+        // 状态栏高度随机型变化（无刘海 20pt、刘海 47pt、灵动岛 59pt），
+        // 把系统给的真实值下发给页面，顶栏按它留白，不写死像素。
+        publishStatusBarHeight()
+    }
+
+    /// 把状态栏高度（CSS 像素）下发给页内脚本。
+    /// `env(safe-area-inset-top)` 在这个 WKWebView 里取到的是 0（viewport-fit=cover 不可靠），
+    /// 所以改用原生侧的 `safeAreaInsets.top`，它由系统按机型、横竖屏、刘海/灵动岛实时给出。
+    private func publishStatusBarHeight() {
+        let px = Int((view.safeAreaInsets.top / max(1, UIScreen.main.scale)).rounded())
+        let js = "window.__dshSetStatusBar && window.__dshSetStatusBar(\(px));"
+        webView.evaluateJavaScript(js) { _, _ in }
     }
 
     deinit {
@@ -3724,6 +3742,9 @@ extension ViewController: WKNavigationDelegate {
         // 完成即隐藏错误层（meta-refresh 握手页二跳也会走到这里）
         hideError()
         hasLoadedOnce = true
+        // 首屏下发一次状态栏高度：safeAreaInsets 可能在页面脚本注入之前就定了，
+        // 不补这一次，顶栏会一直停在默认留白上。
+        publishStatusBarHeight()
         // 内容首帧就绪后才显形：加载过程只显示原生加载态，永不白屏
         revealWebView()
         detectStaleTokenPage()
