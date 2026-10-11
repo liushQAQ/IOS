@@ -682,49 +682,11 @@ final class ViewController: UIViewController {
             '  opacity: 1;',
             '  pointer-events: auto;',
             '}',
-            '/* 移动端全屏面板顶部固定常驻【返回对话】与【✕】退出按钮（严格避开 iOS 顶部状态栏与灵动岛安全区） */',
-            '.dsh-mobile-back-to-chat-btn {',
-            '  position: fixed !important;',
-            '  top: max(54px, calc(env(safe-area-inset-top) + 10px)) !important;',
-            '  left: 12px !important;',
-            '  z-index: 20050 !important;',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '  gap: 5px !important;',
-            '  height: 32px !important;',
-            '  padding: 0 12px 0 8px !important;',
-            '  border-radius: 16px !important;',
-            '  background: #007aff !important;',
-            '  color: #ffffff !important;',
-            '  border: none !important;',
-            '  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25) !important;',
-            '  font-size: 13px !important;',
-            '  font-weight: 600 !important;',
-            '  cursor: pointer !important;',
-            '}',
-            '.dsh-mobile-back-to-chat-btn svg {',
-            '  width: 14px !important;',
-            '  height: 14px !important;',
-            '}',
-            '.dsh-mobile-panel-close-btn {',
-            '  position: fixed !important;',
-            '  top: max(54px, calc(env(safe-area-inset-top) + 10px)) !important;',
-            '  right: 12px !important;',
-            '  z-index: 20050 !important;',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '  justify-content: center !important;',
-            '  width: 32px !important;',
-            '  height: 32px !important;',
-            '  border-radius: 16px !important;',
-            '  background: rgba(120, 120, 128, 0.35) !important;',
-            '  backdrop-filter: blur(16px) !important;',
-            '  -webkit-backdrop-filter: blur(16px) !important;',
-            '  color: var(--dsw-alias-label-primary, #ffffff) !important;',
-            '  border: 1px solid rgba(255, 255, 255, 0.15) !important;',
-            '  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;',
-            '  font-size: 16px !important;',
-            '  cursor: pointer !important;',
+            '/* v1.0.78：不再注入「返回对话」蓝按钮和右上角「✕」，旧版本残留的直接隐藏 */',
+            '.dsh-mobile-back-to-chat-btn,',
+            '.dsh-mobile-panel-close-btn,',
+            '.dsh-mobile-panel-nav {',
+            '  display: none !important;',
             '}',
             '/* 全面排查：图片大图灯箱预览（ImageLightbox）、模态弹窗与所有全屏浮层的关闭按钮，严禁插入 iOS 系统状态栏 */',
             '._close_1hos8_29,',
@@ -736,12 +698,7 @@ final class ViewController: UIViewController {
             '  right: max(16px, calc(env(safe-area-inset-right) + 12px)) !important;',
             '  z-index: 20050 !important;',
             '}',
-            '/* 右侧面板标题栏内边距，给返回和关闭按钮留出安全空间 */',
-            '.dMHGga_panel[data-sidebar-right-open] [data-dockkit-strip],',
-            '.dMHGga_panel[data-sidebar-right-open] .YdIzba_header {',
-            '  padding-left: 100px !important;',
-            '  padding-right: 50px !important;',
-            '}',
+            '/* v1.0.78：返回按钮已移除，面板标题栏不再为其让出左右内边距 */',
             '/* 移动端文件预览【保存/分享到手机】高亮主按钮与电脑端打开降级 */',
             '.dsh-mobile-save-file-btn {',
             '  display: inline-flex !important;',
@@ -1587,40 +1544,15 @@ final class ViewController: UIViewController {
               toggleBackdrop(!!isOpen);
 
               if (panel && isOpen) {
-                // 1. 注入顶部返回对话与关闭按钮
-                var nav = panel.querySelector('.dsh-mobile-panel-nav');
-                if (!nav) {
-                  nav = document.createElement('div');
-                  nav.className = 'dsh-mobile-panel-nav';
-
-                  var backBtn = document.createElement('button');
-                  backBtn.className = 'dsh-mobile-back-to-chat-btn';
-                  backBtn.setAttribute('type', 'button');
-                  backBtn.setAttribute('aria-label', '返回对话');
-                  backBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg> 返回对话';
-                  backBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.__dshCloseRightPanel();
-                  });
-
-                  var closeBtn = document.createElement('button');
-                  closeBtn.className = 'dsh-mobile-panel-close-btn';
-                  closeBtn.setAttribute('type', 'button');
-                  closeBtn.setAttribute('aria-label', '关闭面板');
-                  closeBtn.innerHTML = '✕';
-                  closeBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.__dshCloseRightPanel();
-                  });
-
-                  nav.appendChild(backBtn);
-                  nav.appendChild(closeBtn);
-                  panel.appendChild(nav);
+                // v1.0.78：不再注入「返回对话」蓝按钮和右上角「✕」。
+                // 面板自带的返回和关闭已经够用，这两颗是重复的，用户反馈画蛇添足。
+                // 旧版本注入过的，这里顺手清掉。
+                var stale = panel.querySelectorAll('.dsh-mobile-panel-nav, .dsh-mobile-back-to-chat-btn, .dsh-mobile-panel-close-btn');
+                for (var si = 0; si < stale.length; si++) {
+                  if (stale[si].parentNode) stale[si].parentNode.removeChild(stale[si]);
                 }
 
-                // 2. 优化文件不可预览页面的操作按钮（将手机端无感的“电脑打开”改造为手机“保存/分享”+明确标注电脑端）
+                // 优化文件不可预览页面的操作按钮（将手机端无感的“电脑打开”改造为手机“保存/分享”+明确标注电脑端）
                 var emptyContainer = panel.querySelector('[data-textpreview-unsupported]');
                 if (emptyContainer) {
                   var mobileSaveBtn = emptyContainer.querySelector('.dsh-mobile-save-file-btn');
