@@ -2,8 +2,9 @@ name: Build unsigned IPA (Personal & Public)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main, master, personal ]
+  # 安全合规：彻底关闭 push 自动触发，杜绝短时间内并发高频挤占 macOS 免费算力导致账号风控
+  # push:
+  #   branches: [ main, master, personal ]
 
 jobs:
   build:

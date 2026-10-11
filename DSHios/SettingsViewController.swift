@@ -10,10 +10,120 @@ struct ServiceItem: Codable, Equatable {
     var note: String?
     /// 外网入口专用：电脑端 token 每次重启都会变，先在局域网内向仪表盘换最新地址。
     var resolverURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name, url, note, resolverURL
+    }
+
+    init(name: String, url: String, note: String? = nil, resolverURL: String? = nil) {
+        self.name = name
+        self.url = url
+        self.note = note
+        self.resolverURL = resolverURL
+    }
+
+    /// 容错解码：即使未来版本增减字段或旧版格式不完整，也不会抛出解码异常导致覆盖用户已有配置
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.name = (try? container.decode(String.self, forKey: .name)) ?? "未命名服务"
+        self.url = (try? container.decode(String.self, forKey: .url)) ?? ""
+        self.note = try? container.decodeIfPresent(String.self, forKey: .note)
+        self.resolverURL = try? container.decodeIfPresent(String.self, forKey: .resolverURL)
+    }
+}
+
+/// 跨版本防覆盖持久化中心：采用 Documents/dsh_user_data/ 物理文件 + UserDefaults 双轨互备存储。
+/// 只要用户未卸载 App，无论覆盖安装个人版还是公开版 IPA/TIPA，用户已自定义的服务器、最近访问地址、Web 登录 Cookie 均 100% 保留。
+enum DSHPersistenceCenter {
+    private static var storageDir: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let dir = docs.appendingPathComponent("dsh_user_data", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
+    static var servicesFileURL: URL { storageDir.appendingPathComponent("services_v1.json") }
+    static var stateFileURL: URL { storageDir.appendingPathComponent("user_state_v1.json") }
+    static var cookiesBackupFileURL: URL { storageDir.appendingPathComponent("cookies_backup_v1.json") }
+
+    struct UserState: Codable {
+        var initialized: Bool = true
+        var lastURL: String?
+        var customFreeWebItems: [FreeWebItem]?
+    }
+
+    static func loadState() -> UserState {
+        if let data = try? Data(contentsOf: stateFileURL),
+           let state = try? JSONDecoder().decode(UserState.self, from: data) {
+            return state
+        }
+        let legacyLastURL = UserDefaults.standard.string(forKey: "DSHios.lastURL")
+        let initialized = UserDefaults.standard.bool(forKey: "DSHios.userInitialized") || (legacyLastURL != nil)
+        return UserState(initialized: initialized, lastURL: legacyLastURL, customFreeWebItems: nil)
+    }
+
+    static func saveState(_ state: UserState) {
+        if let data = try? JSONEncoder().encode(state) {
+            try? data.write(to: stateFileURL, options: .atomic)
+        }
+        UserDefaults.standard.set(state.initialized, forKey: "DSHios.userInitialized")
+        if let last = state.lastURL {
+            UserDefaults.standard.set(last, forKey: "DSHios.lastURL")
+        }
+    }
+
+    static func saveLastURL(_ url: String) {
+        var st = loadState()
+        st.initialized = true
+        st.lastURL = url
+        saveState(st)
+    }
+
+    static func loadLastURL() -> String? {
+        if let last = loadState().lastURL, !last.isEmpty {
+            return last
+        }
+        return UserDefaults.standard.string(forKey: "DSHios.lastURL")
+    }
+}
+
+/// 免费 AI 网页版平台模型条目
+struct FreeWebItem: Codable, Equatable {
+    var name: String
+    var url: String
+    var category: String // "domestic" 国内直连 | "overseas" 海外平台
+    var subtitle: String
+}
+
+enum FreeWebStore {
+    static let domesticDefaults: [FreeWebItem] = [
+        FreeWebItem(name: "1. 豆包", url: "https://www.doubao.com", category: "domestic", subtitle: "字节跳动 · 手机号登录免费畅聊"),
+        FreeWebItem(name: "2. DeepSeek", url: "https://chat.deepseek.com", category: "domestic", subtitle: "深度求索官方网页端 · 免费对话"),
+        FreeWebItem(name: "3. Kimi", url: "https://kimi.moonshot.cn", category: "domestic", subtitle: "月之暗面 · 超长上下文免费助手"),
+        FreeWebItem(name: "4. 通义千问", url: "https://tongyi.aliyun.com", category: "domestic", subtitle: "阿里云 Qwen 官方网页版"),
+        FreeWebItem(name: "5. 文心一言", url: "https://yiyan.baidu.com", category: "domestic", subtitle: "百度文心大模型免费网页版"),
+        FreeWebItem(name: "6. 腾讯元宝", url: "https://yuanbao.tencent.com", category: "domestic", subtitle: "腾讯混元 + DeepSeek 免费网页版"),
+        FreeWebItem(name: "7. 智谱清言", url: "https://chatglm.cn", category: "domestic", subtitle: "智谱 GLM 官方免费网页端"),
+        FreeWebItem(name: "8. 讯飞星火", url: "https://xinghuo.xfyun.cn", category: "domestic", subtitle: "科大讯飞星火大模型网页端")
+    ]
+
+    static let overseasDefaults: [FreeWebItem] = [
+        FreeWebItem(name: "1. Gemini（谷歌）", url: "https://gemini.google.com", category: "overseas", subtitle: "Google Gemini 免费网页版"),
+        FreeWebItem(name: "2. ChatGPT", url: "https://chatgpt.com", category: "overseas", subtitle: "OpenAI ChatGPT 官方网页端"),
+        FreeWebItem(name: "3. Claude", url: "https://claude.ai", category: "overseas", subtitle: "Anthropic Claude 官方网页端"),
+        FreeWebItem(name: "4. Grok（X）", url: "https://grok.com", category: "overseas", subtitle: "xAI Grok 官方免费网页端")
+    ]
+
+    static var allDefaults: [FreeWebItem] {
+        return domesticDefaults + overseasDefaults
+    }
 }
 
 enum ServiceStore {
     static let key = "DSHios.services"
+    static let initializedLockKey = "DSHios.servicesInitializedLock"
     static let seedVersionKey = "DSHios.servicesSeedVersion"
     /// 种子版本：8 = 统一收拢至桌面端主控端口 3083，确保局域网与外网与当前电脑桌面窗口全量会话完全同步。
     static let currentSeedVersion = 8
@@ -50,19 +160,40 @@ enum ServiceStore {
     ]
     #endif
 
+    /// 双轨读取（Documents/dsh_user_data/services_v1.json + UserDefaults），带初始化锁。
+    /// 首次安装后只要未卸载，后续版本覆盖更新（无论个人版或公开版）均严格保留玩家已自定义的条目与配置，绝不重置覆盖。
     static func load() -> [ServiceItem] {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let items = try? JSONDecoder().decode([ServiceItem].self, from: data),
-              !items.isEmpty else {
-            return defaults
+        // 1. 优先从沙盒 Documents 持久化文件读取
+        if let fileData = try? Data(contentsOf: DSHPersistenceCenter.servicesFileURL),
+           let fileItems = try? JSONDecoder().decode([ServiceItem].self, from: fileData),
+           !fileItems.isEmpty {
+            // 同步回写一份到 UserDefaults 保持双轨一致
+            UserDefaults.standard.set(fileData, forKey: key)
+            UserDefaults.standard.set(true, forKey: initializedLockKey)
+            return fileItems
         }
-        return items
+
+        // 2. 回退从 UserDefaults 读取（兼容旧版本已安装用户的数据无损升级）
+        if let udData = UserDefaults.standard.data(forKey: key),
+           let udItems = try? JSONDecoder().decode([ServiceItem].self, from: udData),
+           !udItems.isEmpty {
+            // 立即固化到 Documents 物理文件，完成双轨互备升级
+            try? udData.write(to: DSHPersistenceCenter.servicesFileURL, options: .atomic)
+            UserDefaults.standard.set(true, forKey: initializedLockKey)
+            return udItems
+        }
+
+        // 3. 只有真正首次安装（两边均无数据）时，才写入默认预置并加锁
+        let initial = defaults
+        save(initial)
+        return initial
     }
 
     static func save(_ items: [ServiceItem]) {
-        if let data = try? JSONEncoder().encode(items) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
+        guard let data = try? JSONEncoder().encode(items) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+        UserDefaults.standard.set(true, forKey: initializedLockKey)
+        try? data.write(to: DSHPersistenceCenter.servicesFileURL, options: .atomic)
     }
 
     static func add(_ item: ServiceItem) {
