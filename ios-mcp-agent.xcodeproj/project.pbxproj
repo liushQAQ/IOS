@@ -18,6 +18,9 @@
 		B100000000000000000000B9 /* BackgroundKeeper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000A9 /* BackgroundKeeper.swift */; };
 		B100000000000000000000BA /* ElementParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000AB /* ElementParser.swift */; };
 		B100000000000000000000BB /* NetworkCompat.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000AC /* NetworkCompat.swift */; };
+		B100000000000000000000BC /* CronEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000AD /* CronEngine.swift */; };
+		B100000000000000000000BD /* CronTasksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000AE /* CronTasksViewController.swift */; };
+		B100000000000000000000BE /* EnvironmentDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000AF /* EnvironmentDetector.swift */; };
 		C100000000000000000000B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C100000000000000000000A1 /* Assets.xcassets */; };
 		C100000000000000000000B2 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C100000000000000000000A2 /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
@@ -34,6 +37,9 @@
 		B100000000000000000000A9 /* BackgroundKeeper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundKeeper.swift; sourceTree = "<group>"; };
 		B100000000000000000000AB /* ElementParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementParser.swift; sourceTree = "<group>"; };
 		B100000000000000000000AC /* NetworkCompat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkCompat.swift; sourceTree = "<group>"; };
+		B100000000000000000000AD /* CronEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronEngine.swift; sourceTree = "<group>"; };
+		B100000000000000000000AE /* CronTasksViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronTasksViewController.swift; sourceTree = "<group>"; };
+		B100000000000000000000AF /* EnvironmentDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentDetector.swift; sourceTree = "<group>"; };
 		C100000000000000000000A0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C100000000000000000000A1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C100000000000000000000A2 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -74,6 +80,9 @@
 				B100000000000000000000A9 /* BackgroundKeeper.swift */,
 				B100000000000000000000AB /* ElementParser.swift */,
 				B100000000000000000000AC /* NetworkCompat.swift */,
+				B100000000000000000000AD /* CronEngine.swift */,
+				B100000000000000000000AE /* CronTasksViewController.swift */,
+				B100000000000000000000AF /* EnvironmentDetector.swift */,
 				C100000000000000000000A0 /* Info.plist */,
 				C100000000000000000000A1 /* Assets.xcassets */,
 				C100000000000000000000A2 /* LaunchScreen.storyboard */,
@@ -178,6 +187,9 @@
 				B100000000000000000000B9 /* BackgroundKeeper.swift in Sources */,
 				B100000000000000000000BA /* ElementParser.swift in Sources */,
 				B100000000000000000000BB /* NetworkCompat.swift in Sources */,
+				B100000000000000000000BC /* CronEngine.swift in Sources */,
+				B100000000000000000000BD /* CronTasksViewController.swift in Sources */,
+				B100000000000000000000BE /* EnvironmentDetector.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

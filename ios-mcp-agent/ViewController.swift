@@ -14,8 +14,14 @@ final class ViewController: UIViewController {
         view.backgroundColor = .systemBackground
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             title: "关于", style: .plain, target: self, action: #selector(openAbout))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
+        let settingsBtn = UIBarButtonItem(
             title: "模型", style: .plain, target: self, action: #selector(openSettings))
+        let cronBtn = UIBarButtonItem(
+            title: "定时/工作流", style: .done, target: self, action: #selector(openCron))
+        navigationItem.rightBarButtonItems = [settingsBtn, cronBtn]
+
+        // 启动时自动激活后台常驻 Cron 定时引擎
+        CronEngine.shared.start()
 
         input.font = .systemFont(ofSize: 17)
         input.layer.borderColor = UIColor.separator.cgColor
@@ -58,6 +64,10 @@ final class ViewController: UIViewController {
 
     @objc private func openSettings() {
         navigationController?.pushViewController(SettingsViewController(), animated: true)
+    }
+
+    @objc private func openCron() {
+        navigationController?.pushViewController(CronTasksViewController(), animated: true)
     }
 
     @objc private func openAbout() {
