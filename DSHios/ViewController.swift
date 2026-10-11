@@ -2507,8 +2507,11 @@ final class ViewController: UIViewController {
     private func isOwnServicePage(url: URL?) -> Bool {
         guard let host = url?.host?.lowercased(), !host.isEmpty else { return true }
         if let svc = dshServiceHost?.lowercased(), !svc.isEmpty { return host == svc }
-        var hosts = knownServiceHosts().map { $0.lowercased() }
-        hosts.append(contentsOf: ["localhost", "127.0.0.1"])
+        // 尚未标记过服务地址：默认地址 + 最近地址 + 回环地址都算自身页面
+        var hosts = ["localhost", "127.0.0.1"]
+        for raw in [defaultURL, UserDefaults.standard.string(forKey: Keys.lastURL)] {
+            if let h = raw.flatMap({ URL(string: $0)?.host?.lowercased() }), !h.isEmpty { hosts.append(h) }
+        }
         return hosts.contains(host)
     }
 
