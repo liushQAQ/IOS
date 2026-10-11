@@ -16,7 +16,7 @@ final class AboutViewController: UIViewController {
         text.text = """
         手机助手 (ios-mcp-agent)
         版本：v\(version) (Build \(build))
-        开发者：liush
+        开发者：liush（GitHub: liush734530963）
         开源主页：https://github.com/liush734530963/ios-mcp-agent-public
 
         【功能原理与环境边界】
