@@ -2258,13 +2258,27 @@ final class ViewController: UIViewController {
           window.__dshSetStatusBar = function (px) {
             var h = Math.max(0, px || 0);
             document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
+            // v1.0.79：侧栏是另一块容器，顶栏的 padding 管不到它。
+            // 侧栏自己只留了 6px，内容会顶进状态栏，所以把状态栏高度直接补到侧栏容器上。
+            var cols = document.querySelectorAll('[class*="sidebarCol"]');
+            for (var i = 0; i < cols.length; i++) {
+              cols[i].style.setProperty('padding-top', h + 'px', 'important');
+            }
           };
           // v1.0.77：顶栏顺序固定为
           //   目录按钮（靠最左）— 会话标题（居中）— 智能体按钮 — 右侧边栏按钮（靠最右，不动）。
           // 页面原始顺序是「标题、目录、智能体」且三者都在标题簇里，样式表改不动顺序，
           // 所以直接重排 DOM：目录按钮提到标题行第一个，标题簇只留标题和智能体并居中。
           // 内联 !important 才能压住页面后注入的样式。
+          function applySidebarInset() {
+            var raw = getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar');
+            var h = parseFloat(raw);
+            if (!(h > 0)) return;
+            var cols = document.querySelectorAll('[class*="sidebarCol"]');
+            for (var i = 0; i < cols.length; i++) cols[i].style.setProperty('padding-top', h + 'px', 'important');
+          }
           function shiftTitleCluster() {
+            applySidebarInset();
             var rows = document.querySelectorAll('[class*="titleRow"]');
             for (var i = 0; i < rows.length; i++) {
               var row = rows[i];
@@ -2554,11 +2568,15 @@ final class ViewController: UIViewController {
         publishStatusBarHeight()
     }
 
-    /// 把状态栏高度（CSS 像素）下发给页内脚本。
+    /// 把状态栏高度下发给页内脚本。
     /// `env(safe-area-inset-top)` 在这个 WKWebView 里取到的是 0（viewport-fit=cover 不可靠），
     /// 所以改用原生侧的 `safeAreaInsets.top`，它由系统按机型、横竖屏、刘海/灵动岛实时给出。
+    ///
+    /// v1.0.79 修正：之前除以了 `UIScreen.scale`，把 59pt 缩成约 20px 下发，
+    /// 侧栏内容只让出 20px，顶进了状态栏（用户截图：标志被电量图标压住）。
+    /// CSS 像素在 viewport width=device-width 下就等于 pt，不能再除。
     private func publishStatusBarHeight() {
-        let px = Int((view.safeAreaInsets.top / max(1, UIScreen.main.scale)).rounded())
+        let px = Int(view.safeAreaInsets.top.rounded())
         let js = "window.__dshSetStatusBar && window.__dshSetStatusBar(\(px));"
         webView.evaluateJavaScript(js) { _, _ in }
     }
