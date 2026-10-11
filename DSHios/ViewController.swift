@@ -2105,6 +2105,8 @@ final class ViewController: UIViewController {
             '  box-sizing: border-box !important;',
             '  max-width: 100vw !important;',
             '  overflow: hidden !important;',
+            '  /* v1.0.80：顶栏和状态栏那一块不再用纯白，改成跟页面内容区一致的浅灰 */',
+            '  background: #f5f5f7 !important;',
             '}',
             '',
             '[data-phase] header [class*="titleRow"],',
@@ -2270,7 +2272,20 @@ final class ViewController: UIViewController {
           // 页面原始顺序是「标题、目录、智能体」且三者都在标题簇里，样式表改不动顺序，
           // 所以直接重排 DOM：目录按钮提到标题行第一个，标题簇只留标题和智能体并居中。
           // 内联 !important 才能压住页面后注入的样式。
+          // v1.0.81：侧栏打开时，页面在 overlayLayer 里铺一层 rgba(0,0,0,0.45) 的遮罩，
+          // 把侧栏右边的内容盖成发白发灰。清成全透明，让后面的按钮原样露出来。
+          function clearSidebarOverlay() {
+            var layers = document.querySelectorAll('[class*="overlayLayer"]');
+            for (var i = 0; i < layers.length; i++) {
+              var nodes = layers[i].querySelectorAll('*');
+              for (var j = 0; j < nodes.length; j++) {
+                nodes[j].style.setProperty('background', 'transparent', 'important');
+                nodes[j].style.setProperty('background-color', 'transparent', 'important');
+              }
+            }
+          }
           function applySidebarInset() {
+            clearSidebarOverlay();
             var raw = getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar');
             var h = parseFloat(raw);
             if (!(h > 0)) return;
