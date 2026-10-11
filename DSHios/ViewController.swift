@@ -34,8 +34,10 @@ final class ViewController: UIViewController {
     private var webViewBottomConstraint: NSLayoutConstraint!
     /// DSH 服务的 host:port（用于区分 DSH 页面与外嵌免费网页对话等第三方页面）
     private var dshServiceHost: String?
-    /// 键盘当前是否可见（配合 scrollViewDidScroll 钳制 WebKit 的"自动上滚"）
+    /// 键盘当前是否可见
     private var isKeyboardVisible = false
+    /// 键盘遮挡高度（pt）。下发给页内脚本，让输入框滚到键盘正上方。
+    private var keyboardOverlap: CGFloat = 0
 
     /// 语音听写识别器与音频引擎（调用 iOS 原生语音听写）
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
@@ -52,8 +54,10 @@ final class ViewController: UIViewController {
 
     /// 悬浮按钮边长（44pt 精致小巧圆形）。
     private static let menuButtonSide: CGFloat = 44
-    /// 收起时从右缘露出的宽度（隐藏一半，留 22pt 在屏内）。
-    private static let menuCollapsedPeek: CGFloat = 22
+    /// 收起时从右缘露出的宽度。
+    /// v1.0.73：原来只露 22pt（半个圆），用户反馈「右边缘卡着半个按钮」。
+    /// 改成整颗按钮都在屏内，只贴着右缘留 6pt 间距，不再被裁掉一半。
+    private static let menuCollapsedPeek: CGFloat = 44 + 6
     /// 展开态距右缘的间距。
     private static let menuTrailingInset: CGFloat = 10
     /// 展开后静置多久自动半隐藏（3 秒后自动隐藏一半）。
@@ -2144,9 +2148,11 @@ final class ViewController: UIViewController {
         """
         (function () {
           var css = [
-            '/* ===== v1.0.70 顶栏对齐 + 安全区修复（基于 2026-10-11 实测 DOM，追加不覆盖） ===== */',
+            '/* ===== v1.0.73 顶栏修复：flex 自然排布（替换 v1.0.70 的绝对定位方案） ===== */',
+            '/* v1.0.70 把左侧按钮 position:absolute 钉死坐标，只按「会话页」量测过；',
+            '   首页/新会话页 DOM 结构不同，被钉到屏幕边缘外 → 顶栏消失、左右各卡半个按钮。',
+            '   现在全部回到文档流，用 flex 对齐，两种页面共用同一套规则。 */',
             '',
-            '/* 1) 顶栏容器：sticky 吸顶 + 顶部让出 iOS 状态栏/灵动岛高度，自身背景延伸到状态栏后面 */',
             'html body [data-phase] header,',
             'html body .ank0OG_header {',
             '  position: sticky !important;',
@@ -2154,66 +2160,60 @@ final class ViewController: UIViewController {
             '  z-index: 1020 !important;',
             '  display: flex !important;',
             '  flex-direction: column !important;',
-            '  padding: calc(env(safe-area-inset-top, 0px) + 10px) 10px 0 10px !important;',
+            '  padding: calc(env(safe-area-inset-top, 0px) + 8px) 8px 0 8px !important;',
             '  min-height: 0 !important;',
             '  flex: none !important;',
             '  box-sizing: border-box !important;',
+            '  max-width: 100vw !important;',
+            '  overflow: hidden !important;',
             '}',
             '',
-            '/* 2) 标题行：统一 28px 基线，左侧给绝对定位的抽屉按钮让出固定空间（10px 页边 + 28px 按钮位） */',
             '[data-phase] header [class*="titleRow"],',
             '.ank0OG_titleRow {',
             '  display: flex !important;',
             '  align-items: center !important;',
-            '  height: 28px !important;',
-            '  min-height: 28px !important;',
-            '  padding-left: 46px !important;',
-            '  padding-right: 0 !important;',
+            '  height: auto !important;',
+            '  min-height: 32px !important;',
+            '  padding: 0 !important;',
             '  margin: 0 !important;',
             '  width: 100% !important;',
+            '  max-width: 100% !important;',
             '  box-sizing: border-box !important;',
             '  gap: 6px !important;',
+            '  overflow: hidden !important;',
             '}',
             '',
-            '/* 3) 左侧抽屉开关：绝对定位钉死在顶栏左上角（与标题同一水平线，28x28 与全员同规格） */',
+            '/* 左侧抽屉开关回到文档流：不再绝对定位，与标题同一行自然排列 */',
             'header button[aria-label="打开目录"],',
             'header button[aria-label="收起目录"],',
             'header button[aria-label="打开侧边栏"],',
             'header button[aria-label="收起侧边栏"],',
             '[data-mobile-nav="toggle"] {',
-            '  position: absolute !important;',
+            '  position: static !important;',
             '  transform: none !important;',
-            '  top: calc(env(safe-area-inset-top, 0px) + 10px) !important;',
-            '  left: 10px !important;',
-            '  width: 28px !important;',
-            '  height: 28px !important;',
-            '  min-width: 28px !important;',
-            '  max-width: 28px !important;',
+            '  top: auto !important;',
+            '  left: auto !important;',
+            '  right: auto !important;',
+            '  width: 32px !important;',
+            '  height: 32px !important;',
+            '  min-width: 32px !important;',
+            '  max-width: 32px !important;',
             '  margin: 0 !important;',
             '  padding: 0 !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '  justify-content: center !important;',
             '  flex: none !important;',
-            '  border-radius: var(--dsw-radius-sm, 6px) !important;',
-            '  z-index: 100 !important;',
-            '}',
-            'header button[aria-label="打开目录"] svg,',
-            'header button[aria-label="收起目录"] svg,',
-            'header button[aria-label="打开侧边栏"] svg,',
-            'header button[aria-label="收起侧边栏"] svg {',
-            '  width: 16px !important;',
-            '  height: 16px !important;',
-            '  margin: auto !important;',
-            '  display: block !important;',
+            '  order: -1 !important;',
+            '  z-index: auto !important;',
             '}',
             '',
-            '/* 4) 标题簇：占据剩余全部宽度，绝不与左侧按钮重叠 */',
             '[data-phase] header [class*="titleCluster"],',
             '.ank0OG_titleCluster {',
             '  flex: 1 1 auto !important;',
             '  min-width: 0 !important;',
-            '  height: 28px !important;',
+            '  height: auto !important;',
+            '  min-height: 32px !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
             '  overflow: hidden !important;',
@@ -2222,11 +2222,9 @@ final class ViewController: UIViewController {
             '  padding: 0 !important;',
             '}',
             '',
-            '/* 5) 工具区/右侧角落：右侧角落必须回到最右边（恢复 margin-left:auto） */',
             '[data-phase] header [class*="headerUtilities"],',
             '.ank0OG_headerUtilities {',
-            '  height: 28px !important;',
-            '  min-height: 28px !important;',
+            '  min-height: 32px !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
             '  gap: 4px !important;',
@@ -2235,8 +2233,7 @@ final class ViewController: UIViewController {
             '}',
             '[data-phase] header [class*="headerCorner"],',
             '.ank0OG_headerCorner {',
-            '  height: 28px !important;',
-            '  min-height: 28px !important;',
+            '  min-height: 32px !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
             '  gap: 4px !important;',
@@ -2244,7 +2241,6 @@ final class ViewController: UIViewController {
             '  margin-left: 4px !important;',
             '}',
             '',
-            '/* 6) 顶栏标题行内所有按钮：统一 28x28、严格垂直居中（一条水平线） */',
             '[data-phase] header [class*="titleRow"] button,',
             '[data-phase] header [class*="titleRow"] [role="button"],',
             'button[aria-label="智能体团队"],',
@@ -2253,9 +2249,10 @@ final class ViewController: UIViewController {
             'button[aria-label="收起右侧边栏"],',
             '.ank0OG_headerActions button,',
             '.ank0OG_headerCorner button {',
-            '  width: 28px !important;',
-            '  height: 28px !important;',
-            '  min-height: 28px !important;',
+            '  width: 32px !important;',
+            '  height: 32px !important;',
+            '  min-height: 32px !important;',
+            '  min-width: 32px !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '  justify-content: center !important;',
@@ -2263,20 +2260,14 @@ final class ViewController: UIViewController {
             '  margin: 0 !important;',
             '  flex: none !important;',
             '}',
-            '[data-phase] header [class*="titleRow"] button svg {',
-            '  width: 16px !important;',
-            '  height: 16px !important;',
-            '  margin: auto !important;',
-            '  display: block !important;',
-            '}',
             '',
-            '/* 7) 会话标题文本：不缩不成行，超长省略 */',
             '[data-phase] header [class*="crumbs"],',
             '.ank0OG_crumbs {',
             '  flex: 0 1 auto !important;',
             '  min-width: 0 !important;',
-            '  max-width: 46vw !important;',
-            '  height: 28px !important;',
+            '  max-width: 48vw !important;',
+            '  min-height: 32px !important;',
+            '  height: auto !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '  overflow: hidden !important;',
@@ -2284,33 +2275,162 @@ final class ViewController: UIViewController {
             '  white-space: nowrap !important;',
             '}',
             '',
-            '/* 8) 会员/成员计数等小徽标垂直居中不撑行 */',
-            '[data-phase] header [class*="titleRow"] [class*="count"],',
-            '._1Ihh1G_count {',
-            '  height: 28px !important;',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '}',
-            '',
-            '/* 9) 标签页行（对话/轨迹/系统监控）紧跟标题行，间距收敛 */',
             '[data-phase] header [class*="tabs"],',
             '.ank0OG_tabs {',
             '  margin-top: 2px !important;',
             '  flex: none !important;',
+            '  max-width: 100% !important;',
             '}',
           ].join('\\n');
-          function apply() {
+          function inject() {
             var root = document.head || document.documentElement;
-            if (!root) { setTimeout(apply, 16); return; }
-            if (!document.getElementById('dsh-ios-v1070-header-fix')) {
-              var style = document.createElement('style');
-              style.id = 'dsh-ios-v1070-header-fix';
-              style.textContent = css;
-              root.appendChild(style);
+            if (!root) { setTimeout(inject, 30); return; }
+            var old = document.getElementById('dsh-ios-header-fix');
+            if (old && old.parentNode) old.parentNode.removeChild(old);
+            var style = document.createElement('style');
+            style.id = 'dsh-ios-header-fix';
+            style.textContent = css;
+            root.appendChild(style);
+          }
+          inject();
+        })();
+""",
+        // v1.0.72 页面分流补丁（必须放在数组最后，优先级最高）：
+        // A. DSH 自身页面：补上原来常驻的「全屏固定布局」CSS（html/body 固定 + 隐藏滚动）；
+        // B. 内嵌第三方网页（豆包等）：把这些强干预全部撤掉，恢复浏览器原生滚动/聚焦行为，
+        //    并补一个真实手势聚焦兜底 —— 解决第三方短信登录页「点输入框弹不出键盘」。
+        """
+        (function () {
+          var OWN_CSS = 'html, body { overflow: hidden !important; overscroll-behavior: none !important; position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; }';
+          var THIRD_CSS = 'html, body { position: static !important; inset: auto !important; overflow: visible !important; overscroll-behavior: auto !important; height: auto !important; width: auto !important; }';
+          var appliedOwn = false;
+          var appliedThird = false;
+
+          function isOwnPage() {
+            try {
+              if (typeof window.__dshIsOwnPage === 'function') return window.__dshIsOwnPage();
+            } catch (e) {}
+            return true;
+          }
+
+          function attach(id, css) {
+            var root = document.head || document.documentElement;
+            if (!root) return false;
+            if (document.getElementById(id)) return true;
+            var style = document.createElement('style');
+            style.id = id;
+            style.textContent = css;
+            root.appendChild(style);
+            return !!document.getElementById(id);
+          }
+
+          function relaxViewport() {
+            var meta = document.querySelector('meta[name="viewport"]');
+            if (meta) meta.content = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
+          }
+
+          function installTouchFocusFallback() {
+            if (window.__dshTouchFocusInstalled) return;
+            window.__dshTouchFocusInstalled = true;
+            // 页面自身在 touchstart 里 preventDefault 会导致输入框不聚焦、iOS 不弹键盘：
+            // 在真实手指手势内补一次 focus（必须是同步调用，异步会失去用户手势上下文）。
+            document.addEventListener('touchstart', function (e) {
+              var t = e.target;
+              if (!t || !t.closest) return;
+              var el = t.closest('input, textarea, [contenteditable="true"]');
+              if (!el || el.disabled) return;
+              try { if (el.readOnly) return; } catch (err) {}
+              if (document.activeElement === el) return;
+              try { el.focus(); } catch (err) {}
+            }, true);
+          }
+
+          function apply() {
+            if (isOwnPage()) {
+              if (!appliedOwn) appliedOwn = attach('dsh-ios-v1072-ownpage-css', OWN_CSS);
+            } else if (!appliedThird) {
+              appliedThird = attach('dsh-ios-v1072-thirdparty-css', THIRD_CSS);
+              if (appliedThird) {
+                relaxViewport();
+                installTouchFocusFallback();
+              }
             }
           }
+
           apply();
-          setInterval(apply, 800);
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', apply, { once: true });
+          }
+          var tries = 0;
+          var timer = setInterval(function () {
+            tries++;
+            apply();
+            if (appliedOwn || appliedThird || tries > 100) clearInterval(timer);
+          }, 100);
+        })();
+        """,
+        // v1.0.73 键盘抬升：原生侧把键盘遮挡高度（CSS 像素）下发给这里。
+        // 实测 DSH 的输入区不在任何可滚动容器里（外层 centerCol 是 overflow:hidden），
+        // 滚不动 —— 所以直接把「输入区 + 正在编辑的输入框」用 transform 上移到键盘正上方。
+        // 顶栏不在被移动的元素里，保持原位不动。
+        """
+        (function () {
+          var inset = 0;
+          var moved = [];
+
+          function targets() {
+            var list = [];
+            var box = document.querySelector('[class*="uWtHQG_root"]');
+            if (box) list.push(box);
+            var ae = document.activeElement;
+            if (ae && ae !== document.body &&
+                (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) {
+              if (!box || !box.contains(ae)) list.push(ae);
+            }
+            return list;
+          }
+
+          function applyShift(el, shift) {
+            if (!el.hasAttribute('data-dsh-kb-base')) {
+              el.setAttribute('data-dsh-kb-base', el.style.transform || '');
+            }
+            var origin = el.getAttribute('data-dsh-kb-base');
+            el.style.transform = (origin ? origin + ' ' : '') + 'translateY(' + (-shift) + 'px)';
+            el.setAttribute('data-dsh-kb-shift', String(shift));
+          }
+
+          function clearShift(el) {
+            if (!el.hasAttribute('data-dsh-kb-base')) return;
+            el.style.transform = el.getAttribute('data-dsh-kb-base');
+            el.removeAttribute('data-dsh-kb-base');
+            el.removeAttribute('data-dsh-kb-shift');
+          }
+
+          function lift() {
+            var next = targets();
+            if (inset <= 0) {
+              moved.forEach(clearShift);
+              moved = [];
+              return;
+            }
+            var limit = window.innerHeight - inset - 8;
+            moved.filter(function (el) { return next.indexOf(el) < 0; }).forEach(clearShift);
+            moved = next.slice();
+            next.forEach(function (el) {
+              var r = el.getBoundingClientRect();
+              var cur = parseFloat(el.getAttribute('data-dsh-kb-shift') || '0') || 0;
+              var natural = r.bottom + cur;
+              var shift = Math.max(0, Math.round(natural - limit));
+              if (Math.abs(shift - cur) < 1) return;
+              applyShift(el, shift);
+            });
+          }
+
+          window.__dshSetKeyboardInset = function (px) {
+            inset = Math.max(0, px || 0);
+            lift();
+          };
+          document.addEventListener('focusin', function () { setTimeout(lift, 60); }, true);
         })();
         """
     ]
@@ -2345,29 +2465,58 @@ final class ViewController: UIViewController {
     // MARK: - 键盘避让（v1.0.70）
 
     /// 键盘弹出/收起/移动：把键盘与视图重叠的高度写进底部约束（同步键盘动画曲线）。
+    ///
+    /// v1.0.73 修正：v1.0.70 只压 WebView 高度，但页内 `html,body{position:fixed;overflow:hidden}`
+    /// 把整页钉死、内部滚动容器又用 100vh，压缩后输入框仍停在键盘后面（用户实测「看不到输入了什么」）。
+    /// 现在压缩的同时把遮挡高度下发给页内脚本，由脚本把焦点输入框 / 输入区滚到键盘正上方。
     @objc private func keyboardFrameWillChange(_ note: Notification) {
         guard let endFrame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue else { return }
         let kbInView = view.convert(endFrame, from: nil)
         let isHide = note.name == UIResponder.keyboardWillHideNotification || kbInView.minY >= view.bounds.height - 1
         let overlap: CGFloat = isHide ? 0 : max(0, view.bounds.height - kbInView.minY)
         isKeyboardVisible = overlap > 0
+        keyboardOverlap = overlap
 
         let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
         let curveRaw = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7
         let options: UIView.AnimationOptions = [UIView.AnimationOptions(rawValue: curveRaw << 16), .beginFromCurrentState]
-        webViewBottomConstraint.constant = overlap
+        webViewBottomConstraint.constant = -overlap
         view.setNeedsLayout()
         UIView.animate(withDuration: duration, delay: 0, options: options) {
             self.view.layoutIfNeeded()
         }
+        notifyKeyboardInset(overlap)
+    }
+
+    /// 把键盘遮挡高度（CSS 像素）下发给页内脚本，触发「把输入框滚到键盘上方」。
+    /// 键盘动画期间再补一次，避免首帧布局还没稳定时滚动落空。
+    private func notifyKeyboardInset(_ overlap: CGFloat) {
+        let px = Int((overlap / max(1, UIScreen.main.scale)).rounded())
+        let js = "window.__dshSetKeyboardInset && window.__dshSetKeyboardInset(\(px));"
+        webView.evaluateJavaScript(js) { _, _ in }
+        guard overlap > 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, self.keyboardOverlap > 0 else { return }
+            self.webView.evaluateJavaScript(js) { _, _ in }
+        }
+    }
+
+    /// 判定当前页面是不是 DSH 自身页面：与最近一次「标记为 DSH 服务」的地址同主机即为自身页面。
+    /// `dshServiceHost` 尚未标记时（冷启动 / 重试 / 清缓存路径不会更新它）默认按自身页面处理，
+    /// 避免 DSH 页被当成外部网页、顶部被多推一个安全区（v1.0.70 的「顶部多一块空白」就是这么来的）。
+    private func isOwnServicePage(url: URL?) -> Bool {
+        guard let host = url?.host?.lowercased(), !host.isEmpty else { return true }
+        if let svc = dshServiceHost?.lowercased(), !svc.isEmpty { return host == svc }
+        var hosts = knownServiceHosts().map { $0.lowercased() }
+        hosts.append(contentsOf: ["localhost", "127.0.0.1"])
+        return hosts.contains(host)
     }
 
     /// 外部网页（免费网页对话等第三方站点）顶部避让 iOS 状态栏/灵动岛；
     /// DSH 页面保持全屏，由页内顶栏 CSS 自行让出安全区。
     private func updateTopSafeAreaFor(url: URL?) {
-        guard let host = url?.host, !host.isEmpty else { return }
-        let isDSHPage = (host == dshServiceHost)
-        let target: CGFloat = isDSHPage ? 0 : view.safeAreaInsets.top
+        guard url?.host?.isEmpty == false else { return }
+        let target: CGFloat = isOwnServicePage(url: url) ? 0 : view.safeAreaInsets.top
         guard webViewTopConstraint.constant != target else { return }
         webViewTopConstraint.constant = target
         UIView.animate(withDuration: 0.2) { self.view.layoutIfNeeded() }
@@ -3741,13 +3890,19 @@ extension ViewController: UIScrollViewDelegate {
             scrollView.setZoomScale(1.0, animated: false)
         }
     }
-    /// 键盘避让兜底（v1.0.70）：页面 html/body 已固定，WebView 自身ScrollView 永远不需要滚动。
-    /// WebKit 聚焦输入框时会强行把整页往上顶（顶栏被顶出状态栏），键盘可见期间一律钳回原位。
+    /// 键盘避让兜底（v1.0.73 重写）。
+    ///
+    /// v1.0.70 在键盘可见期间把 contentOffset 强制钉回 .zero，本意是防 WebKit 把整页顶出屏幕。
+    /// 实测副作用：WebKit 聚焦输入框时本来会自动把输入框滚进可视区，被这里锁死 →
+    /// 输入框停在键盘后面，用户看不到自己输入的内容（P1-1）。
+    ///
+    /// 现在只在「整页被顶到屏幕上方」（contentOffset.y < 0，顶栏被顶出状态栏）时才钳回 0，
+    /// 正向滚动一律放行，让输入框能滚到键盘正上方。
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard isKeyboardVisible else { return }
         guard !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else { return }
-        if scrollView.contentOffset != .zero {
-            scrollView.contentOffset = .zero
+        if scrollView.contentOffset.y < 0 {
+            scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: 0)
         }
     }
 }
