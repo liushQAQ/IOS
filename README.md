@@ -73,10 +73,12 @@
 
 ## 📦 两个安装包说明
 
-每次推送会编两个未签名 IPA，用 TrollStore 安装：
+手动触发一次构建，产出未签名 IPA，用 TrollStore 安装：
 
-- `ios-mcp-agent-public-{版本}-{构建号}.ipa`：公开版，模型三项留空，无任何敏感信息。
-- `ios-mcp-agent-personal-{版本}-{构建号}.ipa`：自用版。打包流水线自动注入 DeepSeek（`api.deepseek.com`，模型 `deepseek-flash`）和 pengdan（`api.pengdan.eu.org`，模型 `gemini-3.8-flash-high`）。密钥来自仓库 Secrets，不进入 Git 源码。
+- `ios-mcp-agent-public-{版本}-{构建号}.ipa`：公开纯净版，模型三项留空，不含任何密钥与个人信息。
+- 同一文件同时提供 `.tipa` 后缀副本，方便巨魔（TrollStore）直接识别安装。
+
+云端流水线只做零凭据编译，不注入、不读取任何密钥；个人自用版一律在本地离线打包。
 
 ---
 
