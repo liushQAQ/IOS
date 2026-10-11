@@ -11,4 +11,7 @@ rm -rf Payload/ios-mcp-agent.app/_CodeSignature
 rm -f Payload/ios-mcp-agent.app/embedded.mobileprovision
 zip -qry "$ipa" Payload
 rm -rf Payload
-ls -lh "$ipa"
+# 同步生成巨魔专享的 .tipa 包（方便在手机端/隔空投送时被 TrollStore 原生直接识别关联）
+tipa="${ipa%.ipa}.tipa"
+cp -f "$ipa" "$tipa"
+ls -lh "$ipa" "$tipa"

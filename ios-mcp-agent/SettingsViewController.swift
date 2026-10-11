@@ -88,6 +88,59 @@ final class SettingsViewController: UIViewController {
         saveButton.addTarget(self, action: #selector(saveConfig), for: .touchUpInside)
         formViews.append(saveButton)
 
+        // 🛡️ 数据持久化与备份防护组
+        formViews.append(createSectionHeader("数据持久化与升级安全保障"))
+        
+        let protectionBanner = UIView()
+        protectionBanner.backgroundColor = UIColor.systemGreen.withAlphaComponent(0.12)
+        protectionBanner.layer.cornerRadius = 8
+        protectionBanner.layer.borderWidth = 1
+        protectionBanner.layer.borderColor = UIColor.systemGreen.withAlphaComponent(0.3).cgColor
+
+        let bannerLabel = UILabel()
+        bannerLabel.numberOfLines = 0
+        bannerLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        bannerLabel.textColor = .systemGreen
+        bannerLabel.text = "🛡️ 升级保护已开启：您的 API 配置、自定义工作流与快捷指令均已通过 Documents 物理沙盒双轨加固。无论是更新自签还是通过巨魔覆盖安装，只要未卸载 App，个人数据绝对 100% 完好保留，永不被默认配置覆盖！"
+        bannerLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        protectionBanner.addSubview(bannerLabel)
+        NSLayoutConstraint.activate([
+            bannerLabel.topAnchor.constraint(equalTo: protectionBanner.topAnchor, constant: 10),
+            bannerLabel.leadingAnchor.constraint(equalTo: protectionBanner.leadingAnchor, constant: 12),
+            bannerLabel.trailingAnchor.constraint(equalTo: protectionBanner.trailingAnchor, constant: -12),
+            bannerLabel.bottomAnchor.constraint(equalTo: protectionBanner.bottomAnchor, constant: -10)
+        ])
+        formViews.append(protectionBanner)
+
+        let exportBtn = UIButton(type: .system)
+        exportBtn.setTitle("📤 导出全量工作流与配置 (复制到剪贴板)", for: .normal)
+        exportBtn.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        exportBtn.backgroundColor = .secondarySystemGroupedBackground
+        exportBtn.layer.cornerRadius = 8
+        exportBtn.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        exportBtn.addTarget(self, action: #selector(exportBackupData), for: .touchUpInside)
+        formViews.append(exportBtn)
+
+        let importBtn = UIButton(type: .system)
+        importBtn.setTitle("📥 从剪贴板还原备份配置", for: .normal)
+        importBtn.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        importBtn.backgroundColor = .secondarySystemGroupedBackground
+        importBtn.layer.cornerRadius = 8
+        importBtn.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        importBtn.addTarget(self, action: #selector(importBackupData), for: .touchUpInside)
+        formViews.append(importBtn)
+
+        let resetBtn = UIButton(type: .system)
+        resetBtn.setTitle("🔄 重置为出厂初始预设", for: .normal)
+        resetBtn.setTitleColor(.systemRed, for: .normal)
+        resetBtn.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        resetBtn.backgroundColor = .secondarySystemGroupedBackground
+        resetBtn.layer.cornerRadius = 8
+        resetBtn.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        resetBtn.addTarget(self, action: #selector(resetFactoryDefaults), for: .touchUpInside)
+        formViews.append(resetBtn)
+
         let stack = UIStackView(arrangedSubviews: formViews)
         stack.axis = .vertical
         stack.spacing = 12
@@ -302,5 +355,50 @@ final class SettingsViewController: UIViewController {
         config.llmModel = modelField.text?.trimmingCharacters(in: .whitespaces) ?? config.llmModel
         config.save()
         navigationController?.popViewController(animated: true)
+    }
+
+    @objc private func exportBackupData() {
+        guard let json = DataPersistenceManager.shared.exportFullBackupJSON() else {
+            showAlert("导出备份失败，请检查数据完整性")
+            return
+        }
+        UIPasteboard.general.string = json
+        showAlert("✅ 备份导出成功！\n全量工作流、快捷指令与模型配置 JSON 已复制到剪贴板，您可以粘贴保存至备忘录。")
+    }
+
+    @objc private func importBackupData() {
+        guard let content = UIPasteboard.general.string, !content.isEmpty else {
+            showAlert("剪贴板中未检测到文本内容，请先复制备份 JSON 字符串")
+            return
+        }
+
+        let alert = UIAlertController(title: "确认恢复备份？", message: "将使用剪贴板中的备份数据覆盖当前工作流与配置", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "恢复导入", style: .destructive) { [weak self] _ in
+            let res = DataPersistenceManager.shared.restoreFromBackupJSON(content)
+            if res.success {
+                CronEngine.shared.loadTasks()
+                CronEngine.shared.loadQuickActions()
+                let cfg = AgentConfig.load()
+                self?.mcpField.text = cfg.mcpBase
+                self?.baseField.text = cfg.llmBase
+                self?.keyField.text = cfg.llmKey
+                self?.modelField.text = cfg.llmModel
+                self?.showAlert("✅ " + res.message)
+            } else {
+                self?.showAlert("❌ 导入失败: " + res.message)
+            }
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    @objc private func resetFactoryDefaults() {
+        let alert = UIAlertController(title: "重置出厂预设", message: "此操作会将工作流与快捷指令重置为系统默认示例，确定要继续吗？", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "确认重置", style: .destructive) { [weak self] _ in
+            CronEngine.shared.resetToFactoryDefaults()
+            self?.showAlert("已恢复为出厂默认预设")
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(alert, animated: true)
     }
 }

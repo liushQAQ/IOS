@@ -10,7 +10,7 @@ final class AboutViewController: UIViewController {
         text.isEditable = false
         text.font = .systemFont(ofSize: 15)
         text.backgroundColor = .clear
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.8"
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.9"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
 
         text.text = """
@@ -27,22 +27,27 @@ final class AboutViewController: UIViewController {
            - 针对夜间挂机无法输锁屏密码的问题，内置「纯黑伪熄屏(0亮度)」模式，绕过真锁屏，次日自动恢复亮度并打开应用。
 
         ==============================
-        🌟 最新更新日志 (v1.0.8)
+        🌟 最新更新日志 (v1.0.9)
         ==============================
-        【新增功能与核心优化】
-        1. 快捷指令与工具箱全面开放自定义：
-           - 彻底打破固定预设限制：支持自由「➕ 新建快捷动作」；
-           - 支持修改已有动作的标题、副标题与执行参数（Bundle ID、密码、秒数等）；
-           - 支持左滑快速删除无用快捷指令；
-           - 支持点击直接单点触发，点击右侧详情图标进入编辑面板。
-        2. 自由度工作流编排与前置条件自由扩展：
-           - 支持任务左滑删除与步骤左滑删除；
-           - 前置条件门控全面开放自由增删改查：可自由添加最低电量、最高电量、有效时间段、充电状态、越狱状态、CarPlay 连入等任意组合。
-        3. 对标成熟越狱实测的动态根环境探测引擎 (EnvironmentDetector)：
-           - 引入 dlopen / dlsym 动态探测 jbroot / jbroot_alloc 导出符号（精准对标 RootHide / Dopamine）；
-           - 深度遍历 /var/jb、/private/preboot/<UUID>/procursus 隐藏根与 TrollStore 沙盒逃逸特征；
-           - 动态探测 127.0.0.1:8090 MCP 服务连通状态；
-           - 界面首屏以醒目卡片展示当前硬件/越狱环境诊断与锁屏能力推荐方案。
+        【个人数据升级安全防覆盖体系】
+        1. 物理 Documents 沙盒双轨持久化加固 (DataPersistenceManager)：
+           - 彻底解决覆盖安装升级时数据丢失痛点！
+           - 用户的 API Key、Base URL、自定义工作流任务、快捷动作全部受 Documents 物理文件与 UserDefaults 双轨保护；
+           - 只要未主动卸载 App，无论是更新自签还是通过巨魔覆盖安装，已配置的个人数据 100% 完好继承，绝对不被新安装包默认示例覆盖！
+        2. 全版本无损平滑迁移与容错解码：
+           - 自动识别并平滑升级历史版本数据（v1.0.6、v1.0.7、v1.0.8）；
+           - 采用安全容错解码，即使未来数据字段扩充，升级也不会导致任务损坏。
+        3. 清空状态完全尊重：
+           - 用户清空所有任务或快捷动作后，系统尊重纯净状态，重启或更新版本时绝不再强加默认示例。
+        4. 全量备份与还原工具箱：
+           - 设置页支持一键导出全量工作流与配置到剪贴板，支持从剪贴板一键恢复。
+
+        ==============================
+        🌟 历史重要更新 (v1.0.8)
+        ==============================
+        - 快捷指令与工具箱全面开放自定义与自由增删改查；
+        - 工作流支持多模式调度与前置条件任意组合；
+        - 对标成熟越狱实测的动态根环境探测引擎 (EnvironmentDetector)。
 
         ==============================
         📖 使用前检查

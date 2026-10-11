@@ -56,10 +56,22 @@ struct ConditionItem: Codable {
     var param: String // "30" / "09:00 - 21:00" 等
     var isEnabled: Bool = true
 
+    enum CodingKeys: String, CodingKey {
+        case id, type, param, isEnabled
+    }
+
     init(type: ConditionType, param: String = "", isEnabled: Bool = true) {
         self.type = type
         self.param = param
         self.isEnabled = isEnabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? container.decodeIfPresent(String.self, forKey: .id)) ?? UUID().uuidString
+        self.type = (try? container.decodeIfPresent(ConditionType.self, forKey: .type)) ?? .timeWindow
+        self.param = (try? container.decodeIfPresent(String.self, forKey: .param)) ?? ""
+        self.isEnabled = (try? container.decodeIfPresent(Bool.self, forKey: .isEnabled)) ?? true
     }
 
     var summaryText: String {
@@ -83,6 +95,29 @@ struct ConditionItem: Codable {
     }
 }
 
+/// 兼容 v1.0.7 旧版本的前置条件结构体，用于升级时自动无损迁移
+struct LegacyWorkflowConditions: Codable {
+    var requireUnlocked: Bool?
+    var requireLocked: Bool?
+    var requireCharging: Bool?
+    var minBatteryLevel: Int?
+    var effectiveTimeRange: String?
+
+    func toConditionItems() -> [ConditionItem] {
+        var items: [ConditionItem] = []
+        if requireCharging == true {
+            items.append(ConditionItem(type: .requireCharging, isEnabled: true))
+        }
+        if let minBat = minBatteryLevel, minBat > 0 {
+            items.append(ConditionItem(type: .minBattery, param: "\(minBat)", isEnabled: true))
+        }
+        if let range = effectiveTimeRange, !range.isEmpty {
+            items.append(ConditionItem(type: .timeWindow, param: range, isEnabled: true))
+        }
+        return items
+    }
+}
+
 // MARK: - 快捷工具/指令模型 (支持增删改查)
 
 struct QuickActionItem: Codable {
@@ -92,11 +127,24 @@ struct QuickActionItem: Codable {
     var step: WorkflowStep
     var isSystemPreset: Bool = false
 
+    enum CodingKeys: String, CodingKey {
+        case id, title, subtitle, step, isSystemPreset
+    }
+
     init(title: String, subtitle: String, step: WorkflowStep, isSystemPreset: Bool = false) {
         self.title = title
         self.subtitle = subtitle
         self.step = step
         self.isSystemPreset = isSystemPreset
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? container.decodeIfPresent(String.self, forKey: .id)) ?? UUID().uuidString
+        self.title = (try? container.decodeIfPresent(String.self, forKey: .title)) ?? "快捷动作"
+        self.subtitle = (try? container.decodeIfPresent(String.self, forKey: .subtitle)) ?? ""
+        self.step = (try? container.decodeIfPresent(WorkflowStep.self, forKey: .step)) ?? WorkflowStep(type: .launchApp, title: "打开应用", param: "com.tencent.xin")
+        self.isSystemPreset = (try? container.decodeIfPresent(Bool.self, forKey: .isSystemPreset)) ?? false
     }
 }
 
@@ -144,10 +192,28 @@ struct WorkflowStep: Codable {
     var title: String
     var param: String // bundleID / passcode / seconds / level / toolArgs 等
 
+    enum CodingKeys: String, CodingKey {
+        case id, type, title, param
+    }
+
     init(type: WorkflowActionType, title: String, param: String = "") {
         self.type = type
         self.title = title
         self.param = param
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? container.decodeIfPresent(String.self, forKey: .id)) ?? UUID().uuidString
+        self.title = (try? container.decodeIfPresent(String.self, forKey: .title)) ?? "执行步骤"
+        self.param = (try? container.decodeIfPresent(String.self, forKey: .param)) ?? ""
+        
+        // 动作类型安全降级: 若遇到未识别的新指令，自动降级为 launchApp 避免解码崩溃
+        if let decodedType = try? container.decodeIfPresent(WorkflowActionType.self, forKey: .type) {
+            self.type = decodedType
+        } else {
+            self.type = .launchApp
+        }
     }
 }
 
@@ -228,6 +294,76 @@ struct CronTask: Codable {
         set {
             timePointsText = newValue
         }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, isEnabled, triggerMode
+        case timePointsText, intervalMinutes, intervalStart, intervalEnd
+        case repeatDays, monthDays, conditionItems, steps
+        case lastTriggeredDateString, lastIntervalFireTime
+        // 历史版本兼容 Key
+        case timeString
+        case conditions
+    }
+
+    init(name: String, isEnabled: Bool = true) {
+        self.name = name
+        self.isEnabled = isEnabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? container.decodeIfPresent(String.self, forKey: .id)) ?? UUID().uuidString
+        self.name = (try? container.decodeIfPresent(String.self, forKey: .name)) ?? "未命名任务"
+        self.isEnabled = (try? container.decodeIfPresent(Bool.self, forKey: .isEnabled)) ?? true
+        self.triggerMode = (try? container.decodeIfPresent(TriggerMode.self, forKey: .triggerMode)) ?? .multiTime
+
+        // 1. 时间点兼容: 优先 timePointsText，次优先老版 timeString，默认 "08:30"
+        if let points = try? container.decodeIfPresent(String.self, forKey: .timePointsText), !points.isEmpty {
+            self.timePointsText = points
+        } else if let oldTime = try? container.decodeIfPresent(String.self, forKey: .timeString), !oldTime.isEmpty {
+            self.timePointsText = oldTime
+        } else {
+            self.timePointsText = "08:30"
+        }
+
+        self.intervalMinutes = (try? container.decodeIfPresent(Int.self, forKey: .intervalMinutes)) ?? 30
+        self.intervalStart = (try? container.decodeIfPresent(String.self, forKey: .intervalStart)) ?? "09:00"
+        self.intervalEnd = (try? container.decodeIfPresent(String.self, forKey: .intervalEnd)) ?? "21:00"
+        self.repeatDays = (try? container.decodeIfPresent([Int].self, forKey: .repeatDays)) ?? [1, 2, 3, 4, 5, 6, 7]
+        self.monthDays = (try? container.decodeIfPresent([Int].self, forKey: .monthDays)) ?? [1]
+
+        // 2. 前置条件门控兼容: 优先解码 conditionItems，若无则检查老版 conditions 字典并无损自动转换
+        if let items = try? container.decodeIfPresent([ConditionItem].self, forKey: .conditionItems), !items.isEmpty {
+            self.conditionItems = items
+        } else if let legacyConditions = try? container.decodeIfPresent(LegacyWorkflowConditions.self, forKey: .conditions) {
+            self.conditionItems = legacyConditions.toConditionItems()
+        } else {
+            self.conditionItems = []
+        }
+
+        // 3. 执行流水线
+        self.steps = (try? container.decodeIfPresent([WorkflowStep].self, forKey: .steps)) ?? []
+        self.lastTriggeredDateString = try? container.decodeIfPresent(String.self, forKey: .lastTriggeredDateString)
+        self.lastIntervalFireTime = try? container.decodeIfPresent(Double.self, forKey: .lastIntervalFireTime)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(isEnabled, forKey: .isEnabled)
+        try container.encode(triggerMode, forKey: .triggerMode)
+        try container.encode(timePointsText, forKey: .timePointsText)
+        try container.encode(intervalMinutes, forKey: .intervalMinutes)
+        try container.encode(intervalStart, forKey: .intervalStart)
+        try container.encode(intervalEnd, forKey: .intervalEnd)
+        try container.encode(repeatDays, forKey: .repeatDays)
+        try container.encode(monthDays, forKey: .monthDays)
+        try container.encode(conditionItems, forKey: .conditionItems)
+        try container.encode(steps, forKey: .steps)
+        try container.encodeIfPresent(lastTriggeredDateString, forKey: .lastTriggeredDateString)
+        try container.encodeIfPresent(lastIntervalFireTime, forKey: .lastIntervalFireTime)
     }
 
     /// 人类可读的调度说明
@@ -315,8 +451,6 @@ enum CronTimeSanitizer {
 
 final class CronEngine {
     static let shared = CronEngine()
-    private let storageKey = "ios-mcp-agent.cron_tasks"
-    private let quickActionsKey = "ios-mcp-agent.quick_actions"
     
     private var timer: Timer?
     private(set) var tasks: [CronTask] = []
@@ -326,28 +460,38 @@ final class CronEngine {
     private var lastCarPlayState: Bool = false
 
     private init() {
-        loadTasks()
-        if tasks.isEmpty {
+        let isFirstLaunch = DataPersistenceManager.shared.isPristineFirstLaunch
+
+        // 1. 优先从双轨持久化中加载任务 (覆盖安装绝对不丢失；即便用户清空了也是 Optional([]))
+        if let savedTasks = DataPersistenceManager.shared.loadTasks() {
+            self.tasks = savedTasks
+        } else if isFirstLaunch || !DataPersistenceManager.shared.hasEverSavedTasks {
+            // 仅在设备全生命周期初次全新安装或从未存在过任务归档时，才初始化经典预设任务
             setupDefaultPresetTasks()
+        } else {
+            self.tasks = []
         }
-        loadQuickActions()
-        if quickActions.isEmpty {
+
+        // 2. 加载快捷动作
+        if let savedActions = DataPersistenceManager.shared.loadQuickActions() {
+            self.quickActions = savedActions
+        } else if isFirstLaunch || !DataPersistenceManager.shared.hasEverSavedQuickActions {
             setupDefaultQuickActions()
+        } else {
+            self.quickActions = []
         }
+
         setupHardwareListeners()
     }
 
     func loadTasks() {
-        if let data = UserDefaults.standard.data(forKey: storageKey),
-           let list = try? JSONDecoder().decode([CronTask].self, from: data) {
+        if let list = DataPersistenceManager.shared.loadTasks() {
             self.tasks = list
         }
     }
 
     func saveTasks() {
-        if let data = try? JSONEncoder().encode(tasks) {
-            UserDefaults.standard.set(data, forKey: storageKey)
-        }
+        DataPersistenceManager.shared.saveTasks(tasks)
     }
 
     func addTask(_ task: CronTask) {
@@ -371,16 +515,13 @@ final class CronEngine {
     // MARK: - 快捷指令增删改查管理
 
     func loadQuickActions() {
-        if let data = UserDefaults.standard.data(forKey: quickActionsKey),
-           let list = try? JSONDecoder().decode([QuickActionItem].self, from: data) {
+        if let list = DataPersistenceManager.shared.loadQuickActions() {
             self.quickActions = list
         }
     }
 
     func saveQuickActions() {
-        if let data = try? JSONEncoder().encode(quickActions) {
-            UserDefaults.standard.set(data, forKey: quickActionsKey)
-        }
+        DataPersistenceManager.shared.saveQuickActions(quickActions)
     }
 
     func addQuickAction(_ item: QuickActionItem) {
@@ -399,6 +540,12 @@ final class CronEngine {
         guard index >= 0 && index < quickActions.count else { return }
         quickActions.remove(at: index)
         saveQuickActions()
+    }
+
+    /// 用户主动请求重置为出厂预设 (需经过二次确认)
+    func resetToFactoryDefaults() {
+        setupDefaultPresetTasks()
+        setupDefaultQuickActions()
     }
 
     private func setupDefaultQuickActions() {

@@ -1,6 +1,6 @@
 import Foundation
 
-struct AgentConfig {
+struct AgentConfig: Codable {
     var mcpBase: String
     var llmBase: String
     var llmKey: String
@@ -9,15 +9,55 @@ struct AgentConfig {
 
     static let storageKey = "ios-mcp-agent.config"
 
+    enum CodingKeys: String, CodingKey {
+        case mcpBase, llmBase, llmKey, llmModel, maxSteps
+    }
+
+    init(mcpBase: String, llmBase: String, llmKey: String, llmModel: String, maxSteps: Int) {
+        self.mcpBase = mcpBase
+        self.llmBase = llmBase
+        self.llmKey = llmKey
+        self.llmModel = llmModel
+        self.maxSteps = maxSteps
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.mcpBase = (try? container.decodeIfPresent(String.self, forKey: .mcpBase)) ?? "http://127.0.0.1:8090"
+        self.llmBase = (try? container.decodeIfPresent(String.self, forKey: .llmBase)) ?? BuiltInModels.defaultBase
+        self.llmKey = (try? container.decodeIfPresent(String.self, forKey: .llmKey)) ?? BuiltInModels.defaultKey
+        self.llmModel = (try? container.decodeIfPresent(String.self, forKey: .llmModel)) ?? BuiltInModels.defaultModel
+        let steps = (try? container.decodeIfPresent(Int.self, forKey: .maxSteps)) ?? 30
+        self.maxSteps = steps <= 0 ? 30 : steps
+    }
+
     static func load() -> AgentConfig {
         let d = UserDefaults.standard
-        return AgentConfig(
+        // 1. 优先从 Documents 物理持久化文件加载用户已保存的配置 (覆盖安装永不丢失)
+        if let fileConfig = DataPersistenceManager.shared.loadAgentConfig() {
+            // 同步刷新 UserDefaults 镜像
+            d.set(fileConfig.mcpBase, forKey: "mcpBase")
+            d.set(fileConfig.llmBase, forKey: "llmBase")
+            d.set(fileConfig.llmKey, forKey: "llmKey")
+            d.set(fileConfig.llmModel, forKey: "llmModel")
+            d.set(fileConfig.maxSteps, forKey: "maxSteps")
+            return fileConfig
+        }
+
+        // 2. 若物理文件尚不存在，尝试从 UserDefaults 读取历史配置并自动持久化到文件
+        let hasExistingUserDefaults = d.string(forKey: "llmBase") != nil || d.string(forKey: "llmKey") != nil || d.string(forKey: "llmModel") != nil
+        let loaded = AgentConfig(
             mcpBase: d.string(forKey: "mcpBase") ?? "http://127.0.0.1:8090",
             llmBase: d.string(forKey: "llmBase") ?? BuiltInModels.defaultBase,
             llmKey: d.string(forKey: "llmKey") ?? BuiltInModels.defaultKey,
             llmModel: d.string(forKey: "llmModel") ?? BuiltInModels.defaultModel,
             maxSteps: d.integer(forKey: "maxSteps") == 0 ? 30 : d.integer(forKey: "maxSteps")
         )
+
+        if hasExistingUserDefaults {
+            DataPersistenceManager.shared.saveAgentConfig(loaded)
+        }
+        return loaded
     }
 
     func save() {
@@ -27,6 +67,7 @@ struct AgentConfig {
         d.set(llmKey, forKey: "llmKey")
         d.set(llmModel, forKey: "llmModel")
         d.set(maxSteps, forKey: "maxSteps")
+        DataPersistenceManager.shared.saveAgentConfig(self)
     }
 }
 
