@@ -2536,6 +2536,13 @@ final class ViewController: UIViewController {
         changeButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
         changeButton.addTarget(self, action: #selector(openMenuDirectly), for: .touchUpInside)
 
+        // 连不上时直接扫码：扫电脑端显示的地址二维码，自动填地址并连接（v1.0.71）
+        let scanButton = UIButton(type: .system)
+        scanButton.setTitle("📷 扫码连接（无需手动输入）", for: .normal)
+        scanButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        scanButton.tintColor = .systemBlue
+        scanButton.addTarget(self, action: #selector(scanFromErrorOverlay), for: .touchUpInside)
+
         let guideButton = UIButton(type: .system)
         guideButton.setTitle("📖 查看官方 DSH 连接教程与说明", for: .normal)
         guideButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
@@ -2548,6 +2555,7 @@ final class ViewController: UIViewController {
         container.addArrangedSubview(detail)
         container.addArrangedSubview(hint)
         container.addArrangedSubview(retryButton)
+        container.addArrangedSubview(scanButton)
         container.addArrangedSubview(changeButton)
         container.addArrangedSubview(guideButton)
 
@@ -2855,6 +2863,63 @@ final class ViewController: UIViewController {
         }
     }
 
+    // MARK: - 扫码连接（v1.0.71）
+
+    /// 打开扫码界面：扫到地址二维码后自动填地址并连接，省掉手动输入。
+    private func presentQRScanner() {
+        let scanner = QRAddressScannerViewController()
+        scanner.onResult = { [weak self] address in
+            guard let self else { return }
+            // 局域网/本机地址：扫到即连（零点击）；公网地址再确认一次，防止误扫到微信等二维码跳到外站
+            if QRAddressParser.isTrustedLocalAddress(address) || self.isCurrentServiceAddress(address) {
+                self.hideError()
+                self.loadURLString(address)
+            } else {
+                self.confirmConnect(to: address)
+            }
+        }
+        scanner.modalPresentationStyle = .fullScreen
+        present(scanner, animated: true)
+    }
+
+    /// 扫到的地址与当前 DSH 服务同主机（换端口/换路径也算同一台机器）时视为可信。
+    private func isCurrentServiceAddress(_ address: String) -> Bool {
+        guard let scannedHost = URL(string: address)?.host?.lowercased() else { return false }
+        let known = [dshServiceHost,
+                     URL(string: defaultURL)?.host,
+                     URL(string: UserDefaults.standard.string(forKey: Keys.lastURL) ?? "")?.host]
+            .compactMap { $0?.lowercased() }
+            .filter { !$0.isEmpty }
+        return known.contains(scannedHost)
+    }
+
+    /// 公网地址扫到后的二次确认（防误扫）
+    private func confirmConnect(to address: String) {
+        let alert = UIAlertController(
+            title: "识别到连接地址",
+            message: "\(address)\n\n这不是局域网地址，确认连接吗？",
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "连接", style: .default) { [weak self] _ in
+            self?.hideError()
+            self?.loadURLString(address)
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    /// 错误浮层上的扫码入口：先收起浮层再扫码，扫到即连。
+    @objc private func scanFromErrorOverlay() {
+        presentQRScanner()
+    }
+
+    /// 展示当前连接地址的二维码，方便用另一台手机扫码自动填地址。
+    private func showCurrentAddressQRCode() {
+        let address = webView.url?.absoluteString
+            ?? UserDefaults.standard.string(forKey: Keys.lastURL)
+            ?? defaultURL
+        present(QRCodeDisplayViewController(address: address), animated: true)
+    }
+
     /// 错误浮层上的「换一个地址」：不经过悬浮按钮的展开态，直接弹菜单。
     @objc private func openMenuDirectly() {
         presentMenuSheet()
@@ -2920,6 +2985,12 @@ final class ViewController: UIViewController {
         })
         sheet.addAction(UIAlertAction(title: "连接说明与教程…", style: .default) { [weak self] _ in
             self?.openConnectionGuide()
+        })
+        sheet.addAction(UIAlertAction(title: "📷 扫码连接（扫二维码自动填地址）", style: .default) { [weak self] _ in
+            self?.presentQRScanner()
+        })
+        sheet.addAction(UIAlertAction(title: "🔳 当前地址二维码（给别人扫）", style: .default) { [weak self] _ in
+            self?.showCurrentAddressQRCode()
         })
         sheet.addAction(UIAlertAction(title: "手动输入地址…", style: .default) { [weak self] _ in
             self?.promptForURL()
@@ -3202,12 +3273,15 @@ final class ViewController: UIViewController {
             【设备检测信息】
             \(deviceInfo)
 
-            【最新更新日志 (v1.0.70)】
-            1. ⌨️ 键盘避让彻底重做：弹出键盘时压缩网页视口高度（顶栏钉在原位、内容区内滚动、输入框始终悬在键盘上方），不再整页上移顶出状态栏；
-            2. 📐 顶栏全员同一水平线：左侧抽屉开关钉在左上角 28x28，会话标题/成员图标/右侧边栏按钮统一 28px 基线，标题与左侧按钮保留 18px 间距绝不重叠；
-            3. 📱 顶栏自动让出 iOS 状态栏/灵动岛高度（safe-area），顶栏永远不会顶到状态栏里；
-            4. 🌐 免费网页对话等外部页面全屏时顶部自动避开状态栏；
-            5. 🩹 修复注入脚本在 documentStart 阶段因 body 未就绪崩溃，导致右侧边栏遮罩、返回按钮等功能整体失效的问题。
+            【最新更新日志 (v1.0.71)】
+            1. 📷 新增「扫码连接」：扫地址二维码自动填好地址并连接，彻底告别手动输入（悬浮球菜单 / 连不上浮层 / 服务列表右上角扫码图标都能进）；
+            2. 🖼 支持「从相册选二维码图片」识别，截图里的二维码也能扫（Vision 识别，无需相册权限）；
+            3. 🔳 新增「当前地址二维码」：把当前地址生成二维码，方便另一台手机直接扫码连接；
+            4. 🛡 防误扫：局域网地址扫到即连（零点击），公网地址弹一次确认，扫到非地址二维码会在取景界面震动提示并继续扫；
+            5. ⌨️ 键盘避让：弹出键盘时压缩网页视口高度（顶栏钉在原位、内容区内滚动、输入框悬在键盘上方），不再整页上移顶出状态栏；
+            6. 📐 顶栏全员同一水平线：左侧抽屉开关钉在左上角 28x28，会话标题/成员图标/右侧边栏按钮统一 28px 基线，标题与左侧按钮保留 18px 间距绝不重叠；
+            7. 📱 顶栏与外部网页自动让出 iOS 状态栏/灵动岛高度，永不顶到状态栏里；
+            8. 🩹 修复注入脚本在 documentStart 阶段因 body 未就绪崩溃，导致右侧边栏遮罩、返回按钮等功能整体失效的问题。
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in

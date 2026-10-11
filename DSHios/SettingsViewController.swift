@@ -293,6 +293,13 @@ final class SettingsViewController: UIViewController {
 
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .add, target: self, action: #selector(addTapped))
+        // 扫码添加服务：扫到地址二维码自动填好名称与地址，省去手输（v1.0.71）
+        let scanItem = UIBarButtonItem(
+            image: UIImage(systemName: "qrcode.viewfinder"),
+            style: .plain,
+            target: self,
+            action: #selector(scanTapped))
+        navigationItem.rightBarButtonItems = [scanItem, navigationItem.rightBarButtonItem!]
         let doneItem = UIBarButtonItem(
             barButtonSystemItem: .done, target: self, action: #selector(closeTapped))
         let helpItem = UIBarButtonItem(
@@ -416,20 +423,39 @@ final class SettingsViewController: UIViewController {
         presentEditor(nil)
     }
 
-    private func presentEditor(_ existing: (index: Int, item: ServiceItem)?) {
+    /// 扫码添加/编辑服务：识别到地址后直接进编辑框，名称按 host 预填，确认即存。
+    @objc private func scanTapped() {
+        let scanner = QRAddressScannerViewController()
+        scanner.onResult = { [weak self] address in
+            guard let self else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                self.presentEditor(nil, prefilledURL: address)
+            }
+        }
+        scanner.modalPresentationStyle = .fullScreen
+        present(scanner, animated: true)
+    }
+
+    private func presentEditor(_ existing: (index: Int, item: ServiceItem)?, prefilledURL: String? = nil) {
         let alert = UIAlertController(
             title: existing == nil ? "添加服务" : "编辑服务",
             message: "名称、地址与备注",
             preferredStyle: .alert)
 
+        // 扫码进来的：按地址 host 预填一个像样的名称，用户只按「保存」就行
+        let suggestedName: String? = {
+            guard let prefilledURL, let host = URL(string: prefilledURL)?.host else { return nil }
+            return host == "127.0.0.1" || host == "localhost" ? "本机服务" : host
+        }()
+
         alert.addTextField { tf in
             tf.placeholder = "名称（如：端口仪表盘）"
-            tf.text = existing?.item.name
+            tf.text = existing?.item.name ?? suggestedName
             tf.autocapitalizationType = .none
         }
         alert.addTextField { tf in
             tf.placeholder = "http://192.168.215.218:9009/"
-            tf.text = existing?.item.url
+            tf.text = existing?.item.url ?? prefilledURL
             tf.autocapitalizationType = .none
             tf.autocorrectionType = .no
             tf.keyboardType = .URL
@@ -648,7 +674,7 @@ final class ConnectionGuideViewController: UIViewController {
         let step3 = createStepCard(
             badge: "步骤 3",
             title: "在 iPhone 上填入并连接",
-            detail: "1. 确保手机与电脑连入同一 WiFi（同一局域网）\n2. 点击右侧悬浮球，选择「手动输入地址…」或点服务列表右上角「+」\n3. 填入刚才获取的地址并点「加载」即可进入！\n4. 本 App 会自动保存该地址并持久化缓存，下次点开直接秒进。",
+            detail: "1. 确保手机与电脑连入同一 WiFi（同一局域网）\n2. 最快方式：点右上角「扫码」或悬浮球 →「📷 扫码连接」，直接扫地址二维码自动填好并连接（无需手动输入）\n3. 也可以选「手动输入地址…」或点右上角「+」，填入地址后点「加载」进入\n4. 本 App 会自动保存该地址并持久化缓存，下次点开直接秒进。",
             code: nil,
             tip: "🎉 iOS 端已为您自动适配 Safari 现代特性补丁与输入防误关机制，体验极致丝滑！"
         )
