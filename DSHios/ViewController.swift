@@ -389,10 +389,21 @@ final class ViewController: UIViewController {
             '[data-slot="sidebar.right"], [data-slot="sidebar.left"] {',
             '  z-index: 10040 !important;',
             '}',
-            '/* 顶部导航栏：完全采用统一 Flex 居中流，所有按钮与文本统一在一条水平线上居中对齐 */',
+            '/* 顶部导航栏：完全采用统一 Flex 居中流，并在虚拟键盘弹出或页面滚动时 Sticky 吸顶固定不动 */',
+            'html, body {',
+            '  overflow: hidden !important;',
+            '  overscroll-behavior: none !important;',
+            '  position: fixed !important;',
+            '  inset: 0 !important;',
+            '  width: 100% !important;',
+            '  height: 100% !important;',
+            '}',
             '[data-phase] header,',
             '.ank0OG_header {',
-            '  position: relative !important;',
+            '  position: sticky !important;',
+            '  top: 0 !important;',
+            '  z-index: 1020 !important;',
+            '  background: var(--dsw-alias-bg-base, #ffffff) !important;',
             '  box-sizing: border-box !important;',
             '  display: flex !important;',
             '  flex-direction: column !important;',
@@ -400,18 +411,29 @@ final class ViewController: UIViewController {
             '  padding: 8px 10px 0 10px !important;',
             '  flex: none !important;',
             '}',
+            'body[data-ds-dark-theme] [data-phase] header,',
+            'body[data-ds-dark-theme] .ank0OG_header {',
+            '  background: var(--dsw-alias-bg-base, #151517) !important;',
+            '}',
             '.ank0OG_headerLeading {',
             '  display: none !important;',
             '}',
             '/* 隐藏顶栏 Windows/桌面系统文件资源管理器打开图标 */',
-            '.PPCmka_menuAnchor,',
-            '.PPCmka_split,',
+            '.ank0OG_header .PPCmka_menuAnchor,',
+            '.ank0OG_header .PPCmka_split,',
             '[data-slot="conversation.session.header.utilities"] {',
             '  display: none !important;',
             '}',
-            '/* 隐藏每个工作步骤文件路径后面的“复制”按钮 */',
-            '[data-mobile-nav="copy-file"] {',
+            '/* 彻底隐藏所有运行命令/执行步骤/文件路径后面的“复制”按钮 */',
+            '[data-mobile-nav="copy-file"],',
+            'button[data-mobile-nav="copy-file"] {',
             '  display: none !important;',
+            '  visibility: hidden !important;',
+            '  width: 0 !important;',
+            '  height: 0 !important;',
+            '  padding: 0 !important;',
+            '  margin: 0 !important;',
+            '  pointer-events: none !important;',
             '}',
             '[data-phase] header .ank0OG_titleRow,',
             '.ank0OG_titleRow {',
@@ -701,6 +723,33 @@ final class ViewController: UIViewController {
             '  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.35) !important;',
             '  cursor: pointer !important;',
             '  margin-bottom: 8px !important;',
+            '}',
+            'body[data-ds-dark-theme] .dsh-mobile-save-file-btn {',
+            '  background: #0a84ff !important;',
+            '  color: #ffffff !important;',
+            '  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.4) !important;',
+            '}',
+            '/* 暗黑模式下精细化适配新增的分享、下载与关闭按钮，彻底杜绝泛白 */',
+            'body[data-ds-dark-theme] .dsh-mobile-share-btn {',
+            '  background: rgba(255, 255, 255, 0.12) !important;',
+            '  color: #64d2ff !important;',
+            '  border: 1px solid rgba(255, 255, 255, 0.1) !important;',
+            '}',
+            'body[data-ds-dark-theme] .dsh-mobile-download-btn {',
+            '  background: #0a84ff !important;',
+            '  color: #ffffff !important;',
+            '  border: none !important;',
+            '  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;',
+            '}',
+            'body[data-ds-dark-theme] .dsh-mobile-menu-close-btn {',
+            '  background: rgba(255, 255, 255, 0.18) !important;',
+            '  color: rgba(255, 255, 255, 0.85) !important;',
+            '  border: 1px solid rgba(255, 255, 255, 0.15) !important;',
+            '}',
+            'body[data-ds-dark-theme] .dsh-mobile-panel-close-btn {',
+            '  background: rgba(40, 40, 44, 0.75) !important;',
+            '  color: #ffffff !important;',
+            '  border: 1px solid rgba(255, 255, 255, 0.15) !important;',
             '}',
             '/* 电脑端打开按钮在移动端降级为次要轮廓样式并标注来源 */',
             '.PPCmka_split[data-open-target="file"] .PPCmka_main {',
@@ -1965,6 +2014,62 @@ final class ViewController: UIViewController {
             enrichPreviewHeader();
             enrichFilesTree();
           }, 800);
+
+          // 拦截试图在宿主电脑上打开外部程序/链接的操作（如在电脑端打开、WPS、浏览器、终端等），弹窗提醒用户在手机端禁止此操作
+          (function interceptExternalDesktopLaunches() {
+            function showMobileRestrictedAlert(toolName) {
+              var name = toolName ? '【' + toolName + '】' : '';
+              var msg = '手机端禁止打开电脑端外链或程序 ' + name + '，请在电脑端操作！';
+              if (window.__dshToast) {
+                window.__dshToast(msg);
+              }
+              alert(msg);
+            }
+
+            // 1. 拦截前端发起的 /open-in-app/open 请求
+            var origFetch = window.fetch;
+            if (origFetch) {
+              window.fetch = function(input, init) {
+                var url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+                if (url && (url.includes('/open-in-app/open') || url.includes('/open-in-terminal'))) {
+                  showMobileRestrictedAlert('电脑外部程序');
+                  return Promise.reject(new Error('Mobile access restricted'));
+                }
+                return origFetch.apply(this, arguments);
+              };
+            }
+
+            // 2. 监听点击事件，拦截电脑端打开、新建终端、浏览网页等外链/外发按钮
+            document.addEventListener('click', function(e) {
+              var target = e.target;
+              if (!target) return;
+
+              // 检查是否是“在电脑端打开”分列按钮（.PPCmka_split、.PPCmka_main、.PPCmka_chevron）
+              var pcSplitBtn = target.closest('.PPCmka_split, .PPCmka_main, .PPCmka_chevron, [data-open-target]');
+              if (pcSplitBtn) {
+                // 如果这是手机端的“保存/分享”自定义按钮，则允许正常执行
+                if (target.closest('.dsh-mobile-save-file-btn') || target.closest('.dsh-mobile-share-btn') || target.closest('.dsh-mobile-download-btn')) {
+                  return;
+                }
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                showMobileRestrictedAlert('电脑外部应用');
+                return;
+              }
+
+              // 检查新建终端、系统浏览器等按钮
+              var btn = target.closest('button, a');
+              if (btn) {
+                var text = (btn.innerText || btn.getAttribute('aria-label') || btn.getAttribute('title') || '').trim();
+                if (text === '新建终端' || text === '在系统浏览器中打开' || text.includes('在电脑端打开') || text === '浏览网页') {
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                  showMobileRestrictedAlert(text);
+                  return;
+                }
+              }
+            }, true);
+          })();
         })();
         """
     ]
@@ -2689,12 +2794,12 @@ final class ViewController: UIViewController {
             【设备检测信息】
             \(deviceInfo)
 
-            【最新更新日志 (v1.0.66)】
-            1. 🔍 图片无极手势缩放：点击图片弹出的全屏大图和文件图片支持双指放大缩小、双击缩放与拖拽平移；
-            2. 📱 精确硬件型号识别：重构底层 utsname 硬件映射表，精准识别 iPhone XR、14 Pro Max 等具体机型，移除宽泛的 (iphone) 占位；
-            3. 🎯 顶栏与成员按钮右移防重叠：固定左侧按钮安全间距，会话标题与成员按钮整体右移绝不碰撞；
-            4. 📊 底部统计卡片自适应：用量与 Token 自动换行无横向溢出，收紧底部留白更贴合屏幕；
-            5. ✕ 快捷关闭菜单：点击 + 号不弹软键盘，弹出的指令/文件选项面板右上角新增 ✕ 快速关闭按钮。
+            【最新更新日志 (v1.0.67)】
+            1. 📌 顶栏 Sticky 吸顶固定：软键盘弹出或页面滚动时顶栏稳如泰山，不再滚动超出屏幕；
+            2. 🚫 拦截电脑外部程序与外链：手机端点击打开电脑应用、终端、外部浏览器时弹窗提醒在电脑端操作；
+            3. 🧼 彻底隐藏工作步骤文件路径后的复制按钮，界面纯净整洁；
+            4. 🌙 暗黑模式精细化适配：手机分享、下载与关闭按钮颜色适配深色底色，彻底杜绝泛白；
+            5. 🔍 图片双指无损手势缩放 (1x~6x) 与拖拽平移，双击重置。
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in

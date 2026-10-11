@@ -687,7 +687,7 @@ final class ConnectionGuideViewController: UIViewController {
         card.layer.cornerRadius = 12
 
         let badgeLabel = UILabel()
-        badgeLabel.text = "最新更新日志 (v1.0.66)"
+        badgeLabel.text = "最新更新日志 (v1.0.67)"
         badgeLabel.font = .systemFont(ofSize: 12, weight: .bold)
         badgeLabel.textColor = .systemIndigo
         badgeLabel.backgroundColor = .systemIndigo.withAlphaComponent(0.12)
@@ -704,26 +704,22 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.textColor = .label
 
         let logContent = """
-        🔍 1. 图片双指无极放大缩小与平移：
-        • 点击对话消息中的图片展开全屏大图时，支持双指自由缩放（最大支持 6 倍无损放大）；
-        • 放大状态下支持单指自由平移拖拽查看细节，双击图片可快速重置回原始比例；
-        • 侧边栏文件预览区图片同步支持双指手势缩放。
+        📌 1. 顶栏 Sticky 吸顶固定：
+        • 点击输入框弹出软键盘或上下滑动会话时，顶部侧边栏按钮、标题与成员一排固定在屏幕顶部，不再被顶到屏幕外；
+        • 深度结合移动端安全区，键盘交互更加稳健。
 
-        📱 2. 精确 iOS 硬件机型识别：
-        • 重构底层 utsname 硬件型号解析映射表，精准识别 iPhone XR、iPhone 14 Pro Max、iPad Pro 等精确设备名；
-        • 彻底清除以前宽泛的 (iphone) 笼统名称，环境诊断信息清晰专业。
+        🚫 2. 拦截电脑外部程序与外链：
+        • 手机端禁止打开电脑端外链或程序（如“在电脑端打开”、新建终端、系统外部浏览器等）；
+        • 点击时友好弹窗提示“手机端禁止操作，请在电脑端操作”，避免向电脑发送误操作指令。
 
-        🎯 3. 顶栏标题与成员按钮防重叠对齐：
-        • 修复插件动态注入导致的左侧按钮悬浮遮挡问题，标题与成员按钮整体右移预留安全间距；
-        • 隐藏每个工作步骤后冗余的“复制”按钮，界面清爽干净。
+        🧼 3. 彻底隐藏工作步骤文件复制按钮：
+        • 全面屏蔽运行命令和执行步骤后冗余的“复制”小按钮，排版纯净整洁。
 
-        ✕ 4. + 号菜单软键盘抑制与快捷关闭：
-        • 点击输入框左侧 + 号只展开功能选项，严禁自动弹出虚拟键盘将面板顶出屏幕；
-        • 选项弹窗右上角挂载专属 ✕ 快速关闭按钮，轻触即可随心关闭。
+        🌙 4. 暗黑模式精细化适配：
+        • 全面修复暗黑深色模式下【分享到手机】、【保存】与关闭按钮泛白失真问题，色彩契合系统深色主题。
 
-        📊 5. 底部用量与 Token 自动换行：
-        • 统计卡片长文本支持灵活换行自适应，告别横向溢出与滑块拖动；
-        • 底部留白进一步精细化收紧，界面贴合度更高。
+        🔍 5. 图片双指无损缩放与平移：
+        • 对话消息中的全屏大图和文件图片支持双指 1x~6x 放大缩小、单指平移拖拽，双击快速重置比例。
         """
 
         let contentLabel = UILabel()
