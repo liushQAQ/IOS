@@ -27,6 +27,16 @@ final class ViewController: UIViewController {
     /// 白屏自诊断采样计时器（多次采样把 JS 崩溃画到浮层，而不是留一个纯白屏）。
     private var diagnoseTimers: [Timer] = []
 
+    // MARK: 键盘避让与安全区（v1.0.70）
+    /// WebView 顶部约束：DSH 页面 = 0（顶栏自绘背景延伸到状态栏后），外部网页 = safeAreaInsets.top
+    private var webViewTopConstraint: NSLayoutConstraint!
+    /// WebView 底部约束：键盘弹出时 = 键盘高度（压缩视口让输入框始终可见，顶栏纹丝不动）
+    private var webViewBottomConstraint: NSLayoutConstraint!
+    /// DSH 服务的 host:port（用于区分 DSH 页面与外嵌免费网页对话等第三方页面）
+    private var dshServiceHost: String?
+    /// 键盘当前是否可见（配合 scrollViewDidScroll 钳制 WebKit 的"自动上滚"）
+    private var isKeyboardVisible = false
+
     /// 语音听写识别器与音频引擎（调用 iOS 原生语音听写）
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -1379,9 +1389,15 @@ final class ViewController: UIViewController {
 
           // 移动端右侧边栏智能关闭辅助（遮罩与退出逻辑）
           (function setupMobileSidebarRightWatcher() {
-            var backdrop = document.createElement('div');
-            backdrop.className = 'dsh-mobile-sidebar-backdrop';
-            document.body.appendChild(backdrop);
+              var backdrop = document.createElement('div');
+              backdrop.className = 'dsh-mobile-sidebar-backdrop';
+              // documentStart 时 body 可能尚未创建（null → TypeError 会连带杀死后续全部功能），
+              // 改为等待 body 就绪后再挂载（v1.0.70 修复）
+              function attachBackdrop() {
+                if (!document.body) { setTimeout(attachBackdrop, 16); return; }
+                document.body.appendChild(backdrop);
+              }
+              attachBackdrop();
 
             function toggleBackdrop(open) {
               if (open) {
@@ -1499,7 +1515,12 @@ final class ViewController: UIViewController {
               var observer = new MutationObserver(function() {
                 scanAndAdjust();
               });
-              observer.observe(document.body, { childList: true, subtree: true });
+              // documentStart 时 document.body 可能尚未创建，等待就绪后再观察（v1.0.70 修复）
+              function observeBodyForWatchdog() {
+                if (!document.body) { setTimeout(observeBodyForWatchdog, 16); return; }
+                observer.observe(document.body, { childList: true, subtree: true });
+              }
+              observeBodyForWatchdog();
 
               window.addEventListener('resize', scanAndAdjust, { passive: true });
               window.addEventListener('scroll', scanAndAdjust, { passive: true, capture: true });
@@ -1639,7 +1660,12 @@ final class ViewController: UIViewController {
             }
 
             var obs = new MutationObserver(syncPanelNav);
-            obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel'] });
+            // document.body 此刻可能尚未创建，同样需要等待就绪（v1.0.70 修复）
+            function observeBody() {
+              if (!document.body) { setTimeout(observeBody, 16); return; }
+              obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel'] });
+            }
+            observeBody();
             setInterval(syncPanelNav, 300);
           })();
         })();
@@ -2110,6 +2136,183 @@ final class ViewController: UIViewController {
           })();
         })();
         """
+        // v1.0.70 顶栏对齐与状态栏安全区修复（基于 2026-10-11 实测 DOM，追加在数组末尾以最高优先级生效）：
+        // 1. 顶栏 padding-top 让出 iOS 状态栏/灵动岛，顶栏永远在状态栏以下；
+        // 2. 左侧抽屉开关绝对定位钉在顶栏左上角 28x28，标题行全员 28px 同一水平线；
+        // 3. 标题起点与左侧按钮之间保留 18px 间距，绝不重叠；右侧角落恢复 margin-left:auto 靠最右；
+        // 4. 免费网页对话等第三方页面由原生侧顶部约束避让（见 updateTopSafeAreaFor）。
+        """
+        (function () {
+          var css = [
+            '/* ===== v1.0.70 顶栏对齐 + 安全区修复（基于 2026-10-11 实测 DOM，追加不覆盖） ===== */',
+            '',
+            '/* 1) 顶栏容器：sticky 吸顶 + 顶部让出 iOS 状态栏/灵动岛高度，自身背景延伸到状态栏后面 */',
+            'html body [data-phase] header,',
+            'html body .ank0OG_header {',
+            '  position: sticky !important;',
+            '  top: 0 !important;',
+            '  z-index: 1020 !important;',
+            '  display: flex !important;',
+            '  flex-direction: column !important;',
+            '  padding: calc(env(safe-area-inset-top, 0px) + 10px) 10px 0 10px !important;',
+            '  min-height: 0 !important;',
+            '  flex: none !important;',
+            '  box-sizing: border-box !important;',
+            '}',
+            '',
+            '/* 2) 标题行：统一 28px 基线，左侧给绝对定位的抽屉按钮让出固定空间（10px 页边 + 28px 按钮位） */',
+            '[data-phase] header [class*="titleRow"],',
+            '.ank0OG_titleRow {',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  height: 28px !important;',
+            '  min-height: 28px !important;',
+            '  padding-left: 46px !important;',
+            '  padding-right: 0 !important;',
+            '  margin: 0 !important;',
+            '  width: 100% !important;',
+            '  box-sizing: border-box !important;',
+            '  gap: 6px !important;',
+            '}',
+            '',
+            '/* 3) 左侧抽屉开关：绝对定位钉死在顶栏左上角（与标题同一水平线，28x28 与全员同规格） */',
+            'header button[aria-label="打开目录"],',
+            'header button[aria-label="收起目录"],',
+            'header button[aria-label="打开侧边栏"],',
+            'header button[aria-label="收起侧边栏"],',
+            '[data-mobile-nav="toggle"] {',
+            '  position: absolute !important;',
+            '  transform: none !important;',
+            '  top: calc(env(safe-area-inset-top, 0px) + 10px) !important;',
+            '  left: 10px !important;',
+            '  width: 28px !important;',
+            '  height: 28px !important;',
+            '  min-width: 28px !important;',
+            '  max-width: 28px !important;',
+            '  margin: 0 !important;',
+            '  padding: 0 !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
+            '  flex: none !important;',
+            '  border-radius: var(--dsw-radius-sm, 6px) !important;',
+            '  z-index: 100 !important;',
+            '}',
+            'header button[aria-label="打开目录"] svg,',
+            'header button[aria-label="收起目录"] svg,',
+            'header button[aria-label="打开侧边栏"] svg,',
+            'header button[aria-label="收起侧边栏"] svg {',
+            '  width: 16px !important;',
+            '  height: 16px !important;',
+            '  margin: auto !important;',
+            '  display: block !important;',
+            '}',
+            '',
+            '/* 4) 标题簇：占据剩余全部宽度，绝不与左侧按钮重叠 */',
+            '[data-phase] header [class*="titleCluster"],',
+            '.ank0OG_titleCluster {',
+            '  flex: 1 1 auto !important;',
+            '  min-width: 0 !important;',
+            '  height: 28px !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  overflow: hidden !important;',
+            '  gap: 6px !important;',
+            '  margin: 0 !important;',
+            '  padding: 0 !important;',
+            '}',
+            '',
+            '/* 5) 工具区/右侧角落：右侧角落必须回到最右边（恢复 margin-left:auto） */',
+            '[data-phase] header [class*="headerUtilities"],',
+            '.ank0OG_headerUtilities {',
+            '  height: 28px !important;',
+            '  min-height: 28px !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  gap: 4px !important;',
+            '  flex: none !important;',
+            '  margin-left: auto !important;',
+            '}',
+            '[data-phase] header [class*="headerCorner"],',
+            '.ank0OG_headerCorner {',
+            '  height: 28px !important;',
+            '  min-height: 28px !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  gap: 4px !important;',
+            '  flex: none !important;',
+            '  margin-left: 4px !important;',
+            '}',
+            '',
+            '/* 6) 顶栏标题行内所有按钮：统一 28x28、严格垂直居中（一条水平线） */',
+            '[data-phase] header [class*="titleRow"] button,',
+            '[data-phase] header [class*="titleRow"] [role="button"],',
+            'button[aria-label="智能体团队"],',
+            'button[aria-label="更多操作"],',
+            'button[aria-label="打开右侧边栏"],',
+            'button[aria-label="收起右侧边栏"],',
+            '.ank0OG_headerActions button,',
+            '.ank0OG_headerCorner button {',
+            '  width: 28px !important;',
+            '  height: 28px !important;',
+            '  min-height: 28px !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
+            '  padding: 0 !important;',
+            '  margin: 0 !important;',
+            '  flex: none !important;',
+            '}',
+            '[data-phase] header [class*="titleRow"] button svg {',
+            '  width: 16px !important;',
+            '  height: 16px !important;',
+            '  margin: auto !important;',
+            '  display: block !important;',
+            '}',
+            '',
+            '/* 7) 会话标题文本：不缩不成行，超长省略 */',
+            '[data-phase] header [class*="crumbs"],',
+            '.ank0OG_crumbs {',
+            '  flex: 0 1 auto !important;',
+            '  min-width: 0 !important;',
+            '  max-width: 46vw !important;',
+            '  height: 28px !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '}',
+            '',
+            '/* 8) 会员/成员计数等小徽标垂直居中不撑行 */',
+            '[data-phase] header [class*="titleRow"] [class*="count"],',
+            '._1Ihh1G_count {',
+            '  height: 28px !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '}',
+            '',
+            '/* 9) 标签页行（对话/轨迹/系统监控）紧跟标题行，间距收敛 */',
+            '[data-phase] header [class*="tabs"],',
+            '.ank0OG_tabs {',
+            '  margin-top: 2px !important;',
+            '  flex: none !important;',
+            '}',
+          ].join('\\n');
+          function apply() {
+            var root = document.head || document.documentElement;
+            if (!root) { setTimeout(apply, 16); return; }
+            if (!document.getElementById('dsh-ios-v1070-header-fix')) {
+              var style = document.createElement('style');
+              style.id = 'dsh-ios-v1070-header-fix';
+              style.textContent = css;
+              root.appendChild(style);
+            }
+          }
+          apply();
+          setInterval(apply, 800);
+        })();
+        """
     ]
 
     override var prefersStatusBarHidden: Bool { false }
@@ -2125,6 +2328,57 @@ final class ViewController: UIViewController {
             selector: #selector(appDidBecomeActive),
             name: UIApplication.didBecomeActiveNotification,
             object: nil)
+        // 键盘避让（v1.0.70）：压缩 WebView 高度而不是让 WebKit 把整页顶出屏幕。
+        // 效果：顶栏钉在原位不动，会话内容在剩余空间内滚动，输入框始终悬在键盘正上方。
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardFrameWillChange(_:)),
+            name: UIResponder.keyboardWillChangeFrameNotification,
+            object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardFrameWillChange(_:)),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil)
+    }
+
+    // MARK: - 键盘避让（v1.0.70）
+
+    /// 键盘弹出/收起/移动：把键盘与视图重叠的高度写进底部约束（同步键盘动画曲线）。
+    @objc private func keyboardFrameWillChange(_ note: Notification) {
+        guard let endFrame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue else { return }
+        let kbInView = view.convert(endFrame, from: nil)
+        let isHide = note.name == UIResponder.keyboardWillHideNotification || kbInView.minY >= view.bounds.height - 1
+        let overlap: CGFloat = isHide ? 0 : max(0, view.bounds.height - kbInView.minY)
+        isKeyboardVisible = overlap > 0
+
+        let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
+        let curveRaw = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7
+        let options: UIView.AnimationOptions = [UIView.AnimationOptions(rawValue: curveRaw << 16), .beginFromCurrentState]
+        webViewBottomConstraint.constant = overlap
+        view.setNeedsLayout()
+        UIView.animate(withDuration: duration, delay: 0, options: options) {
+            self.view.layoutIfNeeded()
+        }
+    }
+
+    /// 外部网页（免费网页对话等第三方站点）顶部避让 iOS 状态栏/灵动岛；
+    /// DSH 页面保持全屏，由页内顶栏 CSS 自行让出安全区。
+    private func updateTopSafeAreaFor(url: URL?) {
+        guard let host = url?.host, !host.isEmpty else { return }
+        let isDSHPage = (host == dshServiceHost)
+        let target: CGFloat = isDSHPage ? 0 : view.safeAreaInsets.top
+        guard webViewTopConstraint.constant != target else { return }
+        webViewTopConstraint.constant = target
+        UIView.animate(withDuration: 0.2) { self.view.layoutIfNeeded() }
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        // webView 可能尚未创建（viewDidLoad 之前系统就会回调一次）
+        guard webView != nil, webViewTopConstraint != nil else { return }
+        // 旋转/刘海变化时，外部网页页面的顶部避让量跟着刷新
+        updateTopSafeAreaFor(url: webView.url)
     }
 
     deinit {
@@ -2210,12 +2464,14 @@ final class ViewController: UIViewController {
         view.addSubview(activity)
         self.activityIndicator = activity
 
+        // 顶/底约束只创建一次并持有引用：键盘避让（压缩高度）与外部网页安全区都靠动态改它们实现
+        webViewTopConstraint = webView.topAnchor.constraint(equalTo: view.topAnchor)
+        webViewBottomConstraint = webView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         NSLayoutConstraint.activate([
-            // 全屏，与桌面端一致：不吃掉任何高度给原生控件
-            webView.topAnchor.constraint(equalTo: view.topAnchor),
+            webViewTopConstraint,
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            webViewBottomConstraint,
 
             activity.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             activity.centerYAnchor.constraint(equalTo: view.centerYAnchor)
@@ -2723,7 +2979,7 @@ final class ViewController: UIViewController {
             let isCurrent = currentURL.hasPrefix(item.url)
             let title = isCurrent ? "🔴 \(item.name) (当前)" : item.name
             let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
-                self?.loadURLString(item.url)
+                self?.loadURLString(item.url, markAsDSHService: false)
             }
             if isCurrent, action.responds(to: NSSelectorFromString("titleTextColor")) {
                 action.setValue(UIColor.systemRed, forKey: "titleTextColor")
@@ -2753,7 +3009,7 @@ final class ViewController: UIViewController {
             let isCurrent = currentURL.hasPrefix(item.url)
             let title = isCurrent ? "🔴 \(item.name) (当前)" : item.name
             let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
-                self?.loadURLString(item.url)
+                self?.loadURLString(item.url, markAsDSHService: false)
             }
             if isCurrent, action.responds(to: NSSelectorFromString("titleTextColor")) {
                 action.setValue(UIColor.systemRed, forKey: "titleTextColor")
@@ -2789,8 +3045,8 @@ final class ViewController: UIViewController {
         dataStore.removeData(ofTypes: types, modifiedSince: .distantPast) { [weak self] in
             DispatchQueue.main.async {
                 guard let self else { return }
-                // cookie 也一并清了，重新走一遍 Pocket 握手
-                self.loadURLString(target)
+                // cookie 也一并清了，重新走一遍 Pocket 握手（重载不改变页面归属判定）
+                self.loadURLString(target, markAsDSHService: false)
             }
         }
     }
@@ -2946,12 +3202,12 @@ final class ViewController: UIViewController {
             【设备检测信息】
             \(deviceInfo)
 
-            【最新更新日志 (v1.0.67)】
-            1. 📌 顶栏 Sticky 吸顶固定：软键盘弹出或页面滚动时顶栏稳如泰山，不再滚动超出屏幕；
-            2. 🚫 拦截电脑外部程序与外链：手机端点击打开电脑应用、终端、外部浏览器时弹窗提醒在电脑端操作；
-            3. 🧼 彻底隐藏工作步骤文件路径后的复制按钮，界面纯净整洁；
-            4. 🌙 暗黑模式精细化适配：手机分享、下载与关闭按钮颜色适配深色底色，彻底杜绝泛白；
-            5. 🔍 图片双指无损手势缩放 (1x~6x) 与拖拽平移，双击重置。
+            【最新更新日志 (v1.0.70)】
+            1. ⌨️ 键盘避让彻底重做：弹出键盘时压缩网页视口高度（顶栏钉在原位、内容区内滚动、输入框始终悬在键盘上方），不再整页上移顶出状态栏；
+            2. 📐 顶栏全员同一水平线：左侧抽屉开关钉在左上角 28x28，会话标题/成员图标/右侧边栏按钮统一 28px 基线，标题与左侧按钮保留 18px 间距绝不重叠；
+            3. 📱 顶栏自动让出 iOS 状态栏/灵动岛高度（safe-area），顶栏永远不会顶到状态栏里；
+            4. 🌐 免费网页对话等外部页面全屏时顶部自动避开状态栏；
+            5. 🩹 修复注入脚本在 documentStart 阶段因 body 未就绪崩溃，导致右侧边栏遮罩、返回按钮等功能整体失效的问题。
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
@@ -2971,13 +3227,16 @@ final class ViewController: UIViewController {
 
     @objc private func retryTapped() {
         if let current = webView.url?.absoluteString, !current.isEmpty {
-            loadURLString(current)
+            // 重试不改变页面归属判定：第三方页面重试不能把它的 host 误记为 DSH 服务
+            loadURLString(current, markAsDSHService: false)
         } else {
             loadInitialURL()
         }
     }
 
-    private func loadURLString(_ raw: String) {
+    /// - Parameter markAsDSHService: 加载的是 DSH 服务地址时为 true（记录其 host 用于页面归属判定）；
+    ///   打开外嵌免费网页对话等第三方站点时必须传 false，避免把第三方 host 误认成 DSH。
+    private func loadURLString(_ raw: String, markAsDSHService: Bool = true) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -2989,6 +3248,9 @@ final class ViewController: UIViewController {
         guard let url = URL(string: finalString) else {
             showError(detail: "地址无效：\(finalString)")
             return
+        }
+        if markAsDSHService {
+            dshServiceHost = url.host
         }
 
         UserDefaults.standard.set(trimmed, forKey: Keys.lastURL)
@@ -3142,6 +3404,12 @@ extension ViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         activityIndicator.startAnimating()
         startNavigationTimeout()
+    }
+
+    /// v1.0.70：导航已提交（此时 webView.url 已是新页面）——
+    /// 外部网页（免费网页对话等第三方站点）顶部避开 iOS 状态栏/灵动岛；DSH 页面保持全屏。
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        updateTopSafeAreaFor(url: webView.url)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -3397,6 +3665,15 @@ extension ViewController: UIScrollViewDelegate {
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         if scrollView.zoomScale != 1.0 {
             scrollView.setZoomScale(1.0, animated: false)
+        }
+    }
+    /// 键盘避让兜底（v1.0.70）：页面 html/body 已固定，WebView 自身ScrollView 永远不需要滚动。
+    /// WebKit 聚焦输入框时会强行把整页往上顶（顶栏被顶出状态栏），键盘可见期间一律钳回原位。
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard isKeyboardVisible else { return }
+        guard !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else { return }
+        if scrollView.contentOffset != .zero {
+            scrollView.contentOffset = .zero
         }
     }
 }
