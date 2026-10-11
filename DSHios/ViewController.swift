@@ -55,9 +55,9 @@ final class ViewController: UIViewController {
     /// 悬浮按钮边长（44pt 精致小巧圆形）。
     private static let menuButtonSide: CGFloat = 44
     /// 收起时从右缘露出的宽度。
-    /// v1.0.73：原来只露 22pt（半个圆），用户反馈「右边缘卡着半个按钮」。
-    /// 改成整颗按钮都在屏内，只贴着右缘留 6pt 间距，不再被裁掉一半。
-    private static let menuCollapsedPeek: CGFloat = 44 + 6
+    /// v1.0.74：v1.0.73 改成整颗露出，用户反馈「悬浮按钮没有隐藏了」。
+    /// 收起态只留 14pt 一条细把手贴在右缘（不再是被裁掉的半个圆，也不再整颗占屏）。
+    private static let menuCollapsedPeek: CGFloat = 14
     /// 展开态距右缘的间距。
     private static let menuTrailingInset: CGFloat = 10
     /// 展开后静置多久自动半隐藏（3 秒后自动隐藏一半）。
@@ -2160,7 +2160,10 @@ final class ViewController: UIViewController {
             '  z-index: 1020 !important;',
             '  display: flex !important;',
             '  flex-direction: column !important;',
-            '  padding: calc(env(safe-area-inset-top, 0px) + 8px) 8px 0 8px !important;',
+            '  /* v1.0.74：真机顶栏与状态栏之间空出约 60px。viewport-fit=cover 下',
+            '     env(safe-area-inset-top) 在 WKWebView 里取不到，这里的 calc 实际是 0+8，',
+            '     空白来自页面自身布局，所以直接把顶栏上内边距收到 2px。 */',
+            '  padding: 2px 8px 0 8px !important;',
             '  min-height: 0 !important;',
             '  flex: none !important;',
             '  box-sizing: border-box !important;',
@@ -2247,6 +2250,7 @@ final class ViewController: UIViewController {
             'button[aria-label="更多操作"],',
             'button[aria-label="打开右侧边栏"],',
             'button[aria-label="收起右侧边栏"],',
+            'button[aria-label="文件浏览"],',
             '.ank0OG_headerActions button,',
             '.ank0OG_headerCorner button {',
             '  width: 32px !important;',
@@ -2259,6 +2263,20 @@ final class ViewController: UIViewController {
             '  padding: 0 !important;',
             '  margin: 0 !important;',
             '  flex: none !important;',
+            '}',
+            '',
+            '/* v1.0.74：实测「文件浏览」(data-mobile-nav=files) 与「打开右侧边栏」同在 x=350 完全重叠。',
+            '   页面自身用属性选择器把它设成 display:flex，必须用同级属性选择器才能压住。 */',
+            'button[aria-label="文件浏览"],',
+            '[data-mobile-nav="files"] {',
+            '  display: none !important;',
+            '}',
+            '',
+            '/* v1.0.74：实测「智能体团队」x=107 与「打开目录」x=71 互相压住。',
+            '   这两个按钮本不在同一个 flex 行里，强制放进标题行并排。 */',
+            'button[aria-label="智能体团队"] {',
+            '  position: static !important;',
+            '  order: 2 !important;',
             '}',
             '',
             '[data-phase] header [class*="crumbs"],',
@@ -2293,6 +2311,23 @@ final class ViewController: UIViewController {
             root.appendChild(style);
           }
           inject();
+          // v1.0.74：文件夹按钮（data-mobile-nav=files）与右侧边栏按钮重叠。
+          // 页面用运行时样式把它设成 display:flex，!important 都压不住，直接从 DOM 移除，
+          // 并用观察器防止页面重渲染时把它加回来。
+          function dropFilesButton() {
+            var nodes = document.querySelectorAll('[data-mobile-nav="files"]');
+            for (var i = 0; i < nodes.length; i++) {
+              if (nodes[i].parentNode) nodes[i].parentNode.removeChild(nodes[i]);
+            }
+          }
+          dropFilesButton();
+          var mo = new MutationObserver(dropFilesButton);
+          function watch() {
+            var root = document.body || document.documentElement;
+            if (!root) { setTimeout(watch, 50); return; }
+            mo.observe(root, { childList: true, subtree: true });
+          }
+          watch();
         })();
 """,
         // v1.0.72 页面分流补丁（必须放在数组最后，优先级最高）：
@@ -2413,7 +2448,9 @@ final class ViewController: UIViewController {
               moved = [];
               return;
             }
-            var limit = window.innerHeight - inset - 8;
+            // v1.0.74：真机反馈抬得过高、输入框下留一大块空白。
+            // 输入区底部留在键盘上方 56px（约一行统计文字的高度），不再贴死键盘。
+            var limit = window.innerHeight - inset + 56;
             moved.filter(function (el) { return next.indexOf(el) < 0; }).forEach(clearShift);
             moved = next.slice();
             next.forEach(function (el) {
@@ -2594,7 +2631,9 @@ final class ViewController: UIViewController {
         config.userContentController.add(Self.makeErrorBridge(owner: self), name: "dshErrors")
         config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")
         config.userContentController.add(Self.makeVoiceInputBridge(owner: self), name: "dshVoiceInput")
-        webView.allowsBackForwardNavigationGestures = true
+        // v1.0.74：禁止侧滑返回上一个 URL。页面内的返回（抽屉、会话切换）走页面自己的逻辑，
+        // WebView 的历史回退会跳出当前服务地址，用户明确不要。
+        webView.allowsBackForwardNavigationGestures = false
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         // 丝滑滚动体验：启用原生惯性加速与回弹（同 Hermes Studio），消除粘滞感
@@ -3606,6 +3645,19 @@ final class ViewController: UIViewController {
 // MARK: - WKNavigationDelegate
 
 extension ViewController: WKNavigationDelegate {
+    /// v1.0.74：只允许留在当前服务地址内。
+    /// 侧滑返回、页内 `history.back()` 都会发起 back-forward 导航，这里直接取消，
+    /// 避免退回上一个 URL。页面内的抽屉、会话切换是前端路由，不走这里，不受影响。
+    func webView(_ webView: WKWebView,
+                 decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        if navigationAction.navigationType == .backForward {
+            decisionHandler(.cancel)
+            return
+        }
+        decisionHandler(.allow)
+    }
+
     func webView(_ webView: WKWebView,
                  decidePolicyFor navigationResponse: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
