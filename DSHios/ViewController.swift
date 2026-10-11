@@ -2180,6 +2180,11 @@ final class ViewController: UIViewController {
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
         webView.uiDelegate = self
+        webView.scrollView.delegate = self
+        // 彻底禁止 WKWebView 原生缩放手势与双击放大页面（除灯箱图片手势由 JS 专属接管）
+        webView.scrollView.minimumZoomScale = 1.0
+        webView.scrollView.maximumZoomScale = 1.0
+        webView.scrollView.bouncesZoom = false
         config.userContentController.add(Self.makeErrorBridge(owner: self), name: "dshErrors")
         config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")
         config.userContentController.add(Self.makeVoiceInputBridge(owner: self), name: "dshVoiceInput")
@@ -2433,15 +2438,11 @@ final class ViewController: UIViewController {
     /// - 选右缘是因为 iOS 的「侧滑返回」手势占用左缘，放左缘会和系统手势打架。
     private func setupMenuButton() {
         let button = UIButton(type: .custom)
-        // 彻底消除 background 独立圆和 imageEdgeInsets 位移错位！
-        // 按钮本身为透明承载容器，设置 clipsToBounds 保持圆整
+        // 彻底消除任何投影或多重图层错位：单体透明圆角容器，绝不产生双重圆
         button.backgroundColor = .clear
         button.layer.cornerRadius = Self.menuButtonSide / 2
         button.clipsToBounds = true
-        button.layer.shadowColor = UIColor.black.cgColor
-        button.layer.shadowOpacity = 0.22
-        button.layer.shadowRadius = 6
-        button.layer.shadowOffset = CGSize(width: -1, height: 2)
+        button.layer.shadowOpacity = 0.0
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(menuTapped), for: .touchUpInside)
         button.accessibilityLabel = "DSH 菜单"
@@ -2924,14 +2925,8 @@ final class ViewController: UIViewController {
         let scale = screen.scale
         let res = "\(Int(bounds.width * scale))×\(Int(bounds.height * scale)) (@\(Int(scale))x)"
         
-        let cleanedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isGeneric = cleanedName.isEmpty ||
-            cleanedName.caseInsensitiveCompare("iPhone") == .orderedSame ||
-            cleanedName.caseInsensitiveCompare("iPad") == .orderedSame ||
-            cleanedName == exactModel
-
-        let deviceDisplay: String = isGeneric ? exactModel : "\(exactModel) (\(cleanedName))"
-        return "设备: \(deviceDisplay)\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
+        // 严格只显示精确硬件型号，彻底删除任何括号后缀（如 (iPhone) / (iPad)）
+        return "设备: \(exactModel)\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
     }
 
     /// 关于：版本号原生可见（读 Info.plist，回退到编译期常量）
@@ -3390,5 +3385,18 @@ extension ViewController: WKUIDelegate {
             webView.load(navigationAction.request)
         }
         return nil
+    }
+}
+
+// MARK: - UIScrollViewDelegate (彻底封死 WebView 原生页面缩放)
+
+extension ViewController: UIScrollViewDelegate {
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        return nil
+    }
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        if scrollView.zoomScale != 1.0 {
+            scrollView.setZoomScale(1.0, animated: false)
+        }
     }
 }
