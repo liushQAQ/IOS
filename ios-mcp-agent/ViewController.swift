@@ -9,6 +9,7 @@ final class ViewController: UIViewController {
     private let mcpBanner = UIView()
     private let mcpStatusLabel = UILabel()
     private let mcpGuideButton = UIButton(type: .system)
+    private var lines: [String] = []
 
     override func viewDidLoad() {
         super.viewDidLoad()
