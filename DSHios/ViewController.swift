@@ -389,6 +389,24 @@ final class ViewController: UIViewController {
             '[data-slot="sidebar.right"], [data-slot="sidebar.left"] {',
             '  z-index: 10040 !important;',
             '}',
+            '/* 大图预览弹窗 (ImageLightbox) 关闭按钮严格固定在屏幕安全视口右上角，严禁被缩放图片移出屏外 */',
+            '[role="dialog"][aria-modal="true"] button[class*="close"],',
+            '.ImageLightbox_close,',
+            '[class*="ImageLightbox"] button {',
+            '  position: fixed !important;',
+            '  top: max(20px, calc(env(safe-area-inset-top, 0px) + 12px)) !important;',
+            '  right: max(20px, calc(env(safe-area-inset-right, 0px) + 12px)) !important;',
+            '  z-index: 100000 !important;',
+            '  width: 38px !important;',
+            '  height: 38px !important;',
+            '  background: rgba(0, 0, 0, 0.65) !important;',
+            '  color: #ffffff !important;',
+            '  border: 1px solid rgba(255, 255, 255, 0.3) !important;',
+            '  border-radius: 999px !important;',
+            '  backdrop-filter: blur(10px) !important;',
+            '  -webkit-backdrop-filter: blur(10px) !important;',
+            '  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;',
+            '}',
             '/* 顶部导航栏：完全采用统一 Flex 居中流，并在虚拟键盘弹出或页面滚动时 Sticky 吸顶固定不动 */',
             'html, body {',
             '  overflow: hidden !important;',
@@ -1109,6 +1127,26 @@ final class ViewController: UIViewController {
                 }
               }
             }, true);
+          })();
+
+          // 全局禁止双击网页意外缩放（保留图片预览灯箱内的正常缩放）
+          (function setupDisableDoubleTapZoom() {
+            var lastTouchEnd = 0;
+            document.addEventListener('touchend', function(event) {
+              var now = Date.now();
+              if (now - lastTouchEnd <= 300) {
+                // 如果在图片灯箱或预览区域内，允许双击缩放图片
+                var inImageLightbox = event.target && event.target.closest && (
+                  event.target.closest('[role="dialog"][aria-modal="true"]') ||
+                  event.target.closest('[data-image-preview]') ||
+                  event.target.closest('[data-document-zoom-surface]')
+                );
+                if (!inImageLightbox) {
+                  event.preventDefault();
+                }
+              }
+              lastTouchEnd = now;
+            }, { passive: false });
           })();
 
           // 移动端图片预览支持双指无极放大缩小、单指平移拖拽与双击缩放重置
@@ -2117,11 +2155,14 @@ final class ViewController: UIViewController {
         // 在每个页面文档开头注入标准移动端 viewport 修正（仅当页面自己没写时生效）。
         let viewportFix = WKUserScript(source: """
             (function() {
-              if (document.querySelector('meta[name="viewport"]')) return;
-              var m = document.createElement('meta');
-              m.name = 'viewport';
-              m.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
-              document.head.appendChild(m);
+              var meta = document.querySelector('meta[name="viewport"]');
+              if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = 'viewport';
+                document.head.appendChild(meta);
+              }
+              // 彻底禁用全局双击放大与误触放大，锁定视口，确保移动端绝不出现全页面缩放失控
+              meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
             })();
             """,
             injectionTime: .atDocumentStart, forMainFrameOnly: false)
@@ -2265,8 +2306,22 @@ final class ViewController: UIViewController {
         self.errorDetailLabel = detail
     }
 
-    /// 优先使用 fisharchive.cc 超清官方同人二次元鲸鱼娘立绘（圆形精美裁切 + 柔和高质感边框）
+    /// 加载 16 帧 DeepSeek Q萌小胖鲸动态循环图片（吐水泡泡+呼吸摇摆）
+    private static func createAnimatedFatWhaleFrames() -> [UIImage] {
+        var frames: [UIImage] = []
+        for i in 0..<16 {
+            if let img = UIImage(named: "WhaleAnim_\(i)")?.withRenderingMode(.alwaysOriginal) {
+                frames.append(img)
+            }
+        }
+        return frames
+    }
+
+    /// 优先使用 DeepSeek 萌系小胖鲸圆形切片，回退到原生绘制
     private static func createCuteWhaleImage(size: CGSize, alpha: CGFloat = 1.0) -> UIImage {
+        if let firstAnim = UIImage(named: "WhaleAnim_0") {
+            return firstAnim.withRenderingMode(.alwaysOriginal)
+        }
         if let mascot = UIImage(named: "WhaleMascot") {
             let renderer = UIGraphicsImageRenderer(size: size)
             return renderer.image { ctx in
@@ -2378,18 +2433,32 @@ final class ViewController: UIViewController {
     /// - 选右缘是因为 iOS 的「侧滑返回」手势占用左缘，放左缘会和系统手势打架。
     private func setupMenuButton() {
         let button = UIButton(type: .custom)
-        button.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.65)
+        // 彻底消除 background 独立圆和 imageEdgeInsets 位移错位！
+        // 按钮本身为透明承载容器，设置 clipsToBounds 保持圆整
+        button.backgroundColor = .clear
         button.layer.cornerRadius = Self.menuButtonSide / 2
+        button.clipsToBounds = true
         button.layer.shadowColor = UIColor.black.cgColor
         button.layer.shadowOpacity = 0.22
         button.layer.shadowRadius = 6
         button.layer.shadowOffset = CGSize(width: -1, height: 2)
-        button.layer.borderWidth = 1.0
-        button.layer.borderColor = UIColor.white.withAlphaComponent(0.35).cgColor
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(menuTapped), for: .touchUpInside)
         button.accessibilityLabel = "DSH 菜单"
         button.accessibilityHint = "向左滑出或点击打开菜单"
+
+        // 装载 16 帧 DeepSeek Q 萌小胖鲸高清循环动画
+        let animFrames = Self.createAnimatedFatWhaleFrames()
+        if !animFrames.isEmpty, let animImage = UIImage.animatedImage(with: animFrames, duration: 1.25) {
+            button.setImage(animImage, for: .normal)
+        } else {
+            let staticImage = Self.createCuteWhaleImage(size: CGSize(width: Self.menuButtonSide, height: Self.menuButtonSide))
+            button.setImage(staticImage, for: .normal)
+        }
+        button.imageView?.contentMode = .scaleAspectFit
+        button.contentHorizontalAlignment = .fill
+        button.contentVerticalAlignment = .fill
+
         view.addSubview(button)
 
         self.menuTrailingConstraint = button.trailingAnchor.constraint(
@@ -2479,14 +2548,8 @@ final class ViewController: UIViewController {
             self.view.layoutIfNeeded()
         }
 
-        // 使用 fisharchive.cc 超清官方同人二次元鲸鱼娘头像：
-        // 展开时完整居中显示；收起时只露出一半，鲸鱼头像依然清晰露出半张俏皮脸庞
-        let whaleImage = Self.createCuteWhaleImage(size: CGSize(width: Self.menuButtonSide, height: Self.menuButtonSide))
-        button.setImage(whaleImage, for: .normal)
-
-        let visible = expanded ? Self.menuButtonSide : Self.menuCollapsedPeek
-        let shift = (Self.menuButtonSide - visible) / 2
-        button.imageEdgeInsets = UIEdgeInsets(top: 0, left: shift, bottom: 0, right: -shift)
+        // 保持单体按钮与动画图像 100% 绝对同轴对齐，不再使用单独偏移引入错位
+        button.imageEdgeInsets = .zero
 
         if animated {
             UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.82, initialSpringVelocity: 0.5, options: [.curveEaseOut], animations: apply)
@@ -2591,6 +2654,10 @@ final class ViewController: UIViewController {
             sheet.addAction(action)
         }
 
+        sheet.addAction(UIAlertAction(title: "🌐 免费网页版（主流AI模型）…", style: .default) { [weak self] _ in
+            self?.presentFreeWebActionSheet()
+        })
+
         sheet.addAction(UIAlertAction(title: "全部服务…", style: .default) { [weak self] _ in
             self?.openServiceList()
         })
@@ -2611,6 +2678,90 @@ final class ViewController: UIViewController {
         })
         sheet.addAction(UIAlertAction(title: "关于", style: .default) { [weak self] _ in
             self?.showAbout()
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    /// 一级菜单：免费网页版（主流 AI 模型）
+    /// 支持二级菜单查看国内主流模型与海外主流模型，用户登录自己账号后，Cookie 与登录态由 WKWebsiteDataStore 永久保持
+    private func presentFreeWebActionSheet() {
+        let sheet = UIAlertController(
+            title: "免费网页版（主流AI模型）",
+            message: "登录个人账号即可免费使用。登录态 Cookie 自动持久化保存，除非平台官方过期否则无需重复登录。",
+            preferredStyle: .actionSheet)
+
+        sheet.addAction(UIAlertAction(title: "🇨🇳 国内主流模型（手机号即可直接免费用）", style: .default) { [weak self] _ in
+            self?.presentDomesticWebActionSheet()
+        })
+
+        sheet.addAction(UIAlertAction(title: "🌐 国外主流模型（需海外网络环境+账号）", style: .default) { [weak self] _ in
+            self?.presentOverseasWebActionSheet()
+        })
+
+        sheet.addAction(UIAlertAction(title: "返回上级菜单", style: .default) { [weak self] _ in
+            self?.presentMenuSheet()
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    /// 二级菜单：国内主流免费模型
+    private func presentDomesticWebActionSheet() {
+        let sheet = UIAlertController(
+            title: "国内主流模型网页端",
+            message: "直接浏览器打开，手机号登录即可免费畅聊：",
+            preferredStyle: .actionSheet)
+
+        let items = FreeWebStore.domesticDefaults
+        let currentURL = webView.url?.absoluteString ?? ""
+
+        for item in items {
+            let isCurrent = currentURL.hasPrefix(item.url)
+            let title = isCurrent ? "🔴 \(item.name) (当前)" : item.name
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
+                self?.loadURLString(item.url)
+            }
+            if isCurrent, action.responds(to: NSSelectorFromString("titleTextColor")) {
+                action.setValue(UIColor.systemRed, forKey: "titleTextColor")
+            }
+            sheet.addAction(action)
+        }
+
+        sheet.addAction(UIAlertAction(title: "返回免费网页版目录", style: .default) { [weak self] _ in
+            self?.presentFreeWebActionSheet()
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    /// 二级菜单：国外主流免费模型
+    private func presentOverseasWebActionSheet() {
+        let sheet = UIAlertController(
+            title: "国外主流模型网页端",
+            message: "网页免费版，需海外网络环境 + 海外账号登录：",
+            preferredStyle: .actionSheet)
+
+        let items = FreeWebStore.overseasDefaults
+        let currentURL = webView.url?.absoluteString ?? ""
+
+        for item in items {
+            let isCurrent = currentURL.hasPrefix(item.url)
+            let title = isCurrent ? "🔴 \(item.name) (当前)" : item.name
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
+                self?.loadURLString(item.url)
+            }
+            if isCurrent, action.responds(to: NSSelectorFromString("titleTextColor")) {
+                action.setValue(UIColor.systemRed, forKey: "titleTextColor")
+            }
+            sheet.addAction(action)
+        }
+
+        sheet.addAction(UIAlertAction(title: "返回免费网页版目录", style: .default) { [weak self] _ in
+            self?.presentFreeWebActionSheet()
         })
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
         sheet.popoverPresentationController?.sourceView = menuButton
@@ -2773,7 +2924,13 @@ final class ViewController: UIViewController {
         let scale = screen.scale
         let res = "\(Int(bounds.width * scale))×\(Int(bounds.height * scale)) (@\(Int(scale))x)"
         
-        let deviceDisplay = name.isEmpty ? exactModel : "\(exactModel) (\(name))"
+        let cleanedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isGeneric = cleanedName.isEmpty ||
+            cleanedName.caseInsensitiveCompare("iPhone") == .orderedSame ||
+            cleanedName.caseInsensitiveCompare("iPad") == .orderedSame ||
+            cleanedName == exactModel
+
+        let deviceDisplay: String = isGeneric ? exactModel : "\(exactModel) (\(cleanedName))"
         return "设备: \(deviceDisplay)\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
     }
 
