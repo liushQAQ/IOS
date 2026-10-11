@@ -3290,7 +3290,7 @@ final class ViewController: UIViewController {
     private func promptForURL() {
         let alert = UIAlertController(title: "服务地址", message: nil, preferredStyle: .alert)
         alert.addTextField { tf in
-            tf.placeholder = "http://192.168.215.218:3084/"
+            tf.placeholder = "http://192.168.1.100:3083/"
             tf.text = UserDefaults.standard.string(forKey: Keys.lastURL) ?? self.defaultURL
             tf.autocapitalizationType = .none
             tf.autocorrectionType = .no

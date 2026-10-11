@@ -454,7 +454,7 @@ final class SettingsViewController: UIViewController {
             tf.autocapitalizationType = .none
         }
         alert.addTextField { tf in
-            tf.placeholder = "http://192.168.215.218:9009/"
+            tf.placeholder = "http://192.168.1.100:9009/"
             tf.text = existing?.item.url ?? prefilledURL
             tf.autocapitalizationType = .none
             tf.autocorrectionType = .no
