@@ -1,10 +1,7 @@
-name: Build unsigned IPA (Personal & Public)
+﻿name: Build unsigned IPA (Public Clean Edition)
 
 on:
   workflow_dispatch:
-  # 安全合规：彻底关闭 push 自动触发，杜绝短时间内并发高频挤占 macOS 免费算力导致账号风控
-  # push:
-  #   branches: [ main ]
 
 jobs:
   build:
@@ -27,9 +24,9 @@ jobs:
           echo "Version: $MARKETING ($BUILD)"
 
       # ==========================================
-      # 1. 编译打包：公开纯净版
+      # 纯净公开版编译打包（100% 零凭据、零密钥）
       # ==========================================
-      - name: Archive public
+      - name: Archive public clean
         run: |
           rm -rf build Payload dist
           mkdir -p dist
@@ -48,40 +45,10 @@ jobs:
             AD_HOC_CODE_SIGNING_ALLOWED=NO
           bash scripts/pack-ipa.sh build/public.xcarchive "dist/ios-mcp-agent-public-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}.ipa"
 
-      # ==========================================
-      # 2. 编译打包：自用配置版
-      # ==========================================
-      - name: Write private model file
-        env:
-          DEEPSEEK_KEY: ${{ secrets.IOS_AGENT_DEEPSEEK_KEY }}
-          PENGDAN_KEY: ${{ secrets.IOS_AGENT_PENGDAN_KEY }}
-          SILICONFLOW_KEY: ${{ secrets.IOS_AGENT_SILICONFLOW_KEY }}
-        run: |
-          test -n "$DEEPSEEK_KEY" && test -n "$PENGDAN_KEY" && test -n "$SILICONFLOW_KEY"
-          python3 scripts/write-private-models.py "$DEEPSEEK_KEY" "$PENGDAN_KEY" "$SILICONFLOW_KEY"
-
-      - name: Archive private
-        run: |
-          xcodebuild archive \
-            -project ios-mcp-agent.xcodeproj \
-            -scheme ios-mcp-agent \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath build/private.xcarchive \
-            MARKETING_VERSION="${{ steps.ver.outputs.marketing }}" \
-            CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM="" \
-            AD_HOC_CODE_SIGNING_ALLOWED=NO
-          bash scripts/pack-ipa.sh build/private.xcarchive "dist/ios-mcp-agent-personal-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}.ipa"
-          git checkout -- ios-mcp-agent/BuiltInModels.swift
-
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ios-mcp-agent-packages-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}
+          name: ios-mcp-agent-public-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}
           path: |
             dist/*.ipa
             dist/*.tipa
