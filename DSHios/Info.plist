@@ -74,7 +74,7 @@
 		<true/>
 	</dict>
 	<key>DSHAppVersion</key>
-	<string>1.0.84</string>
+	<string>1.0.85</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>需要访问局域网内的电脑端 DeepSeek Harness 服务与通信接口。</string>
 	<key>NSBonjourServices</key>

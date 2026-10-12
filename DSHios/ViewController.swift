@@ -4350,7 +4350,7 @@ extension ViewController: UIScrollViewDelegate {
     }
 }
 
-// MARK: - 远程仓库自动/手动检查更新与巨魔(TrollStore)自动安装 (v1.0.84 国内免代理加速版)
+// MARK: - 远程仓库自动/手动检查更新与巨魔(TrollStore)自动安装 (v1.0.85 实时防缓存加速版)
 
 extension ViewController: UIDocumentInteractionControllerDelegate {
     func documentInteractionControllerViewControllerForPreview(_ controller: UIDocumentInteractionController) -> UIViewController {
@@ -4391,7 +4391,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     }
 
     func checkForAppUpdates(manual: Bool = false) {
-        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.84"
+        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.85"
         let currentBuildStr = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
         let currentBuild = Int(currentBuildStr) ?? 0
 
