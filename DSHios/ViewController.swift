@@ -26,10 +26,6 @@ final class ViewController: UIViewController {
     private var isPocketRetryInFlight = false
     /// 白屏自诊断采样计时器（多次采样把 JS 崩溃画到浮层，而不是留一个纯白屏）。
     private var diagnoseTimers: [Timer] = []
-    /// 记录进入后台/锁屏的时间戳，用于精准判断锁屏时长并秒级自愈恢复联通
-    private var lastEnterBackgroundTime: Date = Date()
-    /// 后台唤醒任务防抖防雪崩 WorkItem
-    private var activeResumeWorkItem: DispatchWorkItem?
 
     // MARK: 键盘避让与安全区（v1.0.70）
     /// WebView 顶部约束：DSH 页面 = 0（顶栏自绘背景延伸到状态栏后），外部网页 = safeAreaInsets.top
@@ -2348,10 +2344,10 @@ final class ViewController: UIViewController {
             '  padding: 0 8px !important;',
             '}',
             '',
-            '/* v1.0.83：会话消息内容区 (viewArea) 底部留足裕量，避免悬浮输入框和键盘上浮遮挡思考中与流式输出 */',
+            '/* 会话消息内容区 (viewArea) 底部常驻 100px 裕量，避免悬浮输入框和键盘上浮遮挡思考中与流式输出，且键盘弹起时无需反复重排 */',
             '[class*="viewArea"],',
             '.ank0OG_viewArea {',
-            '  padding-bottom: var(--dsh-viewarea-pb, 90px) !important;',
+            '  padding-bottom: 100px !important;',
             '  box-sizing: border-box !important;',
             '}',
           ].join('\\n');
@@ -2561,82 +2557,10 @@ final class ViewController: UIViewController {
           }, 100);
         })();
         """,
-        // v1.0.73 键盘抬升：原生侧把键盘遮挡高度（CSS 像素）下发给这里。
-        // 实测 DSH 的输入区不在任何可滚动容器里（外层 centerCol 是 overflow:hidden），
-        // 滚不动 —— 所以直接把「输入区 + 正在编辑的输入框」用 transform 上移到键盘正上方。
-        // 顶栏不在被移动的元素里，保持原位不动。
+        // 键盘避让统一由原生 webViewBottomConstraint 丝滑驱动，绝不在 JS 层面触发额外重排与跳动
         """
         (function () {
-          var inset = 0;
-          var moved = [];
-
-          function targets() {
-            var list = [];
-            var box = document.querySelector('[class*="uWtHQG_root"]');
-            if (box) list.push(box);
-            var ae = document.activeElement;
-            if (ae && ae !== document.body &&
-                (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) {
-              if (!box || !box.contains(ae)) list.push(ae);
-            }
-            return list;
-          }
-
-          function applyShift(el, shift) {
-            if (!el.hasAttribute('data-dsh-kb-base')) {
-              el.setAttribute('data-dsh-kb-base', el.style.transform || '');
-            }
-            var origin = el.getAttribute('data-dsh-kb-base');
-            el.style.transform = (origin ? origin + ' ' : '') + 'translateY(' + (-shift) + 'px)';
-            el.setAttribute('data-dsh-kb-shift', String(shift));
-          }
-
-          function clearShift(el) {
-            if (!el.hasAttribute('data-dsh-kb-base')) return;
-            el.style.transform = el.getAttribute('data-dsh-kb-base');
-            el.removeAttribute('data-dsh-kb-base');
-            el.removeAttribute('data-dsh-kb-shift');
-          }
-
-          function updateScrollPadding(extraShift) {
-            var viewArea = document.querySelector('[class*="viewArea"], .ank0OG_viewArea');
-            var scroller = document.querySelector('[class*="scrollBody"], .ank0OG_scrollBody');
-            // 重要：padding-bottom 只能加在消息内容区 viewArea 上（绝不能加在 scroller 上，否则会把 sticky bottom:0 的输入框挤到顶部屏幕外！）
-            var pb = inset > 0 ? ((extraShift || 0) + 120) : 90;
-            if (viewArea) {
-              viewArea.style.setProperty('--dsh-viewarea-pb', pb + 'px');
-              viewArea.style.setProperty('padding-bottom', pb + 'px', 'important');
-            }
-            if (scroller && inset > 0) {
-              setTimeout(function () {
-                scroller.scrollTop = scroller.scrollHeight;
-              }, 80);
-            }
-          }
-
-          function lift() {
-            var next = targets();
-            if (inset <= 0) {
-              moved.forEach(clearShift);
-              moved = [];
-              updateScrollPadding(0);
-              return;
-            }
-            // 原生层 WKWebView 已通过 webViewBottomConstraint 压缩高度避让键盘，
-            // 视口 window.innerHeight 此时已经收缩为（932 - inset）高度；
-            // 内部输入框通过 position: sticky; bottom: 0 自动停留在键盘顶边缘！
-            // 此时只需要给消息流 viewArea 追加动态 padding-bottom，防止消息被 sticky 贴底的输入框盖住，
-            // 绝对不可对输入框自身盲目叠加二次 translateY（否则会直接将输入框推至顶栏外）！
-            moved.forEach(clearShift);
-            moved = [];
-            updateScrollPadding(0);
-          }
-
-          window.__dshSetKeyboardInset = function (px) {
-            inset = Math.max(0, px || 0);
-            lift();
-          };
-          document.addEventListener('focusin', function () { setTimeout(lift, 60); }, true);
+          window.__dshSetKeyboardInset = function (px) {};
         })();
         """
     ]
@@ -2700,20 +2624,6 @@ final class ViewController: UIViewController {
         view.setNeedsLayout()
         UIView.animate(withDuration: duration, delay: 0, options: options) {
             self.view.layoutIfNeeded()
-        }
-        notifyKeyboardInset(overlap)
-    }
-
-    /// 把键盘遮挡高度（CSS 像素）下发给页内脚本，触发「把输入框滚到键盘上方」。
-    /// 键盘动画期间再补一次，避免首帧布局还没稳定时滚动落空。
-    private func notifyKeyboardInset(_ overlap: CGFloat) {
-        let px = Int((overlap / max(1, UIScreen.main.scale)).rounded())
-        let js = "window.__dshSetKeyboardInset && window.__dshSetKeyboardInset(\(px));"
-        webView.evaluateJavaScript(js) { _, _ in }
-        guard overlap > 0 else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            guard let self, self.keyboardOverlap > 0 else { return }
-            self.webView.evaluateJavaScript(js) { _, _ in }
         }
     }
 
@@ -3359,10 +3269,8 @@ final class ViewController: UIViewController {
             let title = isSelected ? "🔴 \(item.name) (当前)" : item.name
             let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
                 guard let self else { return }
-                // 外网入口先回局域网换最新 token 再打开，避免用过期 token 撞 401。
                 ServiceResolver.resolve(item) { url in
-                    // 强制新建连接，彻底切断锁屏后的卡死管道
-                    self.loadURLString(url, markAsDSHService: true, forceReconnect: true)
+                    self.loadURLString(url, markAsDSHService: true)
                 }
             }
             if isSelected {
@@ -3393,14 +3301,13 @@ final class ViewController: UIViewController {
         sheet.addAction(UIAlertAction(title: "手动输入地址…", style: .default) { [weak self] _ in
             self?.promptForURL()
         })
-        sheet.addAction(UIAlertAction(title: "刷新（强制全新重连）", style: .default) { [weak self] _ in
-            // 彻底切断任何僵死连接，全新发起 TCP 握手，100% 联通恢复
-            self?.forceReconnectCurrentURL()
+        sheet.addAction(UIAlertAction(title: "刷新", style: .default) { [weak self] _ in
+            self?.webView.reloadFromOrigin()
         })
         sheet.addAction(UIAlertAction(title: "清除缓存并重载", style: .default) { [weak self] _ in
             self?.clearWebCacheAndReload()
         })
-        let currentAppVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.83"
+        let currentAppVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.86"
         sheet.addAction(UIAlertAction(title: "🚀 检查更新 (当前 v\(currentAppVer))…", style: .default) { [weak self] _ in
             self?.checkForAppUpdates(manual: true)
         })
@@ -3816,33 +3723,21 @@ final class ViewController: UIViewController {
 
     @objc private func retryTapped() {
         if let current = webView.url?.absoluteString, !current.isEmpty {
-            // 重试强行切断旧死通道
-            loadURLString(current, markAsDSHService: false, forceReconnect: true)
+            loadURLString(current, markAsDSHService: false)
         } else {
             loadInitialURL()
         }
     }
 
     @objc private func appDidEnterBackground() {
-        lastEnterBackgroundTime = Date()
-        activeResumeWorkItem?.cancel()
         if isDictating {
             stopVoiceDictation()
         }
     }
 
-    /// 强制恢复联通性（终极恢复机制：彻底掐断死连接，100% 联通回来）
-    func forceReconnectCurrentURL() {
-        let target = webView.url?.absoluteString
-            ?? UserDefaults.standard.string(forKey: Keys.lastURL)
-            ?? defaultURL
-        loadURLString(target, markAsDSHService: true, forceReconnect: true)
-    }
-
     /// - Parameter markAsDSHService: 加载的是 DSH 服务地址时为 true（记录其 host 用于页面归属判定）；
     ///   打开外嵌免费网页对话等第三方站点时必须传 false，避免把第三方 host 误认成 DSH。
-    /// - Parameter forceReconnect: 是否强行切断旧通道重新建立全新网络握手
-    private func loadURLString(_ raw: String, markAsDSHService: Bool = true, forceReconnect: Bool = false) {
+    private func loadURLString(_ raw: String, markAsDSHService: Bool = true) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -3868,72 +3763,28 @@ final class ViewController: UIViewController {
         isTokenRetryInFlight = false
         if !trimmed.contains("dsh-pocket-retry=1") { isPocketRetryInFlight = false }
 
-        // 1. 彻底掐断之前的旧网络连接与挂起任务，防止卡死在底层请求队列中
-        webView.stopLoading()
-        activityIndicator.startAnimating()
-        startNavigationTimeout()
-
-        // 2. 避免暴力全黑导致假死死锁，仅轻微半透明并增加 2.5 秒安全兜底显形
-        UIView.animate(withDuration: 0.1) {
-            self.webView.alpha = 0.4
+        // 回归 1.0.70.9 稳定机制：绝不手动强开菊花遮挡界面，菊花仅在 didStartProvisionalNavigation 时由系统自然唤起；
+        // 绝不强制 reloadIgnoringLocalAndRemoteCacheData 破坏移动网络通道，绝不在未必要时 stopLoading() 制造死锁！
+        UIView.animate(withDuration: 0.12) {
+            self.webView.alpha = 0
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-            self?.revealWebView()
-        }
-
-        // 3. 构建全新连接请求：忽略任何本地与远程缓存，超时锁死在 8 秒，绝不卡死
-        let cachePolicy: URLRequest.CachePolicy = forceReconnect ? .reloadIgnoringLocalAndRemoteCacheData : .reloadIgnoringLocalCacheData
-        var request = URLRequest(url: url, cachePolicy: cachePolicy, timeoutInterval: 8)
-        request.setValue("no-cache", forHTTPHeaderField: "Pragma")
-        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-        webView.load(request)
+        webView.load(URLRequest(url: url))
     }
 
-    // MARK: - 联网与锁屏切回毫秒级自愈 (Fast-Resume)
+    // MARK: - 联网即加载与后台恢复 (回归 1.0.70.9 零干扰黄金逻辑)
 
     @objc private func appDidBecomeActive() {
-        // 确保悬浮按钮始终位于最顶层，且交互可用
         if let btn = menuButton {
             view.bringSubviewToFront(btn)
             btn.isUserInteractionEnabled = true
         }
         setMenuExpanded(false, animated: false)
 
-        // 取消此前排队的工作项，彻底防范多 App 轮换切换时的连环重入
-        activeResumeWorkItem?.cancel()
-
-        // 若当前处于连接失败态或尚未有内容，立刻尝试重连
+        // 回归 1.0.70.9：绝不在切回前台时向挂起的 WebProcess 盲目注入 evaluateJavaScript！
+        // 页面已正常加载时系统自然恢复渲染与长连接，仅在处于错误态或未加载时才触发重试。
         if !errorOverlay.isHidden || webView.url == nil || !hasLoadedOnce {
-            forceReconnectCurrentURL()
-            return
+            retryTapped()
         }
-
-        // v1.0.85 根治多 App 轮换与长时间后台切回假死：
-        // 绝不在切回前台时粗暴重新加载整页（避免重新下载 14MB 静态包与 WebProcess 销毁竞争引发死锁）！
-        // 页面 DOM 与 JS 状态保持原样，仅派发轻量级的恢复事件与心跳脉冲，让前端 WebSocket 毫秒级重连自愈。
-        let work = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            self.webView.evaluateJavaScript("""
-                (function() {
-                  try {
-                    window.dispatchEvent(new Event('pageshow'));
-                    window.dispatchEvent(new Event('focus'));
-                    document.dispatchEvent(new Event('visibilitychange'));
-                    if (window.__dshFastResume) { window.__dshFastResume(); }
-                    if (window.__dshSyncActiveSession) { window.__dshSyncActiveSession(); }
-                  } catch(e) {}
-                })();
-            """) { [weak self] _, error in
-                guard let self = self else { return }
-                // 仅在明确收到 WebProcess 崩溃错误时才触发全新重载
-                if let err = error as NSError?, err.domain == WKErrorDomain, err.code == WKError.webContentProcessTerminated.rawValue {
-                    self.recordWebError("WebProcess 异常终止，已自动重载")
-                    self.forceReconnectCurrentURL()
-                }
-            }
-        }
-        activeResumeWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
     }
 
     /// 网络可达性监听：网络从无到有时自动加载，无需手动点刷新。
@@ -4350,7 +4201,7 @@ extension ViewController: UIScrollViewDelegate {
     }
 }
 
-// MARK: - 远程仓库自动/手动检查更新与巨魔(TrollStore)自动安装 (v1.0.85 实时防缓存加速版)
+// MARK: - 远程仓库自动/手动检查更新与巨魔(TrollStore)自动安装 (v1.0.86 稳定重连与丝滑避让版)
 
 extension ViewController: UIDocumentInteractionControllerDelegate {
     func documentInteractionControllerViewControllerForPreview(_ controller: UIDocumentInteractionController) -> UIViewController {
@@ -4391,7 +4242,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     }
 
     func checkForAppUpdates(manual: Bool = false) {
-        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.85"
+        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.86"
         let currentBuildStr = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
         let currentBuild = Int(currentBuildStr) ?? 0
 
