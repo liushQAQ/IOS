@@ -28,6 +28,8 @@ final class ViewController: UIViewController {
     private var diagnoseTimers: [Timer] = []
     /// 记录进入后台/锁屏的时间戳，用于精准判断锁屏时长并秒级自愈恢复联通
     private var lastEnterBackgroundTime: Date = Date()
+    /// 后台唤醒任务防抖防雪崩 WorkItem
+    private var activeResumeWorkItem: DispatchWorkItem?
 
     // MARK: 键盘避让与安全区（v1.0.70）
     /// WebView 顶部约束：DSH 页面 = 0（顶栏自绘背景延伸到状态栏后），外部网页 = safeAreaInsets.top
@@ -637,11 +639,15 @@ final class ViewController: UIViewController {
             '  overflow: hidden !important;',
             '  padding: 0 4px !important;',
             '}',
-            '._1Ihh1G_count {',
-            '  overflow: hidden !important;',
-            '  text-overflow: ellipsis !important;',
-            '  white-space: nowrap !important;',
-            '  font-size: 11px !important;',
+            '/* 移动端顶栏隐藏智能体按钮右侧孤立的数字徽标(如数字 1)，消除视觉杂音，保持纯净图标 */',
+            '._1Ihh1G_count,',
+            '[class*="_1Ihh1G_count"] {',
+            '  display: none !important;',
+            '  visibility: hidden !important;',
+            '  width: 0 !important;',
+            '  height: 0 !important;',
+            '  padding: 0 !important;',
+            '  margin: 0 !important;',
             '}',
             '.ank0OG_headerCorner {',
             '  margin-left: 2px !important;',
@@ -1512,8 +1518,18 @@ final class ViewController: UIViewController {
                 }
               }
 
+              var debounceTimer = null;
+              function scheduleAdjust() {
+                if (window.innerWidth > 768) return;
+                if (debounceTimer) return;
+                debounceTimer = setTimeout(function() {
+                  debounceTimer = null;
+                  scanAndAdjust();
+                }, 100);
+              }
+
               var observer = new MutationObserver(function() {
-                scanAndAdjust();
+                scheduleAdjust();
               });
               // documentStart 时 document.body 可能尚未创建，等待就绪后再观察（v1.0.70 修复）
               function observeBodyForWatchdog() {
@@ -1522,9 +1538,8 @@ final class ViewController: UIViewController {
               }
               observeBodyForWatchdog();
 
-              window.addEventListener('resize', scanAndAdjust, { passive: true });
-              window.addEventListener('scroll', scanAndAdjust, { passive: true, capture: true });
-              setInterval(scanAndAdjust, 200);
+              window.addEventListener('resize', scheduleAdjust, { passive: true });
+              window.addEventListener('scroll', scheduleAdjust, { passive: true, capture: true });
             })();
 
             // 移动端聊天输入框回车/换行行为深度优化：
@@ -2385,10 +2400,10 @@ final class ViewController: UIViewController {
           function clearSidebarOverlay() {
             var layers = document.querySelectorAll('[class*="overlayLayer"]');
             for (var i = 0; i < layers.length; i++) {
-              var nodes = layers[i].querySelectorAll('*');
-              for (var j = 0; j < nodes.length; j++) {
-                nodes[j].style.setProperty('background', 'transparent', 'important');
-                nodes[j].style.setProperty('background-color', 'transparent', 'important');
+              if (layers[i].dataset.dshOverlayCleared !== '1') {
+                layers[i].dataset.dshOverlayCleared = '1';
+                layers[i].style.setProperty('background', 'transparent', 'important');
+                layers[i].style.setProperty('background-color', 'transparent', 'important');
               }
             }
           }
@@ -2398,7 +2413,12 @@ final class ViewController: UIViewController {
             var h = parseFloat(raw);
             if (!(h > 0)) return;
             var cols = document.querySelectorAll('[class*="sidebarCol"]');
-            for (var i = 0; i < cols.length; i++) cols[i].style.setProperty('padding-top', h + 'px', 'important');
+            for (var i = 0; i < cols.length; i++) {
+              if (cols[i].dataset.dshInsetApplied !== String(h)) {
+                cols[i].dataset.dshInsetApplied = String(h);
+                cols[i].style.setProperty('padding-top', h + 'px', 'important');
+              }
+            }
           }
           function shiftTitleCluster() {
             try { applySidebarInset(); } catch (e) {}
@@ -2408,57 +2428,53 @@ final class ViewController: UIViewController {
               var cluster = row.querySelector('[class*="titleCluster"]');
               var header = row.closest('header') || row;
               var dir = header.querySelector('button[aria-label="打开目录"], button[aria-label="收起目录"], button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
-              // v1.0.84：按钮要在会话标题左边。它裹在 headerActions 容器里，容器排在标题后面，
-              // 所以按钮跟着跑到了标题右边。把按钮从容器里提出来，放到标题簇第一个。
-              if (dir && cluster && cluster.firstChild !== dir) cluster.insertBefore(dir, cluster.firstChild);
-              // v1.0.85：滑出屏幕左边的侧栏残留按钮隐藏，避免新建会话页左上角多露一截。
-              var stray = document.querySelectorAll('button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
-              for (var s = 0; s < stray.length; s++) {
-                var off = stray[s].getBoundingClientRect().right < 0;
-                stray[s].style.setProperty('visibility', off ? 'hidden' : '', 'important');
+              if (dir && cluster && cluster.firstChild !== dir) {
+                cluster.insertBefore(dir, cluster.firstChild);
               }
-              if (dir) {
+              if (dir && dir.dataset.dshDirStyled !== '1') {
+                dir.dataset.dshDirStyled = '1';
                 dir.style.setProperty('margin-left', '0', 'important');
                 dir.style.setProperty('margin-right', '0', 'important');
                 dir.style.setProperty('order', '0', 'important');
               }
-              if (cluster) {
+              if (cluster && cluster.dataset.dshClusterStyled !== '1') {
+                cluster.dataset.dshClusterStyled = '1';
                 cluster.style.setProperty('flex', '1 1 auto', 'important');
                 cluster.style.setProperty('width', 'auto', 'important');
-                // v1.0.85：标题和智能体往右移，和最左边的目录按钮拉开距离。
                 cluster.style.setProperty('padding-left', '56px', 'important');
-                // v1.0.84：从左往右排，目录按钮靠最左，标题紧跟在它右边。不再居中。
                 cluster.style.setProperty('justify-content', 'flex-start', 'important');
               }
             }
+            var stray = document.querySelectorAll('button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
+            for (var s = 0; s < stray.length; s++) {
+              var off = stray[s].getBoundingClientRect().right < 0;
+              var targetVis = off ? 'hidden' : '';
+              if (stray[s].dataset.dshVis !== targetVis) {
+                stray[s].dataset.dshVis = targetVis;
+                stray[s].style.setProperty('visibility', targetVis, 'important');
+              }
+            }
+            var filesBtns = document.querySelectorAll('[data-mobile-nav="files"]');
+            for (var f = 0; f < filesBtns.length; f++) {
+              if (filesBtns[f].parentNode) filesBtns[f].parentNode.removeChild(filesBtns[f]);
+            }
           }
           shiftTitleCluster();
-          // 会话页的顶栏是点进会话后才渲染的，加载时跑一次会落空，定时再跑。
-          setInterval(shiftTitleCluster, 400);
-          var moShift = new MutationObserver(shiftTitleCluster);
+          var shiftDebounce = null;
+          function scheduleShift() {
+            if (shiftDebounce) return;
+            shiftDebounce = setTimeout(function () {
+              shiftDebounce = null;
+              shiftTitleCluster();
+            }, 180);
+          }
+          var moShift = new MutationObserver(scheduleShift);
           function watchShift() {
             var root = document.body || document.documentElement;
             if (!root) { setTimeout(watchShift, 50); return; }
             moShift.observe(root, { childList: true, subtree: true });
           }
           watchShift();
-          // v1.0.74：文件夹按钮（data-mobile-nav=files）与右侧边栏按钮重叠。
-          // 页面用运行时样式把它设成 display:flex，!important 都压不住，直接从 DOM 移除，
-          // 并用观察器防止页面重渲染时把它加回来。
-          function dropFilesButton() {
-            var nodes = document.querySelectorAll('[data-mobile-nav="files"]');
-            for (var i = 0; i < nodes.length; i++) {
-              if (nodes[i].parentNode) nodes[i].parentNode.removeChild(nodes[i]);
-            }
-          }
-          dropFilesButton();
-          var mo = new MutationObserver(dropFilesButton);
-          function watch() {
-            var root = document.body || document.documentElement;
-            if (!root) { setTimeout(watch, 50); return; }
-            mo.observe(root, { childList: true, subtree: true });
-          }
-          watch();
 
           // v1.0.83：锁屏与后台切回毫秒级自愈支持 (搭配 dsh-anywhere)
           window.__dshFastResume = function () {
@@ -3809,6 +3825,10 @@ final class ViewController: UIViewController {
 
     @objc private func appDidEnterBackground() {
         lastEnterBackgroundTime = Date()
+        activeResumeWorkItem?.cancel()
+        if isDictating {
+            stopVoiceDictation()
+        }
     }
 
     /// 强制恢复联通性（终极恢复机制：彻底掐断死连接，100% 联通回来）
@@ -3872,9 +3892,15 @@ final class ViewController: UIViewController {
     // MARK: - 联网与锁屏切回毫秒级自愈 (Fast-Resume)
 
     @objc private func appDidBecomeActive() {
+        // 确保悬浮按钮始终位于最顶层，且交互可用
+        if let btn = menuButton {
+            view.bringSubviewToFront(btn)
+            btn.isUserInteractionEnabled = true
+        }
         setMenuExpanded(false, animated: false)
 
-        let awaySeconds = Date().timeIntervalSince(lastEnterBackgroundTime)
+        // 取消此前排队的工作项，彻底防范多 App 轮换切换时的连环重入
+        activeResumeWorkItem?.cancel()
 
         // 若当前处于连接失败态或尚未有内容，立刻尝试重连
         if !errorOverlay.isHidden || webView.url == nil || !hasLoadedOnce {
@@ -3882,37 +3908,32 @@ final class ViewController: UIViewController {
             return
         }
 
-        // v1.0.83 锁屏假死彻底自愈：
-        // 如果离开/锁屏超过 15 秒（锁屏一两分钟），底层连接往往已被 iOS 挂起切断：
-        // 先发送极速探针；若 0.35 秒内未收到正常回应，直接自动执行 forceReconnectCurrentURL() 全新建立连接！
-        var isResponsive = false
-        webView.evaluateJavaScript("1+1") { [weak self] result, error in
-            if error == nil, let val = result as? Int, val == 2 {
-                isResponsive = true
-            }
-        }
-
-        let probeDelay = awaySeconds > 15 ? 0.35 : 0.6
-        DispatchQueue.main.asyncAfter(deadline: .now() + probeDelay) { [weak self] in
+        // v1.0.85 根治多 App 轮换与长时间后台切回假死：
+        // 绝不在切回前台时粗暴重新加载整页（避免重新下载 14MB 静态包与 WebProcess 销毁竞争引发死锁）！
+        // 页面 DOM 与 JS 状态保持原样，仅派发轻量级的恢复事件与心跳脉冲，让前端 WebSocket 毫秒级重连自愈。
+        let work = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
-            if !isResponsive || awaySeconds > 90 {
-                // 确凿判定 WebProcess 挂起或通信中断：强行自动全新重连
-                self.recordWebError("检测到锁屏切回后通信中断，已自动执行全新连接自愈")
-                self.forceReconnectCurrentURL()
-            } else {
-                // 存活状态：主动派发 visibilitychange 与 focus，唤醒页面 WebSocket 重连
-                self.webView.evaluateJavaScript("""
-                    (function() {
-                      try {
-                        window.dispatchEvent(new Event('focus'));
-                        document.dispatchEvent(new Event('visibilitychange'));
-                        if (window.__dshFastResume) { window.__dshFastResume(); }
-                        if (window.__dshSyncActiveSession) { window.__dshSyncActiveSession(); }
-                      } catch(e) {}
-                    })();
-                """, completionHandler: nil)
+            self.webView.evaluateJavaScript("""
+                (function() {
+                  try {
+                    window.dispatchEvent(new Event('pageshow'));
+                    window.dispatchEvent(new Event('focus'));
+                    document.dispatchEvent(new Event('visibilitychange'));
+                    if (window.__dshFastResume) { window.__dshFastResume(); }
+                    if (window.__dshSyncActiveSession) { window.__dshSyncActiveSession(); }
+                  } catch(e) {}
+                })();
+            """) { [weak self] _, error in
+                guard let self = self else { return }
+                // 仅在明确收到 WebProcess 崩溃错误时才触发全新重载
+                if let err = error as NSError?, err.domain == WKErrorDomain, err.code == WKError.webContentProcessTerminated.rawValue {
+                    self.recordWebError("WebProcess 异常终止，已自动重载")
+                    self.forceReconnectCurrentURL()
+                }
             }
         }
+        activeResumeWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
     }
 
     /// 网络可达性监听：网络从无到有时自动加载，无需手动点刷新。
@@ -4346,14 +4367,11 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         let release_url: String?
     }
 
-    /// 国内 4G / WiFi 免代理极速多节点镜像列表（并发竞速，哪个最快先回就用哪个）
+    /// 国内 4G / WiFi 免代理极速实时镜像列表（排除 jsDelivr 等强缓存 CDN，确保获取到最新构建）
     private static let updateMetadataMirrorURLs: [String] = [
-        "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@personal/releases/latest.json",
         "https://ghfast.top/https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json",
         "https://gh-proxy.com/https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json",
-        "https://cdn.jsdelivr.net/gh/liushQAQ/IOS@personal/releases/latest.json",
-        "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@personal/releases/latest.json",
-        "https://fastly.jsdelivr.net/gh/liushQAQ/IOS@personal/releases/latest.json",
+        "https://raw.gitmirror.com/liushQAQ/IOS/personal/releases/latest.json",
         "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json"
     ]
 
@@ -4361,19 +4379,14 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     private static func mirrorCandidates(for rawURL: String) -> [String] {
         guard !rawURL.isEmpty else { return [] }
         // 如果已经是代理地址，直接优先使用
-        if rawURL.contains("ghfast.top") || rawURL.contains("gh-proxy.com") || rawURL.contains("jsdelivr.net") {
+        if rawURL.contains("ghfast.top") || rawURL.contains("gh-proxy.com") {
             return [rawURL]
         }
-        var list: [String] = [
+        let list: [String] = [
             "https://ghfast.top/\(rawURL)",
-            "https://gh-proxy.com/\(rawURL)"
+            "https://gh-proxy.com/\(rawURL)",
+            rawURL
         ]
-        if let range = rawURL.range(of: "raw.githubusercontent.com/liushQAQ/IOS/personal/") {
-            let relPath = String(rawURL[range.upperBound...])
-            list.insert("https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@personal/\(relPath)", at: 0)
-            list.append("https://cdn.jsdelivr.net/gh/liushQAQ/IOS@personal/\(relPath)")
-        }
-        list.append(rawURL)
         return list
     }
 
@@ -4384,32 +4397,67 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
 
         var loadingAlert: UIAlertController?
         if manual {
-            let alert = UIAlertController(title: "正在检查更新", message: "正在通过国内加速节点检查仓库最新打包…", preferredStyle: .alert)
+            let alert = UIAlertController(title: "正在检查更新", message: "正在通过国内加速节点检查仓库最新构建…", preferredStyle: .alert)
             present(alert, animated: true)
             loadingAlert = alert
         }
 
         let mirrorURLs = Self.updateMetadataMirrorURLs
         let lock = NSLock()
-        var hasSucceeded = false
+        var bestInfo: AppReleaseInfo?
         var completedCount = 0
+        var hasDispatched = false
         var lastError: Error?
         let total = mirrorURLs.count
         let ts = Int(Date().timeIntervalSince1970)
+
+        func finishWithResult(info: AppReleaseInfo?) {
+            lock.lock()
+            if hasDispatched {
+                lock.unlock()
+                return
+            }
+            hasDispatched = true
+            lock.unlock()
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                let done = {
+                    if let valid = info {
+                        self.handleFetchedReleaseInfo(valid, currentVer: currentVer, currentBuild: currentBuild, manual: manual)
+                    } else if manual {
+                        let msg = lastError?.localizedDescription ?? "所有加速节点均未响应，请检查网络连接。"
+                        let alert = UIAlertController(title: "检查更新失败", message: "无法连接更新源：\(msg)", preferredStyle: .alert)
+                        alert.addAction(UIAlertAction(title: "确定", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
+                if let loading = loadingAlert {
+                    loading.dismiss(animated: true, completion: done)
+                } else {
+                    done()
+                }
+            }
+        }
 
         for urlStr in mirrorURLs {
             let sep = urlStr.contains("?") ? "&" : "?"
             guard let url = URL(string: "\(urlStr)\(sep)_t=\(ts)") else {
                 lock.lock()
                 completedCount += 1
-                lock.unlock()
+                if completedCount >= total && !hasDispatched {
+                    lock.unlock()
+                    finishWithResult(info: bestInfo)
+                } else {
+                    lock.unlock()
+                }
                 continue
             }
 
             var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 6)
             req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
 
-            URLSession.shared.dataTask(with: req) { [weak self] data, resp, error in
+            URLSession.shared.dataTask(with: req) { data, resp, error in
                 var validInfo: AppReleaseInfo?
                 if error == nil,
                    let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
@@ -4419,45 +4467,27 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
                 }
 
                 lock.lock()
-                if hasSucceeded {
-                    lock.unlock()
-                    return
-                }
                 completedCount += 1
                 if let err = error { lastError = err }
 
                 if let info = validInfo {
-                    hasSucceeded = true
-                    lock.unlock()
-                    DispatchQueue.main.async {
-                        guard let self else { return }
-                        let done = {
-                            self.handleFetchedReleaseInfo(info, currentVer: currentVer, currentBuild: currentBuild, manual: manual)
-                        }
-                        if let loading = loadingAlert {
-                            loading.dismiss(animated: true, completion: done)
-                        } else {
-                            done()
-                        }
+                    let incomingBuild = info.build ?? 0
+                    let currentBestBuild = bestInfo?.build ?? -1
+                    if incomingBuild > currentBestBuild {
+                        bestInfo = info
                     }
-                } else if completedCount >= total {
-                    lock.unlock()
-                    DispatchQueue.main.async {
-                        guard let self else { return }
-                        let failBlock = {
-                            if manual {
-                                let msg = lastError?.localizedDescription ?? "所有加速节点均未响应，请检查网络连接。"
-                                let alert = UIAlertController(title: "检查更新失败", message: "无法连接更新源：\(msg)", preferredStyle: .alert)
-                                alert.addAction(UIAlertAction(title: "确定", style: .default))
-                                self.present(alert, animated: true)
-                            }
-                        }
-                        if let loading = loadingAlert {
-                            loading.dismiss(animated: true, completion: failBlock)
-                        } else {
-                            failBlock()
-                        }
+
+                    // 如果已经获取到确切高于当前版本的最新版本，立刻完成响应
+                    if incomingBuild > currentBuild {
+                        lock.unlock()
+                        finishWithResult(info: info)
+                        return
                     }
+                }
+
+                if completedCount >= total {
+                    lock.unlock()
+                    finishWithResult(info: bestInfo)
                 } else {
                     lock.unlock()
                 }
