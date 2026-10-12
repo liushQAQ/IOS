@@ -2605,10 +2605,7 @@ final class ViewController: UIViewController {
     // MARK: - 键盘避让（v1.0.70）
 
     /// 键盘弹出/收起/移动：把键盘与视图重叠的高度写进底部约束（同步键盘动画曲线）。
-    ///
-    /// v1.0.73 修正：v1.0.70 只压 WebView 高度，但页内 `html,body{position:fixed;overflow:hidden}`
-    /// 把整页钉死、内部滚动容器又用 100vh，压缩后输入框仍停在键盘后面（用户实测「看不到输入了什么」）。
-    /// 现在压缩的同时把遮挡高度下发给页内脚本，由脚本把焦点输入框 / 输入区滚到键盘正上方。
+    /// 收起键盘时采用 0.32s 弹簧阻尼平滑缓动下降，解决下降太快、太生硬、无过渡的问题！
     @objc private func keyboardFrameWillChange(_ note: Notification) {
         guard let endFrame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue else { return }
         let kbInView = view.convert(endFrame, from: nil)
@@ -2617,13 +2614,27 @@ final class ViewController: UIViewController {
         isKeyboardVisible = overlap > 0
         keyboardOverlap = overlap
 
-        let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
-        let curveRaw = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7
-        let options: UIView.AnimationOptions = [UIView.AnimationOptions(rawValue: curveRaw << 16), .beginFromCurrentState]
         webViewBottomConstraint.constant = -overlap
         view.setNeedsLayout()
-        UIView.animate(withDuration: duration, delay: 0, options: options) {
-            self.view.layoutIfNeeded()
+
+        if isHide {
+            // 收起键盘：使用 0.32 秒高质感弹簧阻尼动画，优雅缓动下落，彻底消除骤降与生硬卡顿！
+            UIView.animate(
+                withDuration: 0.32,
+                delay: 0,
+                usingSpringWithDamping: 0.88,
+                initialSpringVelocity: 0.2,
+                options: [.curveEaseInOut, .allowUserInteraction, .beginFromCurrentState],
+                animations: {
+                    self.view.layoutIfNeeded()
+                })
+        } else {
+            let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
+            let curveRaw = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7
+            let options: UIView.AnimationOptions = [UIView.AnimationOptions(rawValue: curveRaw << 16), .beginFromCurrentState]
+            UIView.animate(withDuration: duration, delay: 0, options: options) {
+                self.view.layoutIfNeeded()
+            }
         }
     }
 
@@ -3266,9 +3277,14 @@ final class ViewController: UIViewController {
                 return false
             }()
 
-            let title = isSelected ? "🔴 \(item.name) (当前)" : item.name
+            let title = isSelected ? "🔴 \(item.name) (当前·点击刷新)" : item.name
             let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
                 guard let self else { return }
+                if isSelected {
+                    // 点击当前项：直接触发回源彻底重载当前网页，重启长连接，绝不假死
+                    self.webView.reloadFromOrigin()
+                    return
+                }
                 ServiceResolver.resolve(item) { url in
                     self.loadURLString(url, markAsDSHService: true)
                 }
@@ -3281,6 +3297,14 @@ final class ViewController: UIViewController {
             }
             sheet.addAction(action)
         }
+
+        sheet.addAction(UIAlertAction(title: "⚡ 立即刷新当前页面", style: .default) { [weak self] _ in
+            self?.webView.reloadFromOrigin()
+        })
+
+        sheet.addAction(UIAlertAction(title: "💬 反馈与建议…", style: .default) { [weak self] _ in
+            self?.presentFeedbackSheet()
+        })
 
         sheet.addAction(UIAlertAction(title: "🌐 免费网页版（主流AI模型）…", style: .default) { [weak self] _ in
             self?.presentFreeWebActionSheet()
@@ -3301,13 +3325,10 @@ final class ViewController: UIViewController {
         sheet.addAction(UIAlertAction(title: "手动输入地址…", style: .default) { [weak self] _ in
             self?.promptForURL()
         })
-        sheet.addAction(UIAlertAction(title: "刷新", style: .default) { [weak self] _ in
-            self?.webView.reloadFromOrigin()
-        })
         sheet.addAction(UIAlertAction(title: "清除缓存并重载", style: .default) { [weak self] _ in
             self?.clearWebCacheAndReload()
         })
-        let currentAppVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.86"
+        let currentAppVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.87"
         sheet.addAction(UIAlertAction(title: "🚀 检查更新 (当前 v\(currentAppVer))…", style: .default) { [weak self] _ in
             self?.checkForAppUpdates(manual: true)
         })
@@ -3683,6 +3704,15 @@ final class ViewController: UIViewController {
         return "设备: \(exactModel)\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
     }
 
+    /// 反馈与建议页面入口
+    private func presentFeedbackSheet() {
+        let currentURL = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? ""
+        let feedbackVC = FeedbackViewController(currentURL: currentURL)
+        let nav = UINavigationController(rootViewController: feedbackVC)
+        nav.modalPresentationStyle = .pageSheet
+        present(nav, animated: true)
+    }
+
     /// 关于：版本号原生可见（读 Info.plist，回退到编译期常量）
     private func showAbout() {
         let info = Bundle.main.infoDictionary
@@ -3763,12 +3793,15 @@ final class ViewController: UIViewController {
         isTokenRetryInFlight = false
         if !trimmed.contains("dsh-pocket-retry=1") { isPocketRetryInFlight = false }
 
-        // 回归 1.0.70.9 稳定机制：绝不手动强开菊花遮挡界面，菊花仅在 didStartProvisionalNavigation 时由系统自然唤起；
-        // 绝不强制 reloadIgnoringLocalAndRemoteCacheData 破坏移动网络通道，绝不在未必要时 stopLoading() 制造死锁！
-        UIView.animate(withDuration: 0.12) {
-            self.webView.alpha = 0
+        // 绝不强制把当前画面设为 alpha=0（全透明大白屏大菊花卡死元凶）！
+        // 保持原画面可见直到新页面首帧就绪，平滑自然过渡；
+        // 如果请求的地址与当前地址相同（如点击当前服务刷新），直接执行 reloadFromOrigin 彻底重开长连接！
+        if let currentURL = webView.url, currentURL.absoluteString == url.absoluteString {
+            webView.reloadFromOrigin()
+        } else {
+            let request = URLRequest(url: url, timeoutInterval: 12)
+            webView.load(request)
         }
-        webView.load(URLRequest(url: url))
     }
 
     // MARK: - 联网即加载与后台恢复 (回归 1.0.70.9 零干扰黄金逻辑)
@@ -3780,10 +3813,22 @@ final class ViewController: UIViewController {
         }
         setMenuExpanded(false, animated: false)
 
-        // 回归 1.0.70.9：绝不在切回前台时向挂起的 WebProcess 盲目注入 evaluateJavaScript！
-        // 页面已正常加载时系统自然恢复渲染与长连接，仅在处于错误态或未加载时才触发重试。
+        // 回归 1.0.70.9 黄金唤醒逻辑：
+        // 1. 若当前处于错误态或未加载成功，立刻重新加载；
+        // 2. 页面已加载时，派发系统级页面恢复事件，唤醒长连接与会话状态同步，绝不暴力强杀！
         if !errorOverlay.isHidden || webView.url == nil || !hasLoadedOnce {
             retryTapped()
+        } else if hasLoadedOnce {
+            webView.evaluateJavaScript("""
+                (function() {
+                  try {
+                    window.dispatchEvent(new Event('pageshow'));
+                    window.dispatchEvent(new Event('focus'));
+                    document.dispatchEvent(new Event('visibilitychange'));
+                    if (window.__dshSyncActiveSession) { window.__dshSyncActiveSession(); }
+                  } catch(e) {}
+                })();
+            """, completionHandler: nil)
         }
     }
 
@@ -4201,7 +4246,7 @@ extension ViewController: UIScrollViewDelegate {
     }
 }
 
-// MARK: - 远程仓库自动/手动检查更新与巨魔(TrollStore)自动安装 (v1.0.86 稳定重连与丝滑避让版)
+// MARK: - 远程仓库自动/手动检查更新与巨魔(TrollStore)自动安装 (v1.0.87 弹簧缓动与反馈建议版)
 
 extension ViewController: UIDocumentInteractionControllerDelegate {
     func documentInteractionControllerViewControllerForPreview(_ controller: UIDocumentInteractionController) -> UIViewController {
@@ -4242,7 +4287,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     }
 
     func checkForAppUpdates(manual: Bool = false) {
-        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.86"
+        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.87"
         let currentBuildStr = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
         let currentBuild = Int(currentBuildStr) ?? 0
 

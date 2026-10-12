@@ -329,7 +329,7 @@ final class SettingsViewController: UIViewController {
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
-        let footer = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 116))
+        let footer = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 160))
         let footerLabel = UILabel()
         footerLabel.text = "点行打开该服务；右侧 ✎ 编辑（名称/地址/备注）；左滑删除。列表保存在本机，电脑 IP 变化时只需编辑对应条目。"
         footerLabel.font = .preferredFont(forTextStyle: .footnote)
@@ -347,6 +347,15 @@ final class SettingsViewController: UIViewController {
         guideBtn.addTarget(self, action: #selector(helpTapped), for: .touchUpInside)
         footer.addSubview(guideBtn)
 
+        let feedbackBtn = UIButton(type: .system)
+        feedbackBtn.setTitle(" 💬 提交问题反馈与使用建议", for: .normal)
+        feedbackBtn.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        feedbackBtn.setImage(UIImage(systemName: "bubble.left.and.exclamationmark.bubble.right"), for: .normal)
+        feedbackBtn.tintColor = .systemOrange
+        feedbackBtn.translatesAutoresizingMaskIntoConstraints = false
+        feedbackBtn.addTarget(self, action: #selector(feedbackTapped), for: .touchUpInside)
+        footer.addSubview(feedbackBtn)
+
         NSLayoutConstraint.activate([
             footerLabel.topAnchor.constraint(equalTo: footer.topAnchor, constant: 8),
             footerLabel.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 20),
@@ -355,10 +364,21 @@ final class SettingsViewController: UIViewController {
             guideBtn.topAnchor.constraint(equalTo: footerLabel.bottomAnchor, constant: 10),
             guideBtn.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 20),
             guideBtn.trailingAnchor.constraint(lessThanOrEqualTo: footer.trailingAnchor, constant: -20),
-            guideBtn.bottomAnchor.constraint(lessThanOrEqualTo: footer.bottomAnchor, constant: -8)
+
+            feedbackBtn.topAnchor.constraint(equalTo: guideBtn.bottomAnchor, constant: 10),
+            feedbackBtn.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 20),
+            feedbackBtn.trailingAnchor.constraint(lessThanOrEqualTo: footer.trailingAnchor, constant: -20),
+            feedbackBtn.bottomAnchor.constraint(lessThanOrEqualTo: footer.bottomAnchor, constant: -8)
         ])
         tableView.tableFooterView = footer
         probeAll()
+    }
+
+    @objc private func feedbackTapped() {
+        let feedbackVC = FeedbackViewController(currentURL: currentURL)
+        let nav = UINavigationController(rootViewController: feedbackVC)
+        nav.modalPresentationStyle = .pageSheet
+        present(nav, animated: true)
     }
 
     @objc private func helpTapped() {
