@@ -1,10 +1,10 @@
 {
-  "version": "1.0.87",
-  "build": 22,
-  "updated_at": "2026-10-12 22:05:00",
-  "title": "v1.0.87 键盘平滑弹簧缓动下降·新增反馈建议·彻底解决切后台转圈",
-  "changelog": "1. 键盘收起动画优化：采用 0.32 秒高质感弹簧阻尼缓动（damping: 0.88），会话记录平滑自然下移，彻底告别下落过快与生硬骤降！\n2. 新增「💬 反馈与建议」专用页面：支持问题分类、详细描述、联系方式及一键复制设备与网络诊断信息，直通 GitHub Issues\n3. 彻底根治切换后台卡死与换 URL 无限转圈：点击当前服务秒级回源真刷新重启长连接，切换新地址原画面平稳保留，彻底拔除 alpha=0 菊花卡死元凶！",
-  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.87-22.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.87-22.tipa",
+  "version": "1.0.88",
+  "build": 23,
+  "updated_at": "2026-10-13 00:50:00",
+  "title": "v1.0.88 统一3083主控·彻底解决双开冲突与会话丢失·全网通用稳定版",
+  "changelog": "1. 统一 3083 端口主控：深度适配 dsh-anywhere 1.0.1 单进程主控架构，无论桌面端还是无头端均严格统一监听 3083，彻底杜绝 stored session 会话丢失与双端不同步！\n2. 键盘平滑弹簧阻尼缓动：收起键盘采用 0.32s 柔和阻尼过渡，彻底消除骤降与断崖感！\n3. 新增「💬 反馈与建议」页面：悬浮菜单与设置页一键直达，支持导出软硬件诊断报告。\n4. 切后台与换 URL 防死锁：保留原画面平滑过渡，点击当前服务强制回源重连。",
+  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.88-23.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.88-23.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }
