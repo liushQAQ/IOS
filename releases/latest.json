@@ -1,10 +1,10 @@
 {
-  "version": "1.0.86",
-  "build": 21,
-  "updated_at": "2026-10-12 20:00:00",
-  "title": "v1.0.86 黄金架构回归·彻底根治后台卡死与转圈·键盘丝滑零弹跳",
-  "changelog": "1. 彻底根治切换后台几分钟卡死与切换URL无限转圈：生命周期与URL加载全面回归1.0.70.9经典黄金架构，移除强制no-cache与手动转圈遮挡，网络秒级响应\n2. 彻底解决点击会话框键盘弹出会话记录弹跳闪烁两下的问题：移除冗余滚动与延时补刀，底部常驻100px舒适裕量，键盘弹起一气呵成丝滑上移，绝无遮挡",
-  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.86-21.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.86-21.tipa",
+  "version": "1.0.87",
+  "build": 22,
+  "updated_at": "2026-10-12 22:05:00",
+  "title": "v1.0.87 键盘平滑弹簧缓动下降·新增反馈建议·彻底解决切后台转圈",
+  "changelog": "1. 键盘收起动画优化：采用 0.32 秒高质感弹簧阻尼缓动（damping: 0.88），会话记录平滑自然下移，彻底告别下落过快与生硬骤降！\n2. 新增「💬 反馈与建议」专用页面：支持问题分类、详细描述、联系方式及一键复制设备与网络诊断信息，直通 GitHub Issues\n3. 彻底根治切换后台卡死与换 URL 无限转圈：点击当前服务秒级回源真刷新重启长连接，切换新地址原画面平稳保留，彻底拔除 alpha=0 菊花卡死元凶！",
+  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.87-22.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.87-22.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }
