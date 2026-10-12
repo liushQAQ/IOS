@@ -692,7 +692,7 @@ final class ConnectionGuideViewController: UIViewController {
         let step2 = createStepCard(
             badge: "步骤 2",
             title: "多台手机/Pad 同时访问与无缝切换",
-            detail: "1. 电脑端重启 DSH（默认工作在 3082/3083 端口）\n2. 终端或 DSH 界面会显示您的电脑局域网访问地址与二维码\n3. 多台 iPhone、iPad 与电脑可同时打开同一会话，两边实时同屏收发、流式同步打印，不踢线、不冲突！\n4. 如需公网访问，支持 Cloudflare / 自定义穿透，重启软件外网地址保持不变。",
+            detail: "1. 电脑端启动 DSH（统一以 3083 端口为唯一主控代理）\n2. 终端或 DSH 界面会显示您的电脑局域网访问地址与二维码\n3. 多台 iPhone、iPad 与电脑可同时打开同一会话，两边实时同屏收发、流式同步打印，不踢线、不冲突！\n4. 如需公网访问，支持 Cloudflare / 自定义穿透，重启软件外网地址保持不变。",
             code: nil,
             tip: "⚡ 彻底告别锁屏假死：手机锁屏一两分钟切回，系统自动恢复联通；亦可点击悬浮球「刷新」或「当前地址」瞬间重新联通！"
         )
@@ -754,12 +754,15 @@ final class ConnectionGuideViewController: UIViewController {
         t.text = title
         t.font = .preferredFont(forTextStyle: .headline)
         t.textColor = .label
+        t.numberOfLines = 0
+        t.lineBreakMode = .byWordWrapping
 
         let d = UILabel()
         d.text = desc
         d.font = .preferredFont(forTextStyle: .subheadline)
         d.textColor = .secondaryLabel
         d.numberOfLines = 0
+        d.lineBreakMode = .byWordWrapping
 
         let vStack = UIStackView(arrangedSubviews: [t, d])
         vStack.axis = .vertical
@@ -788,22 +791,27 @@ final class ConnectionGuideViewController: UIViewController {
         badgeLabel.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.12)
         badgeLabel.layer.cornerRadius = 4
         badgeLabel.clipsToBounds = true
+        badgeLabel.setContentHuggingPriority(.required, for: .horizontal)
+        badgeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         let t = UILabel()
         t.text = title
         t.font = .preferredFont(forTextStyle: .headline)
         t.textColor = .label
+        t.numberOfLines = 0
+        t.lineBreakMode = .byWordWrapping
 
         let headStack = UIStackView(arrangedSubviews: [badgeLabel, t])
         headStack.axis = .horizontal
         headStack.spacing = 8
-        headStack.alignment = .center
+        headStack.alignment = .top
 
         let d = UILabel()
         d.text = detail
         d.font = .preferredFont(forTextStyle: .subheadline)
         d.textColor = .secondaryLabel
         d.numberOfLines = 0
+        d.lineBreakMode = .byWordWrapping
 
         var views: [UIView] = [headStack, d]
 
@@ -872,7 +880,7 @@ final class ConnectionGuideViewController: UIViewController {
         card.layer.cornerRadius = 12
 
         let badgeLabel = UILabel()
-        badgeLabel.text = "最新更新日志 (v1.0.83)"
+        badgeLabel.text = "最新更新日志 (v1.0.88)"
         badgeLabel.font = .systemFont(ofSize: 12, weight: .bold)
         badgeLabel.textColor = .systemIndigo
         badgeLabel.backgroundColor = .systemIndigo.withAlphaComponent(0.12)
@@ -887,6 +895,8 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.text = "功能特性与体验升级说明"
         titleLabel.font = .preferredFont(forTextStyle: .headline)
         titleLabel.textColor = .label
+        titleLabel.numberOfLines = 0
+        titleLabel.lineBreakMode = .byWordWrapping
 
         let logContent = """
         ⚡ 1. 首推自研 dsh-anywhere 插件（多端协同枢纽）：

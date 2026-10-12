@@ -3259,14 +3259,69 @@ final class ViewController: UIViewController {
         presentMenuSheet()
     }
 
+    // MARK: - 悬浮菜单分级归类（一级、二级、三级清晰导航）
+
+    /// 一级主菜单：清晰收拢为 5 项高频主分类，告别冗长杂乱
     private func presentMenuSheet() {
-        let sheet = UIAlertController(title: "DSH", message: nil, preferredStyle: .actionSheet)
+        let sheet = UIAlertController(title: "DSH 移动主控枢纽", message: nil, preferredStyle: .actionSheet)
 
         let services = ServiceStore.load()
         let currentURL = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? ""
         let currentComps = URLComponents(string: currentURL)
 
-        for item in services.prefix(6) {
+        // 1. 首项直接显示当前服务，点击即可立即回源刷新防假死
+        var currentServiceName = "当前已连接服务"
+        for item in services {
+            if item.url == currentURL { currentServiceName = item.name; break }
+            if let itemComps = URLComponents(string: item.url), let currentComps {
+                if itemComps.host == currentComps.host && itemComps.port == currentComps.port {
+                    currentServiceName = item.name
+                    break
+                }
+            }
+        }
+        let currentAction = UIAlertAction(title: "🔴 \(currentServiceName)（点击立即刷新）", style: .default) { [weak self] _ in
+            self?.webView.reloadFromOrigin()
+        }
+        if currentAction.responds(to: NSSelectorFromString("titleTextColor")) {
+            currentAction.setValue(UIColor.systemRed, forKey: "titleTextColor")
+        }
+        sheet.addAction(currentAction)
+
+        // 2. 二级菜单：切换服务与连接入口
+        sheet.addAction(UIAlertAction(title: "📡 切换服务与连接 (局域网/外网/扫码) ›", style: .default) { [weak self] _ in
+            self?.presentConnectionsSubmenu()
+        })
+
+        // 3. 二级菜单：免费网页版（主流AI模型）
+        sheet.addAction(UIAlertAction(title: "🌐 免费网页版（8大国内+4大海外AI） ›", style: .default) { [weak self] _ in
+            self?.presentFreeWebActionSheet()
+        })
+
+        // 4. 二级菜单：维护与工具
+        sheet.addAction(UIAlertAction(title: "⚙️ 维护与工具 (缓存清理/检查更新/教程) ›", style: .default) { [weak self] _ in
+            self?.presentToolsSubmenu()
+        })
+
+        // 5. 邮件反馈与建议（直发 734530963@qq.com）
+        sheet.addAction(UIAlertAction(title: "✉️ 邮件反馈与建议 (734530963@qq.com)…", style: .default) { [weak self] _ in
+            self?.presentFeedbackSheet()
+        })
+
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    /// 二级子菜单：切换服务与连接通道
+    private func presentConnectionsSubmenu() {
+        let sheet = UIAlertController(title: "选择服务与连接方式", message: nil, preferredStyle: .actionSheet)
+
+        let services = ServiceStore.load()
+        let currentURL = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? ""
+        let currentComps = URLComponents(string: currentURL)
+
+        for item in services {
             let isSelected: Bool = {
                 if item.url == currentURL { return true }
                 if let itemComps = URLComponents(string: item.url), let currentComps {
@@ -3277,11 +3332,10 @@ final class ViewController: UIViewController {
                 return false
             }()
 
-            let title = isSelected ? "🔴 \(item.name) (当前·点击刷新)" : item.name
+            let title = isSelected ? "✓ \(item.name) (正在使用)" : item.name
             let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
                 guard let self else { return }
                 if isSelected {
-                    // 点击当前项：直接触发回源彻底重载当前网页，重启长连接，绝不假死
                     self.webView.reloadFromOrigin()
                     return
                 }
@@ -3289,175 +3343,64 @@ final class ViewController: UIViewController {
                     self.loadURLString(url, markAsDSHService: true)
                 }
             }
-            if isSelected {
-                // 如果系统支持，将字体颜色设置为红色强调（利用 responds(to:) 保护防止低版本 iOS KVC 闪退）
-                if action.responds(to: NSSelectorFromString("titleTextColor")) {
-                    action.setValue(UIColor.systemRed, forKey: "titleTextColor")
-                }
+            if isSelected && action.responds(to: NSSelectorFromString("titleTextColor")) {
+                action.setValue(UIColor.systemBlue, forKey: "titleTextColor")
             }
             sheet.addAction(action)
         }
 
-        sheet.addAction(UIAlertAction(title: "⚡ 立即刷新当前页面", style: .default) { [weak self] _ in
-            self?.webView.reloadFromOrigin()
-        })
-
-        sheet.addAction(UIAlertAction(title: "💬 反馈与建议…", style: .default) { [weak self] _ in
-            self?.presentFeedbackSheet()
-        })
-
-        sheet.addAction(UIAlertAction(title: "🌐 免费网页版（主流AI模型）…", style: .default) { [weak self] _ in
-            self?.presentFreeWebActionSheet()
-        })
-
-        sheet.addAction(UIAlertAction(title: "全部服务…", style: .default) { [weak self] _ in
-            self?.openServiceList()
-        })
-        sheet.addAction(UIAlertAction(title: "连接说明与教程…", style: .default) { [weak self] _ in
-            self?.openConnectionGuide()
-        })
-        sheet.addAction(UIAlertAction(title: "📷 扫码连接（扫二维码自动填地址）", style: .default) { [weak self] _ in
+        sheet.addAction(UIAlertAction(title: "📷 扫码连接（扫描二维码自动填入）", style: .default) { [weak self] _ in
             self?.presentQRScanner()
         })
-        sheet.addAction(UIAlertAction(title: "🔳 当前地址二维码（给别人扫）", style: .default) { [weak self] _ in
-            self?.showCurrentAddressQRCode()
-        })
-        sheet.addAction(UIAlertAction(title: "手动输入地址…", style: .default) { [weak self] _ in
+        sheet.addAction(UIAlertAction(title: "⌨️ 手动输入地址…", style: .default) { [weak self] _ in
             self?.promptForURL()
         })
-        sheet.addAction(UIAlertAction(title: "清除缓存并重载", style: .default) { [weak self] _ in
+        sheet.addAction(UIAlertAction(title: "🔳 当前地址二维码（生成分享给其他设备）", style: .default) { [weak self] _ in
+            self?.showCurrentAddressQRCode()
+        })
+        sheet.addAction(UIAlertAction(title: "📋 全部服务列表管理（编辑/新增/删除）…", style: .default) { [weak self] _ in
+            self?.openServiceList()
+        })
+        sheet.addAction(UIAlertAction(title: "‹ 返回主菜单", style: .cancel) { [weak self] _ in
+            self?.presentMenuSheet()
+        })
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    /// 二级子菜单：维护、教程与工具
+    private func presentToolsSubmenu() {
+        let sheet = UIAlertController(title: "系统维护与实用工具", message: nil, preferredStyle: .actionSheet)
+
+        sheet.addAction(UIAlertAction(title: "⚡ 立即回源刷新当前页面", style: .default) { [weak self] _ in
+            self?.webView.reloadFromOrigin()
+        })
+        sheet.addAction(UIAlertAction(title: "🧹 清除网页缓存并重载", style: .default) { [weak self] _ in
             self?.clearWebCacheAndReload()
         })
-        let currentAppVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.87"
+        let currentAppVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.88"
         sheet.addAction(UIAlertAction(title: "🚀 检查更新 (当前 v\(currentAppVer))…", style: .default) { [weak self] _ in
             self?.checkForAppUpdates(manual: true)
         })
-        #if !PUBLIC_BUILD
-        // v1.0.83：布局编辑只在个人版里。公开版编译时带 PUBLIC_BUILD，这段不存在。
-        let layoutOn = UserDefaults.standard.bool(forKey: Keys.layoutEdit)
-        sheet.addAction(UIAlertAction(title: layoutOn ? "调整布局：开（点此关闭）" : "调整布局…", style: .default) { [weak self] _ in
-            guard let self else { return }
-            UserDefaults.standard.set(!layoutOn, forKey: Keys.layoutEdit)
-            self.applyLayoutEditMode()
+        sheet.addAction(UIAlertAction(title: "📖 连接说明与教程…", style: .default) { [weak self] _ in
+            self?.openConnectionGuide()
         })
-        #endif
-        sheet.addAction(UIAlertAction(title: "关于", style: .default) { [weak self] _ in
+        sheet.addAction(UIAlertAction(title: "ℹ️ 关于 DSHios", style: .default) { [weak self] _ in
             self?.showAbout()
         })
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.addAction(UIAlertAction(title: "‹ 返回主菜单", style: .cancel) { [weak self] _ in
+            self?.presentMenuSheet()
+        })
         sheet.popoverPresentationController?.sourceView = menuButton
         present(sheet, animated: true)
     }
 
     #if !PUBLIC_BUILD
-    /// v1.0.83：布局编辑层。给每个按钮描边、标名字，按住拖动，松手记住位置。
-    /// 只在个人版里。打开后注入到当前页面，刷新或换页时按开关重新注入。
+    /// 布局调整功能已关闭，静默清除历史注入元素
     private func applyLayoutEditMode() {
-        let on = UserDefaults.standard.bool(forKey: Keys.layoutEdit)
-        let js = on ? Self.layoutEditOnJS : Self.layoutEditOffJS
+        let js = "(function(){var e=document.getElementById('dsh-layout-edit');if(e)e.remove();})();"
         webView?.evaluateJavaScript(js, completionHandler: nil)
     }
-
-    private static let layoutEditOffJS = "(function(){var e=document.getElementById('dsh-layout-edit');if(e)e.remove();document.querySelectorAll('[data-dsh-moved]').forEach(function(n){n.style.position='';n.style.left='';n.style.top='';n.style.zIndex='';n.removeAttribute('data-dsh-moved');});})();"
-
-    private static let layoutEditOnJS = """
-    (function () {
-      if (document.getElementById('dsh-layout-edit')) return;
-      var box = document.createElement('div');
-      box.id = 'dsh-layout-edit';
-      box.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;z-index:2147483000;';
-      document.documentElement.appendChild(box);
-
-      function labelOf(el) {
-        var t = el.getAttribute('aria-label') || (el.innerText || '').trim();
-        return t.replace(/\\s+/g, ' ').slice(0, 10) || el.tagName.toLowerCase();
-      }
-      function candidates() {
-        var sel = 'header, [class*="titleRow"], [class*="composerSeat"], [class*="composerStack"], [class*="uWtHQG_input"], [class*="sidebarCol"], button, [role="button"], a, input, textarea';
-        var list = Array.prototype.filter.call(document.querySelectorAll(sel), function (el) {
-          if (el.closest('#dsh-layout-edit') || el.closest('#dsh-layout-bar')) return false;
-          var r = el.getBoundingClientRect();
-          return r.width > 8 && r.height > 8 && r.width < window.innerWidth + 4 && r.bottom > 0 && r.right > 0 && r.top < window.innerHeight && r.left < window.innerWidth;
-        });
-        // 大块在前、小按钮在后：后画的框在上层，按钮不会被整块挡住拖不动。
-        list.sort(function (a, b) { return (b.getBoundingClientRect().width * b.getBoundingClientRect().height) - (a.getBoundingClientRect().width * a.getBoundingClientRect().height); });
-        return list;
-      }
-      function paint() {
-        box.innerHTML = '';
-        var idx = 0;
-        candidates().forEach(function (el) {
-          idx += 1;
-          var num = idx;
-          var r = el.getBoundingClientRect();
-          var f = document.createElement('div');
-          f.style.cssText = 'position:fixed;border:1px dashed #ff2d55;border-radius:6px;pointer-events:auto;background:rgba(255,45,85,0.06);';
-          f.style.left = r.left + 'px';
-          f.style.top = r.top + 'px';
-          f.style.width = r.width + 'px';
-          f.style.height = r.height + 'px';
-          var tag = document.createElement('span');
-          tag.textContent = num + ' ' + labelOf(el);
-          tag.style.cssText = 'position:absolute;left:0;top:-14px;font:10px sans-serif;color:#fff;background:#ff2d55;padding:0 3px;border-radius:3px;white-space:nowrap;';
-          f.appendChild(tag);
-          var sx = 0, sy = 0, sl = 0, st = 0, moved = false;
-          f.addEventListener('touchstart', function (e) {
-            var t = e.touches[0]; sx = t.clientX; sy = t.clientY;
-            var er = el.getBoundingClientRect(); sl = er.left; st = er.top; moved = false;
-          }, { passive: true });
-          f.addEventListener('touchmove', function (e) {
-            var t = e.touches[0];
-            var dx = t.clientX - sx, dy = t.clientY - sy;
-            if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
-            if (!moved) return;
-            e.preventDefault();
-            el.style.setProperty('position', 'fixed', 'important');
-            el.style.setProperty('left', Math.round(sl + dx) + 'px', 'important');
-            el.style.setProperty('top', Math.round(st + dy) + 'px', 'important');
-            el.style.setProperty('margin', '0', 'important');
-            el.style.setProperty('z-index', '2147482000', 'important');
-            el.setAttribute('data-dsh-moved', '1');
-            f.style.left = Math.round(sl + dx) + 'px';
-            f.style.top = Math.round(st + dy) + 'px';
-          }, { passive: false });
-          f.addEventListener('touchend', function (e) {
-            if (moved) { e.preventDefault(); e.stopPropagation(); }
-          }, true);
-          box.appendChild(f);
-        });
-      }
-      paint();
-
-      var bar = document.createElement('div');
-      bar.id = 'dsh-layout-bar';
-      bar.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483646;display:flex;gap:6px;';
-      function btn(text, bg) {
-        var b = document.createElement('button');
-        b.textContent = text;
-        b.style.cssText = 'font:13px sans-serif;color:#fff;border:none;border-radius:8px;padding:6px 10px;';
-        b.style.background = bg;
-        return b;
-      }
-      var copy = btn('复制位置', '#ff2d55');
-      copy.addEventListener('click', function (e) {
-        e.preventDefault(); e.stopPropagation();
-        var lines = ['按钮 左 上 宽 高'];
-        candidates().forEach(function (el) {
-          var r = el.getBoundingClientRect();
-          lines.push(labelOf(el) + ' ' + Math.round(r.left) + ' ' + Math.round(r.top) + ' ' + Math.round(r.width) + ' ' + Math.round(r.height));
-        });
-        var text = lines.join('\\n');
-        if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {});
-        copy.textContent = '已复制';
-        setTimeout(function () { copy.textContent = '复制位置'; }, 1200);
-      }, true);
-      var refresh = btn('重标', '#444');
-      refresh.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); paint(); }, true);
-      bar.appendChild(copy); bar.appendChild(refresh);
-      document.documentElement.appendChild(bar);
-      box.__bar = bar;
-    })();
-    """
     #endif
 
     /// 一级菜单：免费网页版（主流 AI 模型）
@@ -3974,12 +3917,6 @@ extension ViewController: WKNavigationDelegate {
         // 首屏下发一次状态栏高度：safeAreaInsets 可能在页面脚本注入之前就定了，
         // 不补这一次，顶栏会一直停在默认留白上。
         publishStatusBarHeight()
-        #if !PUBLIC_BUILD
-        // 布局编辑开着时，每次页面加载完成重新挂上编辑层。
-        if UserDefaults.standard.bool(forKey: Keys.layoutEdit) {
-            applyLayoutEditMode()
-        }
-        #endif
         // 内容首帧就绪后才显形：加载过程只显示原生加载态，永不白屏
         revealWebView()
         detectStaleTokenPage()
@@ -4229,19 +4166,15 @@ extension ViewController: UIScrollViewDelegate {
             scrollView.setZoomScale(1.0, animated: false)
         }
     }
-    /// 键盘避让兜底（v1.0.73 重写）。
-    ///
-    /// v1.0.70 在键盘可见期间把 contentOffset 强制钉回 .zero，本意是防 WebKit 把整页顶出屏幕。
-    /// 实测副作用：WebKit 聚焦输入框时本来会自动把输入框滚进可视区，被这里锁死 →
-    /// 输入框停在键盘后面，用户看不到自己输入的内容（P1-1）。
-    ///
-    /// 现在只在「整页被顶到屏幕上方」（contentOffset.y < 0，顶栏被顶出状态栏）时才钳回 0，
-    /// 正向滚动一律放行，让输入框能滚到键盘正上方。
+    /// 键盘避让与顶栏静止铁律（v1.0.88 定版）：
+    /// 原生通过 webViewBottomConstraint.constant = -overlap 已经把 WebView 底部压缩到了软键盘正上方。
+    /// 在 DSH 应用级 SPA 页面中，页面根视口 contentOffset 必须始终锁死在 .zero，
+    /// 任何会话内容的滚动均发生在内部消息容器中，彻底根除 WebKit 聚焦全页上冲导致顶栏被顶上天的物理 Bug！
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard isKeyboardVisible else { return }
-        guard !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else { return }
-        if scrollView.contentOffset.y < 0 {
-            scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: 0)
+        if isOwnServicePage(url: webView?.url) {
+            if scrollView.contentOffset.y != 0 {
+                scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: 0)
+            }
         }
     }
 }
