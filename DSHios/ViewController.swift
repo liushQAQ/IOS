@@ -4329,7 +4329,7 @@ extension ViewController: UIScrollViewDelegate {
     }
 }
 
-// MARK: - 远程仓库自动/手动检查更新与巨魔(TrollStore)自动安装 (v1.0.83)
+// MARK: - 远程仓库自动/手动检查更新与巨魔(TrollStore)自动安装 (v1.0.84 国内免代理加速版)
 
 extension ViewController: UIDocumentInteractionControllerDelegate {
     func documentInteractionControllerViewControllerForPreview(_ controller: UIDocumentInteractionController) -> UIViewController {
@@ -4346,90 +4346,157 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         let release_url: String?
     }
 
+    /// 国内 4G / WiFi 免代理极速多节点镜像列表（并发竞速，哪个最快先回就用哪个）
+    private static let updateMetadataMirrorURLs: [String] = [
+        "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@personal/releases/latest.json",
+        "https://ghfast.top/https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json",
+        "https://gh-proxy.com/https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json",
+        "https://cdn.jsdelivr.net/gh/liushQAQ/IOS@personal/releases/latest.json",
+        "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@personal/releases/latest.json",
+        "https://fastly.jsdelivr.net/gh/liushQAQ/IOS@personal/releases/latest.json",
+        "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json"
+    ]
+
+    /// 将 GitHub 原始 TIPA 下载地址转换为国内免代理高速镜像地址列表
+    private static func mirrorCandidates(for rawURL: String) -> [String] {
+        guard !rawURL.isEmpty else { return [] }
+        // 如果已经是代理地址，直接优先使用
+        if rawURL.contains("ghfast.top") || rawURL.contains("gh-proxy.com") || rawURL.contains("jsdelivr.net") {
+            return [rawURL]
+        }
+        var list: [String] = [
+            "https://ghfast.top/\(rawURL)",
+            "https://gh-proxy.com/\(rawURL)"
+        ]
+        if let range = rawURL.range(of: "raw.githubusercontent.com/liushQAQ/IOS/personal/") {
+            let relPath = String(rawURL[range.upperBound...])
+            list.insert("https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@personal/\(relPath)", at: 0)
+            list.append("https://cdn.jsdelivr.net/gh/liushQAQ/IOS@personal/\(relPath)")
+        }
+        list.append(rawURL)
+        return list
+    }
+
     func checkForAppUpdates(manual: Bool = false) {
-        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.83"
+        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.84"
         let currentBuildStr = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
         let currentBuild = Int(currentBuildStr) ?? 0
 
         var loadingAlert: UIAlertController?
         if manual {
-            let alert = UIAlertController(title: "正在检查更新", message: "正在从远程仓库检查最新打包…", preferredStyle: .alert)
+            let alert = UIAlertController(title: "正在检查更新", message: "正在通过国内加速节点检查仓库最新打包…", preferredStyle: .alert)
             present(alert, animated: true)
             loadingAlert = alert
         }
 
-        let updateURLStr = "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json"
-        guard let url = URL(string: updateURLStr) else {
-            loadingAlert?.dismiss(animated: true)
-            return
-        }
+        let mirrorURLs = Self.updateMetadataMirrorURLs
+        let lock = NSLock()
+        var hasSucceeded = false
+        var completedCount = 0
+        var lastError: Error?
+        let total = mirrorURLs.count
+        let ts = Int(Date().timeIntervalSince1970)
 
-        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
-        req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-
-        URLSession.shared.dataTask(with: req) { [weak self] data, _, error in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                let finishBlock = {
-                    if let error = error {
-                        if manual {
-                            let alert = UIAlertController(title: "检查更新失败", message: "无法连接更新源：\(error.localizedDescription)", preferredStyle: .alert)
-                            alert.addAction(UIAlertAction(title: "确定", style: .default))
-                            self.present(alert, animated: true)
-                        }
-                        return
-                    }
-
-                    guard let data = data,
-                          let info = try? JSONDecoder().decode(AppReleaseInfo.self, from: data) else {
-                        if manual {
-                            let alert = UIAlertController(title: "检查更新失败", message: "仓库版本信息解析失败。", preferredStyle: .alert)
-                            alert.addAction(UIAlertAction(title: "确定", style: .default))
-                            self.present(alert, animated: true)
-                        }
-                        return
-                    }
-
-                    let remoteVer = info.version
-                    let remoteBuild = info.build ?? 0
-
-                    let hasNewVersion: Bool = {
-                        if remoteBuild > currentBuild { return true }
-                        if remoteBuild == currentBuild && remoteVer.compare(currentVer, options: .numeric) == .orderedDescending {
-                            return true
-                        }
-                        return remoteVer.compare(currentVer, options: .numeric) == .orderedDescending
-                    }()
-
-                    if hasNewVersion {
-                        self.presentNewVersionPrompt(info: info, currentVer: currentVer, currentBuild: currentBuild)
-                    } else if manual {
-                        let alert = UIAlertController(
-                            title: "✅ 当前已是最新版本",
-                            message: "当前版本：v\(currentVer) (Build \(currentBuild))\n仓库最新：v\(remoteVer) (Build \(remoteBuild))\n\n如有强制重装需求，也可直接通过巨魔重装最新包。",
-                            preferredStyle: .alert)
-                        #if PUBLIC_BUILD
-                        let tipaURL = info.public_tipa_url ?? info.personal_tipa_url ?? ""
-                        #else
-                        let tipaURL = info.personal_tipa_url ?? info.public_tipa_url ?? ""
-                        #endif
-                        if !tipaURL.isEmpty {
-                            alert.addAction(UIAlertAction(title: "🚀 重新下载并用巨魔安装", style: .default) { [weak self] _ in
-                                self?.installViaTrollStore(remoteURLString: tipaURL)
-                            })
-                        }
-                        alert.addAction(UIAlertAction(title: "好", style: .cancel))
-                        self.present(alert, animated: true)
-                    }
-                }
-
-                if let loading = loadingAlert {
-                    loading.dismiss(animated: true, completion: finishBlock)
-                } else {
-                    finishBlock()
-                }
+        for urlStr in mirrorURLs {
+            let sep = urlStr.contains("?") ? "&" : "?"
+            guard let url = URL(string: "\(urlStr)\(sep)_t=\(ts)") else {
+                lock.lock()
+                completedCount += 1
+                lock.unlock()
+                continue
             }
-        }.resume()
+
+            var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 6)
+            req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+
+            URLSession.shared.dataTask(with: req) { [weak self] data, resp, error in
+                var validInfo: AppReleaseInfo?
+                if error == nil,
+                   let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+                   let data = data,
+                   let decoded = try? JSONDecoder().decode(AppReleaseInfo.self, from: data) {
+                    validInfo = decoded
+                }
+
+                lock.lock()
+                if hasSucceeded {
+                    lock.unlock()
+                    return
+                }
+                completedCount += 1
+                if let err = error { lastError = err }
+
+                if let info = validInfo {
+                    hasSucceeded = true
+                    lock.unlock()
+                    DispatchQueue.main.async {
+                        guard let self else { return }
+                        let done = {
+                            self.handleFetchedReleaseInfo(info, currentVer: currentVer, currentBuild: currentBuild, manual: manual)
+                        }
+                        if let loading = loadingAlert {
+                            loading.dismiss(animated: true, completion: done)
+                        } else {
+                            done()
+                        }
+                    }
+                } else if completedCount >= total {
+                    lock.unlock()
+                    DispatchQueue.main.async {
+                        guard let self else { return }
+                        let failBlock = {
+                            if manual {
+                                let msg = lastError?.localizedDescription ?? "所有加速节点均未响应，请检查网络连接。"
+                                let alert = UIAlertController(title: "检查更新失败", message: "无法连接更新源：\(msg)", preferredStyle: .alert)
+                                alert.addAction(UIAlertAction(title: "确定", style: .default))
+                                self.present(alert, animated: true)
+                            }
+                        }
+                        if let loading = loadingAlert {
+                            loading.dismiss(animated: true, completion: failBlock)
+                        } else {
+                            failBlock()
+                        }
+                    }
+                } else {
+                    lock.unlock()
+                }
+            }.resume()
+        }
+    }
+
+    private func handleFetchedReleaseInfo(_ info: AppReleaseInfo, currentVer: String, currentBuild: Int, manual: Bool) {
+        let remoteVer = info.version
+        let remoteBuild = info.build ?? 0
+
+        let hasNewVersion: Bool = {
+            if remoteBuild > currentBuild { return true }
+            if remoteBuild == currentBuild && remoteVer.compare(currentVer, options: .numeric) == .orderedDescending {
+                return true
+            }
+            return remoteVer.compare(currentVer, options: .numeric) == .orderedDescending
+        }()
+
+        if hasNewVersion {
+            presentNewVersionPrompt(info: info, currentVer: currentVer, currentBuild: currentBuild)
+        } else if manual {
+            let alert = UIAlertController(
+                title: "✅ 当前已是最新版本",
+                message: "当前版本：v\(currentVer) (Build \(currentBuild))\n仓库最新：v\(remoteVer) (Build \(remoteBuild))\n\n如有强制重装需求，也可直接通过国内加速通道重装最新包。",
+                preferredStyle: .alert)
+            #if PUBLIC_BUILD
+            let tipaURL = info.public_tipa_url ?? info.personal_tipa_url ?? ""
+            #else
+            let tipaURL = info.personal_tipa_url ?? info.public_tipa_url ?? ""
+            #endif
+            if !tipaURL.isEmpty {
+                alert.addAction(UIAlertAction(title: "🚀 重新下载并用巨魔安装 (免代理加速)", style: .default) { [weak self] _ in
+                    self?.installViaTrollStore(remoteURLString: tipaURL)
+                })
+            }
+            alert.addAction(UIAlertAction(title: "好", style: .cancel))
+            present(alert, animated: true)
+        }
     }
 
     private func presentNewVersionPrompt(info: AppReleaseInfo, currentVer: String, currentBuild: Int) {
@@ -4445,15 +4512,15 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
 
         let alert = UIAlertController(
             title: "🎉 发现新版本 v\(remoteVer) (Build \(remoteBuild))",
-            message: "当前版本：v\(currentVer) (Build \(currentBuild))\n\n【更新说明】\n\(notes)\n\n点击下方按钮即可自动拉取仓库最新 TIPA 包并唤起巨魔 (TrollStore) 完成覆盖更新。",
+            message: "当前版本：v\(currentVer) (Build \(currentBuild))\n\n【更新说明】\n\(notes)\n\n已自动匹配国内免代理高速节点，点击下方按钮即可拉取最新 TIPA 包并唤起巨魔 (TrollStore) 完成覆盖更新。",
             preferredStyle: .alert
         )
 
         if !targetTipaURL.isEmpty {
-            alert.addAction(UIAlertAction(title: "🚀 巨魔一键自动安装 (推荐)", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: "🚀 巨魔一键自动安装 (国内免代理推荐)", style: .default) { [weak self] _ in
                 self?.installViaTrollStore(remoteURLString: targetTipaURL)
             })
-            alert.addAction(UIAlertAction(title: "📥 App内下载后调用巨魔安装", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: "📥 App内加速下载后调起巨魔", style: .default) { [weak self] _ in
                 self?.downloadAndInstallTIPA(remoteURLString: targetTipaURL, filename: "DSHios-\(remoteVer)-\(remoteBuild).tipa")
             })
         }
@@ -4469,7 +4536,10 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     }
 
     func installViaTrollStore(remoteURLString: String) {
-        guard let encoded = remoteURLString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
+        // 巨魔直接拉取 URL 时，也使用国内免代理镜像地址，防止巨魔因连不上 raw.githubusercontent.com 卡死
+        let candidates = Self.mirrorCandidates(for: remoteURLString)
+        let acceleratedURL = candidates.first(where: { $0.contains("ghfast.top") || $0.contains("gh-proxy.com") }) ?? candidates.first ?? remoteURLString
+        guard let encoded = acceleratedURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
         let schemes = [
             "apple-magnifier://install?url=\(encoded)",
             "trollstore://install?url=\(encoded)"
@@ -4495,46 +4565,60 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     }
 
     private func downloadAndInstallTIPA(remoteURLString: String, filename: String) {
-        guard let url = URL(string: remoteURLString) else { return }
+        let candidates = Self.mirrorCandidates(for: remoteURLString)
+        guard !candidates.isEmpty else { return }
 
-        let progressAlert = UIAlertController(title: "正在下载最新安装包", message: "正在从仓库下载 \(filename)…\n进度：0%", preferredStyle: .alert)
+        let progressAlert = UIAlertController(title: "正在加速下载最新包", message: "正在通过国内镜像下载 \(filename)…\n进度：0%", preferredStyle: .alert)
         present(progressAlert, animated: true)
 
         let destURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
         try? FileManager.default.removeItem(at: destURL)
 
-        var observation: NSKeyValueObservation?
-        let task = URLSession.shared.downloadTask(with: url) { [weak self] localURL, _, error in
-            observation?.invalidate()
-            DispatchQueue.main.async {
-                progressAlert.dismiss(animated: true) {
-                    guard let self else { return }
-                    if let error = error {
-                        let alert = UIAlertController(title: "下载失败", message: error.localizedDescription, preferredStyle: .alert)
+        func tryDownload(index: Int) {
+            guard index < candidates.count, let url = URL(string: candidates[index]) else {
+                DispatchQueue.main.async {
+                    progressAlert.dismiss(animated: true) { [weak self] in
+                        let alert = UIAlertController(title: "下载失败", message: "所有国内加速镜像节点均无法下载，请稍后重试。", preferredStyle: .alert)
                         alert.addAction(UIAlertAction(title: "好", style: .default))
-                        self.present(alert, animated: true)
-                        return
-                    }
-                    guard let localURL = localURL else { return }
-                    do {
-                        try FileManager.default.moveItem(at: localURL, to: destURL)
-                        self.openDownloadedTIPA(fileURL: destURL)
-                    } catch {
-                        let alert = UIAlertController(title: "保存失败", message: error.localizedDescription, preferredStyle: .alert)
-                        alert.addAction(UIAlertAction(title: "好", style: .default))
-                        self.present(alert, animated: true)
+                        self?.present(alert, animated: true)
                     }
                 }
+                return
             }
+
+            var observation: NSKeyValueObservation?
+            let task = URLSession.shared.downloadTask(with: url) { [weak self] localURL, resp, error in
+                observation?.invalidate()
+                let statusOK = (resp as? HTTPURLResponse).map { (200...299).contains($0.statusCode) } ?? false
+                if error != nil || !statusOK || localURL == nil {
+                    // 当前镜像失败，自动无缝切换到下一个备用加速镜像
+                    tryDownload(index: index + 1)
+                    return
+                }
+                guard let localURL = localURL else { return }
+                do {
+                    try? FileManager.default.removeItem(at: destURL)
+                    try FileManager.default.moveItem(at: localURL, to: destURL)
+                    DispatchQueue.main.async {
+                        progressAlert.dismiss(animated: true) {
+                            self?.openDownloadedTIPA(fileURL: destURL)
+                        }
+                    }
+                } catch {
+                    tryDownload(index: index + 1)
+                }
+            }
+
+            observation = task.progress.observe(\.fractionCompleted) { progress, _ in
+                DispatchQueue.main.async {
+                    let pct = Int(progress.fractionCompleted * 100)
+                    progressAlert.message = "正在通过国内镜像 (节点 \(index + 1)) 下载 \(filename)…\n进度：\(pct)%"
+                }
+            }
+            task.resume()
         }
 
-        observation = task.progress.observe(\.fractionCompleted) { progress, _ in
-            DispatchQueue.main.async {
-                let pct = Int(progress.fractionCompleted * 100)
-                progressAlert.message = "正在从仓库下载 \(filename)…\n进度：\(pct)%"
-            }
-        }
-        task.resume()
+        tryDownload(index: 0)
     }
 
     private func openDownloadedTIPA(fileURL: URL) {
