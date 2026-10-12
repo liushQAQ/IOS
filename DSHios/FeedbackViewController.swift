@@ -310,9 +310,3 @@ extension FeedbackViewController: UITextViewDelegate {
         placeholderLabel.isHidden = !textView.text.isEmpty
     }
 }
-
-extension FeedbackViewController: UITextViewDelegate {
-    func textViewDidChange(_ textView: UITextView) {
-        placeholderLabel.isHidden = !textView.text.isEmpty
-    }
-}
