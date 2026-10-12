@@ -1,10 +1,10 @@
 {
-  "version": "1.0.84",
-  "build": 19,
-  "updated_at": "2026-10-12 17:15:00",
-  "title": "v1.0.84 国内免代理加速更新·键盘流式完美避让",
-  "changelog": "1. 检查更新全面支持国内 4G/WiFi 免代理极速多节点并发（jsDelivr CDN、ghfast、gh-proxy 智能竞速），彻底告别请求超时！\n2. 巨魔(TrollStore)下载全面采用国内高速镜像，下载安装秒级完成\n3. 键盘弹起消息流式输出零遮挡完美避让\n4. 锁屏假死断线秒级自愈与全新连接通道",
-  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.84-19.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.84-19.tipa",
+  "version": "1.0.85",
+  "build": 20,
+  "updated_at": "2026-10-12 19:20:00",
+  "title": "v1.0.85 根治后台卡死·修复检查更新CDN滞后·智能体图标纯净化",
+  "changelog": "1. 根治多App轮换切换/后台1~2分钟回来全界面与悬浮球卡死（彻底移除粗暴强杀重载，改用轻量唤醒脉冲与防抖机制）\n2. 检查更新剔除强缓存滞后的 jsDelivr 节点，实时直连穿透国内镜像，杜绝版本倒挂\n3. 顶栏智能体团队图标纯净化，隐藏孤立的数字 1 徽标\n4. 移除 DOM 高频轮询定时器与递归写入，彻底消除前后台切换 CPU 峰值假死",
+  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.85-20.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.85-20.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }
