@@ -1,10 +1,10 @@
 {
-  "version": "1.0.85",
-  "build": 20,
-  "updated_at": "2026-10-12 19:20:00",
-  "title": "v1.0.85 根治后台卡死·修复检查更新CDN滞后·智能体图标纯净化",
-  "changelog": "1. 根治多App轮换切换/后台1~2分钟回来全界面与悬浮球卡死（彻底移除粗暴强杀重载，改用轻量唤醒脉冲与防抖机制）\n2. 检查更新剔除强缓存滞后的 jsDelivr 节点，实时直连穿透国内镜像，杜绝版本倒挂\n3. 顶栏智能体团队图标纯净化，隐藏孤立的数字 1 徽标\n4. 移除 DOM 高频轮询定时器与递归写入，彻底消除前后台切换 CPU 峰值假死",
-  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.85-20.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.85-20.tipa",
+  "version": "1.0.86",
+  "build": 21,
+  "updated_at": "2026-10-12 20:00:00",
+  "title": "v1.0.86 黄金架构回归·彻底根治后台卡死与转圈·键盘丝滑零弹跳",
+  "changelog": "1. 彻底根治切换后台几分钟卡死与切换URL无限转圈：生命周期与URL加载全面回归1.0.70.9经典黄金架构，移除强制no-cache与手动转圈遮挡，网络秒级响应\n2. 彻底解决点击会话框键盘弹出会话记录弹跳闪烁两下的问题：移除冗余滚动与延时补刀，底部常驻100px舒适裕量，键盘弹起一气呵成丝滑上移，绝无遮挡",
+  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.86-21.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.86-21.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }
