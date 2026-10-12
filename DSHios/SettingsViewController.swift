@@ -226,29 +226,37 @@ enum ServiceResolver {
     private static var inflight: [String: Bool] = [:]
     private static let cacheTTL: TimeInterval = 30 * 60
 
-    /// 外网入口的 token 会随电脑端 3081 重启而失效。
-    /// 打开前先回局域网向 9009 仪表盘换一张最新的完整地址（/api/dsh-url）；
-    /// 优先用缓存（30 分钟内），局域网内换不到就退回缓存/预置地址，不阻塞用户。
+    /// 外网入口换票：加 1.5 秒快速硬超时兜底，换不到立刻使用已有地址，绝不阻断用户换 URL
     static func resolve(_ item: ServiceItem, completion: @escaping (String) -> Void) {
         guard let api = item.resolverURL, !api.isEmpty, let url = URL(string: api) else {
             completion(item.url)
             return
         }
-        // 有新鲜缓存直接用，不再等网络。
+        // 有新鲜缓存直接用
         if let hit = cache[api], Date().timeIntervalSince(hit.at) < cacheTTL {
             completion(hit.url)
             return
         }
-        // 并发去重：同一条目的换票请求只发一次，结果广播给所有等待者。
         if inflight[api] == true {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { resolve(item, completion: completion) }
+            completion(cache[api]?.url ?? item.url)
             return
         }
         inflight[api] = true
-        var request = URLRequest(url: url, timeoutInterval: 6)
+        var request = URLRequest(url: url, timeoutInterval: 1.5)
         request.httpMethod = "GET"
+        var didComplete = false
+        let safeCompletion = { (resURL: String) in
+            if !didComplete {
+                didComplete = true
+                inflight[api] = false
+                completion(resURL)
+            }
+        }
+        // 1.5 秒硬超时保护
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            safeCompletion(cache[api]?.url ?? item.url)
+        }
         URLSession.shared.dataTask(with: request) { data, _, _ in
-            inflight[api] = false
             var resolved = cache[api]?.url ?? item.url
             if let data,
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -257,7 +265,7 @@ enum ServiceResolver {
                 resolved = external
                 cache[api] = (external, Date())
             }
-            DispatchQueue.main.async { completion(resolved) }
+            DispatchQueue.main.async { safeCompletion(resolved) }
         }.resume()
     }
 }
@@ -643,40 +651,40 @@ final class ConnectionGuideViewController: UIViewController {
             stack.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -40)
         ])
 
-        // 头部卡片
+        // 头部卡片：主推自研 dsh-anywhere，备选 dsh-pocket
         let headerBox = createCardView(
-            title: "💡 官方原版 DSH 免改动直连",
-            desc: "即使您的电脑安装的是纯正官方原版 DeepSeek Harness，也完全不需要改动任何源码！只需加装官方开源插件即可完美联动手机端。"
+            title: "💡 首选：dsh-anywhere 超级连接枢纽（支持多设备无缝协同）",
+            desc: "专为 DSH iOS App 与多端协同深度打造！\n• 多端同屏：支持多台手机（iPhone / 安卓）、iPad / 平板、电脑多设备同时在线访问，实时同屏收发、流式同步打印！\n• 无缝切换：多终端随时接续，不冲突、不踢线！\n• 极速自愈：手机锁屏一两分钟切回 App 均能自动秒级自愈重连。\n• 纯净开源：完全开源无任何个人外网地址与密码。\n\n（备选方案：单设备轻量访问亦可选用 dsh-pocket）"
         )
         stack.addArrangedSubview(headerBox)
 
-        // 步骤一：电脑端安装手机访问插件
+        // 步骤一：电脑端安装插件（主推 dsh-anywhere，备选 dsh-pocket）
         let step1 = createStepCard(
             badge: "步骤 1",
-            title: "电脑端安装手机访问插件",
-            detail: "官方 DSH 默认出于安全策略只监听 127.0.0.1，禁止局域网未授权控制。请在电脑端安装 dsh-pocket 插件：\n\n方式 A：在电脑终端（CMD / PowerShell）执行命令：",
-            code: "dsh plugin --profile web add dsh-pocket -w",
-            tip: "方式 B：在 DSH 桌面端界面打开「设置 → 插件市场」，搜索并安装 dsh-pocket。"
+            title: "电脑端安装插件（主推 dsh-anywhere / 备选 dsh-pocket）",
+            detail: "【首选方案 dsh-anywhere】支持多台手机与 iPad 同时在线访问与无缝切换：\n开源地址：https://github.com/liushQAQ/dsh-anywhere\n安装命令：",
+            code: "pnpm add dsh-anywhere",
+            tip: "【备选方案 dsh-pocket】若仅需单设备轻量访问，可安装官方备选：\ndsh plugin --profile web add dsh-pocket -w"
         )
         stack.addArrangedSubview(step1)
 
-        // 步骤二：获取局域网地址
+        // 步骤二：开启多端访问并查看地址
         let step2 = createStepCard(
             badge: "步骤 2",
-            title: "开启手机访问并查看地址",
-            detail: "1. 电脑端重启 DSH\n2. 打开「设置 → 手机访问」页面\n3. 界面会显示您的电脑局域网访问地址（例如 http://192.168.1.100:3084/）与二维码\n4. 可在该页面选择关闭局域网访问密码（实现免密秒开），或记录默认访问口令。",
+            title: "多台手机/Pad 同时访问与无缝切换",
+            detail: "1. 电脑端重启 DSH（默认工作在 3082/3083 端口）\n2. 终端或 DSH 界面会显示您的电脑局域网访问地址与二维码\n3. 多台 iPhone、iPad 与电脑可同时打开同一会话，两边实时同屏收发、流式同步打印，不踢线、不冲突！\n4. 如需公网访问，支持 Cloudflare / 自定义穿透，重启软件外网地址保持不变。",
             code: nil,
-            tip: "💡 如需出门在外 4G 访问，在该设置页点击「开启公网访问」即可获得免费穿透链接。"
+            tip: "⚡ 彻底告别锁屏假死：手机锁屏一两分钟切回，系统自动恢复联通；亦可点击悬浮球「刷新」或「当前地址」瞬间重新联通！"
         )
         stack.addArrangedSubview(step2)
 
         // 步骤三：手机端连接
         let step3 = createStepCard(
             badge: "步骤 3",
-            title: "在 iPhone 上填入并连接",
-            detail: "1. 确保手机与电脑连入同一 WiFi（同一局域网）\n2. 最快方式：点右上角「扫码」或悬浮球 →「📷 扫码连接」，直接扫地址二维码自动填好并连接（无需手动输入）\n3. 也可以选「手动输入地址…」或点右上角「+」，填入地址后点「加载」进入\n4. 本 App 会自动保存该地址并持久化缓存，下次点开直接秒进。",
+            title: "在 iPhone 上扫码或填入连接",
+            detail: "1. 确保手机与电脑连入同一 WiFi（或使用公网地址）\n2. 最快方式：点右上角「扫码」或悬浮球 →「📷 扫码连接」，直接扫地址二维码自动填好并连接\n3. 也可以选「手动输入地址…」，填入地址后点「加载」进入\n4. 本 App 会自动保存该地址并持久化保持登录态 Cookie，下次点开直接秒进。",
             code: nil,
-            tip: "🎉 iOS 端已为您自动适配 Safari 现代特性补丁与输入防误关机制，体验极致丝滑！"
+            tip: "🎉 iOS 端已为您自动适配 Safari 现代特性补丁与流式消息防遮挡机制，体验极致丝滑！"
         )
         stack.addArrangedSubview(step3)
 
@@ -707,7 +715,7 @@ final class ConnectionGuideViewController: UIViewController {
     }
 
     @objc private func copyCommandTapped(_ sender: UIButton) {
-        let codeText = "dsh plugin --profile web add dsh-pocket -w"
+        let codeText = "pnpm add dsh-anywhere"
         UIPasteboard.general.string = codeText
         sender.setTitle("已复制", for: .normal)
         let feedback = UINotificationFeedbackGenerator()
@@ -844,7 +852,7 @@ final class ConnectionGuideViewController: UIViewController {
         card.layer.cornerRadius = 12
 
         let badgeLabel = UILabel()
-        badgeLabel.text = "最新更新日志 (v1.0.67)"
+        badgeLabel.text = "最新更新日志 (v1.0.83)"
         badgeLabel.font = .systemFont(ofSize: 12, weight: .bold)
         badgeLabel.textColor = .systemIndigo
         badgeLabel.backgroundColor = .systemIndigo.withAlphaComponent(0.12)
@@ -861,22 +869,24 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.textColor = .label
 
         let logContent = """
-        📌 1. 顶栏 Sticky 吸顶固定：
-        • 点击输入框弹出软键盘或上下滑动会话时，顶部侧边栏按钮、标题与成员一排固定在屏幕顶部，不再被顶到屏幕外；
-        • 深度结合移动端安全区，键盘交互更加稳健。
+        ⚡ 1. 首推自研 dsh-anywhere 插件（多端协同枢纽）：
+        • 支持多台 iPhone、安卓手机、iPad 与电脑多设备同时在线访问；
+        • 实时双向同屏收发、流式同步打印，不踢线、不冲突，多端无缝切换；
+        • 内置毫秒级 Fast-Resume，锁屏一两分钟切回 App 均能自动秒级自愈恢复联通；
+        • 纯净开源无个人外网密码（备选支持单端 dsh-pocket 插件）。
 
-        🚫 2. 拦截电脑外部程序与外链：
-        • 手机端禁止打开电脑端外链或程序（如“在电脑端打开”、新建终端、系统外部浏览器等）；
-        • 点击时友好弹窗提示“手机端禁止操作，请在电脑端操作”，避免向电脑发送误操作指令。
+        🛡 2. 锁屏假死彻底自愈与强行重连：
+        • 针对锁屏后网络通信中断导致的页面卡死，切回前台自动触发强行重连自愈；
+        • 悬浮菜单点击「刷新」或点击「当前服务地址」，100% 强行建立全新连接恢复通讯。
 
-        🧼 3. 彻底隐藏工作步骤文件复制按钮：
-        • 全面屏蔽运行命令和执行步骤后冗余的“复制”小按钮，排版纯净整洁。
+        📐 3. 侧边栏 75% 缩放舒展适配：
+        • 左侧侧边栏宽度优化至 210px，移动端屏蔽桌面快捷键，新会话居中整齐舒展。
 
-        🌙 4. 暗黑模式精细化适配：
-        • 全面修复暗黑深色模式下【分享到手机】、【保存】与关闭按钮泛白失真问题，色彩契合系统深色主题。
+        🚀 4. 远程仓库更新与巨魔 (TrollStore) 一键自动安装：
+        • 悬浮菜单内置「检查更新」，自动检测仓库新版本，支持巨魔一键覆盖安装。
 
-        🔍 5. 图片双指无损缩放与平移：
-        • 对话消息中的全屏大图和文件图片支持双指 1x~6x 放大缩小、单指平移拖拽，双击快速重置比例。
+        ⌨️ 5. 会话框上浮消息零遮挡：
+        • 键盘弹起时消息内容区动态增加避让缓冲，思考中与流式最后三行完整呈现。
         """
 
         let contentLabel = UILabel()

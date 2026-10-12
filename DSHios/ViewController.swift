@@ -26,6 +26,8 @@ final class ViewController: UIViewController {
     private var isPocketRetryInFlight = false
     /// 白屏自诊断采样计时器（多次采样把 JS 崩溃画到浮层，而不是留一个纯白屏）。
     private var diagnoseTimers: [Timer] = []
+    /// 记录进入后台/锁屏的时间戳，用于精准判断锁屏时长并秒级自愈恢复联通
+    private var lastEnterBackgroundTime: Date = Date()
 
     // MARK: 键盘避让与安全区（v1.0.70）
     /// WebView 顶部约束：DSH 页面 = 0（顶栏自绘背景延伸到状态栏后），外部网页 = safeAreaInsets.top
@@ -159,6 +161,20 @@ final class ViewController: UIViewController {
         }
     }
 
+    private static func makeAppUpdateBridge(owner: ViewController) -> WKScriptMessageHandler {
+        VoiceInputBridge { [weak owner] dict in
+            guard let self = owner else { return }
+            let action = dict["action"] as? String ?? "check"
+            DispatchQueue.main.async {
+                if action == "install", let urlStr = dict["url"] as? String, !urlStr.isEmpty {
+                    self.installViaTrollStore(remoteURLString: urlStr)
+                } else {
+                    self.checkForAppUpdates(manual: true)
+                }
+            }
+        }
+    }
+
     /// 累积 Web 侧异常，最多保留最近 4 条，供自诊断浮层展示。
     private func recordWebError(_ text: String) {
         let line = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
@@ -248,6 +264,7 @@ final class ViewController: UIViewController {
         static let lastURL = "DSHios.lastURL"
         static let urlVersion = "DSHios.urlVersion"
         static let currentURLVersion = 4
+        static let layoutEdit = "DSHios.layoutEdit"
     }
 
     /// iOS 16 缺失的关键 Web API 兜底。页面构建目标定得比 16 高，
@@ -2265,6 +2282,63 @@ final class ViewController: UIViewController {
             '  flex: none !important;',
             '  max-width: 100% !important;',
             '}',
+            '',
+            '/* v1.0.83：左侧侧边栏打开后宽度按 75% 缩放（从 280px 缩放至 210px，舒展适屏） */',
+            '[class*="sidebarCol"],',
+            '.CZPbNW_sidebarCol,',
+            '[class*="WYye1W_root"],',
+            '.WYye1W_root {',
+            '  width: 210px !important;',
+            '  max-width: 210px !important;',
+            '  min-width: 0 !important;',
+            '  box-sizing: border-box !important;',
+            '  overflow-x: hidden !important;',
+            '}',
+            '[class*="WYye1W_logoRow"],',
+            '[class*="WYye1W_newSession"],',
+            '[class*="WYye1W_panelList"],',
+            '[class*="WYye1W_regionArea"],',
+            '[class*="WYye1W_footArea"] {',
+            '  width: 100% !important;',
+            '  max-width: 100% !important;',
+            '  min-width: 0 !important;',
+            '  box-sizing: border-box !important;',
+            '  overflow-x: hidden !important;',
+            '}',
+            '[class*="WYye1W_newSession"],',
+            '[class*="WYye1W_panelRow"] {',
+            '  padding-left: 10px !important;',
+            '  padding-right: 10px !important;',
+            '  font-size: 13px !important;',
+            '}',
+            '/* 移动端触摸屏隐藏电脑端键盘快捷键 Ctrl+Alt+N，彻底释放“新会话”按钮文字空间 */',
+            '[class*="WYye1W_newSessionShortcut"] {',
+            '  display: none !important;',
+            '}',
+            '[class*="WYye1W_newSessionLabelMask"],',
+            '[class*="WYye1W_newSessionContent"] {',
+            '  width: 100% !important;',
+            '  max-width: 100% !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  gap: 8px !important;',
+            '}',
+            '[class*="WYye1W_newSessionLabel"] {',
+            '  display: inline-block !important;',
+            '  opacity: 1 !important;',
+            '  font-size: 13px !important;',
+            '  font-weight: 500 !important;',
+            '}',
+            '[class*="WYye1W_logoRow"] {',
+            '  padding: 0 8px !important;',
+            '}',
+            '',
+            '/* v1.0.83：会话消息内容区 (viewArea) 底部留足裕量，避免悬浮输入框和键盘上浮遮挡思考中与流式输出 */',
+            '[class*="viewArea"],',
+            '.ank0OG_viewArea {',
+            '  padding-bottom: var(--dsh-viewarea-pb, 90px) !important;',
+            '  box-sizing: border-box !important;',
+            '}',
           ].join('\\n');
           function inject() {
             var root = document.head || document.documentElement;
@@ -2385,6 +2459,16 @@ final class ViewController: UIViewController {
             mo.observe(root, { childList: true, subtree: true });
           }
           watch();
+
+          // v1.0.83：锁屏与后台切回毫秒级自愈支持 (搭配 dsh-anywhere)
+          window.__dshFastResume = function () {
+            try {
+              // 触发一次合成点击与按键事件，打通挂起的微任务队列
+              window.dispatchEvent(new Event('pageshow'));
+              window.dispatchEvent(new Event('focus'));
+              document.dispatchEvent(new Event('visibilitychange'));
+            } catch (e) {}
+          };
         })();
 """,
         // v1.0.72 页面分流补丁（必须放在数组最后，优先级最高）：
@@ -2498,26 +2582,38 @@ final class ViewController: UIViewController {
             el.removeAttribute('data-dsh-kb-shift');
           }
 
+          function updateScrollPadding(extraShift) {
+            var viewArea = document.querySelector('[class*="viewArea"], .ank0OG_viewArea');
+            var scroller = document.querySelector('[class*="scrollBody"], .ank0OG_scrollBody');
+            // 重要：padding-bottom 只能加在消息内容区 viewArea 上（绝不能加在 scroller 上，否则会把 sticky bottom:0 的输入框挤到顶部屏幕外！）
+            var pb = inset > 0 ? ((extraShift || 0) + 120) : 90;
+            if (viewArea) {
+              viewArea.style.setProperty('--dsh-viewarea-pb', pb + 'px');
+              viewArea.style.setProperty('padding-bottom', pb + 'px', 'important');
+            }
+            if (scroller && inset > 0) {
+              setTimeout(function () {
+                scroller.scrollTop = scroller.scrollHeight;
+              }, 80);
+            }
+          }
+
           function lift() {
             var next = targets();
             if (inset <= 0) {
               moved.forEach(clearShift);
               moved = [];
+              updateScrollPadding(0);
               return;
             }
-            // v1.0.74：真机反馈抬得过高、输入框下留一大块空白。
-            // 输入区底部留在键盘上方 56px（约一行统计文字的高度），不再贴死键盘。
-            var limit = window.innerHeight - inset + 56;
-            moved.filter(function (el) { return next.indexOf(el) < 0; }).forEach(clearShift);
-            moved = next.slice();
-            next.forEach(function (el) {
-              var r = el.getBoundingClientRect();
-              var cur = parseFloat(el.getAttribute('data-dsh-kb-shift') || '0') || 0;
-              var natural = r.bottom + cur;
-              var shift = Math.max(0, Math.round(natural - limit));
-              if (Math.abs(shift - cur) < 1) return;
-              applyShift(el, shift);
-            });
+            // 原生层 WKWebView 已通过 webViewBottomConstraint 压缩高度避让键盘，
+            // 视口 window.innerHeight 此时已经收缩为（932 - inset）高度；
+            // 内部输入框通过 position: sticky; bottom: 0 自动停留在键盘顶边缘！
+            // 此时只需要给消息流 viewArea 追加动态 padding-bottom，防止消息被 sticky 贴底的输入框盖住，
+            // 绝对不可对输入框自身盲目叠加二次 translateY（否则会直接将输入框推至顶栏外）！
+            moved.forEach(clearShift);
+            moved = [];
+            updateScrollPadding(0);
           }
 
           window.__dshSetKeyboardInset = function (px) {
@@ -2542,6 +2638,11 @@ final class ViewController: UIViewController {
             selector: #selector(appDidBecomeActive),
             name: UIApplication.didBecomeActiveNotification,
             object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil)
         // 键盘避让（v1.0.70）：压缩 WebView 高度而不是让 WebKit 把整页顶出屏幕。
         // 效果：顶栏钉在原位不动，会话内容在剩余空间内滚动，输入框始终悬在键盘正上方。
         NotificationCenter.default.addObserver(
@@ -2554,6 +2655,11 @@ final class ViewController: UIViewController {
             selector: #selector(keyboardFrameWillChange(_:)),
             name: UIResponder.keyboardWillHideNotification,
             object: nil)
+
+        // 自动检查更新（v1.0.83）：启动 3 秒后静默检查仓库最新构建
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            self?.checkForAppUpdates(manual: false)
+        }
     }
 
     // MARK: - 键盘避让（v1.0.70）
@@ -2704,6 +2810,7 @@ final class ViewController: UIViewController {
         config.userContentController.add(Self.makeErrorBridge(owner: self), name: "dshErrors")
         config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")
         config.userContentController.add(Self.makeVoiceInputBridge(owner: self), name: "dshVoiceInput")
+        config.userContentController.add(Self.makeAppUpdateBridge(owner: self), name: "dshAppUpdate")
         // v1.0.74：禁止侧滑返回上一个 URL。页面内的返回（抽屉、会话切换）走页面自己的逻辑，
         // WebView 的历史回退会跳出当前服务地址，用户明确不要。
         webView.allowsBackForwardNavigationGestures = false
@@ -2787,7 +2894,7 @@ final class ViewController: UIViewController {
         请确认：
         1. 电脑端 DSH 正在运行（支持官方原版）
         2. 手机与电脑在同一局域网 WiFi
-        3. 电脑端已安装并启用手机访问（dsh-pocket）
+        3. 电脑端已安装并启用协同插件（dsh-anywhere）
         """
 
         let retryButton = UIButton(type: .system)
@@ -3238,7 +3345,8 @@ final class ViewController: UIViewController {
                 guard let self else { return }
                 // 外网入口先回局域网换最新 token 再打开，避免用过期 token 撞 401。
                 ServiceResolver.resolve(item) { url in
-                    self.loadURLString(url)
+                    // 强制新建连接，彻底切断锁屏后的卡死管道
+                    self.loadURLString(url, markAsDSHService: true, forceReconnect: true)
                 }
             }
             if isSelected {
@@ -3269,15 +3377,26 @@ final class ViewController: UIViewController {
         sheet.addAction(UIAlertAction(title: "手动输入地址…", style: .default) { [weak self] _ in
             self?.promptForURL()
         })
-        sheet.addAction(UIAlertAction(title: "刷新", style: .default) { [weak self] _ in
-            // reloadFromOrigin 而不是 reload：后者允许复用 HTTP 缓存。
-            // 入口包（index-*.js）名字是构建期哈希、不是内容哈希，一旦被缓存住，
-            // 服务端修好了客户端也拿不到（白屏看起来「修不好」）。强制回源。
-            self?.webView.reloadFromOrigin()
+        sheet.addAction(UIAlertAction(title: "刷新（强制全新重连）", style: .default) { [weak self] _ in
+            // 彻底切断任何僵死连接，全新发起 TCP 握手，100% 联通恢复
+            self?.forceReconnectCurrentURL()
         })
         sheet.addAction(UIAlertAction(title: "清除缓存并重载", style: .default) { [weak self] _ in
             self?.clearWebCacheAndReload()
         })
+        let currentAppVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.83"
+        sheet.addAction(UIAlertAction(title: "🚀 检查更新 (当前 v\(currentAppVer))…", style: .default) { [weak self] _ in
+            self?.checkForAppUpdates(manual: true)
+        })
+        #if !PUBLIC_BUILD
+        // v1.0.83：布局编辑只在个人版里。公开版编译时带 PUBLIC_BUILD，这段不存在。
+        let layoutOn = UserDefaults.standard.bool(forKey: Keys.layoutEdit)
+        sheet.addAction(UIAlertAction(title: layoutOn ? "调整布局：开（点此关闭）" : "调整布局…", style: .default) { [weak self] _ in
+            guard let self else { return }
+            UserDefaults.standard.set(!layoutOn, forKey: Keys.layoutEdit)
+            self.applyLayoutEditMode()
+        })
+        #endif
         sheet.addAction(UIAlertAction(title: "关于", style: .default) { [weak self] _ in
             self?.showAbout()
         })
@@ -3285,6 +3404,117 @@ final class ViewController: UIViewController {
         sheet.popoverPresentationController?.sourceView = menuButton
         present(sheet, animated: true)
     }
+
+    #if !PUBLIC_BUILD
+    /// v1.0.83：布局编辑层。给每个按钮描边、标名字，按住拖动，松手记住位置。
+    /// 只在个人版里。打开后注入到当前页面，刷新或换页时按开关重新注入。
+    private func applyLayoutEditMode() {
+        let on = UserDefaults.standard.bool(forKey: Keys.layoutEdit)
+        let js = on ? Self.layoutEditOnJS : Self.layoutEditOffJS
+        webView?.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    private static let layoutEditOffJS = "(function(){var e=document.getElementById('dsh-layout-edit');if(e)e.remove();document.querySelectorAll('[data-dsh-moved]').forEach(function(n){n.style.position='';n.style.left='';n.style.top='';n.style.zIndex='';n.removeAttribute('data-dsh-moved');});})();"
+
+    private static let layoutEditOnJS = """
+    (function () {
+      if (document.getElementById('dsh-layout-edit')) return;
+      var box = document.createElement('div');
+      box.id = 'dsh-layout-edit';
+      box.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;z-index:2147483000;';
+      document.documentElement.appendChild(box);
+
+      function labelOf(el) {
+        var t = el.getAttribute('aria-label') || (el.innerText || '').trim();
+        return t.replace(/\\s+/g, ' ').slice(0, 10) || el.tagName.toLowerCase();
+      }
+      function candidates() {
+        var sel = 'header, [class*="titleRow"], [class*="composerSeat"], [class*="composerStack"], [class*="uWtHQG_input"], [class*="sidebarCol"], button, [role="button"], a, input, textarea';
+        var list = Array.prototype.filter.call(document.querySelectorAll(sel), function (el) {
+          if (el.closest('#dsh-layout-edit') || el.closest('#dsh-layout-bar')) return false;
+          var r = el.getBoundingClientRect();
+          return r.width > 8 && r.height > 8 && r.width < window.innerWidth + 4 && r.bottom > 0 && r.right > 0 && r.top < window.innerHeight && r.left < window.innerWidth;
+        });
+        // 大块在前、小按钮在后：后画的框在上层，按钮不会被整块挡住拖不动。
+        list.sort(function (a, b) { return (b.getBoundingClientRect().width * b.getBoundingClientRect().height) - (a.getBoundingClientRect().width * a.getBoundingClientRect().height); });
+        return list;
+      }
+      function paint() {
+        box.innerHTML = '';
+        var idx = 0;
+        candidates().forEach(function (el) {
+          idx += 1;
+          var num = idx;
+          var r = el.getBoundingClientRect();
+          var f = document.createElement('div');
+          f.style.cssText = 'position:fixed;border:1px dashed #ff2d55;border-radius:6px;pointer-events:auto;background:rgba(255,45,85,0.06);';
+          f.style.left = r.left + 'px';
+          f.style.top = r.top + 'px';
+          f.style.width = r.width + 'px';
+          f.style.height = r.height + 'px';
+          var tag = document.createElement('span');
+          tag.textContent = num + ' ' + labelOf(el);
+          tag.style.cssText = 'position:absolute;left:0;top:-14px;font:10px sans-serif;color:#fff;background:#ff2d55;padding:0 3px;border-radius:3px;white-space:nowrap;';
+          f.appendChild(tag);
+          var sx = 0, sy = 0, sl = 0, st = 0, moved = false;
+          f.addEventListener('touchstart', function (e) {
+            var t = e.touches[0]; sx = t.clientX; sy = t.clientY;
+            var er = el.getBoundingClientRect(); sl = er.left; st = er.top; moved = false;
+          }, { passive: true });
+          f.addEventListener('touchmove', function (e) {
+            var t = e.touches[0];
+            var dx = t.clientX - sx, dy = t.clientY - sy;
+            if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+            if (!moved) return;
+            e.preventDefault();
+            el.style.setProperty('position', 'fixed', 'important');
+            el.style.setProperty('left', Math.round(sl + dx) + 'px', 'important');
+            el.style.setProperty('top', Math.round(st + dy) + 'px', 'important');
+            el.style.setProperty('margin', '0', 'important');
+            el.style.setProperty('z-index', '2147482000', 'important');
+            el.setAttribute('data-dsh-moved', '1');
+            f.style.left = Math.round(sl + dx) + 'px';
+            f.style.top = Math.round(st + dy) + 'px';
+          }, { passive: false });
+          f.addEventListener('touchend', function (e) {
+            if (moved) { e.preventDefault(); e.stopPropagation(); }
+          }, true);
+          box.appendChild(f);
+        });
+      }
+      paint();
+
+      var bar = document.createElement('div');
+      bar.id = 'dsh-layout-bar';
+      bar.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483646;display:flex;gap:6px;';
+      function btn(text, bg) {
+        var b = document.createElement('button');
+        b.textContent = text;
+        b.style.cssText = 'font:13px sans-serif;color:#fff;border:none;border-radius:8px;padding:6px 10px;';
+        b.style.background = bg;
+        return b;
+      }
+      var copy = btn('复制位置', '#ff2d55');
+      copy.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var lines = ['按钮 左 上 宽 高'];
+        candidates().forEach(function (el) {
+          var r = el.getBoundingClientRect();
+          lines.push(labelOf(el) + ' ' + Math.round(r.left) + ' ' + Math.round(r.top) + ' ' + Math.round(r.width) + ' ' + Math.round(r.height));
+        });
+        var text = lines.join('\\n');
+        if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {});
+        copy.textContent = '已复制';
+        setTimeout(function () { copy.textContent = '复制位置'; }, 1200);
+      }, true);
+      var refresh = btn('重标', '#444');
+      refresh.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); paint(); }, true);
+      bar.appendChild(copy); bar.appendChild(refresh);
+      document.documentElement.appendChild(bar);
+      box.__bar = bar;
+    })();
+    """
+    #endif
 
     /// 一级菜单：免费网页版（主流 AI 模型）
     /// 支持二级菜单查看国内主流模型与海外主流模型，用户登录自己账号后，Cookie 与登录态由 WKWebsiteDataStore 永久保持
@@ -3540,22 +3770,17 @@ final class ViewController: UIViewController {
             title: "DeepSeek Harness iOS",
             message: """
             版本：\(version) (\(build))
-            作者：liush734530963
-            开源仓库：
-            https://github.com/liush734530963/deepseek-harness-ios
+            开源仓库：https://github.com/liushQAQ/IOS
 
-            【设备检测信息】
+            【设备环境信息】
             \(deviceInfo)
 
-            【最新更新日志 (v1.0.71)】
-            1. 📷 新增「扫码连接」：扫地址二维码自动填好地址并连接，彻底告别手动输入（悬浮球菜单 / 连不上浮层 / 服务列表右上角扫码图标都能进）；
-            2. 🖼 支持「从相册选二维码图片」识别，截图里的二维码也能扫（Vision 识别，无需相册权限）；
-            3. 🔳 新增「当前地址二维码」：把当前地址生成二维码，方便另一台手机直接扫码连接；
-            4. 🛡 防误扫：局域网地址扫到即连（零点击），公网地址弹一次确认，扫到非地址二维码会在取景界面震动提示并继续扫；
-            5. ⌨️ 键盘避让：弹出键盘时压缩网页视口高度（顶栏钉在原位、内容区内滚动、输入框悬在键盘上方），不再整页上移顶出状态栏；
-            6. 📐 顶栏全员同一水平线：左侧抽屉开关钉在左上角 28x28，会话标题/成员图标/右侧边栏按钮统一 28px 基线，标题与左侧按钮保留 18px 间距绝不重叠；
-            7. 📱 顶栏与外部网页自动让出 iOS 状态栏/灵动岛高度，永不顶到状态栏里；
-            8. 🩹 修复注入脚本在 documentStart 阶段因 body 未就绪崩溃，导致右侧边栏遮罩、返回按钮等功能整体失效的问题。
+            【最新特性 (v1.0.83)】
+            1. ⚡ 首推插件 dsh-anywhere：支持多台手机、iPad、平板、电脑多设备同时在线访问，实时同屏收发与流式同步打印，无缝切换使用；内置毫秒级锁屏自愈（备选支持 dsh-pocket）；
+            2. 🛡 锁屏假死彻底自愈：锁屏 1~2 分钟切回自动恢复联通；手动点击刷新或当前地址 100% 强行恢复连接；
+            3. 📐 左侧侧边栏按 75% 缩放舒展展示（210px 宽度），隐藏电脑端快捷键，新会话按钮清爽居中；
+            4. 🚀 悬浮按钮内置「检查更新」：支持从 GitHub 仓库自动下载并唤起巨魔 (TrollStore) 一键覆盖安装；
+            5. ⌨️ 会话框上浮避让：键盘打开时消息内容区动态增加缓冲，思考中与流式输出最后三行零遮挡。
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
@@ -3575,16 +3800,29 @@ final class ViewController: UIViewController {
 
     @objc private func retryTapped() {
         if let current = webView.url?.absoluteString, !current.isEmpty {
-            // 重试不改变页面归属判定：第三方页面重试不能把它的 host 误记为 DSH 服务
-            loadURLString(current, markAsDSHService: false)
+            // 重试强行切断旧死通道
+            loadURLString(current, markAsDSHService: false, forceReconnect: true)
         } else {
             loadInitialURL()
         }
     }
 
+    @objc private func appDidEnterBackground() {
+        lastEnterBackgroundTime = Date()
+    }
+
+    /// 强制恢复联通性（终极恢复机制：彻底掐断死连接，100% 联通回来）
+    func forceReconnectCurrentURL() {
+        let target = webView.url?.absoluteString
+            ?? UserDefaults.standard.string(forKey: Keys.lastURL)
+            ?? defaultURL
+        loadURLString(target, markAsDSHService: true, forceReconnect: true)
+    }
+
     /// - Parameter markAsDSHService: 加载的是 DSH 服务地址时为 true（记录其 host 用于页面归属判定）；
     ///   打开外嵌免费网页对话等第三方站点时必须传 false，避免把第三方 host 误认成 DSH。
-    private func loadURLString(_ raw: String, markAsDSHService: Bool = true) {
+    /// - Parameter forceReconnect: 是否强行切断旧通道重新建立全新网络握手
+    private func loadURLString(_ raw: String, markAsDSHService: Bool = true, forceReconnect: Bool = false) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -3608,35 +3846,72 @@ final class ViewController: UIViewController {
         terminateCount = 0
         hasLoadedOnce = false
         isTokenRetryInFlight = false
-        // 用户/代码显式换地址：解除 Pocket 重试防重入，让新地址能走完整握手
         if !trimmed.contains("dsh-pocket-retry=1") { isPocketRetryInFlight = false }
-        // 新地址开始加载：先隐藏旧内容，避免残留上一个服务的画面
-        UIView.animate(withDuration: 0.12) {
-            self.webView.alpha = 0
+
+        // 1. 彻底掐断之前的旧网络连接与挂起任务，防止卡死在底层请求队列中
+        webView.stopLoading()
+        activityIndicator.startAnimating()
+        startNavigationTimeout()
+
+        // 2. 避免暴力全黑导致假死死锁，仅轻微半透明并增加 2.5 秒安全兜底显形
+        UIView.animate(withDuration: 0.1) {
+            self.webView.alpha = 0.4
         }
-        webView.load(URLRequest(url: url))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            self?.revealWebView()
+        }
+
+        // 3. 构建全新连接请求：忽略任何本地与远程缓存，超时锁死在 8 秒，绝不卡死
+        let cachePolicy: URLRequest.CachePolicy = forceReconnect ? .reloadIgnoringLocalAndRemoteCacheData : .reloadIgnoringLocalCacheData
+        var request = URLRequest(url: url, cachePolicy: cachePolicy, timeoutInterval: 8)
+        request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        webView.load(request)
     }
 
-    // MARK: - 联网即加载
+    // MARK: - 联网与锁屏切回毫秒级自愈 (Fast-Resume)
 
     @objc private func appDidBecomeActive() {
-        // 回前台先把悬浮按钮收回右缘，避免它停在上次展开的位置挡住页面。
         setMenuExpanded(false, animated: false)
-        // 回到前台：若当前是失败态或还没内容，立刻重连（桌面端会话是实时的）。
+
+        let awaySeconds = Date().timeIntervalSince(lastEnterBackgroundTime)
+
+        // 若当前处于连接失败态或尚未有内容，立刻尝试重连
         if !errorOverlay.isHidden || webView.url == nil || !hasLoadedOnce {
-            retryTapped()
-        } else if hasLoadedOnce {
-            // 当页面已经加载且从后台切回前台时，主动触发 WebSocket / 数据流唤醒，
-            // 确保正在进行的任务、对话执行状态与桌面端 100% 实时同步。
-            webView.evaluateJavaScript("""
-                (function() {
-                  try {
-                    window.dispatchEvent(new Event('focus'));
-                    document.dispatchEvent(new Event('visibilitychange'));
-                    if (window.__dshSyncActiveSession) { window.__dshSyncActiveSession(); }
-                  } catch(e) {}
-                })();
-            """, completionHandler: nil)
+            forceReconnectCurrentURL()
+            return
+        }
+
+        // v1.0.83 锁屏假死彻底自愈：
+        // 如果离开/锁屏超过 15 秒（锁屏一两分钟），底层连接往往已被 iOS 挂起切断：
+        // 先发送极速探针；若 0.35 秒内未收到正常回应，直接自动执行 forceReconnectCurrentURL() 全新建立连接！
+        var isResponsive = false
+        webView.evaluateJavaScript("1+1") { [weak self] result, error in
+            if error == nil, let val = result as? Int, val == 2 {
+                isResponsive = true
+            }
+        }
+
+        let probeDelay = awaySeconds > 15 ? 0.35 : 0.6
+        DispatchQueue.main.asyncAfter(deadline: .now() + probeDelay) { [weak self] in
+            guard let self = self else { return }
+            if !isResponsive || awaySeconds > 90 {
+                // 确凿判定 WebProcess 挂起或通信中断：强行自动全新重连
+                self.recordWebError("检测到锁屏切回后通信中断，已自动执行全新连接自愈")
+                self.forceReconnectCurrentURL()
+            } else {
+                // 存活状态：主动派发 visibilitychange 与 focus，唤醒页面 WebSocket 重连
+                self.webView.evaluateJavaScript("""
+                    (function() {
+                      try {
+                        window.dispatchEvent(new Event('focus'));
+                        document.dispatchEvent(new Event('visibilitychange'));
+                        if (window.__dshFastResume) { window.__dshFastResume(); }
+                        if (window.__dshSyncActiveSession) { window.__dshSyncActiveSession(); }
+                      } catch(e) {}
+                    })();
+                """, completionHandler: nil)
+            }
         }
     }
 
@@ -3782,6 +4057,12 @@ extension ViewController: WKNavigationDelegate {
         // 首屏下发一次状态栏高度：safeAreaInsets 可能在页面脚本注入之前就定了，
         // 不补这一次，顶栏会一直停在默认留白上。
         publishStatusBarHeight()
+        #if !PUBLIC_BUILD
+        // 布局编辑开着时，每次页面加载完成重新挂上编辑层。
+        if UserDefaults.standard.bool(forKey: Keys.layoutEdit) {
+            applyLayoutEditMode()
+        }
+        #endif
         // 内容首帧就绪后才显形：加载过程只显示原生加载态，永不白屏
         revealWebView()
         detectStaleTokenPage()
@@ -4047,3 +4328,236 @@ extension ViewController: UIScrollViewDelegate {
         }
     }
 }
+
+// MARK: - 远程仓库自动/手动检查更新与巨魔(TrollStore)自动安装 (v1.0.83)
+
+extension ViewController: UIDocumentInteractionControllerDelegate {
+    func documentInteractionControllerViewControllerForPreview(_ controller: UIDocumentInteractionController) -> UIViewController {
+        return self
+    }
+
+    private struct AppReleaseInfo: Decodable {
+        let version: String
+        let build: Int?
+        let title: String?
+        let changelog: String?
+        let personal_tipa_url: String?
+        let public_tipa_url: String?
+        let release_url: String?
+    }
+
+    func checkForAppUpdates(manual: Bool = false) {
+        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.83"
+        let currentBuildStr = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+        let currentBuild = Int(currentBuildStr) ?? 0
+
+        var loadingAlert: UIAlertController?
+        if manual {
+            let alert = UIAlertController(title: "正在检查更新", message: "正在从远程仓库检查最新打包…", preferredStyle: .alert)
+            present(alert, animated: true)
+            loadingAlert = alert
+        }
+
+        let updateURLStr = "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json"
+        guard let url = URL(string: updateURLStr) else {
+            loadingAlert?.dismiss(animated: true)
+            return
+        }
+
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
+        req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+
+        URLSession.shared.dataTask(with: req) { [weak self] data, _, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let finishBlock = {
+                    if let error = error {
+                        if manual {
+                            let alert = UIAlertController(title: "检查更新失败", message: "无法连接更新源：\(error.localizedDescription)", preferredStyle: .alert)
+                            alert.addAction(UIAlertAction(title: "确定", style: .default))
+                            self.present(alert, animated: true)
+                        }
+                        return
+                    }
+
+                    guard let data = data,
+                          let info = try? JSONDecoder().decode(AppReleaseInfo.self, from: data) else {
+                        if manual {
+                            let alert = UIAlertController(title: "检查更新失败", message: "仓库版本信息解析失败。", preferredStyle: .alert)
+                            alert.addAction(UIAlertAction(title: "确定", style: .default))
+                            self.present(alert, animated: true)
+                        }
+                        return
+                    }
+
+                    let remoteVer = info.version
+                    let remoteBuild = info.build ?? 0
+
+                    let hasNewVersion: Bool = {
+                        if remoteBuild > currentBuild { return true }
+                        if remoteBuild == currentBuild && remoteVer.compare(currentVer, options: .numeric) == .orderedDescending {
+                            return true
+                        }
+                        return remoteVer.compare(currentVer, options: .numeric) == .orderedDescending
+                    }()
+
+                    if hasNewVersion {
+                        self.presentNewVersionPrompt(info: info, currentVer: currentVer, currentBuild: currentBuild)
+                    } else if manual {
+                        let alert = UIAlertController(
+                            title: "✅ 当前已是最新版本",
+                            message: "当前版本：v\(currentVer) (Build \(currentBuild))\n仓库最新：v\(remoteVer) (Build \(remoteBuild))\n\n如有强制重装需求，也可直接通过巨魔重装最新包。",
+                            preferredStyle: .alert)
+                        #if PUBLIC_BUILD
+                        let tipaURL = info.public_tipa_url ?? info.personal_tipa_url ?? ""
+                        #else
+                        let tipaURL = info.personal_tipa_url ?? info.public_tipa_url ?? ""
+                        #endif
+                        if !tipaURL.isEmpty {
+                            alert.addAction(UIAlertAction(title: "🚀 重新下载并用巨魔安装", style: .default) { [weak self] _ in
+                                self?.installViaTrollStore(remoteURLString: tipaURL)
+                            })
+                        }
+                        alert.addAction(UIAlertAction(title: "好", style: .cancel))
+                        self.present(alert, animated: true)
+                    }
+                }
+
+                if let loading = loadingAlert {
+                    loading.dismiss(animated: true, completion: finishBlock)
+                } else {
+                    finishBlock()
+                }
+            }
+        }.resume()
+    }
+
+    private func presentNewVersionPrompt(info: AppReleaseInfo, currentVer: String, currentBuild: Int) {
+        #if PUBLIC_BUILD
+        let targetTipaURL = info.public_tipa_url ?? info.personal_tipa_url ?? ""
+        #else
+        let targetTipaURL = info.personal_tipa_url ?? info.public_tipa_url ?? ""
+        #endif
+
+        let remoteVer = info.version
+        let remoteBuild = info.build ?? 0
+        let notes = info.changelog ?? info.title ?? "包含最新的移动端布局优化与功能修复。"
+
+        let alert = UIAlertController(
+            title: "🎉 发现新版本 v\(remoteVer) (Build \(remoteBuild))",
+            message: "当前版本：v\(currentVer) (Build \(currentBuild))\n\n【更新说明】\n\(notes)\n\n点击下方按钮即可自动拉取仓库最新 TIPA 包并唤起巨魔 (TrollStore) 完成覆盖更新。",
+            preferredStyle: .alert
+        )
+
+        if !targetTipaURL.isEmpty {
+            alert.addAction(UIAlertAction(title: "🚀 巨魔一键自动安装 (推荐)", style: .default) { [weak self] _ in
+                self?.installViaTrollStore(remoteURLString: targetTipaURL)
+            })
+            alert.addAction(UIAlertAction(title: "📥 App内下载后调用巨魔安装", style: .default) { [weak self] _ in
+                self?.downloadAndInstallTIPA(remoteURLString: targetTipaURL, filename: "DSHios-\(remoteVer)-\(remoteBuild).tipa")
+            })
+        }
+
+        if let rel = info.release_url, let relURL = URL(string: rel) {
+            alert.addAction(UIAlertAction(title: "🌐 打开仓库页面", style: .default) { _ in
+                UIApplication.shared.open(relURL)
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: "稍后提醒", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    func installViaTrollStore(remoteURLString: String) {
+        guard let encoded = remoteURLString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
+        let schemes = [
+            "apple-magnifier://install?url=\(encoded)",
+            "trollstore://install?url=\(encoded)"
+        ]
+
+        var didOpen = false
+        let group = DispatchGroup()
+        for s in schemes {
+            if let u = URL(string: s) {
+                group.enter()
+                UIApplication.shared.open(u, options: [:]) { success in
+                    if success { didOpen = true }
+                    group.leave()
+                }
+            }
+        }
+
+        group.notify(queue: .main) { [weak self] in
+            if !didOpen {
+                self?.downloadAndInstallTIPA(remoteURLString: remoteURLString, filename: "DSHios-latest.tipa")
+            }
+        }
+    }
+
+    private func downloadAndInstallTIPA(remoteURLString: String, filename: String) {
+        guard let url = URL(string: remoteURLString) else { return }
+
+        let progressAlert = UIAlertController(title: "正在下载最新安装包", message: "正在从仓库下载 \(filename)…\n进度：0%", preferredStyle: .alert)
+        present(progressAlert, animated: true)
+
+        let destURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        try? FileManager.default.removeItem(at: destURL)
+
+        var observation: NSKeyValueObservation?
+        let task = URLSession.shared.downloadTask(with: url) { [weak self] localURL, _, error in
+            observation?.invalidate()
+            DispatchQueue.main.async {
+                progressAlert.dismiss(animated: true) {
+                    guard let self else { return }
+                    if let error = error {
+                        let alert = UIAlertController(title: "下载失败", message: error.localizedDescription, preferredStyle: .alert)
+                        alert.addAction(UIAlertAction(title: "好", style: .default))
+                        self.present(alert, animated: true)
+                        return
+                    }
+                    guard let localURL = localURL else { return }
+                    do {
+                        try FileManager.default.moveItem(at: localURL, to: destURL)
+                        self.openDownloadedTIPA(fileURL: destURL)
+                    } catch {
+                        let alert = UIAlertController(title: "保存失败", message: error.localizedDescription, preferredStyle: .alert)
+                        alert.addAction(UIAlertAction(title: "好", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
+            }
+        }
+
+        observation = task.progress.observe(\.fractionCompleted) { progress, _ in
+            DispatchQueue.main.async {
+                let pct = Int(progress.fractionCompleted * 100)
+                progressAlert.message = "正在从仓库下载 \(filename)…\n进度：\(pct)%"
+            }
+        }
+        task.resume()
+    }
+
+    private func openDownloadedTIPA(fileURL: URL) {
+        if let encoded = fileURL.absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let tsURL = URL(string: "apple-magnifier://install?url=\(encoded)") {
+            UIApplication.shared.open(tsURL, options: [:]) { [weak self] success in
+                if !success {
+                    self?.presentShareForFile(fileURL)
+                }
+            }
+        } else {
+            presentShareForFile(fileURL)
+        }
+    }
+
+    private func presentShareForFile(_ fileURL: URL) {
+        let docController = UIDocumentInteractionController(url: fileURL)
+        docController.delegate = self
+        if !docController.presentOpenInMenu(from: menuButton?.bounds ?? view.bounds, in: menuButton ?? view, animated: true) {
+            let act = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+            act.popoverPresentationController?.sourceView = menuButton ?? view
+            present(act, animated: true)
+        }
+    }
+}
+

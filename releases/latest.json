@@ -1,0 +1,10 @@
+{
+  "version": "1.0.83",
+  "build": 18,
+  "updated_at": "2026-10-12 13:25:00",
+  "title": "v1.0.83 侧栏50%·键盘流式避让·巨魔自动更新",
+  "changelog": "1. 左侧侧边栏宽度缩小50%（从280px收紧至140px）\n2. 键盘弹起消息留足避让空间，思考中与流式输出不被遮挡\n3. 增加远程仓库检查更新按钮，支持巨魔(TrollStore)一键自动安装",
+  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.83-18.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.83-18.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS"
+}
