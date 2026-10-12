@@ -480,14 +480,13 @@ final class ViewController: UIViewController {
             '  width: 100% !important;',
             '  gap: 6px !important;',
             '}',
-            '/* 左侧展开目录按钮：固定在左上角 x=8px, y=8px (28x28)，右侧 titleRow 留出 42px 安全区，确保标题和成员按钮整体右移绝不重叠 */',
+            '/* v1.0.83：不再把左侧目录按钮钉成 28px。页面自带 38px，钉小后进了具体会话就变小，',
+            '   还和另一颗叠在一起。尺寸交给页面自己，位置回归正常排列。 */',
             '[data-mobile-nav="toggle"] {',
-            '  position: absolute !important;',
+            '  position: static !important;',
             '  transform: none !important;',
-            '  top: 8px !important;',
-            '  left: 8px !important;',
-            '  width: 28px !important;',
-            '  height: 28px !important;',
+            '  top: auto !important;',
+            '  left: auto !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '  justify-content: center !important;',
@@ -536,11 +535,12 @@ final class ViewController: UIViewController {
             '  gap: 4px !important;',
             '  margin-left: auto !important;',
             '}',
-            '/* 统一右侧所有按钮尺寸为 32x32，严格水平居中 */',
+            '/* 统一右侧按钮尺寸为 32x32。v1.0.83：目录按钮也在 headerActions 里，',
+            '   排除它，保留页面自带的 38px，避免进了具体会话就变小。 */',
             '.ank0OG_headerCorner button,',
             '.ank0OG_headerCorner [role="button"],',
-            '.ank0OG_headerActions button,',
-            '.ank0OG_headerActions [role="button"] {',
+            '.ank0OG_headerActions button:not([data-mobile-nav="toggle"]),',
+            '.ank0OG_headerActions [role="button"]:not([data-mobile-nav="toggle"]) {',
             '  height: 32px !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
@@ -1006,6 +1006,23 @@ final class ViewController: UIViewController {
                             target.closest('input[role="searchbox"]') ||
                             target.closest('input:not([type="button"]):not([type="submit"]):not([type="radio"]):not([type="checkbox"])');
 
+              // v1.0.86：豆包验证码是点外层格子，再由页面自己调用 focus()。
+              // 点的位置附近有输入框，也算用户主动要输入，放行随后的聚焦，键盘才能弹。
+              if (!inputEl && e.touches && e.touches.length) {
+                var touch = e.touches[0];
+                var near = document.elementsFromPoint(touch.clientX, touch.clientY) || [];
+                for (var k = 0; k < near.length && k < 8; k++) {
+                  var node = near[k];
+                  if (!node || !node.querySelector) continue;
+                  if (node.matches && node.matches('input, textarea, [contenteditable="true"]')) { inputEl = node; break; }
+                  var inner = node.querySelector('input:not([type="button"]):not([type="submit"]):not([type="radio"]):not([type="checkbox"]), textarea, [contenteditable="true"]');
+                  if (inner) {
+                    var r = inner.getBoundingClientRect();
+                    if (Math.abs(r.top + r.height / 2 - touch.clientY) < 80) { inputEl = inner; break; }
+                  }
+                }
+              }
+
               if (inputEl) {
                 allowUserTouchFocus = true;
                 clearTimeout(touchResetTimer);
@@ -1430,17 +1447,18 @@ final class ViewController: UIViewController {
                   el.style.right = 'auto';
                 }
 
-                // 4. 垂直方向越界自动拉回安全区内（严格保护 iOS 状态栏/灵动岛高度，避免顶入时间/电量指示区）
+                // 4. v1.0.86：弹层垂直居中。之前把超出底部的弹层往上推、再把顶部锁死在 54px，
+                //    验证码这类弹层的输入框被顶出屏幕，既不居中也点不到，键盘弹不出来。
+                //    改为：比屏幕高的限制高度放进安全区，其余的居中。不再改写 top 把内容推出屏幕。
                 var TOP_SAFE = Math.max(54, PADDING);
-                if (rect.bottom > winH - PADDING) {
-                  var overflowY = rect.bottom - (winH - PADDING);
-                  var currentTop = parseFloat(el.style.top) || rect.top;
-                  var newTop = Math.max(TOP_SAFE, currentTop - overflowY);
-                  el.style.top = newTop + 'px';
-                  el.style.bottom = 'auto';
-                }
-                if (rect.top < TOP_SAFE) {
+                var usable = winH - TOP_SAFE - PADDING;
+                if (rect.height > usable) {
+                  el.style.maxHeight = usable + 'px';
                   el.style.top = TOP_SAFE + 'px';
+                  el.style.bottom = 'auto';
+                } else if (rect.top < TOP_SAFE || rect.bottom > winH - PADDING) {
+                  var centered = Math.max(TOP_SAFE, Math.round((winH - rect.height) / 2));
+                  el.style.top = centered + 'px';
                   el.style.bottom = 'auto';
                 }
               }
@@ -2096,17 +2114,16 @@ final class ViewController: UIViewController {
             '  z-index: 1020 !important;',
             '  display: flex !important;',
             '  flex-direction: column !important;',
-            '  /* v1.0.76：上内边距取状态栏高度。--dsh-statusbar 由原生侧按机型下发',
-            '     （无刘海 20pt、刘海 47pt、灵动岛 59pt，横竖屏也会变），env() 取不到时用它兜底，',
-            '     两者都没有才退回 20px。不写死，换机型自动匹配。 */',
-            '  padding: calc(max(env(safe-area-inset-top, 0px), var(--dsh-statusbar, 20px)) + 2px) 8px 0 8px !important;',
+            '  /* v1.0.82：iPhone 14 Pro Max 状态栏 54pt。之前用下发值再加一截，',
+            '     顶栏被顶得离状态栏很远。这里只留 6px，状态栏那一截由 --dsh-statusbar 单独撑。 */',
+            '  padding: 6px 8px 0 8px !important;',
             '  min-height: 0 !important;',
             '  flex: none !important;',
             '  box-sizing: border-box !important;',
             '  max-width: 100vw !important;',
             '  overflow: hidden !important;',
-            '  /* v1.0.80：顶栏和状态栏那一块不再用纯白，改成跟页面内容区一致的浅灰 */',
-            '  background: #f5f5f7 !important;',
+            '  /* v1.0.82：顶栏背景透明。之前刷的 #f5f5f7 在新建会话页是一整块灰，用户不要。 */',
+            '  background: transparent !important;',
             '}',
             '',
             '[data-phase] header [class*="titleRow"],',
@@ -2130,15 +2147,17 @@ final class ViewController: UIViewController {
             'header button[aria-label="打开侧边栏"],',
             'header button[aria-label="收起侧边栏"],',
             '[data-mobile-nav="toggle"] {',
+            '  /* v1.0.83：页面在具体会话里把这颗按钮收成 28px，新建会话页是 38px，两个页面大小不一致。',
+            '     统一成页面自带的 38px。 */',
+            '  width: 38px !important;',
+            '  height: 38px !important;',
+            '  min-width: 38px !important;',
+            '  min-height: 38px !important;',
             '  position: static !important;',
             '  transform: none !important;',
             '  top: auto !important;',
             '  left: auto !important;',
             '  right: auto !important;',
-            '  width: 32px !important;',
-            '  height: 32px !important;',
-            '  min-width: 32px !important;',
-            '  max-width: 32px !important;',
             '  margin: 0 !important;',
             '  padding: 0 !important;',
             '  display: inline-flex !important;',
@@ -2149,6 +2168,7 @@ final class ViewController: UIViewController {
             '  margin-left: 0 !important;',
             '  z-index: auto !important;',
             '}',
+            '/* v1.0.85：侧栏收起后残留的开关按钮滑到屏幕左边外，还露一截。滑出屏幕的隐藏。 */',
             '',
             'html body [data-phase] header [class*="titleCluster"],',
             'html body .ank0OG_titleCluster {',
@@ -2188,14 +2208,16 @@ final class ViewController: UIViewController {
             '  margin-left: 4px !important;',
             '}',
             '',
-            '[data-phase] header [class*="titleRow"] button,',
-            '[data-phase] header [class*="titleRow"] [role="button"],',
+            '/* v1.0.83：打开目录被挪进标题行后也命中了这条，被压成 32px，',
+            '   和页面自带的 38px 按钮叠在一起。把它排除，保留原始尺寸。 */',
+            '[data-phase] header [class*="titleRow"] button:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]),',
+            '[data-phase] header [class*="titleRow"] [role="button"]:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]),',
             'button[aria-label="智能体团队"],',
             'button[aria-label="更多操作"],',
             'button[aria-label="打开右侧边栏"],',
             'button[aria-label="收起右侧边栏"],',
             'button[aria-label="文件浏览"],',
-            '.ank0OG_headerActions button,',
+            '.ank0OG_headerActions button:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]),',
             '.ank0OG_headerCorner button {',
             '  width: 32px !important;',
             '  height: 32px !important;',
@@ -2260,11 +2282,23 @@ final class ViewController: UIViewController {
           window.__dshSetStatusBar = function (px) {
             var h = Math.max(0, px || 0);
             document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
-            // v1.0.79：侧栏是另一块容器，顶栏的 padding 管不到它。
-            // 侧栏自己只留了 6px，内容会顶进状态栏，所以把状态栏高度直接补到侧栏容器上。
+            // v1.0.82：顶栏只在状态栏下面留这一截，不再叠加 padding。
+            var headers = document.querySelectorAll('header');
+            for (var i = 0; i < headers.length; i++) {
+              headers[i].style.setProperty('margin-top', h + 'px', 'important');
+              headers[i].style.setProperty('background', 'transparent', 'important');
+            }
+            // 侧栏同样只让出状态栏高度。
             var cols = document.querySelectorAll('[class*="sidebarCol"]');
-            for (var i = 0; i < cols.length; i++) {
-              cols[i].style.setProperty('padding-top', h + 'px', 'important');
+            for (var j = 0; j < cols.length; j++) {
+              cols[j].style.setProperty('padding-top', h + 'px', 'important');
+              cols[j].style.setProperty('background', 'transparent', 'important');
+            }
+            // v1.0.82：新建会话页的灰是 body 和空标签容器的底色，全部清成透明，不留任何颜色。
+            document.body.style.setProperty('background', 'transparent', 'important');
+            var hosts = document.querySelectorAll('[class*="_emptyTabHost"], [class*="CZPbNW_frame"], [class*="ank0OG_root"]');
+            for (var k = 0; k < hosts.length; k++) {
+              hosts[k].style.setProperty('background', 'transparent', 'important');
             }
           };
           // v1.0.77：顶栏顺序固定为
@@ -2293,13 +2327,22 @@ final class ViewController: UIViewController {
             for (var i = 0; i < cols.length; i++) cols[i].style.setProperty('padding-top', h + 'px', 'important');
           }
           function shiftTitleCluster() {
-            applySidebarInset();
+            try { applySidebarInset(); } catch (e) {}
             var rows = document.querySelectorAll('[class*="titleRow"]');
             for (var i = 0; i < rows.length; i++) {
               var row = rows[i];
               var cluster = row.querySelector('[class*="titleCluster"]');
-              var dir = row.querySelector('button[aria-label="打开目录"], button[aria-label="收起目录"], button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
-              if (dir && dir.parentNode !== row) row.insertBefore(dir, row.firstChild);
+              var header = row.closest('header') || row;
+              var dir = header.querySelector('button[aria-label="打开目录"], button[aria-label="收起目录"], button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
+              // v1.0.84：按钮要在会话标题左边。它裹在 headerActions 容器里，容器排在标题后面，
+              // 所以按钮跟着跑到了标题右边。把按钮从容器里提出来，放到标题簇第一个。
+              if (dir && cluster && cluster.firstChild !== dir) cluster.insertBefore(dir, cluster.firstChild);
+              // v1.0.85：滑出屏幕左边的侧栏残留按钮隐藏，避免新建会话页左上角多露一截。
+              var stray = document.querySelectorAll('button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
+              for (var s = 0; s < stray.length; s++) {
+                var off = stray[s].getBoundingClientRect().right < 0;
+                stray[s].style.setProperty('visibility', off ? 'hidden' : '', 'important');
+              }
               if (dir) {
                 dir.style.setProperty('margin-left', '0', 'important');
                 dir.style.setProperty('margin-right', '0', 'important');
@@ -2308,12 +2351,16 @@ final class ViewController: UIViewController {
               if (cluster) {
                 cluster.style.setProperty('flex', '1 1 auto', 'important');
                 cluster.style.setProperty('width', 'auto', 'important');
-                cluster.style.setProperty('margin-left', '0', 'important');
-                cluster.style.setProperty('justify-content', 'center', 'important');
+                // v1.0.85：标题和智能体往右移，和最左边的目录按钮拉开距离。
+                cluster.style.setProperty('padding-left', '56px', 'important');
+                // v1.0.84：从左往右排，目录按钮靠最左，标题紧跟在它右边。不再居中。
+                cluster.style.setProperty('justify-content', 'flex-start', 'important');
               }
             }
           }
           shiftTitleCluster();
+          // 会话页的顶栏是点进会话后才渲染的，加载时跑一次会落空，定时再跑。
+          setInterval(shiftTitleCluster, 400);
           var moShift = new MutationObserver(shiftTitleCluster);
           function watchShift() {
             var root = document.body || document.documentElement;
@@ -2776,13 +2823,23 @@ final class ViewController: UIViewController {
         container.addArrangedSubview(changeButton)
         container.addArrangedSubview(guideButton)
 
+        // v1.0.86：内容比屏幕高时，纯 centerY 会把整块顶出屏幕上方（真机上提示跑到天上）。
+        // 改成上下都挂约束、优先级让位给内容高度：内容少时居中，内容多时贴安全区、不再溢出。
+        container.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        let centerY = container.centerYAnchor.constraint(equalTo: overlay.centerYAnchor)
+        centerY.priority = .defaultHigh
+        let topLimit = container.topAnchor.constraint(greaterThanOrEqualTo: overlay.safeAreaLayoutGuide.topAnchor, constant: 16)
+        let bottomLimit = container.bottomAnchor.constraint(lessThanOrEqualTo: overlay.safeAreaLayoutGuide.bottomAnchor, constant: -16)
+
         NSLayoutConstraint.activate([
             overlay.topAnchor.constraint(equalTo: view.topAnchor),
             overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            container.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
+            centerY,
+            topLimit,
+            bottomLimit,
             container.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 32),
             container.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -32)
         ])
