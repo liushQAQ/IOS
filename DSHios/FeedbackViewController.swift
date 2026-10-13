@@ -13,11 +13,9 @@ final class FeedbackViewController: UIViewController, MFMailComposeViewControlle
     private let contactField = UITextField()
     private let diagTextView = UITextView()
 
-    private let currentURLString: String
     private static let feedbackEmail = "734530963@qq.com"
 
-    init(currentURL: String = "") {
-        self.currentURLString = currentURL
+    init() {
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -199,13 +197,11 @@ final class FeedbackViewController: UIViewController, MFMailComposeViewControlle
         let sysVer = UIDevice.current.systemVersion
         let model = UIDevice.current.model
         let screen = "\(Int(UIScreen.main.bounds.width))×\(Int(UIScreen.main.bounds.height))"
-        let url = currentURLString.isEmpty ? "未连接" : currentURLString
 
         let text = """
         【应用版本】DSHios v\(appVer) (Build \(build))
         【系统环境】iOS \(sysVer) (\(model))
         【屏幕分辨率】\(screen) (@\(Int(UIScreen.main.scale))x)
-        【当前访问地址】\(url)
         【生成时间】\(Date())
         """
         diagTextView.text = text

@@ -3298,10 +3298,9 @@ final class ViewController: UIViewController {
         return "设备: \(exactModel)\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
     }
 
-    /// 反馈与建议页面入口
+    /// 反馈与建议页面入口（严禁传递或收集任何用户私密访问地址与密码凭据）
     private func presentFeedbackSheet() {
-        let currentURL = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? ""
-        let feedbackVC = FeedbackViewController(currentURL: currentURL)
+        let feedbackVC = FeedbackViewController()
         let nav = UINavigationController(rootViewController: feedbackVC)
         nav.modalPresentationStyle = .pageSheet
         present(nav, animated: true)
