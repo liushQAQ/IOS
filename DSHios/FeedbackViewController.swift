@@ -116,7 +116,7 @@ final class FeedbackViewController: UIViewController, MFMailComposeViewControlle
 
         // 4. 一键直发邮箱主按钮
         let mailBtn = UIButton(type: .system)
-        mailBtn.setTitle("✉️ 一键唤起邮箱 App 发送至 734530963@qq.com", for: .normal)
+        mailBtn.setTitle("✉️ 一键唤起邮箱 App 发送到开发者邮箱", for: .normal)
         mailBtn.titleLabel?.font = .systemFont(ofSize: 15, weight: .bold)
         mailBtn.backgroundColor = .systemBlue
         mailBtn.setTitleColor(.white, for: .normal)
@@ -282,7 +282,7 @@ final class FeedbackViewController: UIViewController, MFMailComposeViewControlle
     private func showFallbackAlert(body: String) {
         let alert = UIAlertController(
             title: "已复制反馈内容",
-            message: "已将完整的反馈与诊断信息复制到剪贴板，您可以直接打开您的邮件软件发送至：\n\(Self.feedbackEmail)",
+            message: "已将完整的反馈与诊断信息复制到剪贴板，您可以直接打开您的邮件软件发送到开发者邮箱进行反馈与建议。",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "好的", style: .default) { [weak self] _ in
