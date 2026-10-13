@@ -1,10 +1,10 @@
 {
   "version": "1.0.97",
-  "build": 36,
-  "updated_at": "2026-10-14 02:40:00",
+  "build": 37,
+  "updated_at": "2026-10-14 02:48:00",
   "title": "v1.0.97 架构彻底合并为单一公开版·彻底根治巨魔301报错·移动端右侧边栏全功能上线",
   "changelog": "1. 架构彻底合并（老总重要指示）：全网统一单一公开版 TIPA，彻底取消个人版与个人链接，本地保存的服务地址与配置数据永不丢失！\n2. 彻底根治巨魔更新 301 报错：新增 App 内免代理极速下载通道，下载完成后直调巨魔秒级安装，彻底告别重定向 301 报错！\n3. 移动端右侧边栏全功能上线：彻底修复移动端点击右上角右侧栏打不开的问题，重构为全屏滑入抽屉浮层，完整支持工作区、文件管理、终端与浏览器流畅交互！\n4. 状态栏安全区完美避让：右侧栏与各项操作按钮精准避让 iOS 顶部状态栏与灵动岛，不遮挡任何文字与标题！\n5. 纯净原版界面：彻底剔除多余注入分享按钮，保持原版极简高级质感！",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.97-36.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.97-36.tipa",
+  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.97-37.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.97-37.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }
