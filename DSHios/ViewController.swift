@@ -488,8 +488,7 @@ final class ViewController: UIViewController {
             '  align-items: center !important;',
             '  height: 32px !important;',
             '  min-height: 32px !important;',
-            '  padding-left: 42px !important;',
-            '  padding-right: 0 !important;',
+            '  padding: 0 2px !important;',
             '  margin: 0 !important;',
             '  box-sizing: border-box !important;',
             '  width: 100% !important;',
@@ -522,20 +521,77 @@ final class ViewController: UIViewController {
             '/* 顶栏会话标题与成员按钮同步右移，严禁与左侧侧边栏按钮重叠 */',
             '/* v1.0.75：flex:1 会把标题簇拉满整行，标题文字仍贴在最左边、右边空出两百多像素。',
             '   改成按内容收缩并用 margin-left:auto 把空位吃到左边，整组靠右贴近右侧边栏按钮。 */',
-            '.ank0OG_titleCluster,',
-            '[data-phase] header [class*="titleCluster"] {',
-            '  flex: 0 0 auto !important;',
-            '  width: auto !important;',
-            '  margin-left: auto !important;',
-            '  min-width: 0 !important;',
+            '/* 顶栏会话标题居中排布（老总定版）：',
+            '   左侧目录按钮靠左，会话标题在屏幕正中居中显示并平滑截断，右侧操作组靠右排列！ */',
+            '.ank0OG_titleRow,',
+            '[data-phase] header [class*="titleRow"] {',
+            '  position: relative !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
-            '  overflow: hidden !important;',
-            '  gap: 6px !important;',
-            '  height: 32px !important;',
-            '  margin: 0 !important;',
-            '  padding: 0 !important;',
+            '  justify-content: space-between !important;',
+            '  width: 100% !important;',
             '  box-sizing: border-box !important;',
+            '}',
+            '.ank0OG_crumbs,',
+            '[data-phase] header [class*="crumbs"],',
+            '[data-phase] header [class$="_crumbs"] {',
+            '  position: absolute !important;',
+            '  left: 54px !important;',
+            '  right: 96px !important;',
+            '  margin: 0 auto !important;',
+            '  display: flex !important;',
+            '  justify-content: center !important;',
+            '  align-items: center !important;',
+            '  text-align: center !important;',
+            '  max-width: calc(100% - 150px) !important;',
+            '  min-width: 0 !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '  pointer-events: auto !important;',
+            '}',
+            '.ank0OG_crumbs *,',
+            '[data-phase] header [class*="crumbs"] *,',
+            '.ank0OG_crumb,',
+            '.ank0OG_crumbCurrent,',
+            '.ank0OG_crumbSeg {',
+            '  text-align: center !important;',
+            '  max-width: 100% !important;',
+            '  min-width: 0 !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '  display: inline-block !important;',
+            '  word-break: keep-all !important;',
+            '  font-weight: 600 !important;',
+            '  font-size: 15px !important;',
+            '  line-height: 22px !important;',
+            '  padding: 2px 4px !important;',
+            '}',
+            '.ank0OG_titleCluster,',
+            '[data-phase] header [class*="titleCluster"],',
+            '.ank0OG_headerActions {',
+            '  margin-left: auto !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  gap: 6px !important;',
+            '}',
+            '/* 智能体团队及顶栏操作按钮：强制绝对抗挤压、不收缩、不折行、完整保持横排药丸 */',
+            '[class*="titleCluster"] > :not([class*="crumbs"]):not([class$="_crumbs"]),',
+            '[class*="titleCluster"] button,',
+            '.ank0OG_titleCluster button,',
+            'button[aria-label="智能体团队"],',
+            'button[aria-label*="智能体团队"],',
+            'button[title*="智能体团队"],',
+            '[class*="agentTeam"],',
+            '[data-agent-team-button] {',
+            '  flex: 0 0 auto !important;',
+            '  flex-shrink: 0 !important;',
+            '  white-space: nowrap !important;',
+            '  min-width: max-content !important;',
+            '  word-break: keep-all !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
             '}',
             '.ank0OG_headerActions {',
             '  height: 32px !important;',
@@ -564,8 +620,9 @@ final class ViewController: UIViewController {
             '.ank0OG_crumbs,',
             '[data-phase] header [class*="crumbs"] {',
             '  flex: 0 1 auto !important;',
+            '  flex-shrink: 1 !important;',
             '  min-width: 0 !important;',
-            '  max-width: 120px !important;',
+            '  max-width: 22vw !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
@@ -586,6 +643,7 @@ final class ViewController: UIViewController {
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
             '  display: inline-block !important;',
+            '  word-break: keep-all !important;',
             '  font-weight: 600 !important;',
             '  font-size: 15px !important;',
             '  line-height: 22px !important;',
@@ -631,8 +689,9 @@ final class ViewController: UIViewController {
             '}',
             '._1Ihh1G_root,',
             '._1Ihh1G_trigger {',
-            '  max-width: 110px !important;',
-            '  overflow: hidden !important;',
+            '  max-width: none !important;',
+            '  overflow: visible !important;',
+            '  white-space: nowrap !important;',
             '  padding: 0 4px !important;',
             '}',
             '/* 移动端顶栏隐藏智能体按钮右侧孤立的数字徽标(如数字 1)，消除视觉杂音，保持纯净图标 */',
@@ -680,7 +739,30 @@ final class ViewController: UIViewController {
             '  align-items: center !important;',
             '  justify-content: center !important;',
             '}',
-            /* 2. 修复右侧边栏(文件/终端/浏览器/文档预览)在移动端展开后遮挡且缺乏快捷退出按钮 */
+            /* 2. 修复右侧边栏(文件/终端/浏览器/文档预览/Diff代码对比)在移动端展开后遮挡且缺乏状态栏避让 */
+            '[class*="rightbarCol"],',
+            '.CZPbNW_rightbarCol,',
+            '[data-slot="sidebar.right"],',
+            '.dMHGga_session,',
+            '[class*="dMHGga_root"],',
+            '.dMHGga_panel,',
+            '.YdIzba_header,',
+            '[class*="YdIzba_root"],',
+            '[data-dockkit-surface],',
+            '[data-dockkit-strip],',
+            '[data-aionui-preview-col] {',
+            '  padding-top: calc(var(--dsh-statusbar, 54px) + 6px) !important;',
+            '  box-sizing: border-box !important;',
+            '}',
+            '[class*="rightbarCol"],',
+            '.CZPbNW_rightbarCol {',
+            '  padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;',
+            '  height: 100vh !important;',
+            '  height: 100dvh !important;',
+            '  max-height: 100vh !important;',
+            '  max-height: 100dvh !important;',
+            '  overflow: hidden !important;',
+            '}',
             '.dMHGga_panel[data-sidebar-right-open] {',
             '  pointer-events: auto !important;',
             '  z-index: 10040 !important;',
@@ -2097,48 +2179,12 @@ final class ViewController: UIViewController {
             });
           }
 
-          // 动态注入 2：向工作区文档预览工具栏（.YdIzba_header）追加「分享」按钮
+          // 动态注入 2：移除预览工具栏内多余的蓝色按钮，保持原版 DSH 纯净体验
           function enrichPreviewHeader() {
-            var headers = document.querySelectorAll('.YdIzba_header');
-            headers.forEach(function(header) {
-              if (header.querySelector('.dsh-mobile-download-btn')) return;
-              var btn = document.createElement('button');
-              btn.type = 'button';
-              btn.className = 'dsh-mobile-download-btn';
-              btn.setAttribute('title', '分享 / 保存到手机');
-              btn.style.cssText = 'height:26px;padding:0 9px;font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:5px;border-radius:6px;border:none;background:var(--dsw-alias-brand-primary, #007aff);color:#ffffff;cursor:pointer;margin-left:auto;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.15);';
-              btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg><span>分享到手机</span>';
-              
-              btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                var pathLabel = header.querySelector('.YdIzba_path') || document.querySelector('[data-textpreview-path]');
-                var rawPath = pathLabel ? (pathLabel.getAttribute('title') || pathLabel.innerText || '').trim() : '';
-                if (!rawPath) {
-                  var textPreviewEl = document.querySelector('[data-textpreview-url]');
-                  var resourceUrl = textPreviewEl ? textPreviewEl.getAttribute('data-textpreview-url') : '';
-                  if (resourceUrl && resourceUrl.startsWith('dsh-resource://file/')) {
-                    var prefix = 'dsh-resource://file/session/';
-                    var idx = resourceUrl.indexOf(prefix);
-                    if (idx !== -1) {
-                      var rest = resourceUrl.substring(idx + prefix.length);
-                      var slashIdx = rest.indexOf('/');
-                      if (slashIdx !== -1) {
-                        var encodedPath = rest.substring(slashIdx + 1);
-                        try { rawPath = decodeURIComponent(encodedPath); } catch (e) { rawPath = encodedPath; }
-                      }
-                    }
-                  }
-                }
-                var fname = rawPath ? rawPath.split(/[\\\\/]/).pop() : 'file_' + Date.now();
-
-                if (rawPath) {
-                  shareFileByPath(rawPath, fname);
-                }
-              });
-              header.appendChild(btn);
-            });
+            var btns = document.querySelectorAll('.dsh-mobile-download-btn');
+            for (var b = 0; b < btns.length; b++) {
+              if (btns[b].parentNode) btns[b].parentNode.removeChild(btns[b]);
+            }
           }
 
           // 动态注入 3：向右侧边栏文件树的列表项追加轻量的分享图标
@@ -2397,14 +2443,13 @@ final class ViewController: UIViewController {
             '',
             '/* v1.0.83：打开目录被挪进标题行后也命中了这条，被压成 32px，',
             '   和页面自带的 38px 按钮叠在一起。把它排除，保留原始尺寸。 */',
-            '[data-phase] header [class*="titleRow"] button:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]),',
-            '[data-phase] header [class*="titleRow"] [role="button"]:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]),',
-            'button[aria-label="智能体团队"],',
+            '[data-phase] header [class*="titleRow"] button:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]):not([aria-label*="智能体团队"]),',
+            '[data-phase] header [class*="titleRow"] [role="button"]:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]):not([aria-label*="智能体团队"]),',
             'button[aria-label="更多操作"],',
             'button[aria-label="打开右侧边栏"],',
             'button[aria-label="收起右侧边栏"],',
             'button[aria-label="文件浏览"],',
-            '.ank0OG_headerActions button:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]),',
+            '.ank0OG_headerActions button:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]):not([aria-label*="智能体团队"]),',
             '.ank0OG_headerCorner button {',
             '  width: 32px !important;',
             '  height: 32px !important;',
@@ -2425,22 +2470,30 @@ final class ViewController: UIViewController {
             '  display: none !important;',
             '}',
             '',
-            '/* 智能体团队：单行水平并排，杜绝文字挤压换行变形 */',
-            'button[aria-label="智能体团队"] {',
+            '/* 智能体团队：单行水平并排，杜绝文字挤压换行变形（老总铁律：必须完整药丸横排） */',
+            'button[aria-label="智能体团队"],',
+            'button[aria-label*="智能体团队"] {',
+            '  width: auto !important;',
+            '  min-width: max-content !important;',
+            '  max-width: none !important;',
             '  white-space: nowrap !important;',
             '  flex: 0 0 auto !important;',
             '  display: inline-flex !important;',
             '  flex-direction: row !important;',
             '  align-items: center !important;',
-            '  gap: 4px !important;',
-            '  height: 32px !important;',
-            '  padding: 0 8px !important;',
+            '  gap: 5px !important;',
+            '  height: 28px !important;',
+            '  padding: 0 10px !important;',
             '  margin: 0 !important;',
             '  position: static !important;',
+            '  border-radius: 14px !important;',
+            '  word-break: keep-all !important;',
             '}',
-            'button[aria-label="智能体团队"] * {',
+            'button[aria-label="智能体团队"] *,',
+            'button[aria-label*="智能体团队"] * {',
             '  white-space: nowrap !important;',
             '  overflow: visible !important;',
+            '  word-break: keep-all !important;',
             '}',
             '',
             '/* 后台任务胶囊指示器：允许自适应宽度，确保完整显示数字（如 1）杜绝截断为省略号 */',
@@ -2456,7 +2509,7 @@ final class ViewController: UIViewController {
             '.ank0OG_crumbs {',
             '  flex: 0 1 auto !important;',
             '  min-width: 0 !important;',
-            '  max-width: 44vw !important;',
+            '  max-width: 24vw !important;',
             '  min-height: 32px !important;',
             '  height: auto !important;',
             '  display: inline-flex !important;',
@@ -2605,10 +2658,10 @@ final class ViewController: UIViewController {
               headers[i].style.setProperty('margin-top', topOffset + 'px', 'important');
               headers[i].style.setProperty('background', 'transparent', 'important');
             }
-            // 侧栏让出状态栏高度。
-            var cols = document.querySelectorAll('[class*="sidebarCol"]');
+            // 侧栏与右侧边栏（Diff/预览/CHANGES）让出状态栏高度。
+            var cols = document.querySelectorAll('[class*="sidebarCol"], [class*="rightbarCol"], .CZPbNW_rightbarCol, [data-slot="sidebar.right"], .dMHGga_session, .dMHGga_panel, .YdIzba_header');
             for (var j = 0; j < cols.length; j++) {
-              cols[j].style.setProperty('padding-top', h + 'px', 'important');
+              cols[j].style.setProperty('padding-top', (h + 6) + 'px', 'important');
             }
             // 新建会话页的灰是 body 和空标签容器的底色，全部清成透明，不留任何颜色。
             document.body.style.setProperty('background', 'transparent', 'important');
@@ -2630,11 +2683,11 @@ final class ViewController: UIViewController {
             var raw = getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar');
             var h = parseFloat(raw);
             if (!(h > 0)) return;
-            var cols = document.querySelectorAll('[class*="sidebarCol"]');
+            var cols = document.querySelectorAll('[class*="sidebarCol"], [class*="rightbarCol"], .CZPbNW_rightbarCol, [data-slot="sidebar.right"], .dMHGga_session, .dMHGga_panel, .YdIzba_header');
             for (var i = 0; i < cols.length; i++) {
               if (cols[i].dataset.dshInsetApplied !== String(h)) {
                 cols[i].dataset.dshInsetApplied = String(h);
-                cols[i].style.setProperty('padding-top', h + 'px', 'important');
+                cols[i].style.setProperty('padding-top', (h + 6) + 'px', 'important');
               }
             }
           }
@@ -2669,8 +2722,8 @@ final class ViewController: UIViewController {
                 cluster.style.setProperty('padding-left', '0', 'important');
                 cluster.style.setProperty('display', 'flex', 'important');
                 cluster.style.setProperty('align-items', 'center', 'important');
-                cluster.style.setProperty('justify-content', 'flex-end', 'important');
-                cluster.style.setProperty('margin-left', 'auto', 'important');
+                cluster.style.setProperty('justify-content', 'center', 'important');
+                cluster.style.setProperty('margin', '0 auto', 'important');
                 cluster.style.setProperty('gap', '6px', 'important');
               }
             }

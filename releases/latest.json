@@ -1,10 +1,10 @@
 {
-  "version": "1.0.95",
-  "build": 34,
-  "updated_at": "2026-10-13 22:05:00",
-  "title": "v1.0.95 暗黑模式对比度强化·侧栏三段式顶底固定·全局防溢出最终版",
-  "changelog": "1. 侧栏经典三段式：顶部标题与底部【设置】固化吸底，中间会话内容独立纵向流畅滚动！\n2. 暗黑模式对比度强化：彻底根治灰白底+白字看不清缺陷，选项按钮高对比深黑底/高亮蓝底白字！\n3. 全局弹窗安全规范：问答卡片/多选弹层顶部严格不超状态栏，底部不超底栏，选项1置顶可见！\n4. 首页目录按钮归位：左上角单个透明扁平图标精准避让灵动岛，全屏背景纯白通透！\n5. 纯净架构保障：所有改动严格收敛在插件与iOS端，完全兼容原生桌面端，全网开箱即用！",
-  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.95-34.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.95-34.tipa",
+  "version": "1.0.96",
+  "build": 35,
+  "updated_at": "2026-10-14 01:25:00",
+  "title": "v1.0.96 会话标题居中排布·Diff状态栏避让·纯净原版界面",
+  "changelog": "1. 顶栏经典三段式：目录图标居左，会话标题正中居中对称展示，右侧操作组靠右排列！\n2. 纯净原版界面：彻底剔除 Diff 与文档预览工具栏上的多余注入按钮，恢复原版纯净质感！\n3. Diff状态栏避让：右侧栏与代码变更页面严格避让 iOS 顶部状态栏与灵动岛，不遮挡任何文字！\n4. 长标题智能截断：遇到超长标题自动居中平滑截断，右侧操作按钮永不变形、永不折行！",
+  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.96-35.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.96-35.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }
