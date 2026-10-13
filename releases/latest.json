@@ -1,10 +1,10 @@
 {
-  "version": "1.0.90",
-  "build": 26,
-  "updated_at": "2026-10-13 03:50:00",
-  "title": "v1.0.90 彻底还原纯净原生布局·侧栏抽屉自动收起·开发者邮箱隐私保护·会话损坏彻底根治版",
-  "changelog": "1. 彻底还原纯净原生布局：拔除所有冗余注入样式与重排，彻底消除左侧栏卡死常驻与10%宽度挤压问题，侧栏平时100%隐藏不占任何屏幕宽度！\n2. 侧边栏抽屉自动收起：点击抽屉内会话行平滑秒进，并在进入会话后 100% 自动收起滑动退出，绝非常驻占用！\n3. 顶栏按钮高度完美归位：顶栏绝对不顶入状态栏或超出屏幕外，键盘弹出时顶栏绝对静止不动！\n4. 个人隐私安全保护：全面抹除具体邮箱地址展示，统一更正为「发送到开发者邮箱」！\n5. DSH底层会话损坏彻底根治：加装 lifecycle 容错保护罩并平滑对齐 seq gap，全机 358 个会话毫秒级恢复！",
-  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.90-26.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.90-26.tipa",
+  "version": "1.0.91",
+  "build": 27,
+  "updated_at": "2026-10-13 12:15:00",
+  "title": "v1.0.91 会话标题与智能体靠右对齐·侧边栏打开顶栏背景100%全透明版",
+  "changelog": "1. 会话标题与智能体靠右对齐：左侧仅留目录开关，中间弹性留白，会话标题与智能体团队整组右移紧靠右侧边栏按钮，排布舒适开阔！\n2. 打开设备顶栏背景100%全透明：原生与Web层全链路清除顶栏与状态栏白底，侧边栏抽屉打开时右上角绝对透明无白块，纯净融入遮罩！\n3. 抽屉自动收起与隐私保护：点击会话平滑秒进且100%自动收起抽屉退出，全面隐藏开发者个人邮箱隐私！",
+  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.91-27.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.91-27.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }

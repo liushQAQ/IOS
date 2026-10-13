@@ -2409,8 +2409,8 @@ final class ViewController: UIViewController {
         webView.scrollView.bounces = true
         webView.scrollView.alwaysBounceVertical = false
         webView.isOpaque = false
-        webView.backgroundColor = .systemBackground
-        webView.scrollView.backgroundColor = .systemBackground
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
         // 首帧到达前保持透明：加载期间露出的是原生加载态，不会白屏闪一下。
         webView.alpha = 0
         view.addSubview(webView)
