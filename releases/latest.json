@@ -1,10 +1,10 @@
 {
   "version": "1.0.91",
-  "build": 27,
-  "updated_at": "2026-10-13 12:15:00",
-  "title": "v1.0.91 会话标题与智能体靠右对齐·侧边栏打开顶栏背景100%全透明版",
-  "changelog": "1. 会话标题与智能体靠右对齐：左侧仅留目录开关，中间弹性留白，会话标题与智能体团队整组右移紧靠右侧边栏按钮，排布舒适开阔！\n2. 打开设备顶栏背景100%全透明：原生与Web层全链路清除顶栏与状态栏白底，侧边栏抽屉打开时右上角绝对透明无白块，纯净融入遮罩！\n3. 抽屉自动收起与隐私保护：点击会话平滑秒进且100%自动收起抽屉退出，全面隐藏开发者个人邮箱隐私！",
-  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.91-27.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.91-27.tipa",
+  "build": 29,
+  "updated_at": "2026-10-13 12:40:00",
+  "title": "v1.0.91 会话标题与智能体靠右对齐·侧边栏打开顶栏背景100%全透明·隐私绝对保护版",
+  "changelog": "1. 隐私绝对保护：彻底拔除反馈诊断中的访问地址与密码收集，绝不收集玩家私密外网域名与密码凭据！\n2. 会话标题与智能体靠右对齐：左侧仅留目录开关，中间弹性留白，会话标题与智能体团队整组右移紧靠右侧边栏按钮！\n3. 打开设备顶栏背景100%全透明：原生与Web层全链路清除顶栏与状态栏白底，侧边栏抽屉打开时右上角绝对透明无白块，纯净融入遮罩！\n4. 修复更新解析错误301：全面验证TIPA完整解包结构与国内免代理高速镜像分发！",
+  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.91-29.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.91-29.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }
