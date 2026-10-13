@@ -2122,19 +2122,368 @@ final class ViewController: UIViewController {
           })();
         })();
         """,
-// 移动端锁屏与后台切回自愈支持
+        // v1.0.70 顶栏对齐与状态栏安全区修复（基于 2026-10-11 实测 DOM，追加在数组末尾以最高优先级生效）：
+        // 1. 顶栏 padding-top 让出 iOS 状态栏/灵动岛，顶栏永远在状态栏以下；
+        // 2. 左侧抽屉开关绝对定位钉在顶栏左上角 28x28，标题行全员 28px 同一水平线；
+        // 3. 标题起点与左侧按钮之间保留 18px 间距，绝不重叠；右侧角落恢复 margin-left:auto 靠最右；
+        // 4. 免费网页对话等第三方页面由原生侧顶部约束避让（见 updateTopSafeAreaFor）。
         """
         (function () {
+          var css = [
+            '/* ===== v1.0.73 顶栏修复：flex 自然排布（替换 v1.0.70 的绝对定位方案） ===== */',
+            '/* v1.0.70 把左侧按钮 position:absolute 钉死坐标，只按「会话页」量测过；',
+            '   首页/新会话页 DOM 结构不同，被钉到屏幕边缘外 → 顶栏消失、左右各卡半个按钮。',
+            '   现在全部回到文档流，用 flex 对齐，两种页面共用同一套规则。 */',
+            '',
+            'html body [data-phase] header,',
+            'html body .ank0OG_header {',
+            '  position: sticky !important;',
+            '  top: 0 !important;',
+            '  z-index: 1020 !important;',
+            '  display: flex !important;',
+            '  flex-direction: column !important;',
+            '  /* v1.0.82：iPhone 14 Pro Max 状态栏 54pt。之前用下发值再加一截，',
+            '     顶栏被顶得离状态栏很远。这里只留 6px，状态栏那一截由 --dsh-statusbar 单独撑。 */',
+            '  padding: 6px 8px 0 8px !important;',
+            '  min-height: 0 !important;',
+            '  flex: none !important;',
+            '  box-sizing: border-box !important;',
+            '  max-width: 100vw !important;',
+            '  overflow: hidden !important;',
+            '  /* v1.0.82：顶栏背景透明。之前刷的 #f5f5f7 在新建会话页是一整块灰，用户不要。 */',
+            '  background: transparent !important;',
+            '}',
+            '',
+            '[data-phase] header [class*="titleRow"],',
+            '.ank0OG_titleRow {',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  height: auto !important;',
+            '  min-height: 32px !important;',
+            '  padding: 0 !important;',
+            '  margin: 0 !important;',
+            '  width: 100% !important;',
+            '  max-width: 100% !important;',
+            '  box-sizing: border-box !important;',
+            '  gap: 6px !important;',
+            '  overflow: hidden !important;',
+            '}',
+            '',
+            '/* 左侧抽屉开关回到文档流：不再绝对定位，与标题同一行自然排列 */',
+            'header button[aria-label="打开目录"],',
+            'header button[aria-label="收起目录"],',
+            'header button[aria-label="打开侧边栏"],',
+            'header button[aria-label="收起侧边栏"],',
+            '[data-mobile-nav="toggle"] {',
+            '  /* v1.0.83：页面在具体会话里把这颗按钮收成 28px，新建会话页是 38px，两个页面大小不一致。',
+            '     统一成页面自带的 38px。 */',
+            '  width: 38px !important;',
+            '  height: 38px !important;',
+            '  min-width: 38px !important;',
+            '  min-height: 38px !important;',
+            '  position: static !important;',
+            '  transform: none !important;',
+            '  top: auto !important;',
+            '  left: auto !important;',
+            '  right: auto !important;',
+            '  margin: 0 !important;',
+            '  padding: 0 !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
+            '  flex: none !important;',
+            '  order: -1 !important;',
+            '  margin-left: 0 !important;',
+            '  z-index: auto !important;',
+            '}',
+            '/* v1.0.85：侧栏收起后残留的开关按钮滑到屏幕左边外，还露一截。滑出屏幕的隐藏。 */',
+            '',
+            'html body [data-phase] header [class*="titleCluster"],',
+            'html body .ank0OG_titleCluster {',
+            '  /* v1.0.75：原来 flex:1 把标题簇拉成 326px，标题只占左边 57px，右边空两百多像素。',
+            '     按内容收缩后，margin-left:auto 把空位吃到左边，',
+            '     标题、目录、智能体按钮整组靠右，贴近右侧边栏按钮。 */',
+            '  flex: 0 1 auto !important;',
+            '  width: auto !important;',
+            '  margin-left: auto !important;',
+            '  min-width: 0 !important;',
+            '  height: auto !important;',
+            '  min-height: 32px !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  overflow: hidden !important;',
+            '  gap: 6px !important;',
+            '  margin: 0 !important;',
+            '  padding: 0 !important;',
+            '}',
+            '',
+            '[data-phase] header [class*="headerUtilities"],',
+            '.ank0OG_headerUtilities {',
+            '  min-height: 32px !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  gap: 4px !important;',
+            '  flex: none !important;',
+            '  margin-left: 0 !important;',
+            '}',
+            '[data-phase] header [class*="headerCorner"],',
+            '.ank0OG_headerCorner {',
+            '  min-height: 32px !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  gap: 4px !important;',
+            '  flex: none !important;',
+            '  margin-left: 4px !important;',
+            '}',
+            '',
+            '/* v1.0.83：打开目录被挪进标题行后也命中了这条，被压成 32px，',
+            '   和页面自带的 38px 按钮叠在一起。把它排除，保留原始尺寸。 */',
+            '[data-phase] header [class*="titleRow"] button:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]),',
+            '[data-phase] header [class*="titleRow"] [role="button"]:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]),',
+            'button[aria-label="智能体团队"],',
+            'button[aria-label="更多操作"],',
+            'button[aria-label="打开右侧边栏"],',
+            'button[aria-label="收起右侧边栏"],',
+            'button[aria-label="文件浏览"],',
+            '.ank0OG_headerActions button:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]),',
+            '.ank0OG_headerCorner button {',
+            '  width: 32px !important;',
+            '  height: 32px !important;',
+            '  min-height: 32px !important;',
+            '  min-width: 32px !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
+            '  padding: 0 !important;',
+            '  margin: 0 !important;',
+            '  flex: none !important;',
+            '}',
+            '',
+            '/* v1.0.74：实测「文件浏览」(data-mobile-nav=files) 与「打开右侧边栏」同在 x=350 完全重叠。',
+            '   页面自身用属性选择器把它设成 display:flex，必须用同级属性选择器才能压住。 */',
+            'button[aria-label="文件浏览"],',
+            '[data-mobile-nav="files"] {',
+            '  display: none !important;',
+            '}',
+            '',
+            '/* v1.0.74：实测「智能体团队」x=107 与「打开目录」x=71 互相压住。',
+            '   这两个按钮本不在同一个 flex 行里，强制放进标题行并排。 */',
+            'button[aria-label="智能体团队"] {',
+            '  position: static !important;',
+            '  order: 2 !important;',
+            '}',
+            '',
+            '[data-phase] header [class*="crumbs"],',
+            '.ank0OG_crumbs {',
+            '  flex: 0 1 auto !important;',
+            '  min-width: 0 !important;',
+            '  max-width: 48vw !important;',
+            '  min-height: 32px !important;',
+            '  height: auto !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '}',
+            '',
+            '[data-phase] header [class*="tabs"],',
+            '.ank0OG_tabs {',
+            '  margin-top: 2px !important;',
+            '  flex: none !important;',
+            '  max-width: 100% !important;',
+            '}',
+            '',
+            '/* v1.0.83：左侧侧边栏打开后宽度按 75% 缩放（从 280px 缩放至 210px，舒展适屏） */',
+            '[class*="sidebarCol"],',
+            '.CZPbNW_sidebarCol,',
+            '[class*="WYye1W_root"],',
+            '.WYye1W_root {',
+            '  width: 210px !important;',
+            '  max-width: 210px !important;',
+            '  min-width: 0 !important;',
+            '  box-sizing: border-box !important;',
+            '  overflow-x: hidden !important;',
+            '}',
+            '[class*="WYye1W_logoRow"],',
+            '[class*="WYye1W_newSession"],',
+            '[class*="WYye1W_panelList"],',
+            '[class*="WYye1W_regionArea"],',
+            '[class*="WYye1W_footArea"] {',
+            '  width: 100% !important;',
+            '  max-width: 100% !important;',
+            '  min-width: 0 !important;',
+            '  box-sizing: border-box !important;',
+            '  overflow-x: hidden !important;',
+            '}',
+            '[class*="WYye1W_newSession"],',
+            '[class*="WYye1W_panelRow"] {',
+            '  padding-left: 10px !important;',
+            '  padding-right: 10px !important;',
+            '  font-size: 13px !important;',
+            '}',
+            '/* 移动端触摸屏隐藏电脑端键盘快捷键 Ctrl+Alt+N，彻底释放“新会话”按钮文字空间 */',
+            '[class*="WYye1W_newSessionShortcut"] {',
+            '  display: none !important;',
+            '}',
+            '[class*="WYye1W_newSessionLabelMask"],',
+            '[class*="WYye1W_newSessionContent"] {',
+            '  width: 100% !important;',
+            '  max-width: 100% !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  gap: 8px !important;',
+            '}',
+            '[class*="WYye1W_newSessionLabel"] {',
+            '  display: inline-block !important;',
+            '  opacity: 1 !important;',
+            '  font-size: 13px !important;',
+            '  font-weight: 500 !important;',
+            '}',
+            '[class*="WYye1W_logoRow"] {',
+            '  padding: 0 8px !important;',
+            '}',
+            '',
+            '/* 会话消息内容区 (viewArea) 底部常驻 100px 裕量，避免悬浮输入框和键盘上浮遮挡思考中与流式输出，且键盘弹起时无需反复重排 */',
+            '[class*="viewArea"],',
+            '.ank0OG_viewArea {',
+            '  padding-bottom: 100px !important;',
+            '  box-sizing: border-box !important;',
+            '}',
+          ].join('\\n');
+          function inject() {
+            var root = document.head || document.documentElement;
+            if (!root) { setTimeout(inject, 30); return; }
+            var old = document.getElementById('dsh-ios-header-fix');
+            if (old && old.parentNode) old.parentNode.removeChild(old);
+            var style = document.createElement('style');
+            style.id = 'dsh-ios-header-fix';
+            style.textContent = css;
+            root.appendChild(style);
+          }
+          inject();
+          // v1.0.76：原生侧把状态栏高度（CSS 像素）下发到这里。
+          // 写成 CSS 变量，顶栏 padding 用它，换机型、转屏都跟着变。
+          window.__dshSetStatusBar = function (px) {
+            var h = Math.max(0, px || 0);
+            document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
+            // v1.0.82：顶栏只在状态栏下面留这一截，不再叠加 padding。
+            var headers = document.querySelectorAll('header');
+            for (var i = 0; i < headers.length; i++) {
+              headers[i].style.setProperty('margin-top', h + 'px', 'important');
+              headers[i].style.setProperty('background', 'transparent', 'important');
+            }
+            // 侧栏同样只让出状态栏高度。
+            var cols = document.querySelectorAll('[class*="sidebarCol"]');
+            for (var j = 0; j < cols.length; j++) {
+              cols[j].style.setProperty('padding-top', h + 'px', 'important');
+              cols[j].style.setProperty('background', 'transparent', 'important');
+            }
+            // v1.0.82：新建会话页的灰是 body 和空标签容器的底色，全部清成透明，不留任何颜色。
+            document.body.style.setProperty('background', 'transparent', 'important');
+            var hosts = document.querySelectorAll('[class*="_emptyTabHost"], [class*="CZPbNW_frame"], [class*="ank0OG_root"]');
+            for (var k = 0; k < hosts.length; k++) {
+              hosts[k].style.setProperty('background', 'transparent', 'important');
+            }
+          };
+          // v1.0.77：顶栏顺序固定为
+          //   目录按钮（靠最左）— 会话标题（居中）— 智能体按钮 — 右侧边栏按钮（靠最右，不动）。
+          // 页面原始顺序是「标题、目录、智能体」且三者都在标题簇里，样式表改不动顺序，
+          // 所以直接重排 DOM：目录按钮提到标题行第一个，标题簇只留标题和智能体并居中。
+          // 内联 !important 才能压住页面后注入的样式。
+          // v1.0.81：侧栏打开时，页面在 overlayLayer 里铺一层 rgba(0,0,0,0.45) 的遮罩，
+          // 把侧栏右边的内容盖成发白发灰。清成全透明，让后面的按钮原样露出来。
+          function clearSidebarOverlay() {
+            var layers = document.querySelectorAll('[class*="overlayLayer"]');
+            for (var i = 0; i < layers.length; i++) {
+              if (layers[i].dataset.dshOverlayCleared !== '1') {
+                layers[i].dataset.dshOverlayCleared = '1';
+                layers[i].style.setProperty('background', 'transparent', 'important');
+                layers[i].style.setProperty('background-color', 'transparent', 'important');
+              }
+            }
+          }
+          function applySidebarInset() {
+            clearSidebarOverlay();
+            var raw = getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar');
+            var h = parseFloat(raw);
+            if (!(h > 0)) return;
+            var cols = document.querySelectorAll('[class*="sidebarCol"]');
+            for (var i = 0; i < cols.length; i++) {
+              if (cols[i].dataset.dshInsetApplied !== String(h)) {
+                cols[i].dataset.dshInsetApplied = String(h);
+                cols[i].style.setProperty('padding-top', h + 'px', 'important');
+              }
+            }
+          }
+          function shiftTitleCluster() {
+            try { applySidebarInset(); } catch (e) {}
+            var rows = document.querySelectorAll('[class*="titleRow"]');
+            for (var i = 0; i < rows.length; i++) {
+              var row = rows[i];
+              var cluster = row.querySelector('[class*="titleCluster"]');
+              var header = row.closest('header') || row;
+              var dir = header.querySelector('button[aria-label="打开目录"], button[aria-label="收起目录"], button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
+              if (dir && cluster && cluster.firstChild !== dir) {
+                cluster.insertBefore(dir, cluster.firstChild);
+              }
+              if (dir && dir.dataset.dshDirStyled !== '1') {
+                dir.dataset.dshDirStyled = '1';
+                dir.style.setProperty('margin-left', '0', 'important');
+                dir.style.setProperty('margin-right', '0', 'important');
+                dir.style.setProperty('order', '0', 'important');
+              }
+              if (cluster && cluster.dataset.dshClusterStyled !== '1') {
+                cluster.dataset.dshClusterStyled = '1';
+                cluster.style.setProperty('flex', '1 1 auto', 'important');
+                cluster.style.setProperty('width', 'auto', 'important');
+                cluster.style.setProperty('padding-left', '56px', 'important');
+                cluster.style.setProperty('justify-content', 'flex-start', 'important');
+              }
+            }
+            var stray = document.querySelectorAll('button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
+            for (var s = 0; s < stray.length; s++) {
+              var off = stray[s].getBoundingClientRect().right < 0;
+              var targetVis = off ? 'hidden' : '';
+              if (stray[s].dataset.dshVis !== targetVis) {
+                stray[s].dataset.dshVis = targetVis;
+                stray[s].style.setProperty('visibility', targetVis, 'important');
+              }
+            }
+            var filesBtns = document.querySelectorAll('[data-mobile-nav="files"]');
+            for (var f = 0; f < filesBtns.length; f++) {
+              if (filesBtns[f].parentNode) filesBtns[f].parentNode.removeChild(filesBtns[f]);
+            }
+          }
+          shiftTitleCluster();
+          var shiftDebounce = null;
+          function scheduleShift() {
+            if (shiftDebounce) return;
+            shiftDebounce = setTimeout(function () {
+              shiftDebounce = null;
+              shiftTitleCluster();
+            }, 180);
+          }
+          var moShift = new MutationObserver(scheduleShift);
+          function watchShift() {
+            var root = document.body || document.documentElement;
+            if (!root) { setTimeout(watchShift, 50); return; }
+            moShift.observe(root, { childList: true, subtree: true });
+          }
+          watchShift();
+
+          // v1.0.83：锁屏与后台切回毫秒级自愈支持 (搭配 dsh-anywhere)
           window.__dshFastResume = function () {
             try {
-              window.dispatchEvent(new Event("pageshow"));
-              window.dispatchEvent(new Event("focus"));
-              document.dispatchEvent(new Event("visibilitychange"));
+              // 触发一次合成点击与按键事件，打通挂起的微任务队列
+              window.dispatchEvent(new Event('pageshow'));
+              window.dispatchEvent(new Event('focus'));
+              document.dispatchEvent(new Event('visibilitychange'));
             } catch (e) {}
           };
         })();
-        """,
-                // v1.0.72 页面分流补丁（必须放在数组最后，优先级最高）：
+""",
+        // v1.0.72 页面分流补丁（必须放在数组最后，优先级最高）：
         // A. DSH 自身页面：补上原来常驻的「全屏固定布局」CSS（html/body 固定 + 隐藏滚动）；
         // B. 内嵌第三方网页（豆包等）：把这些强干预全部撤掉，恢复浏览器原生滚动/聚焦行为，
         //    并补一个真实手势聚焦兜底 —— 解决第三方短信登录页「点输入框弹不出键盘」。
@@ -2409,8 +2758,8 @@ final class ViewController: UIViewController {
         webView.scrollView.bounces = true
         webView.scrollView.alwaysBounceVertical = false
         webView.isOpaque = false
-        webView.backgroundColor = .clear
-        webView.scrollView.backgroundColor = .clear
+        webView.backgroundColor = .systemBackground
+        webView.scrollView.backgroundColor = .systemBackground
         // 首帧到达前保持透明：加载期间露出的是原生加载态，不会白屏闪一下。
         webView.alpha = 0
         view.addSubview(webView)
@@ -2910,53 +3259,32 @@ final class ViewController: UIViewController {
         presentMenuSheet()
     }
 
-    // MARK: - 悬浮菜单分级归类（一级、二级、三级清晰导航）
-
-    /// 一级主菜单：清晰收拢为 5 项高频主分类，告别冗长杂乱
     private func presentMenuSheet() {
-        let sheet = UIAlertController(title: "DSH 移动主控枢纽", message: nil, preferredStyle: .actionSheet)
+        let sheet = UIAlertController(title: "DSH", message: nil, preferredStyle: .actionSheet)
 
-        let services = ServiceStore.load()
-        let currentURL = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? ""
-        let currentComps = URLComponents(string: currentURL)
-
-        // 1. 首项直接显示当前服务，点击即可立即回源刷新防假死
-        var currentServiceName = "当前已连接服务"
-        for item in services {
-            if item.url == currentURL { currentServiceName = item.name; break }
-            if let itemComps = URLComponents(string: item.url), let currentComps {
-                if itemComps.host == currentComps.host && itemComps.port == currentComps.port {
-                    currentServiceName = item.name
-                    break
-                }
-            }
-        }
-        let currentAction = UIAlertAction(title: "🔴 \(currentServiceName)（点击立即刷新）", style: .default) { [weak self] _ in
-            self?.webView.reloadFromOrigin()
-        }
-        if currentAction.responds(to: NSSelectorFromString("titleTextColor")) {
-            currentAction.setValue(UIColor.systemRed, forKey: "titleTextColor")
-        }
-        sheet.addAction(currentAction)
-
-        // 2. 二级菜单：切换服务与连接入口
-        sheet.addAction(UIAlertAction(title: "📡 切换服务与连接 (局域网/外网/扫码) ›", style: .default) { [weak self] _ in
+        // 1. 切换服务与连接通道（二级菜单）
+        sheet.addAction(UIAlertAction(title: "📡 切换服务与连接通道 ›", style: .default) { [weak self] _ in
             self?.presentConnectionsSubmenu()
         })
 
-        // 3. 二级菜单：免费网页版（主流AI模型）
-        sheet.addAction(UIAlertAction(title: "🌐 免费网页版（8大国内+4大海外AI） ›", style: .default) { [weak self] _ in
+        // 2. 立即刷新当前页面
+        sheet.addAction(UIAlertAction(title: "⚡ 立即刷新当前页面", style: .default) { [weak self] _ in
+            self?.webView.reloadFromOrigin()
+        })
+
+        // 3. 免费网页版（二级菜单）
+        sheet.addAction(UIAlertAction(title: "🌐 免费网页版（主流AI模型）›", style: .default) { [weak self] _ in
             self?.presentFreeWebActionSheet()
         })
 
-        // 4. 二级菜单：维护与工具
-        sheet.addAction(UIAlertAction(title: "⚙️ 维护与工具 (缓存清理/检查更新/教程) ›", style: .default) { [weak self] _ in
-            self?.presentToolsSubmenu()
-        })
-
-        // 5. 邮件反馈与建议（发送到开发者邮箱）
+        // 4. 邮件反馈与建议（发送到开发者邮箱）
         sheet.addAction(UIAlertAction(title: "✉️ 邮件反馈与建议 (发送到开发者邮箱)…", style: .default) { [weak self] _ in
             self?.presentFeedbackSheet()
+        })
+
+        // 5. 维护与工具（二级菜单）
+        sheet.addAction(UIAlertAction(title: "⚙️ 维护与工具 (缓存清理/检查更新/教程) ›", style: .default) { [weak self] _ in
+            self?.presentToolsSubmenu()
         })
 
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
@@ -2972,7 +3300,7 @@ final class ViewController: UIViewController {
         let currentURL = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? ""
         let currentComps = URLComponents(string: currentURL)
 
-        for item in services {
+        for item in services.prefix(6) {
             let isSelected: Bool = {
                 if item.url == currentURL { return true }
                 if let itemComps = URLComponents(string: item.url), let currentComps {
@@ -2983,7 +3311,7 @@ final class ViewController: UIViewController {
                 return false
             }()
 
-            let title = isSelected ? "✓ \(item.name) (正在使用)" : item.name
+            let title = isSelected ? "🔴 \(item.name) (当前·点击刷新)" : item.name
             let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
                 guard let self else { return }
                 if isSelected {
@@ -2994,22 +3322,24 @@ final class ViewController: UIViewController {
                     self.loadURLString(url, markAsDSHService: true)
                 }
             }
-            if isSelected && action.responds(to: NSSelectorFromString("titleTextColor")) {
-                action.setValue(UIColor.systemBlue, forKey: "titleTextColor")
+            if isSelected {
+                if action.responds(to: NSSelectorFromString("titleTextColor")) {
+                    action.setValue(UIColor.systemRed, forKey: "titleTextColor")
+                }
             }
             sheet.addAction(action)
         }
 
-        sheet.addAction(UIAlertAction(title: "📷 扫码连接（扫描二维码自动填入）", style: .default) { [weak self] _ in
+        sheet.addAction(UIAlertAction(title: "📷 扫码连接（扫二维码自动填地址）", style: .default) { [weak self] _ in
             self?.presentQRScanner()
         })
-        sheet.addAction(UIAlertAction(title: "⌨️ 手动输入地址…", style: .default) { [weak self] _ in
-            self?.promptForURL()
-        })
-        sheet.addAction(UIAlertAction(title: "🔳 当前地址二维码（生成分享给其他设备）", style: .default) { [weak self] _ in
+        sheet.addAction(UIAlertAction(title: "🔳 当前地址二维码（给别人扫）", style: .default) { [weak self] _ in
             self?.showCurrentAddressQRCode()
         })
-        sheet.addAction(UIAlertAction(title: "📋 全部服务列表管理（编辑/新增/删除）…", style: .default) { [weak self] _ in
+        sheet.addAction(UIAlertAction(title: "手动输入地址…", style: .default) { [weak self] _ in
+            self?.promptForURL()
+        })
+        sheet.addAction(UIAlertAction(title: "全部服务管理…", style: .default) { [weak self] _ in
             self?.openServiceList()
         })
         sheet.addAction(UIAlertAction(title: "‹ 返回主菜单", style: .cancel) { [weak self] _ in
@@ -3045,13 +3375,117 @@ final class ViewController: UIViewController {
         sheet.popoverPresentationController?.sourceView = menuButton
         present(sheet, animated: true)
     }
+    }
 
     #if !PUBLIC_BUILD
-    /// 布局调整功能已关闭，静默清除历史注入元素
+    /// v1.0.83：布局编辑层。给每个按钮描边、标名字，按住拖动，松手记住位置。
+    /// 只在个人版里。打开后注入到当前页面，刷新或换页时按开关重新注入。
     private func applyLayoutEditMode() {
-        let js = "(function(){var e=document.getElementById('dsh-layout-edit');if(e)e.remove();})();"
+        let on = UserDefaults.standard.bool(forKey: Keys.layoutEdit)
+        let js = on ? Self.layoutEditOnJS : Self.layoutEditOffJS
         webView?.evaluateJavaScript(js, completionHandler: nil)
     }
+
+    private static let layoutEditOffJS = "(function(){var e=document.getElementById('dsh-layout-edit');if(e)e.remove();document.querySelectorAll('[data-dsh-moved]').forEach(function(n){n.style.position='';n.style.left='';n.style.top='';n.style.zIndex='';n.removeAttribute('data-dsh-moved');});})();"
+
+    private static let layoutEditOnJS = """
+    (function () {
+      if (document.getElementById('dsh-layout-edit')) return;
+      var box = document.createElement('div');
+      box.id = 'dsh-layout-edit';
+      box.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;z-index:2147483000;';
+      document.documentElement.appendChild(box);
+
+      function labelOf(el) {
+        var t = el.getAttribute('aria-label') || (el.innerText || '').trim();
+        return t.replace(/\\s+/g, ' ').slice(0, 10) || el.tagName.toLowerCase();
+      }
+      function candidates() {
+        var sel = 'header, [class*="titleRow"], [class*="composerSeat"], [class*="composerStack"], [class*="uWtHQG_input"], [class*="sidebarCol"], button, [role="button"], a, input, textarea';
+        var list = Array.prototype.filter.call(document.querySelectorAll(sel), function (el) {
+          if (el.closest('#dsh-layout-edit') || el.closest('#dsh-layout-bar')) return false;
+          var r = el.getBoundingClientRect();
+          return r.width > 8 && r.height > 8 && r.width < window.innerWidth + 4 && r.bottom > 0 && r.right > 0 && r.top < window.innerHeight && r.left < window.innerWidth;
+        });
+        // 大块在前、小按钮在后：后画的框在上层，按钮不会被整块挡住拖不动。
+        list.sort(function (a, b) { return (b.getBoundingClientRect().width * b.getBoundingClientRect().height) - (a.getBoundingClientRect().width * a.getBoundingClientRect().height); });
+        return list;
+      }
+      function paint() {
+        box.innerHTML = '';
+        var idx = 0;
+        candidates().forEach(function (el) {
+          idx += 1;
+          var num = idx;
+          var r = el.getBoundingClientRect();
+          var f = document.createElement('div');
+          f.style.cssText = 'position:fixed;border:1px dashed #ff2d55;border-radius:6px;pointer-events:auto;background:rgba(255,45,85,0.06);';
+          f.style.left = r.left + 'px';
+          f.style.top = r.top + 'px';
+          f.style.width = r.width + 'px';
+          f.style.height = r.height + 'px';
+          var tag = document.createElement('span');
+          tag.textContent = num + ' ' + labelOf(el);
+          tag.style.cssText = 'position:absolute;left:0;top:-14px;font:10px sans-serif;color:#fff;background:#ff2d55;padding:0 3px;border-radius:3px;white-space:nowrap;';
+          f.appendChild(tag);
+          var sx = 0, sy = 0, sl = 0, st = 0, moved = false;
+          f.addEventListener('touchstart', function (e) {
+            var t = e.touches[0]; sx = t.clientX; sy = t.clientY;
+            var er = el.getBoundingClientRect(); sl = er.left; st = er.top; moved = false;
+          }, { passive: true });
+          f.addEventListener('touchmove', function (e) {
+            var t = e.touches[0];
+            var dx = t.clientX - sx, dy = t.clientY - sy;
+            if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+            if (!moved) return;
+            e.preventDefault();
+            el.style.setProperty('position', 'fixed', 'important');
+            el.style.setProperty('left', Math.round(sl + dx) + 'px', 'important');
+            el.style.setProperty('top', Math.round(st + dy) + 'px', 'important');
+            el.style.setProperty('margin', '0', 'important');
+            el.style.setProperty('z-index', '2147482000', 'important');
+            el.setAttribute('data-dsh-moved', '1');
+            f.style.left = Math.round(sl + dx) + 'px';
+            f.style.top = Math.round(st + dy) + 'px';
+          }, { passive: false });
+          f.addEventListener('touchend', function (e) {
+            if (moved) { e.preventDefault(); e.stopPropagation(); }
+          }, true);
+          box.appendChild(f);
+        });
+      }
+      paint();
+
+      var bar = document.createElement('div');
+      bar.id = 'dsh-layout-bar';
+      bar.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483646;display:flex;gap:6px;';
+      function btn(text, bg) {
+        var b = document.createElement('button');
+        b.textContent = text;
+        b.style.cssText = 'font:13px sans-serif;color:#fff;border:none;border-radius:8px;padding:6px 10px;';
+        b.style.background = bg;
+        return b;
+      }
+      var copy = btn('复制位置', '#ff2d55');
+      copy.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var lines = ['按钮 左 上 宽 高'];
+        candidates().forEach(function (el) {
+          var r = el.getBoundingClientRect();
+          lines.push(labelOf(el) + ' ' + Math.round(r.left) + ' ' + Math.round(r.top) + ' ' + Math.round(r.width) + ' ' + Math.round(r.height));
+        });
+        var text = lines.join('\\n');
+        if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {});
+        copy.textContent = '已复制';
+        setTimeout(function () { copy.textContent = '复制位置'; }, 1200);
+      }, true);
+      var refresh = btn('重标', '#444');
+      refresh.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); paint(); }, true);
+      bar.appendChild(copy); bar.appendChild(refresh);
+      document.documentElement.appendChild(bar);
+      box.__bar = bar;
+    })();
+    """
     #endif
 
     /// 一级菜单：免费网页版（主流 AI 模型）
@@ -3298,7 +3732,7 @@ final class ViewController: UIViewController {
         return "设备: \(exactModel)\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
     }
 
-    /// 反馈与建议页面入口（严禁传递或收集任何用户私密访问地址与密码凭据）
+    /// 反馈与建议页面入口（严禁收集或传递用户私密访问地址与密码凭据）
     private func presentFeedbackSheet() {
         let feedbackVC = FeedbackViewController()
         let nav = UINavigationController(rootViewController: feedbackVC)
@@ -3567,6 +4001,12 @@ extension ViewController: WKNavigationDelegate {
         // 首屏下发一次状态栏高度：safeAreaInsets 可能在页面脚本注入之前就定了，
         // 不补这一次，顶栏会一直停在默认留白上。
         publishStatusBarHeight()
+        #if !PUBLIC_BUILD
+        // 布局编辑开着时，每次页面加载完成重新挂上编辑层。
+        if UserDefaults.standard.bool(forKey: Keys.layoutEdit) {
+            applyLayoutEditMode()
+        }
+        #endif
         // 内容首帧就绪后才显形：加载过程只显示原生加载态，永不白屏
         revealWebView()
         detectStaleTokenPage()
@@ -3816,13 +4256,23 @@ extension ViewController: UIScrollViewDelegate {
             scrollView.setZoomScale(1.0, animated: false)
         }
     }
-    /// 键盘避让与顶栏静止铁律（v1.0.88 定版）：
-    /// 原生通过 webViewBottomConstraint.constant = -overlap 已经把 WebView 底部压缩到了软键盘正上方。
-    /// 在 DSH 应用级 SPA 页面中，页面根视口 contentOffset 必须始终锁死在 .zero，
-    /// 任何会话内容的滚动均发生在内部消息容器中，彻底根除 WebKit 聚焦全页上冲导致顶栏被顶上天的物理 Bug！
+    /// 键盘避让兜底（v1.0.73 重写）。
+    ///
+    /// v1.0.70 在键盘可见期间把 contentOffset 强制钉回 .zero，本意是防 WebKit 把整页顶出屏幕。
+    /// 实测副作用：WebKit 聚焦输入框时本来会自动把输入框滚进可视区，被这里锁死 →
+    /// 输入框停在键盘后面，用户看不到自己输入的内容（P1-1）。
+    ///
+    /// 现在只在「整页被顶到屏幕上方」（contentOffset.y < 0，顶栏被顶出状态栏）时才钳回 0，
+    /// 正向滚动一律放行，让输入框能滚到键盘正上方。
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         if isOwnServicePage(url: webView?.url) {
             if scrollView.contentOffset.y != 0 {
+                scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: 0)
+            }
+        } else {
+            guard isKeyboardVisible else { return }
+            guard !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else { return }
+            if scrollView.contentOffset.y < 0 {
                 scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: 0)
             }
         }
