@@ -1,10 +1,10 @@
 {
-  "version": "1.0.93",
-  "build": 32,
-  "updated_at": "2026-10-13 16:50:00",
-  "title": "v1.0.93 UI完美对齐·消除首页遮罩与错位·侧栏设置找回稳定版",
-  "changelog": "1. 首页纯净亮白：彻底消除误加的暗色蒙层遮罩，背景纯白通透！\n2. 顶栏精准对齐：左上角单扁平目录按钮精准避让灵动岛/状态栏，绝不重叠且无多余大空白！\n3. 侧栏设置找回：侧边栏恢复280px原生舒展宽度，左下角齿轮【设置】按钮与导出会话日志完整可见！\n4. 智能体单行靠右：会话标题与智能体团队水平并排单行排列零折行变形，操作组整齐右对齐！\n5. 玩家隐私防护：彻底剔除反馈页面与诊断信息中的访问地址与明文密码收集！",
-  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.93-32.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.93-32.tipa",
+  "version": "1.0.94",
+  "build": 33,
+  "updated_at": "2026-10-13 19:25:00",
+  "title": "v1.0.94 全局弹窗防溢出规范·选项1置顶·侧栏设置吸底稳定版",
+  "changelog": "1. 弹窗卡片全局规范：严格限制卡片最大高度，顶部不超状态栏/灵动岛，底部不超屏幕底栏！\n2. 选项1置顶可见：AI问答/选择题卡片开启内部平滑惯性滚动，选项1永远清晰完整可见，输入框稳固呈现！\n3. 侧栏设置吸底：侧边栏恢复280px完整舒展，最底部齿轮【设置】按钮始终稳固吸底可见！\n4. 首页目录按钮归位：左上角单个透明扁平图标精准避让灵动岛，全屏背景纯白亮丽！\n5. 顶栏水平平齐：会话顶栏上移紧贴状态栏，目录图标与会话标题同一水平线零断层！",
+  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.94-33.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.94-33.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }
