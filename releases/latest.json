@@ -1,10 +1,10 @@
 {
-  "version": "1.0.91",
-  "build": 29,
-  "updated_at": "2026-10-13 12:40:00",
-  "title": "v1.0.91 会话标题与智能体靠右对齐·侧边栏打开顶栏背景100%全透明·隐私绝对保护版",
-  "changelog": "1. 隐私绝对保护：彻底拔除反馈诊断中的访问地址与密码收集，绝不收集玩家私密外网域名与密码凭据！\n2. 会话标题与智能体靠右对齐：左侧仅留目录开关，中间弹性留白，会话标题与智能体团队整组右移紧靠右侧边栏按钮！\n3. 打开设备顶栏背景100%全透明：原生与Web层全链路清除顶栏与状态栏白底，侧边栏抽屉打开时右上角绝对透明无白块，纯净融入遮罩！\n4. 修复更新解析错误301：全面验证TIPA完整解包结构与国内免代理高速镜像分发！",
-  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.91-29.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.91-29.tipa",
+  "version": "1.0.92",
+  "build": 31,
+  "updated_at": "2026-10-13 13:15:00",
+  "title": "v1.0.92 彻底回归1.0.88成熟基线·三级菜单·隐私保护稳定版",
+  "changelog": "1. 彻底回归 1.0.88 黄金成熟基线：完整恢复经过全机型量测验证的顶栏对齐、侧栏75%舒展自适应与毫秒级自愈机制！\n2. 优雅三级菜单分层：一级主菜单收拢为5项高频主控，按服务通道、免费网页、维护工具分级展开，彻底关闭冗余的调整布局！\n3. 玩家隐私绝对保护：彻底拔除反馈与设置中的访问地址与密码收集，绝不泄露任何私密外网域名与凭据！\n4. 解决巨魔安装错误：完整提供2.1MB二进制TIPA包，国内免代理高速直连秒速更新！",
+  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.92-31.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.92-31.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }
