@@ -375,7 +375,7 @@ final class SettingsViewController: UIViewController {
     }
 
     @objc private func feedbackTapped() {
-        let feedbackVC = FeedbackViewController(currentURL: currentURL)
+        let feedbackVC = FeedbackViewController()
         let nav = UINavigationController(rootViewController: feedbackVC)
         nav.modalPresentationStyle = .pageSheet
         present(nav, animated: true)
