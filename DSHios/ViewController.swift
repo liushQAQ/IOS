@@ -2142,16 +2142,59 @@ final class ViewController: UIViewController {
             '  z-index: 1020 !important;',
             '  display: flex !important;',
             '  flex-direction: column !important;',
-            '  /* v1.0.82：iPhone 14 Pro Max 状态栏 54pt。之前用下发值再加一截，',
-            '     顶栏被顶得离状态栏很远。这里只留 6px，状态栏那一截由 --dsh-statusbar 单独撑。 */',
-            '  padding: 6px 8px 0 8px !important;',
+            '  /* 顶栏紧凑贴合 iOS 状态栏/灵动岛，消除多余大空白，保留适度间距 */',
+            '  padding: 2px 8px 0 8px !important;',
             '  min-height: 0 !important;',
             '  flex: none !important;',
             '  box-sizing: border-box !important;',
             '  max-width: 100vw !important;',
             '  overflow: hidden !important;',
-            '  /* v1.0.82：顶栏背景透明。之前刷的 #f5f5f7 在新建会话页是一整块灰，用户不要。 */',
             '  background: transparent !important;',
+            '}',
+            '',
+            '/* 隐藏顶部占位空容器，让标题行直接升到第 1 行，彻底消除顶栏与状态栏之间多余大空白 */',
+            '.ank0OG_headerLeading,',
+            '[data-conversation-header-leading] {',
+            '  display: none !important;',
+            '  height: 0 !important;',
+            '  min-height: 0 !important;',
+            '  margin: 0 !important;',
+            '  padding: 0 !important;',
+            '}',
+            '',
+            '/* 确保 overlayLayer 挂载层本身透明，杜绝首页与主界面全局发灰变暗 */',
+            '.CZPbNW_overlayLayer,',
+            '[class*="overlayLayer"] {',
+            '  background: transparent !important;',
+            '  background-color: transparent !important;',
+            '}',
+            '',
+            '/* 新建会话首页目录按钮：位置精准位于状态栏/灵动岛下方，保持与会话页完全一致的扁平透明优雅质感 */',
+            '[data-mobile-nav="fab"] {',
+            '  position: absolute !important;',
+            '  top: calc(var(--dsh-statusbar, 54px) + 4px) !important;',
+            '  left: 12px !important;',
+            '  width: 38px !important;',
+            '  height: 38px !important;',
+            '  padding: 0 !important;',
+            '  border: none !important;',
+            '  border-radius: 8px !important;',
+            '  background: transparent !important;',
+            '  color: var(--dsw-alias-label-secondary, #333) !important;',
+            '  box-shadow: none !important;',
+            '  z-index: 21 !important;',
+            '}',
+            '',
+            '/* 会话页时隐藏 fallback 浮动按钮，把空间交给顶栏内置侧栏按钮 */',
+            '[data-phase="active"] [data-mobile-nav="fab"] {',
+            '  display: none !important;',
+            '}',
+            '',
+            '/* 侧栏收起时彻底隐藏抽屉内部残留的切换按钮，杜绝屏幕左边缘天上露出半个多余小按钮 */',
+            '[data-sidebar-collapsed] [class*="WYye1W_toggle"],',
+            '[data-sidebar-collapsed] button[aria-label="打开侧边栏"] {',
+            '  display: none !important;',
+            '  visibility: hidden !important;',
             '}',
             '',
             '[data-phase] header [class*="titleRow"],',
@@ -2233,7 +2276,12 @@ final class ViewController: UIViewController {
             '  align-items: center !important;',
             '  gap: 4px !important;',
             '  flex: none !important;',
-            '  margin-left: 4px !important;',
+            '  margin-left: auto !important;',
+            '}',
+            '/* 新建会话首页无需打开右侧边栏，隐藏右上角无用占位按钮 */',
+            'header.ank0OG_headerBlank [class*="headerCorner"],',
+            'header.ank0OG_headerBlank .ank0OG_headerCorner {',
+            '  display: none !important;',
             '}',
             '',
             '/* v1.0.83：打开目录被挪进标题行后也命中了这条，被压成 32px，',
@@ -2266,18 +2314,38 @@ final class ViewController: UIViewController {
             '  display: none !important;',
             '}',
             '',
-            '/* v1.0.74：实测「智能体团队」x=107 与「打开目录」x=71 互相压住。',
-            '   这两个按钮本不在同一个 flex 行里，强制放进标题行并排。 */',
+            '/* 智能体团队：单行水平并排，杜绝文字挤压换行变形 */',
             'button[aria-label="智能体团队"] {',
+            '  white-space: nowrap !important;',
+            '  flex: 0 0 auto !important;',
+            '  display: inline-flex !important;',
+            '  flex-direction: row !important;',
+            '  align-items: center !important;',
+            '  gap: 4px !important;',
+            '  height: 32px !important;',
+            '  padding: 0 8px !important;',
+            '  margin: 0 !important;',
             '  position: static !important;',
-            '  order: 2 !important;',
+            '}',
+            'button[aria-label="智能体团队"] * {',
+            '  white-space: nowrap !important;',
+            '  overflow: visible !important;',
+            '}',
+            '',
+            '/* 后台任务胶囊指示器：允许自适应宽度，确保完整显示数字（如 1）杜绝截断为省略号 */',
+            'button[aria-label*="后台任务"],',
+            '[data-job-indicator] button {',
+            '  width: auto !important;',
+            '  min-width: 28px !important;',
+            '  padding: 0 6px !important;',
+            '  white-space: nowrap !important;',
             '}',
             '',
             '[data-phase] header [class*="crumbs"],',
             '.ank0OG_crumbs {',
             '  flex: 0 1 auto !important;',
             '  min-width: 0 !important;',
-            '  max-width: 48vw !important;',
+            '  max-width: 44vw !important;',
             '  min-height: 32px !important;',
             '  height: auto !important;',
             '  display: inline-flex !important;',
@@ -2294,16 +2362,26 @@ final class ViewController: UIViewController {
             '  max-width: 100% !important;',
             '}',
             '',
-            '/* v1.0.83：左侧侧边栏打开后宽度按 75% 缩放（从 280px 缩放至 210px，舒展适屏） */',
+            '/* 恢复左侧侧边栏 280px 原生舒展宽度，彻底找回右下角设置按钮与完整菜单项 */',
             '[class*="sidebarCol"],',
             '.CZPbNW_sidebarCol,',
             '[class*="WYye1W_root"],',
             '.WYye1W_root {',
-            '  width: 210px !important;',
-            '  max-width: 210px !important;',
-            '  min-width: 0 !important;',
+            '  width: 280px !important;',
+            '  max-width: 85vw !important;',
+            '  min-width: 260px !important;',
             '  box-sizing: border-box !important;',
             '  overflow-x: hidden !important;',
+            '  background: var(--dsw-alias-bg-base, #ffffff) !important;',
+            '  z-index: 1200 !important;',
+            '}',
+            '@media (prefers-color-scheme: dark) {',
+            '  [class*="sidebarCol"],',
+            '  .CZPbNW_sidebarCol,',
+            '  [class*="WYye1W_root"],',
+            '  .WYye1W_root {',
+            '    background: #18181b !important;',
+            '  }',
             '}',
             '[class*="WYye1W_logoRow"],',
             '[class*="WYye1W_newSession"],',
@@ -2315,6 +2393,13 @@ final class ViewController: UIViewController {
             '  min-width: 0 !important;',
             '  box-sizing: border-box !important;',
             '  overflow-x: hidden !important;',
+            '}',
+            '[class*="WYye1W_footArea"],',
+            '[class*="WYye1W_logoRow"] {',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: space-between !important;',
+            '  padding: 0 10px 14px 10px !important;',
             '}',
             '[class*="WYye1W_newSession"],',
             '[class*="WYye1W_panelRow"] {',
@@ -2367,44 +2452,35 @@ final class ViewController: UIViewController {
           window.__dshSetStatusBar = function (px) {
             var h = Math.max(0, px || 0);
             document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
-            // v1.0.82：顶栏只在状态栏下面留这一截，不再叠加 padding。
+            // 顶栏避让：刚好紧贴 iOS 状态栏/灵动岛下方，既不重叠状态栏时间，又零多余大空白
+            var topOffset = h > 20 ? (h + 4) : 8;
             var headers = document.querySelectorAll('header');
             for (var i = 0; i < headers.length; i++) {
-              headers[i].style.setProperty('margin-top', h + 'px', 'important');
+              headers[i].style.setProperty('margin-top', topOffset + 'px', 'important');
               headers[i].style.setProperty('background', 'transparent', 'important');
             }
-            // 侧栏同样只让出状态栏高度。
+            // 侧栏让出状态栏高度。
             var cols = document.querySelectorAll('[class*="sidebarCol"]');
             for (var j = 0; j < cols.length; j++) {
               cols[j].style.setProperty('padding-top', h + 'px', 'important');
-              cols[j].style.setProperty('background', 'transparent', 'important');
             }
-            // v1.0.82：新建会话页的灰是 body 和空标签容器的底色，全部清成透明，不留任何颜色。
+            // 新建会话页的灰是 body 和空标签容器的底色，全部清成透明，不留任何颜色。
             document.body.style.setProperty('background', 'transparent', 'important');
             var hosts = document.querySelectorAll('[class*="_emptyTabHost"], [class*="CZPbNW_frame"], [class*="ank0OG_root"]');
             for (var k = 0; k < hosts.length; k++) {
               hosts[k].style.setProperty('background', 'transparent', 'important');
             }
           };
-          // v1.0.77：顶栏顺序固定为
-          //   目录按钮（靠最左）— 会话标题（居中）— 智能体按钮 — 右侧边栏按钮（靠最右，不动）。
-          // 页面原始顺序是「标题、目录、智能体」且三者都在标题簇里，样式表改不动顺序，
-          // 所以直接重排 DOM：目录按钮提到标题行第一个，标题簇只留标题和智能体并居中。
-          // 内联 !important 才能压住页面后注入的样式。
-          // v1.0.81：侧栏打开时，页面在 overlayLayer 里铺一层 rgba(0,0,0,0.45) 的遮罩，
-          // 把侧栏右边的内容盖成发白发灰。清成全透明，让后面的按钮原样露出来。
-          function clearSidebarOverlay() {
+          // 确保 overlayLayer 挂载层全透明，杜绝首页全局暗淡发灰
+          function ensureSidebarOverlay() {
             var layers = document.querySelectorAll('[class*="overlayLayer"]');
             for (var i = 0; i < layers.length; i++) {
-              if (layers[i].dataset.dshOverlayCleared !== '1') {
-                layers[i].dataset.dshOverlayCleared = '1';
-                layers[i].style.setProperty('background', 'transparent', 'important');
-                layers[i].style.setProperty('background-color', 'transparent', 'important');
-              }
+              layers[i].style.setProperty('background', 'transparent', 'important');
+              layers[i].style.setProperty('background-color', 'transparent', 'important');
             }
           }
           function applySidebarInset() {
-            clearSidebarOverlay();
+            ensureSidebarOverlay();
             var raw = getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar');
             var h = parseFloat(raw);
             if (!(h > 0)) return;
@@ -2418,27 +2494,38 @@ final class ViewController: UIViewController {
           }
           function shiftTitleCluster() {
             try { applySidebarInset(); } catch (e) {}
+            var leadings = document.querySelectorAll('.ank0OG_headerLeading, [data-conversation-header-leading]');
+            for (var l = 0; l < leadings.length; l++) {
+              leadings[l].style.setProperty('display', 'none', 'important');
+              leadings[l].style.setProperty('height', '0', 'important');
+              leadings[l].style.setProperty('min-height', '0', 'important');
+            }
             var rows = document.querySelectorAll('[class*="titleRow"]');
             for (var i = 0; i < rows.length; i++) {
               var row = rows[i];
               var cluster = row.querySelector('[class*="titleCluster"]');
               var header = row.closest('header') || row;
               var dir = header.querySelector('button[aria-label="打开目录"], button[aria-label="收起目录"], button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
-              if (dir && cluster && cluster.firstChild !== dir) {
-                cluster.insertBefore(dir, cluster.firstChild);
+              // 目录按钮保持在顶栏左侧最前，不插入到 cluster 内部挤压标题与智能体团队
+              if (dir && row && row.firstChild !== dir && dir.parentNode !== cluster) {
+                row.insertBefore(dir, row.firstChild);
               }
               if (dir && dir.dataset.dshDirStyled !== '1') {
                 dir.dataset.dshDirStyled = '1';
                 dir.style.setProperty('margin-left', '0', 'important');
-                dir.style.setProperty('margin-right', '0', 'important');
-                dir.style.setProperty('order', '0', 'important');
+                dir.style.setProperty('margin-right', '6px', 'important');
+                dir.style.setProperty('flex', 'none', 'important');
               }
               if (cluster && cluster.dataset.dshClusterStyled !== '1') {
                 cluster.dataset.dshClusterStyled = '1';
                 cluster.style.setProperty('flex', '1 1 auto', 'important');
                 cluster.style.setProperty('width', 'auto', 'important');
-                cluster.style.setProperty('padding-left', '56px', 'important');
-                cluster.style.setProperty('justify-content', 'flex-start', 'important');
+                cluster.style.setProperty('padding-left', '0', 'important');
+                cluster.style.setProperty('display', 'flex', 'important');
+                cluster.style.setProperty('align-items', 'center', 'important');
+                cluster.style.setProperty('justify-content', 'flex-end', 'important');
+                cluster.style.setProperty('margin-left', 'auto', 'important');
+                cluster.style.setProperty('gap', '6px', 'important');
               }
             }
             var stray = document.querySelectorAll('button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');

@@ -1,10 +1,10 @@
 {
-  "version": "1.0.92",
-  "build": 31,
-  "updated_at": "2026-10-13 13:15:00",
-  "title": "v1.0.92 彻底回归1.0.88成熟基线·三级菜单·隐私保护稳定版",
-  "changelog": "1. 彻底回归 1.0.88 黄金成熟基线：完整恢复经过全机型量测验证的顶栏对齐、侧栏75%舒展自适应与毫秒级自愈机制！\n2. 优雅三级菜单分层：一级主菜单收拢为5项高频主控，按服务通道、免费网页、维护工具分级展开，彻底关闭冗余的调整布局！\n3. 玩家隐私绝对保护：彻底拔除反馈与设置中的访问地址与密码收集，绝不泄露任何私密外网域名与凭据！\n4. 解决巨魔安装错误：完整提供2.1MB二进制TIPA包，国内免代理高速直连秒速更新！",
-  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.92-31.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.92-31.tipa",
+  "version": "1.0.93",
+  "build": 32,
+  "updated_at": "2026-10-13 16:50:00",
+  "title": "v1.0.93 UI完美对齐·消除首页遮罩与错位·侧栏设置找回稳定版",
+  "changelog": "1. 首页纯净亮白：彻底消除误加的暗色蒙层遮罩，背景纯白通透！\n2. 顶栏精准对齐：左上角单扁平目录按钮精准避让灵动岛/状态栏，绝不重叠且无多余大空白！\n3. 侧栏设置找回：侧边栏恢复280px原生舒展宽度，左下角齿轮【设置】按钮与导出会话日志完整可见！\n4. 智能体单行靠右：会话标题与智能体团队水平并排单行排列零折行变形，操作组整齐右对齐！\n5. 玩家隐私防护：彻底剔除反馈页面与诊断信息中的访问地址与明文密码收集！",
+  "personal_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-personal-1.0.93-32.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.93-32.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }
