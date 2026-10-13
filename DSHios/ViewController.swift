@@ -3829,7 +3829,6 @@ final class ViewController: UIViewController {
       box.__bar = bar;
     })();
     """
-    #endif
 
     /// 一级菜单：免费网页版（主流 AI 模型）
     /// 支持二级菜单查看国内主流模型与海外主流模型，用户登录自己账号后，Cookie 与登录态由 WKWebsiteDataStore 永久保持
