@@ -250,13 +250,9 @@ final class ViewController: UIViewController {
     /// Web 内容进程被系统回收的次数（内存压力导致白屏的重要嫌疑指标）。
     private var terminateCount = 0
 
-    /// 默认加载地址：DSH Pocket（桌面端 LAN 代理，明文 HTTP，免密码）。
+    /// 默认加载地址：DSH Pocket / dsh-anywhere（桌面端 LAN 代理，明文 HTTP，免密码）。
     /// 桌面端主控运行在 3083（DSH Desktop GUI 进程，持有全量活会话）。
-    #if PUBLIC_BUILD
     private let defaultURL = "http://192.168.1.100:3083/"
-    #else
-    private let defaultURL = "http://192.168.215.218:3083/"
-    #endif
 
     private struct Keys {
         static let lastURL = "DSHios.lastURL"
@@ -762,6 +758,36 @@ final class ViewController: UIViewController {
             '  max-height: 100vh !important;',
             '  max-height: 100dvh !important;',
             '  overflow: hidden !important;',
+            '}',
+            '@media (max-width: 1023px) {',
+            '  .CZPbNW_rightbarCol, [class*="rightbarCol"] {',
+            '    position: fixed !important;',
+            '    inset: 0 !important;',
+            '    width: 100vw !important;',
+            '    max-width: 100vw !important;',
+            '    height: 100vh !important;',
+            '    height: 100dvh !important;',
+            '    z-index: 10040 !important;',
+            '    background: var(--dsw-alias-bg-base, #18181b) !important;',
+            '    box-sizing: border-box !important;',
+            '    transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease !important;',
+            '    transform: translateX(105%) !important;',
+            '    opacity: 0 !important;',
+            '    pointer-events: none !important;',
+            '  }',
+            '  .CZPbNW_rightbarCol[data-sidebar-expanded="true"], [class*="rightbarCol"][data-sidebar-expanded="true"],',
+            '  .CZPbNW_rightbarCol:has([data-sidebar-right-open="true"]), [class*="rightbarCol"]:has([data-sidebar-right-open="true"]),',
+            '  body[data-sidebar-right-visible="true"] .CZPbNW_rightbarCol, body[data-sidebar-right-visible="true"] [class*="rightbarCol"] {',
+            '    transform: none !important;',
+            '    opacity: 1 !important;',
+            '    pointer-events: auto !important;',
+            '  }',
+            '  .dMHGga_panel {',
+            '    width: 100% !important;',
+            '    height: 100% !important;',
+            '    display: flex !important;',
+            '    flex-direction: column !important;',
+            '  }',
             '}',
             '.dMHGga_panel[data-sidebar-right-open] {',
             '  pointer-events: auto !important;',
@@ -1835,14 +1861,47 @@ final class ViewController: UIViewController {
               }
             }
 
-            var obs = new MutationObserver(syncPanelNav);
+            function syncRightbarCol() {
+              var col = document.querySelector('.CZPbNW_rightbarCol') || document.querySelector('[class*="rightbarCol"]');
+              var p = document.querySelector('.dMHGga_panel') || document.querySelector('[data-sidebar-right-panel]');
+              if (!col) return;
+              var isOpen = p && p.getAttribute('data-sidebar-right-open') === 'true' && p.getAttribute('aria-hidden') !== 'true';
+              if (isOpen) {
+                col.setAttribute('data-sidebar-expanded', 'true');
+                if (document.body) document.body.setAttribute('data-sidebar-right-visible', 'true');
+              } else {
+                col.setAttribute('data-sidebar-expanded', 'false');
+                if (document.body) document.body.removeAttribute('data-sidebar-right-visible');
+              }
+            }
+
+            document.addEventListener('click', function(e) {
+              var t = e.target;
+              if (!t) return;
+              if (t.closest('header button[aria-label*="右侧边栏"]') || t.closest('[data-sidebar-right-toggle]')) {
+                setTimeout(syncRightbarCol, 20);
+                setTimeout(syncRightbarCol, 150);
+              }
+              if (t.closest('button[aria-label*="收起右侧边栏"]') || t.closest('button[aria-label*="关闭"]')) {
+                setTimeout(syncRightbarCol, 20);
+                setTimeout(syncRightbarCol, 150);
+              }
+            }, true);
+
+            var obs = new MutationObserver(function() {
+              syncPanelNav();
+              syncRightbarCol();
+            });
             // document.body 此刻可能尚未创建，同样需要等待就绪（v1.0.70 修复）
             function observeBody() {
               if (!document.body) { setTimeout(observeBody, 16); return; }
-              obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel'] });
+              obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel', 'aria-hidden', 'class'] });
             }
             observeBody();
-            setInterval(syncPanelNav, 300);
+            setInterval(function() {
+              syncPanelNav();
+              syncRightbarCol();
+            }, 300);
           })();
         })();
         """,
@@ -3662,9 +3721,8 @@ final class ViewController: UIViewController {
         present(sheet, animated: true)
     }
 
-    #if !PUBLIC_BUILD
     /// v1.0.83：布局编辑层。给每个按钮描边、标名字，按住拖动，松手记住位置。
-    /// 只在个人版里。打开后注入到当前页面，刷新或换页时按开关重新注入。
+    /// 打开后注入到当前页面，刷新或换页时按开关重新注入。
     private func applyLayoutEditMode() {
         let on = UserDefaults.standard.bool(forKey: Keys.layoutEdit)
         let js = on ? Self.layoutEditOnJS : Self.layoutEditOffJS
@@ -4286,12 +4344,10 @@ extension ViewController: WKNavigationDelegate {
         // 首屏下发一次状态栏高度：safeAreaInsets 可能在页面脚本注入之前就定了，
         // 不补这一次，顶栏会一直停在默认留白上。
         publishStatusBarHeight()
-        #if !PUBLIC_BUILD
         // 布局编辑开着时，每次页面加载完成重新挂上编辑层。
         if UserDefaults.standard.bool(forKey: Keys.layoutEdit) {
             applyLayoutEditMode()
         }
-        #endif
         // 内容首帧就绪后才显形：加载过程只显示原生加载态，永不白屏
         revealWebView()
         detectStaleTokenPage()
@@ -4576,7 +4632,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         let build: Int?
         let title: String?
         let changelog: String?
-        let personal_tipa_url: String?
+        let tipa_url: String?
         let public_tipa_url: String?
         let release_url: String?
     }
@@ -4721,21 +4777,18 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
             return remoteVer.compare(currentVer, options: .numeric) == .orderedDescending
         }()
 
+        let tipaURL = info.tipa_url ?? info.public_tipa_url ?? ""
+
         if hasNewVersion {
-            presentNewVersionPrompt(info: info, currentVer: currentVer, currentBuild: currentBuild)
+            presentNewVersionPrompt(info: info, currentVer: currentVer, currentBuild: currentBuild, tipaURL: tipaURL)
         } else if manual {
             let alert = UIAlertController(
                 title: "✅ 当前已是最新版本",
-                message: "当前版本：v\(currentVer) (Build \(currentBuild))\n仓库最新：v\(remoteVer) (Build \(remoteBuild))\n\n如有强制重装需求，也可直接通过国内加速通道重装最新包。",
+                message: "当前版本：v\(currentVer) (Build \(currentBuild))\n仓库最新：v\(remoteVer) (Build \(remoteBuild))\n\n如有强制重装需求，也可通过国内加速通道重装最新包。",
                 preferredStyle: .alert)
-            #if PUBLIC_BUILD
-            let tipaURL = info.public_tipa_url ?? info.personal_tipa_url ?? ""
-            #else
-            let tipaURL = info.personal_tipa_url ?? info.public_tipa_url ?? ""
-            #endif
             if !tipaURL.isEmpty {
                 alert.addAction(UIAlertAction(title: "🚀 重新下载并用巨魔安装 (免代理加速)", style: .default) { [weak self] _ in
-                    self?.installViaTrollStore(remoteURLString: tipaURL)
+                    self?.downloadAndInstallTIPA(remoteURLString: tipaURL, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
                 })
             }
             alert.addAction(UIAlertAction(title: "好", style: .cancel))
@@ -4743,29 +4796,23 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         }
     }
 
-    private func presentNewVersionPrompt(info: AppReleaseInfo, currentVer: String, currentBuild: Int) {
-        #if PUBLIC_BUILD
-        let targetTipaURL = info.public_tipa_url ?? info.personal_tipa_url ?? ""
-        #else
-        let targetTipaURL = info.personal_tipa_url ?? info.public_tipa_url ?? ""
-        #endif
-
+    private func presentNewVersionPrompt(info: AppReleaseInfo, currentVer: String, currentBuild: Int, tipaURL: String) {
         let remoteVer = info.version
         let remoteBuild = info.build ?? 0
         let notes = info.changelog ?? info.title ?? "包含最新的移动端布局优化与功能修复。"
 
         let alert = UIAlertController(
             title: "🎉 发现新版本 v\(remoteVer) (Build \(remoteBuild))",
-            message: "当前版本：v\(currentVer) (Build \(currentBuild))\n\n【更新说明】\n\(notes)\n\n已自动匹配国内免代理高速节点，点击下方按钮即可拉取最新 TIPA 包并唤起巨魔 (TrollStore) 完成覆盖更新。",
+            message: "当前版本：v\(currentVer) (Build \(currentBuild))\n\n【更新说明】\n\(notes)\n\n推荐点击下方按钮，App 将通过免代理通道极速下载并自动调起巨魔安装（彻底避免 301 报错）。",
             preferredStyle: .alert
         )
 
-        if !targetTipaURL.isEmpty {
-            alert.addAction(UIAlertAction(title: "🚀 巨魔一键自动安装 (国内免代理推荐)", style: .default) { [weak self] _ in
-                self?.installViaTrollStore(remoteURLString: targetTipaURL)
+        if !tipaURL.isEmpty {
+            alert.addAction(UIAlertAction(title: "🚀 极速下载并用巨魔安装 (推荐·零报错)", style: .default) { [weak self] _ in
+                self?.downloadAndInstallTIPA(remoteURLString: tipaURL, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
             })
-            alert.addAction(UIAlertAction(title: "📥 App内加速下载后调起巨魔", style: .default) { [weak self] _ in
-                self?.downloadAndInstallTIPA(remoteURLString: targetTipaURL, filename: "DSHios-\(remoteVer)-\(remoteBuild).tipa")
+            alert.addAction(UIAlertAction(title: "⚡ 巨魔一键直连安装", style: .default) { [weak self] _ in
+                self?.installViaTrollStore(remoteURLString: tipaURL)
             })
         }
 
@@ -4780,32 +4827,57 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     }
 
     func installViaTrollStore(remoteURLString: String) {
-        // 巨魔直接拉取 URL 时，也使用国内免代理镜像地址，防止巨魔因连不上 raw.githubusercontent.com 卡死
         let candidates = Self.mirrorCandidates(for: remoteURLString)
         let acceleratedURL = candidates.first(where: { $0.contains("ghfast.top") || $0.contains("gh-proxy.com") }) ?? candidates.first ?? remoteURLString
-        guard let encoded = acceleratedURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
-        let schemes = [
-            "apple-magnifier://install?url=\(encoded)",
-            "trollstore://install?url=\(encoded)"
-        ]
 
-        var didOpen = false
-        let group = DispatchGroup()
-        for s in schemes {
-            if let u = URL(string: s) {
-                group.enter()
-                UIApplication.shared.open(u, options: [:]) { success in
-                    if success { didOpen = true }
-                    group.leave()
+        // 巨魔直接打开 URL 遇到 301 重定向时会直接弹错 301；
+        // 这里先用 URLSession 做一次 HEAD 预解析，解析出跟随重定向后的真实 200 终点直链
+        guard let reqURL = URL(string: acceleratedURL) else {
+            downloadAndInstallTIPA(remoteURLString: remoteURLString, filename: "DSHios-public-latest.tipa")
+            return
+        }
+
+        var req = URLRequest(url: reqURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 4)
+        req.httpMethod = "HEAD"
+
+        URLSession.shared.dataTask(with: req) { [weak self] _, resp, error in
+            let finalTarget: String = {
+                if let http = resp as? HTTPURLResponse, let finalURL = http.url?.absoluteString, !finalURL.isEmpty {
+                    return finalURL
+                }
+                return acceleratedURL
+            }()
+
+            DispatchQueue.main.async {
+                guard let encoded = finalTarget.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+                    self?.downloadAndInstallTIPA(remoteURLString: remoteURLString, filename: "DSHios-public-latest.tipa")
+                    return
+                }
+
+                let schemes = [
+                    "apple-magnifier://install?url=\(encoded)",
+                    "trollstore://install?url=\(encoded)"
+                ]
+
+                var didOpen = false
+                let group = DispatchGroup()
+                for s in schemes {
+                    if let u = URL(string: s) {
+                        group.enter()
+                        UIApplication.shared.open(u, options: [:]) { success in
+                            if success { didOpen = true }
+                            group.leave()
+                        }
+                    }
+                }
+
+                group.notify(queue: .main) {
+                    if !didOpen {
+                        self?.downloadAndInstallTIPA(remoteURLString: remoteURLString, filename: "DSHios-public-latest.tipa")
+                    }
                 }
             }
-        }
-
-        group.notify(queue: .main) { [weak self] in
-            if !didOpen {
-                self?.downloadAndInstallTIPA(remoteURLString: remoteURLString, filename: "DSHios-latest.tipa")
-            }
-        }
+        }.resume()
     }
 
     private func downloadAndInstallTIPA(remoteURLString: String, filename: String) {
@@ -4856,7 +4928,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
             observation = task.progress.observe(\.fractionCompleted) { progress, _ in
                 DispatchQueue.main.async {
                     let pct = Int(progress.fractionCompleted * 100)
-                    progressAlert.message = "正在通过国内镜像 (节点 \(index + 1)) 下载 \(filename)…\n进度：\(pct)%"
+                    progressAlert.message = "正在通过国内免代理通道下载最新公开版…\n进度：\(pct)%"
                 }
             }
             task.resume()
@@ -4866,6 +4938,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     }
 
     private func openDownloadedTIPA(fileURL: URL) {
+        // 先尝试通过本地 URL Scheme 唤起巨魔直接安装
         if let encoded = fileURL.absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
            let tsURL = URL(string: "apple-magnifier://install?url=\(encoded)") {
             UIApplication.shared.open(tsURL, options: [:]) { [weak self] success in
