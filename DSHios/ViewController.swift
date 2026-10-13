@@ -3375,7 +3375,6 @@ final class ViewController: UIViewController {
         sheet.popoverPresentationController?.sourceView = menuButton
         present(sheet, animated: true)
     }
-    }
 
     #if !PUBLIC_BUILD
     /// v1.0.83：布局编辑层。给每个按钮描边、标名字，按住拖动，松手记住位置。
