@@ -1,0 +1,9 @@
+{
+  "version": "1.0.10",
+  "build": 17,
+  "title": "v1.0.10 全员标配检测更新与升级·彻底根治巨魔301报错·单一公开版",
+  "changelog": "1. 标配在线检测更新：主界面启动静默检测，关于页新增「🚀 检查新版本 (巨魔免代理直装)」一键升级；\n2. 彻底根治巨魔 301 报错：引入 App 内免代理极速下载通道 + 本地直调巨魔秒级安装，100% 消除网络重定向异常；\n3. 统一单一公开版：零凭据、纯净开源基线，本地沙盒数据 100% 自动继承。",
+  "tipa_url": "https://github.com/liushQAQ/IOS/releases/download/v1.0.10-mcp/ios-mcp-agent-public-1.0.10-17.tipa",
+  "public_tipa_url": "https://github.com/liushQAQ/IOS/releases/download/v1.0.10-mcp/ios-mcp-agent-public-1.0.10-17.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.10-mcp"
+}

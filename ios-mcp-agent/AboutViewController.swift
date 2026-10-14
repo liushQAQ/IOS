@@ -59,11 +59,31 @@ final class AboutViewController: UIViewController {
         """
         text.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(text)
+
+        let checkUpdateButton = UIButton(type: .system)
+        checkUpdateButton.setTitle("🚀 检查新版本 (巨魔免代理直装)", for: .normal)
+        checkUpdateButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+        checkUpdateButton.backgroundColor = .systemBlue
+        checkUpdateButton.setTitleColor(.white, for: .normal)
+        checkUpdateButton.layer.cornerRadius = 10
+        checkUpdateButton.translatesAutoresizingMaskIntoConstraints = false
+        checkUpdateButton.addTarget(self, action: #selector(checkUpdateTapped), for: .touchUpInside)
+        view.addSubview(checkUpdateButton)
+
         NSLayoutConstraint.activate([
             text.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             text.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 14),
             text.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
-            text.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+            text.bottomAnchor.constraint(equalTo: checkUpdateButton.topAnchor, constant: -12),
+
+            checkUpdateButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            checkUpdateButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            checkUpdateButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12),
+            checkUpdateButton.heightAnchor.constraint(equalToConstant: 48)
         ])
+    }
+
+    @objc private func checkUpdateTapped() {
+        AppUpdateManager.shared.checkForUpdates(manual: true)
     }
 }

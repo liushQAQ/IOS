@@ -65,6 +65,11 @@ final class ViewController: UIViewController {
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             stack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
         ])
+
+        // 启动时静默检查更新
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            AppUpdateManager.shared.checkForUpdates(manual: false)
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
