@@ -133,19 +133,13 @@ enum ServiceStore {
     ///         外网走 OpenFRP 穿透到 9060 认证网关（经 8080 反代直通桌面端 3083）。
     /// 仪表盘对：9009 自包含单页，外网带密码直达，无需换票。
     /// TTS 8210 外网 404（无外网入口），只配局域网一条。
+    /// 默认预置（纯净公开版模板，零个人信息、零私密穿透与密码，绝对安全）：
     static let defaults: [ServiceItem] = [
-        ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.215.218:3083/",
-                    note: "桌面端主控·全量同步·秒开", resolverURL: nil),
-        ServiceItem(name: "DSH 外网（OpenFrp穿透）",
-                    url: "http://cn-hk-bgp-4.ofalias.net:47027/dsh/?password=Liu326766%40",
-                    note: "直通桌面端·出门随时用",
-                    resolverURL: "http://192.168.215.218:9009/api/dsh-url"),
-        ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.215.218:9009/",
-                    note: "局域网", resolverURL: nil),
-        ServiceItem(name: "端口仪表盘（外网）",
-                    url: "http://cn-hk-bgp-4.ofalias.net:47027/?password=Liu326766%40",
-                    note: "OpenFRP 穿透", resolverURL: nil),
-        ServiceItem(name: "本地 TTS", url: "http://192.168.215.218:8210/",
+        ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.1.100:3083/",
+                    note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
+        ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.1.100:9009/",
+                    note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
+        ServiceItem(name: "本地 TTS", url: "http://192.168.1.100:8210/",
                     note: "局域网", resolverURL: nil)
     ]
 

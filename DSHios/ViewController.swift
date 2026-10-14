@@ -250,9 +250,8 @@ final class ViewController: UIViewController {
     /// Web 内容进程被系统回收的次数（内存压力导致白屏的重要嫌疑指标）。
     private var terminateCount = 0
 
-    /// 默认加载地址：DSH Pocket / dsh-anywhere（桌面端 LAN 代理，明文 HTTP，免密码）。
-    /// 桌面端主控运行在 3083（DSH Desktop GUI 进程，持有全量活会话）。
-    private let defaultURL = "http://192.168.215.218:3083/"
+    /// 默认加载地址（纯净公开版占位示例，个人地址由用户在 App 内添加并持久化在本地沙盒）：
+    private let defaultURL = "http://192.168.1.100:3083/"
 
     private struct Keys {
         static let lastURL = "DSHios.lastURL"
@@ -4069,7 +4068,8 @@ final class ViewController: UIViewController {
     // MARK: - Loading
 
     private func loadInitialURL() {
-        let saved = UserDefaults.standard.string(forKey: Keys.lastURL)
+        // 跨版本防覆盖铁律：优先读取本地持久化沙盒中用户已配置/正在使用的地址，绝不覆盖冲掉用户已有 URL！
+        let saved = DSHPersistenceCenter.loadLastURL() ?? UserDefaults.standard.string(forKey: Keys.lastURL)
         let urlString = (saved?.isEmpty == false) ? saved! : defaultURL
         loadURLString(urlString)
     }
@@ -4107,7 +4107,9 @@ final class ViewController: UIViewController {
             dshServiceHost = url.host
         }
 
+        // 双轨固化存储，跨版本覆盖安装升级永不丢失当前使用的 URL
         UserDefaults.standard.set(trimmed, forKey: Keys.lastURL)
+        DSHPersistenceCenter.saveLastURL(trimmed)
         hideError()
         stopWhiteScreenDiagnostics()
         webErrors = []

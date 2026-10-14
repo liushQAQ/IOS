@@ -32,7 +32,7 @@ enum QRAddressParser {
             }
         }
 
-        // 3. 裸地址：192.168.1.100:3083/dsh/ 、cn-hk-bgp-4.ofalias.net:47027 、localhost:3083
+        // 3. 裸地址：192.168.1.100:3083/dsh/ 、example.com:3083 、localhost:3083
         let bare = "^[A-Za-z0-9][A-Za-z0-9\\.\\-_]*(:\\d{1,5})?(/[^\\s]*)?$"
         if text.range(of: bare, options: .regularExpression) != nil,
            text.contains(".") || text.contains(":") || text.lowercased().contains("localhost") {
