@@ -1,10 +1,10 @@
 {
   "version": "1.0.98",
-  "build": 38,
-  "updated_at": "2026-10-14 05:40:00",
-  "title": "v1.0.98 彻底回归 1.0.70 零死锁黄金渲染通道·恢复老总主控 IP·根治卡死",
-  "changelog": "1. 彻底根治网页卡死与打不开：全面回归 v1.0.70.9 零干扰黄金生命周期，彻底切除所有多余全局 DOM MutationObserver 递归轰炸与 12 秒强制超时；\n2. 恢复老总桌面端主控直连：默认地址与服务预设无缝回归 192.168.215.218:3083，开箱即连，全量会话秒级呈现；\n3. 纯 CSS 驱动右侧边栏抽屉：摆脱 JS 事件循环死锁，触摸滑入滑出轻盈丝滑；\n4. 巨魔免代理更新与防 301 架构持续护航，沙盒持久化数据永不丢失。",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.98-38.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.98-38.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS"
+  "build": 39,
+  "updated_at": "2026-10-14 17:00:00",
+  "title": "v1.0.98 彻底回归 1.0.70 零死锁渲染通道·纯净公开版·绝不覆盖用户URL",
+  "changelog": "1. 彻底根治网页卡死与打不开：全面回归 v1.0.70.9 零干扰黄金生命周期，彻底切除所有多余全局 DOM MutationObserver 递归轰炸与 12 秒强制超时；\n2. 纯净公开版安全基线：代码与预设 100% 安全脱敏，彻底杜绝任何个人外网穿透地址与密码泄露；\n3. 跨版本防覆盖升级铁律：启动优先读取沙盒持久化数据，覆盖安装绝对不覆盖用户在手机上已配置的专属 URL；\n4. 纯 CSS 驱动右侧边栏抽屉：摆脱 JS 事件循环死锁，触摸滑入滑出轻盈丝滑；\n5. 巨魔免代理极速下载通道与防 301 架构持续护航，一键直调巨魔秒级更新。",
+  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.98-39.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.98-39.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.98"
 }
