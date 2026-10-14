@@ -252,7 +252,7 @@ final class ViewController: UIViewController {
 
     /// 默认加载地址：DSH Pocket / dsh-anywhere（桌面端 LAN 代理，明文 HTTP，免密码）。
     /// 桌面端主控运行在 3083（DSH Desktop GUI 进程，持有全量活会话）。
-    private let defaultURL = "http://192.168.1.100:3083/"
+    private let defaultURL = "http://192.168.215.218:3083/"
 
     private struct Keys {
         static let lastURL = "DSHios.lastURL"
@@ -775,9 +775,8 @@ final class ViewController: UIViewController {
             '    opacity: 0 !important;',
             '    pointer-events: none !important;',
             '  }',
-            '  .CZPbNW_rightbarCol[data-sidebar-expanded="true"], [class*="rightbarCol"][data-sidebar-expanded="true"],',
-            '  .CZPbNW_rightbarCol:has([data-sidebar-right-open="true"]), [class*="rightbarCol"]:has([data-sidebar-right-open="true"]),',
-            '  body[data-sidebar-right-visible="true"] .CZPbNW_rightbarCol, body[data-sidebar-right-visible="true"] [class*="rightbarCol"] {',
+            '  .CZPbNW_rightbarCol:has([data-sidebar-right-open="true"]),',
+            '  [class*="rightbarCol"]:has([data-sidebar-right-open="true"]) {',
             '    transform: none !important;',
             '    opacity: 1 !important;',
             '    pointer-events: auto !important;',
@@ -1861,47 +1860,14 @@ final class ViewController: UIViewController {
               }
             }
 
-            function syncRightbarCol() {
-              var col = document.querySelector('.CZPbNW_rightbarCol') || document.querySelector('[class*="rightbarCol"]');
-              var p = document.querySelector('.dMHGga_panel') || document.querySelector('[data-sidebar-right-panel]');
-              if (!col) return;
-              var isOpen = p && p.getAttribute('data-sidebar-right-open') === 'true' && p.getAttribute('aria-hidden') !== 'true';
-              if (isOpen) {
-                col.setAttribute('data-sidebar-expanded', 'true');
-                if (document.body) document.body.setAttribute('data-sidebar-right-visible', 'true');
-              } else {
-                col.setAttribute('data-sidebar-expanded', 'false');
-                if (document.body) document.body.removeAttribute('data-sidebar-right-visible');
-              }
-            }
-
-            document.addEventListener('click', function(e) {
-              var t = e.target;
-              if (!t) return;
-              if (t.closest('header button[aria-label*="右侧边栏"]') || t.closest('[data-sidebar-right-toggle]')) {
-                setTimeout(syncRightbarCol, 20);
-                setTimeout(syncRightbarCol, 150);
-              }
-              if (t.closest('button[aria-label*="收起右侧边栏"]') || t.closest('button[aria-label*="关闭"]')) {
-                setTimeout(syncRightbarCol, 20);
-                setTimeout(syncRightbarCol, 150);
-              }
-            }, true);
-
-            var obs = new MutationObserver(function() {
-              syncPanelNav();
-              syncRightbarCol();
-            });
+            var obs = new MutationObserver(syncPanelNav);
             // document.body 此刻可能尚未创建，同样需要等待就绪（v1.0.70 修复）
             function observeBody() {
               if (!document.body) { setTimeout(observeBody, 16); return; }
-              obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel', 'aria-hidden', 'class'] });
+              obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel'] });
             }
             observeBody();
-            setInterval(function() {
-              syncPanelNav();
-              syncRightbarCol();
-            }, 300);
+            setInterval(syncPanelNav, 300);
           })();
         })();
         """,
@@ -2801,21 +2767,9 @@ final class ViewController: UIViewController {
             }
           }
           shiftTitleCluster();
-          var shiftDebounce = null;
-          function scheduleShift() {
-            if (shiftDebounce) return;
-            shiftDebounce = setTimeout(function () {
-              shiftDebounce = null;
-              shiftTitleCluster();
-            }, 180);
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', shiftTitleCluster, { once: true });
           }
-          var moShift = new MutationObserver(scheduleShift);
-          function watchShift() {
-            var root = document.body || document.documentElement;
-            if (!root) { setTimeout(watchShift, 50); return; }
-            moShift.observe(root, { childList: true, subtree: true });
-          }
-          watchShift();
 
           // v1.0.83：锁屏与后台切回毫秒级自愈支持 (搭配 dsh-anywhere)
           window.__dshFastResume = function () {
@@ -4162,18 +4116,14 @@ final class ViewController: UIViewController {
         isTokenRetryInFlight = false
         if !trimmed.contains("dsh-pocket-retry=1") { isPocketRetryInFlight = false }
 
-        // 绝不强制把当前画面设为 alpha=0（全透明大白屏大菊花卡死元凶）！
-        // 保持原画面可见直到新页面首帧就绪，平滑自然过渡；
-        // 如果请求的地址与当前地址相同（如点击当前服务刷新），直接执行 reloadFromOrigin 彻底重开长连接！
-        if let currentURL = webView.url, currentURL.absoluteString == url.absoluteString {
-            webView.reloadFromOrigin()
-        } else {
-            let request = URLRequest(url: url, timeoutInterval: 12)
-            webView.load(request)
+        // 1.0.70 黄金逻辑：新地址开始加载先隐藏旧内容，由系统原生处理请求与超时
+        UIView.animate(withDuration: 0.12) {
+            self.webView.alpha = 0
         }
+        webView.load(URLRequest(url: url))
     }
 
-    // MARK: - 联网即加载与后台恢复 (回归 1.0.70.9 零干扰黄金逻辑)
+    // MARK: - 联网即加载 (1.0.70 零干扰黄金逻辑)
 
     @objc private func appDidBecomeActive() {
         if let btn = menuButton {
@@ -4182,22 +4132,8 @@ final class ViewController: UIViewController {
         }
         setMenuExpanded(false, animated: false)
 
-        // 回归 1.0.70.9 黄金唤醒逻辑：
-        // 1. 若当前处于错误态或未加载成功，立刻重新加载；
-        // 2. 页面已加载时，派发系统级页面恢复事件，唤醒长连接与会话状态同步，绝不暴力强杀！
         if !errorOverlay.isHidden || webView.url == nil || !hasLoadedOnce {
             retryTapped()
-        } else if hasLoadedOnce {
-            webView.evaluateJavaScript("""
-                (function() {
-                  try {
-                    window.dispatchEvent(new Event('pageshow'));
-                    window.dispatchEvent(new Event('focus'));
-                    document.dispatchEvent(new Event('visibilitychange'));
-                    if (window.__dshSyncActiveSession) { window.__dshSyncActiveSession(); }
-                  } catch(e) {}
-                })();
-            """, completionHandler: nil)
         }
     }
 
@@ -4289,19 +4225,6 @@ final class ViewController: UIViewController {
 // MARK: - WKNavigationDelegate
 
 extension ViewController: WKNavigationDelegate {
-    /// v1.0.74：只允许留在当前服务地址内。
-    /// 侧滑返回、页内 `history.back()` 都会发起 back-forward 导航，这里直接取消，
-    /// 避免退回上一个 URL。页面内的抽屉、会话切换是前端路由，不走这里，不受影响。
-    func webView(_ webView: WKWebView,
-                 decidePolicyFor navigationAction: WKNavigationAction,
-                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        if navigationAction.navigationType == .backForward {
-            decisionHandler(.cancel)
-            return
-        }
-        decisionHandler(.allow)
-    }
-
     func webView(_ webView: WKWebView,
                  decidePolicyFor navigationResponse: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {

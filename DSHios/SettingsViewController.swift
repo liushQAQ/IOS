@@ -133,16 +133,6 @@ enum ServiceStore {
     ///         外网走 OpenFRP 穿透到 9060 认证网关（经 8080 反代直通桌面端 3083）。
     /// 仪表盘对：9009 自包含单页，外网带密码直达，无需换票。
     /// TTS 8210 外网 404（无外网入口），只配局域网一条。
-    #if PUBLIC_BUILD
-    static let defaults: [ServiceItem] = [
-        ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.1.100:3083/",
-                    note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
-        ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.1.100:9009/",
-                    note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
-        ServiceItem(name: "本地 TTS", url: "http://192.168.1.100:8210/",
-                    note: "局域网", resolverURL: nil)
-    ]
-    #else
     static let defaults: [ServiceItem] = [
         ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.215.218:3083/",
                     note: "桌面端主控·全量同步·秒开", resolverURL: nil),
@@ -158,7 +148,6 @@ enum ServiceStore {
         ServiceItem(name: "本地 TTS", url: "http://192.168.215.218:8210/",
                     note: "局域网", resolverURL: nil)
     ]
-    #endif
 
     /// 双轨读取（Documents/dsh_user_data/services_v1.json + UserDefaults），带初始化锁。
     /// 首次安装后只要未卸载，后续版本覆盖更新（无论个人版或公开版）均严格保留玩家已自定义的条目与配置，绝不重置覆盖。

@@ -1,10 +1,10 @@
 {
-  "version": "1.0.97",
-  "build": 37,
-  "updated_at": "2026-10-14 02:48:00",
-  "title": "v1.0.97 架构彻底合并为单一公开版·彻底根治巨魔301报错·移动端右侧边栏全功能上线",
-  "changelog": "1. 架构彻底合并（老总重要指示）：全网统一单一公开版 TIPA，彻底取消个人版与个人链接，本地保存的服务地址与配置数据永不丢失！\n2. 彻底根治巨魔更新 301 报错：新增 App 内免代理极速下载通道，下载完成后直调巨魔秒级安装，彻底告别重定向 301 报错！\n3. 移动端右侧边栏全功能上线：彻底修复移动端点击右上角右侧栏打不开的问题，重构为全屏滑入抽屉浮层，完整支持工作区、文件管理、终端与浏览器流畅交互！\n4. 状态栏安全区完美避让：右侧栏与各项操作按钮精准避让 iOS 顶部状态栏与灵动岛，不遮挡任何文字与标题！\n5. 纯净原版界面：彻底剔除多余注入分享按钮，保持原版极简高级质感！",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.97-37.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.97-37.tipa",
+  "version": "1.0.98",
+  "build": 38,
+  "updated_at": "2026-10-14 05:40:00",
+  "title": "v1.0.98 彻底回归 1.0.70 零死锁黄金渲染通道·恢复老总主控 IP·根治卡死",
+  "changelog": "1. 彻底根治网页卡死与打不开：全面回归 v1.0.70.9 零干扰黄金生命周期，彻底切除所有多余全局 DOM MutationObserver 递归轰炸与 12 秒强制超时；\n2. 恢复老总桌面端主控直连：默认地址与服务预设无缝回归 192.168.215.218:3083，开箱即连，全量会话秒级呈现；\n3. 纯 CSS 驱动右侧边栏抽屉：摆脱 JS 事件循环死锁，触摸滑入滑出轻盈丝滑；\n4. 巨魔免代理更新与防 301 架构持续护航，沙盒持久化数据永不丢失。",
+  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.98-38.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.98-38.tipa",
   "release_url": "https://github.com/liushQAQ/IOS"
 }
