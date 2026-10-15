@@ -3066,6 +3066,87 @@ final class ViewController: UIViewController {
             } catch (e) {}
           };
         })();
+
+        // ===== v1.0.106 顶栏「智能体」按钮与标题重叠修复 =====
+        // 实测（430x932 iPhone 视口 + 真机 UA，会话页）：DSH 官方把标题 .ank0OG_crumbs 绝对定位到
+        // left:54px、横跨 256px（实测 x66~322），而左侧那排图标按钮排在 x56~180 ——
+        // 标题直接把「1 个子智能体」徽标（容器仅 32px，内部文字实测 70px 溢出到 x35~105）
+        // 和「智能体团队」按钮（x94~134）整排压住，视觉上一团糊。
+        // 老总方案：标题不动；智能体按钮右移；「智能体」三个字隐藏。
+        // 一律用内联 !important —— DSH 原生样式权重更高，写在 <style> 里打不过。
+        (function () {
+          if (window.__dshHeaderAgentFix) return;
+          window.__dshHeaderAgentFix = 1;
+
+          // 「智能体」三个字隐藏：顶栏动作区里那个 "1 个子智能体" 徽标，容器只有 32px，
+          // 文字却要 70px → 溢出到标题底下。藏掉文字（保留徽标与其中箭头，不影响点击）。
+          function hideAgentBadgeText() {
+            try {
+              var header = document.querySelector('header');
+              if (!header) return;
+              var acts = header.querySelector('[class*="headerActions"]');
+              if (!acts) return;
+              var spans = acts.querySelectorAll('button > span');
+              for (var i = 0; i < spans.length; i++) {
+                var sp = spans[i];
+                var t = (sp.textContent || '').trim();
+                if (!t || t.indexOf('子智能体') === -1) continue;
+                if (sp.dataset.dshAgentTxtHidden === '1') continue;
+                sp.dataset.dshAgentTxtHidden = '1';
+                sp.style.setProperty('display', 'none', 'important');
+              }
+            } catch (e) {}
+          }
+
+          // 智能体按钮右移：脱离标题行文档流，落到标题右侧（实测标题文字止于 x293），
+          // 紧贴右侧抽屉开关（32px）左边并留 10px 间距。
+          function shiftAgentButtonRight() {
+            try {
+              var header = document.querySelector('header');
+              if (!header) return;
+              var btns = header.querySelectorAll('button[aria-label*="智能体团队"]');
+              for (var j = 0; j < btns.length; j++) {
+                var wrap = btns[j].parentElement;
+                if (!wrap) continue;
+                if (wrap.dataset.dshAgentMoved === '1') continue;
+                wrap.dataset.dshAgentMoved = '1';
+                wrap.style.setProperty('position', 'absolute', 'important');
+                wrap.style.setProperty('left', 'auto', 'important');
+                wrap.style.setProperty('right', '42px', 'important');
+                wrap.style.setProperty('top', '50%', 'important');
+                wrap.style.setProperty('transform', 'translateY(-50%)', 'important');
+                wrap.style.setProperty('margin', '0', 'important');
+                wrap.style.setProperty('z-index', '6', 'important');
+              }
+            } catch (e) {}
+          }
+
+          function fixHeaderAgent() {
+            hideAgentBadgeText();
+            shiftAgentButtonRight();
+          }
+
+          fixHeaderAgent();
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', fixHeaderAgent);
+          }
+          window.addEventListener('load', fixHeaderAgent);
+
+          // DSH 是 React 应用，切换会话时 header 会被整棵重建（内联样式一并丢失），
+          // 因此必须持续兜底：MutationObserver 去抖 + 启动阶段额外补 30 秒。
+          var pending = 0;
+          try {
+            new MutationObserver(function () {
+              if (pending) return;
+              pending = setTimeout(function () { pending = 0; fixHeaderAgent(); }, 300);
+            }).observe(document.documentElement, { childList: true, subtree: true });
+          } catch (e) {}
+          var ticks = 0;
+          var iv = setInterval(function () {
+            fixHeaderAgent();
+            if (++ticks >= 30) clearInterval(iv);
+          }, 1000);
+        })();
 """,
         // v1.0.72 页面分流补丁（必须放在数组最后，优先级最高）：
         // A. DSH 自身页面：补上原来常驻的「全屏固定布局」CSS（html/body 固定 + 隐藏滚动）；
