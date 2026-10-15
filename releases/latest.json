@@ -1,10 +1,10 @@
 {
-  "version": "1.0.103",
-  "build": 46,
-  "updated_at": "2026-10-15 21:40:00",
-  "title": "v1.0.103 页面整体垂直上移·首页目录按钮修复·拦截卡片错误",
-  "changelog": "1. 页面整体垂直上移：切除顶栏顶部虚高空白占位，整体上提紧贴 iOS 状态栏下沿；\n2. 底栏所有统计与操作完整展露：UI 布局不改，整体上移后彻底消除底栏超出遮挡，保留舒适呼吸留白；\n3. 修复首页目录图标（问题 4）：校准状态栏安全区坐标，目录按钮饱满规整，彻底告别半截线框；\n4. 拦截安装包打开报错（问题 1）：点击 .tipa/.ipa 二进制文件直调手机原生分享保存，压制未注册 tab 错误弹窗；\n5. 全网单一公开版，零私密配置，巨魔一键无损升级。",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.103-46.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.103-46.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.103"
+  "version": "1.0.105",
+  "build": 47,
+  "updated_at": "2026-10-16 00:02:44",
+  "title": "v1.0.105 机型安全区自动适配·顶栏底栏随机型自适应·回归 100% 官方前端",
+  "changelog": "1. 内置 iOS 机型安全区标准值对照表：iPhone 6s 至 iPhone 16 全系 + 全面屏 iPad，启动即按机型自动匹配，无需手工配置；\n2. 顶栏按机型状态栏高度自动让位：有 Home 键 20pt / 刘海 44~48pt / 灵动岛 59pt（16 Pro 62pt），不再写死像素；\n3. 底栏留白按机型底部安全区自动预留：全面屏 34pt、有 Home 键 0pt，再叠加 12pt 呼吸间距，彻底解决底栏超出屏幕与贴底问题；\n4. 横竖屏切换、更换机型均自动重算顶栏与底栏，多设备体验一致；\n5. 设置页新增「本机机型 + 标准安全区」自检信息，可在手机上现场核对检测结果；\n6. 低系统版本友好提示：检测到系统不支持所需网页特性时，明确提示版本门槛与升级方式，不再白屏让人猜；\n7. 全网单一公开版，零私密配置，巨魔一键无损升级。",
+  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.105-47.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.105-47.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.105"
 }
