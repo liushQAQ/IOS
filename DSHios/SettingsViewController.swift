@@ -924,6 +924,11 @@ final class ConnectionGuideViewController: UIViewController {
 
         ⌨️ 5. 会话框上浮消息零遮挡：
         • 键盘弹起时消息内容区动态增加避让缓冲，思考中与流式最后三行完整呈现。
+
+        📱 6. iOS 机型安全区自动适配（v1.0.105）：
+        • 内置 iPhone / iPad 全系安全区标准值对照表，启动即按机型自动匹配，无需手工配置；
+        • 本机检测：\(iOSSafeArea.selfCheckSummary())；
+        • 顶栏按状态栏高度自动让位、底栏按底部安全区自动预留，换机与横竖屏切换均自动重算。
         """
 
         let contentLabel = UILabel()

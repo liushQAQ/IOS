@@ -213,7 +213,12 @@ final class ViewController: UIViewController {
           var hasAt = typeof Array.prototype.at === 'function';
           var hasOwn = typeof Object.hasOwn === 'function';
           var hasTS = typeof Array.prototype.toSorted === 'function';
-          return JSON.stringify({ rootLen: len, rootKids: kids, withResolvers: hasBR, at: hasAt, hasOwn: hasOwn, toSorted: hasTS });
+          // v1.0.105：DSH 官方前端（vendor 包）内含 RegExp 后行断言 lookbehind 正则字面量，
+          // 而 lookbehind 需 Safari / iOS 16.4+ 才支持。必须用 new RegExp(字符串) 运行期探测——
+          // 若写成正则字面量，在旧 WebKit 上本段诊断脚本自身会解析失败，什么都探不到。
+          var hasLB = true;
+          try { new RegExp('(?<=a)b'); } catch (e) { hasLB = false; }
+          return JSON.stringify({ rootLen: len, rootKids: kids, withResolvers: hasBR, at: hasAt, hasOwn: hasOwn, toSorted: hasTS, lookbehind: hasLB });
         })()
         """
         webView.evaluateJavaScript(check) { [weak self] result, error in
@@ -232,9 +237,26 @@ final class ViewController: UIViewController {
                 }
                 // 尚未到判定时刻：插件可能还在加载，不打扰。
                 guard report else { return }
+                // v1.0.105：白屏根因若是系统 WebKit 太旧（不支持 RegExp lookbehind），
+                // 不再甩一句"页面白屏"让人猜，直接给出版本门槛与可执行动作。
+                // 说明：DSH 官方前端自身就要求 iOS 16.4+，这不是 App 引入的限制，
+                // 所以正确做法是"把官方的能力边界讲清楚"，而不是去改 DSH 官方文件。
+                if (info["lookbehind"] as? Bool) == false {
+                    self.errorTitleLabel.text = "系统版本过低"
+                    self.showError(detail: """
+                    当前 iOS 版本过低，无法运行 DSH 网页端。
+
+                    DSH 官方前端使用了 RegExp 后行断言（lookbehind），
+                    该语法需要 iOS 16.4 或更高版本（Safari / WebKit 16.4+）。
+
+                    本机检测：lookbehind = 不支持
+                    解决办法：设置 → 通用 → 软件更新，升级到 iOS 16.4 及以上后再试。
+                    """)
+                    return
+                }
                 let details = [
                     "#root 文本长度=\(info["rootLen"] ?? "?") 子节点数=\(info["rootKids"] ?? "?")",
-                    "API: withResolvers=\(info["withResolvers"] ?? "?") at=\(info["at"] ?? "?") hasOwn=\(info["hasOwn"] ?? "?") toSorted=\(info["toSorted"] ?? "?")"
+                    "API: withResolvers=\(info["withResolvers"] ?? "?") at=\(info["at"] ?? "?") hasOwn=\(info["hasOwn"] ?? "?") toSorted=\(info["toSorted"] ?? "?") lookbehind=\(info["lookbehind"] ?? "?")"
                 ]
                 var parts = details
                 if !self.webErrors.isEmpty { parts.append("JS 异常：" + self.webErrors.joined(separator: " ｜ ")) }
@@ -1929,8 +1951,12 @@ final class ViewController: UIViewController {
         """,
         // 针对 iOS 15 的系统级兼容补丁（解决 iOS 15 白屏问题）：
         // 1. crypto.randomUUID 兜底（在局域网明文 HTTP 环境下 iOS 15 WebKit 会禁用原生 crypto.randomUUID，引发脚本崩溃白屏）
-        // 2. 正则先行/后行断言 RegExp Lookbehind 容错，防止 iOS 15 解析 ES2022+ 正则时抛 SyntaxError
-        // 3. String.prototype.replaceAll, Array.prototype.at 补齐
+        // 2. String.prototype.replaceAll 补齐
+        // ⚠️ v1.0.105 更正：本段历史上曾被注释为"正则先行/后行断言 RegExp Lookbehind 容错"，
+        //    但实际代码从来没有、也不可能兜住 lookbehind——它是**语法层**特性，
+        //    正则在解析期就抛 SyntaxError，任何运行期 polyfill 都救不了。
+        //    lookbehind 需 iOS 16.4+（Safari/WebKit 16.4）。官方 DSH 前端自身即以此为门槛，
+        //    App 侧的应对是"探测到不支持就给出版本提示"，见 sampleRoot()，而不是假装已兼容。
         """
         (function () {
           if (typeof window !== 'undefined') {
@@ -2442,29 +2468,27 @@ final class ViewController: UIViewController {
             '  z-index: 1020 !important;',
             '  display: flex !important;',
             '  flex-direction: column !important;',
-            '  /* 顶栏紧凑贴合 iOS 状态栏/灵动岛下沿，消除多余大空白，整体垂直上移 */',
-            '  margin-top: calc(var(--dsh-statusbar, 54px) - 38px) !important;',
+            '  /* v1.0.104：顶栏纵向位置绝不再用固定像素猜。DSH 自带移动端样式表里',
+            '     [data-mobile-nav="frame"]{padding-top:env(safe-area-inset-top)} 之类的规则',
+            '     权重比注入样式高，且真机 env() 有值、本地为 0，猜像素必然出错。',
+            '     这里只保留结构，纵向位置统一交给运行时几何校正 __dshLayoutFix 实测修正。 */',
             '  padding: 2px 8px 0 8px !important;',
             '  min-height: 0 !important;',
             '  flex: none !important;',
             '  box-sizing: border-box !important;',
             '  max-width: 100vw !important;',
-            '  overflow: hidden !important;',
+            '  overflow: visible !important;',
             '  background: transparent !important;',
             '}',
             '',
-            '/* 彻底切除顶部 leading 空白占位层，让标题行自然升至第 1 行 */',
+            '/* v1.0.104：顶部 36px 首行内部住着左右两个抽屉开关，绝对不能整块 display:none，',
+            '   也不能给 pointer-events:none（会连带把开关点不动）。纵向压缩改由',
+            '   __dshLayoutFix 用「标题行负 margin 上提」实现，这里只保证开关可点、无多余外边距。 */',
             'header .ank0OG_headerLeading,',
             '.ank0OG_headerLeading,',
             '[data-conversation-header-leading] {',
-            '  display: none !important;',
-            '  visibility: hidden !important;',
-            '  height: 0 !important;',
-            '  min-height: 0 !important;',
-            '  max-height: 0 !important;',
+            '  pointer-events: auto !important;',
             '  margin: 0 !important;',
-            '  padding: 0 !important;',
-            '  pointer-events: none !important;',
             '}',
             '',
             '/* 确保 overlayLayer 挂载层本身透明，杜绝首页与主界面全局发灰变暗 */',
@@ -2853,13 +2877,16 @@ final class ViewController: UIViewController {
           window.__dshSetStatusBar = function (px) {
             var h = Math.max(0, px || 0);
             document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
-            // 整体垂直上移：紧密贴合 iOS 灵动岛/状态栏下方，彻底消除顶部虚高大空白
-            var topOffset = 4;
+            // 原生下发的才是真·安全区高度（iPhone 14 Pro Max = 59）。DSH 自己也会写同名
+            // 变量、而且写得比我们大（实测 75），会把几何校正的目标带偏，所以这里单独存一份。
+            window.__dshNativeStatusBar = h;
+            // v1.0.104：顶栏纵向位置禁止在这里写死（旧版写 margin-top:4px 会覆盖运行时几何校正，
+            // 而且真机多出来的那段空白根本不是 header 撑的，写死必然对不上）。
             var headers = document.querySelectorAll('header');
             for (var i = 0; i < headers.length; i++) {
-              headers[i].style.setProperty('margin-top', topOffset + 'px', 'important');
               headers[i].style.setProperty('background', 'transparent', 'important');
             }
+            if (window.__dshLayoutFix) { try { window.__dshLayoutFix(); } catch (e) {} }
             // 侧栏外层让出状态栏高度，内部子容器（.dMHGga_panel、.YdIzba_header 等）严禁重复叠加 padding-top，保持顶栏高度不变！
             var cols = document.querySelectorAll('[class*="sidebarCol"], .CZPbNW_sidebarCol, [class*="rightbarCol"], .CZPbNW_rightbarCol');
             for (var j = 0; j < cols.length; j++) {
@@ -2904,12 +2931,8 @@ final class ViewController: UIViewController {
           }
           function shiftTitleCluster() {
             try { applySidebarInset(); } catch (e) {}
-            var leadings = document.querySelectorAll('.ank0OG_headerLeading, [data-conversation-header-leading]');
-            for (var l = 0; l < leadings.length; l++) {
-              leadings[l].style.setProperty('display', 'none', 'important');
-              leadings[l].style.setProperty('height', '0', 'important');
-              leadings[l].style.setProperty('min-height', '0', 'important');
-            }
+            // v1.0.104：绝不能再隐藏顶部首行（leading）——左右两个抽屉开关就住在里面，
+            // 隐藏它等于把"打开侧边栏/文件"的入口一起干掉。纵向压缩交给 __dshLayoutFix 的负 margin。
             var rows = document.querySelectorAll('[class*="titleRow"]');
             for (var i = 0; i < rows.length; i++) {
               var row = rows[i];
@@ -3057,6 +3080,272 @@ final class ViewController: UIViewController {
         (function () {
           window.__dshSetKeyboardInset = function (px) {};
         })();
+        """,
+        // ================= v1.0.104：运行时几何校正（顶栏紧贴状态栏 / 底栏留两行空白）=================
+        // 踩过的坑（必须记住）：
+        //  1. DSH 自带的移动端样式表（data-mobile-nav 那套）用的是 !important，而且选择器权重比
+        //     注入样式高，例如：
+        //       [data-mobile-nav="frame"]{ padding-top: env(safe-area-inset-top,0px) !important }
+        //       [data-phase] header > :first-child { min-height: 36px !important }
+        //       html body [data-phase] header { padding: 8px 12px 0 !important }
+        //     结果：注入样式里写 padding-top/margin-top/display 全被压掉，改了等于没改。
+        //  2. env(safe-area-inset-top) 在真机 iPhone 上有值（14 Pro Max = 59），
+        //     而本机桌面 Chromium 恒为 0 —— 所以「本地截图看着好了」是假象，真机必然还差一大截。
+        // 结论：不再猜任何固定像素。本段直接读真实 DOM 几何，算出偏差，用「内联 !important」
+        //       修正（内联 !important 优先级高于任何样式表 !important，谁也压不掉），
+        //       无论那段空白是哪个容器撑出来的，都能被拉回正确位置。
+        """
+        (function () {
+          if (window.__dshLayoutFix) { try { window.__dshLayoutFix(); } catch (e) {} return; }
+          var TOP_BREATH = 6;    // 顶栏标题行与状态栏下沿之间的呼吸间距（CSS px = pt）
+          // v1.0.105：底栏留白改为「按机型安全区自适应」= Home Indicator 安全区 + 固定呼吸间距。
+          // 安全区由原生按机型下发（iPhone 全面屏 34 / iPad 全面屏 20 / 有 Home 键机型 0，
+          // 见文件末尾 iOSSafeArea 对照表）；取不到时兜底 34，
+          // 保证 34 + 12 = 46，与历史验证过的结果完全一致，不改变现有 iPhone 表现。
+          var SAFE_BOTTOM_FALLBACK = 34;
+          var BOT_BREATH_EXTRA = 12;
+          function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+          function sbHeight() {
+            // 优先用原生下发的真实安全区高度；其次读 CSS 变量；最后兜底 54。
+            var n = num(window.__dshNativeStatusBar);
+            if (n > 0) return n;
+            var v = num(getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar'));
+            return v > 0 ? v : 54;
+          }
+          // 底栏距屏幕底部的留白（自适应）：优先原生下发的真实底部安全区，
+          // 其次读 CSS 变量，最后兜底 34（全面屏 iPhone 主流值）。
+          //   ⚠️ 必须用 __dshSafeAreaReady 区分「原生还没下发」和「原生下发的就是 0」——
+          //      有 Home 键机型（iPhone SE / 6s~8）底部安全区**就是 0**，
+          //      若按 `b > 0` 判断会把 0 当成"没值"，错误套用全面屏的 34，SE 上凭空多出 34px 空白。
+          function botBreath() {
+            try {
+              if (window.__dshSafeAreaReady === 1 && window.__dshSafeArea) {
+                var sb = window.__dshSafeArea.bottom;
+                if (typeof sb === 'number' && isFinite(sb) && sb >= 0) return sb + BOT_BREATH_EXTRA;
+              }
+            } catch (e) {}
+            var v = num(getComputedStyle(document.documentElement).getPropertyValue('--dsh-safe-bottom'));
+            return (v > 0 ? v : SAFE_BOTTOM_FALLBACK) + BOT_BREATH_EXTRA;
+          }
+          function setP(el, prop, val) { try { el.style.setProperty(prop, val, 'important'); } catch (e) {} }
+          function pickHeader() {
+            return document.querySelector('[data-phase] header')
+              || document.querySelector('header.ank0OG_header')
+              || document.querySelector('header');
+          }
+          function fixTop() {
+            var header = pickHeader();
+            if (!header) return;
+            // 真凶就在这：[data-mobile-nav="frame"] 被 DSH 塞了 padding-top: env(safe-area-inset-top)
+            // （真机 59~75px）。它只把内容整体往下推，却不缩减自身高度，
+            // 于是整列比屏幕高出 75px —— 顶栏下方多一大段空白 + 输入框整块被顶出屏幕底部，
+            // 两个毛病是同一个原因。这里直接清零，状态栏高度改由我们自己按真实几何预留。
+            var frame = header.closest('[data-mobile-nav="frame"]');
+            if (frame) {
+              setP(frame, 'padding-top', '0px');
+              setP(frame, 'box-sizing', 'border-box');
+              setP(frame, 'overflow', 'hidden');
+            }
+            setP(header, 'position', 'sticky');
+            setP(header, 'top', '0px');
+            setP(header, 'z-index', '1020');
+            setP(header, 'display', 'flex');
+            setP(header, 'flex-direction', 'column');
+            setP(header, 'min-height', '0px');
+            setP(header, 'max-width', '100vw');
+            setP(header, 'box-sizing', 'border-box');
+            setP(header, 'background', 'transparent');
+            // 顶栏 padding-top 必须钉成 8px：几何目标就是按「顶栏顶 + 8 = 标题行顶」算的，
+            // 左右内边距仍保留 DSH 自己的 12px。
+            setP(header, 'padding-top', '8px');
+            // 顶部首行（36px 占位层）里住着左右两个抽屉开关，绝不可隐藏；
+            // 直接把首行高度压成 0（内联 !important 能压过 DSH 样式表里的 min-height:36px），
+            // 标题行随即上提到「顶栏顶 + padding-top」，而两个开关是绝对定位挂在顶栏上的，
+            // 位置完全不受影响 —— 比用标题行负 margin 更确定、也不会被 React 重渲染冲掉。
+            var leading = header.querySelector('.ank0OG_headerLeading, [data-conversation-header-leading], [class*="headerLeading"]');
+            if (leading) {
+              setP(leading, 'min-height', '0px');
+              setP(leading, 'height', '0px');
+              setP(leading, 'max-height', '0px');
+              setP(leading, 'overflow', 'visible');
+              setP(leading, 'pointer-events', 'auto');
+            }
+            // 几何校正（实测 → 修正）：
+            // 注意两个坑：
+            //   1. 不能用 offsetTop —— 顶栏的 offsetParent 是 .ank0OG_root，
+            //      外层 frame 的 padding 撑不动它，测出来永远是常数，校正必然失效；
+            //      必须用 getBoundingClientRect().top 拿真实视口坐标。
+            //   2. 不能给 header 加负 margin —— 顶栏所在整列 .CZPbNW_centerCol 带
+            //      overflow:hidden，负 margin 会把顶栏（连同左右两个抽屉开关）裁掉。
+            //      正确做法是把位移加在「整列」上，列的裁剪框跟着一起上移，既不裁切，
+            //      也不影响绝对定位的侧栏。
+            var col = header;
+            while (col && col.parentElement) {
+              if (frame && col.parentElement === frame) break;
+              if (col.parentElement === document.body || col.parentElement === document.documentElement) break;
+              col = col.parentElement;
+            }
+            if (!col) col = header;
+            var want = sbHeight() - 2;
+            var delta = want - header.getBoundingClientRect().top;
+            if (Math.abs(delta) > 0.5 && Math.abs(delta) < 600) {
+              var mt = num(getComputedStyle(col).marginTop);
+              if (Math.abs(mt + delta) < 600) setP(col, 'margin-top', (mt + delta) + 'px');
+            }
+            // 钉死整列高度：列顶确定后，列高 = 视口高 - 列顶，
+            // 保证底栏（吸在列底）绝不越出屏幕，同时给底栏留白打好地基。
+            var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+            var colTop = col.getBoundingClientRect().top;
+            if (vh > 0 && colTop >= 0 && colTop < vh) {
+              var hpx = (vh - colTop) + 'px';
+              if (col.style.height !== hpx) {
+                setP(col, 'height', hpx);
+                setP(col, 'max-height', hpx);
+                setP(col, 'box-sizing', 'border-box');
+                setP(col, 'overflow', 'hidden');
+              }
+            }
+          }
+          function fixBottom() {
+            var seat = document.querySelector('.ank0OG_composerSeat, [class*="composerSeat"]');
+            if (!seat) return;
+            var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+            if (!vh) return;
+            var delta = seat.getBoundingClientRect().bottom - (vh - botBreath());
+            if (Math.abs(delta) > 1) {
+              var mb = num(getComputedStyle(seat).marginBottom);
+              setP(seat, 'margin-bottom', Math.max(0, mb + delta) + 'px');
+            }
+          }
+          function fixFab() {
+            // 首页左上角目录按钮：DSH 自带规则是 top: calc(var(--dsh-statusbar,54px) - 24px)，
+            // 正好压进状态栏里被切掉半截。改为状态栏下沿 + TOP_BREATH，饱满完整呈现。
+            var fabs = document.querySelectorAll('[data-mobile-nav="fab"]');
+            for (var i = 0; i < fabs.length; i++) {
+              setP(fabs[i], 'top', (sbHeight() + TOP_BREATH) + 'px');
+              setP(fabs[i], 'border-radius', '8px');
+              setP(fabs[i], 'background', 'var(--dsw-alias-interactive-bg-hover, rgba(125,125,125,0.16))');
+            }
+          }
+          // 单趟：只跑一次，绝不循环。
+          // 血的教训：底栏是 position:sticky 吸在滚动容器底部，在同一段同步 JS 里改完
+          // margin-bottom 后立刻重测量，浏览器还没重算 sticky 位置，读到的仍是旧值，
+          // 循环三次就等于把同一个偏差加了三次（46 → 92 → 138），底栏被顶到屏幕中间。
+          // 必须跨帧收敛。
+          function passOnce() {
+            try { fixFab(); } catch (e) {}
+            try { fixTop(); } catch (e) {}
+            try { fixBottom(); } catch (e) {}
+          }
+          var settleTimer = null;
+          function settle(left) {
+            passOnce();
+            if (left > 0) {
+              if (settleTimer) clearTimeout(settleTimer);
+              settleTimer = setTimeout(function () { settle(left - 1); }, 90);
+            }
+          }
+          window.__dshLayoutFix = function () { settle(5); };
+          // 频率闸：几何校正要读 rect（会强制重排），流式输出期间 DOM 变动极密，
+          // 必须限流，绝不允许变成每帧一次重排。250ms 内最多跑一趟，页面不可见时直接跳过。
+          var lastRun = 0;
+          function run() {
+            if (document.hidden) return;
+            var now = Date.now();
+            if (now - lastRun < 250) return;
+            lastRun = now;
+            passOnce();
+          }
+          run();
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+          window.addEventListener('load', run);
+          window.addEventListener('resize', run);
+          window.addEventListener('orientationchange', function () { setTimeout(run, 260); });
+          var ticks = 0;
+          var timer = setInterval(function () { ticks++; run(); if (ticks >= 30) clearInterval(timer); }, 400);
+          // SPA 切换路由/面板时自动重算；只监听子节点变化（我们只改内联样式，不会自触发）
+          try {
+            var pending = false;
+            var mo = new MutationObserver(function () {
+              if (pending) return;
+              pending = true;
+              setTimeout(function () { pending = false; run(); }, 320);
+            });
+            mo.observe(document.documentElement, { childList: true, subtree: true });
+          } catch (e) {}
+        })();
+        """,
+        // ===== shim_15（v1.0.104）：窄屏长文本溢出自动降级（DSH-MOBILE-FIT v1）=====
+        // 症状：iPhone 430 宽下会话里的长文件路径显示成 "E:\desktop\所有skill\deepseek-harn..."、
+        //       错误信息被截断 —— DSH 前端在窄屏下对长文本不做换行/省略，撑破后被
+        //       祖先的 overflow:hidden 裁掉。
+        // 设计原则：**通用**。DSH 用 CSS Modules，类名带哈希且随版本变，硬编码类名就是
+        //       "改几十遍"的根源；这里改为运行时读真实几何，自动给溢出元素打
+        //       data-dsh-fit 标记，再由注入的 CSS 让它们换行。对任何 DSH 实例
+        //       （本机 / 官方 / 他人）都有效，找不到目标时静默跳过，绝不报错。
+        // 与 shim_14 的分工：shim_14 管 safe-area（顶栏/底栏留白），本 shim 管横向文本溢出，
+        //       两者改的是不同属性，实测共存无冲突。
+        """
+        (function () {
+          if (window.__dshMobileFit) return;
+          window.__dshMobileFit = 1;
+          var LIMIT = 760;
+          // 故意藏在屏外的浮层不参与标记，避免把抽屉/菜单误判成溢出
+          var SKIP = /rightbar|drawer|Drawer|portal|Portal|overlay|Overlay|popover|Popover|menu|Menu|tooltip|Tooltip|lightbox|Lightbox|dialog|Dialog|modal|Modal/;
+          var CSS = '@media (max-width: ' + LIMIT + 'px) {'
+            + 'html,body{max-width:100% !important;overflow-x:clip !important}'
+            + '[data-dsh-fit="1"],pre,code,kbd,samp,textarea,'
+            + '[class*="_text_"],[class*="_fileLink"],[class*="_filePath"],[class*="_path"],'
+            + '[class*="_summary"],[class*="_rowText"],[class*="_rowSub"],[class*="_rowDesc"],'
+            + '[class*="_desc"],[class*="_tips"],[class*="_hint"],[class*="_error"]{'
+            + 'overflow-wrap:anywhere !important;word-break:break-word !important;'
+            + 'min-width:0 !important;max-width:100% !important}'
+            + 'pre,[class*="_text_"],[class*="_summary"]{white-space:pre-wrap !important}'
+            + '[class*="header"],[class*="Header"],[class*="row"],[class*="Row"],'
+            + '[class*="body"],[class*="Body"],[class*="content"],[class*="Content"],'
+            + '[class*="col"],[class*="Col"],[class*="_main"],[class*="_inner"]{min-width:0 !important}'
+            + '[data-dsh-fit="1"] *{overflow-wrap:anywhere !important}'
+            + '}';
+          function injectCss() {
+            try {
+              if (document.querySelector('style[data-dsh-mobile-fit]')) return;
+              var st = document.createElement('style');
+              st.setAttribute('data-dsh-mobile-fit', '1');
+              st.textContent = CSS;
+              (document.head || document.documentElement).appendChild(st);
+            } catch (e) {}
+          }
+          function mark() {
+            try {
+              if (window.innerWidth > LIMIT) return;
+              var vw = document.documentElement.clientWidth || window.innerWidth;
+              var els = document.querySelectorAll('body *:not([data-dsh-fit])');
+              for (var i = 0; i < els.length; i++) {
+                var e = els[i];
+                var cn = (typeof e.className === 'string') ? e.className : '';
+                if (cn && SKIP.test(cn)) continue;
+                var r = e.getBoundingClientRect();
+                if (r.width < 8 || r.height < 4) continue;
+                var s = null;
+                try { s = getComputedStyle(e); } catch (x) { s = null; }
+                if (s && (s.display === 'none' || s.visibility === 'hidden')) continue;
+                if (Math.round(r.right - vw) > 2) { e.setAttribute('data-dsh-fit', '1'); continue; }
+                if (e.scrollWidth > e.clientWidth + 4 && e.clientWidth > 60) e.setAttribute('data-dsh-fit', '1');
+              }
+            } catch (err) {}
+          }
+          var t = 0;
+          function schedule() { if (t) return; t = setTimeout(function () { t = 0; mark(); }, 260); }
+          function boot() { injectCss(); schedule(); }
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+          else boot();
+          window.addEventListener('load', boot);
+          window.addEventListener('resize', schedule, { passive: true });
+          window.addEventListener('orientationchange', function () { setTimeout(schedule, 300); });
+          try { new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true }); } catch (e) {}
+          var n = 0, iv = setInterval(function () { schedule(); if (++n > 30) clearInterval(iv); }, 600);
+          window.__dshMobileFitMark = mark;
+        })();
         """
     ]
 
@@ -3179,8 +3468,26 @@ final class ViewController: UIViewController {
     /// 侧栏内容只让出 20px，顶进了状态栏（用户截图：标志被电量图标压住）。
     /// CSS 像素在 viewport width=device-width 下就等于 pt，不能再除。
     private func publishStatusBarHeight() {
-        let px = Int(view.safeAreaInsets.top.rounded())
-        let js = "window.__dshSetStatusBar && window.__dshSetStatusBar(\(px));"
+        let insets = view.safeAreaInsets
+        // 竖屏判断：用视图自身宽高，不依赖已弃用的 statusBarOrientation
+        let isPortrait = view.bounds.height >= view.bounds.width
+        // v1.0.105：系统值优先；系统值异常为 0 且竖屏时，按「iOS 机型安全区标准值对照表」兜底。
+        // 这样即使早期视图未布局完读不到安全区，也能按机型给出正确留白（见文件末尾 iOSSafeArea）。
+        let topValue = iOSSafeArea.effectiveTop(systemTop: insets.top, isPortrait: isPortrait)
+        let bottomValue = iOSSafeArea.effectiveBottom(systemBottom: insets.bottom)
+        let px = Int(topValue.rounded())
+        let bp = Int(bottomValue.rounded())
+        let deviceId = iOSSafeArea.machineIdentifier
+        let summary = iOSSafeArea.debugSummary(systemTop: insets.top, systemBottom: insets.bottom, isPortrait: isPortrait)
+        // 保持 __dshSetStatusBar 既有语义不变（页内 shim 依赖它），额外挂 __dshSafeArea 供按需取用。
+        // __dshSafeAreaReady 表示"这一次下发是权威值"，页内据此区分「未下发」与「下发为 0」
+        // （有 Home 键机型 bottom 合法值就是 0，不能当成缺省）。
+        let js = "(function(){try{"
+            + "if(window.__dshSetStatusBar)window.__dshSetStatusBar(\(px));"
+            + "window.__dshSafeArea={top:\(px),bottom:\(bp),device:\"\(deviceId)\"};"
+            + "window.__dshSafeAreaReady=1;"
+            + "window.__dshSafeAreaDebug=\"\(summary)\";"
+            + "}catch(e){}})();"
         webView.evaluateJavaScript(js) { _, _ in }
     }
 
@@ -4381,8 +4688,9 @@ final class ViewController: UIViewController {
     }
 
     private func showError(detail: String) {
-        // 白屏诊断路径已把标题设成「页面白屏」，这里不要覆盖它；其余一律回到默认标题。
-        if errorTitleLabel.text != "页面白屏" {
+        // 白屏 / 系统版本诊断路径已显式设过标题，这里不要覆盖；其余一律回到默认标题。
+        let presetTitles: Set<String> = ["页面白屏", "系统版本过低"]
+        if !presetTitles.contains(errorTitleLabel.text ?? "") {
             errorTitleLabel.text = "无法连接到 DSH"
         }
         errorDetailLabel.text = detail
@@ -4482,6 +4790,11 @@ extension ViewController: WKNavigationDelegate {
         // 首屏下发一次状态栏高度：safeAreaInsets 可能在页面脚本注入之前就定了，
         // 不补这一次，顶栏会一直停在默认留白上。
         publishStatusBarHeight()
+        // v1.0.105 双保险：首屏可能早于视图完成布局（此时 safeAreaInsets 还是 0），
+        // 延迟再补发一次，让页内 shim 无论何时接管都能拿到正确的顶/底安全区。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.publishStatusBarHeight()
+        }
         // 布局编辑开着时，每次页面加载完成重新挂上编辑层。
         if UserDefaults.standard.bool(forKey: Keys.layoutEdit) {
             applyLayoutEditMode()
@@ -5097,6 +5410,186 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
             act.popoverPresentationController?.sourceView = menuButton ?? view
             present(act, animated: true)
         }
+    }
+}
+
+// MARK: - iOS 设备安全区标准值对照表（Apple 公开规范，v1.0.105）
+
+/// 机型 → 安全区标准值（竖屏，单位 pt）。
+///
+/// **为什么需要它**：`view.safeAreaInsets` 由系统实时给出、平时最准，但在这些场景会读到 0：
+///   ① 页面极早阶段视图尚未完成布局；② 部分 iPad 分屏 / 老旧系统上安全区上报滞后。
+/// 读到 0 就会把「顶栏应留 59pt」错算成 0 → 顶栏贴进状态栏（历史截图：标志被电量图标压住）。
+///
+/// **取值策略（重要，勿改）**：
+///   - **系统值 > 0 一律以系统值为准** —— 横屏、分屏、新机型、未来机型都能自动跟上，无需改代码；
+///   - **仅在系统值异常为 0 且处于竖屏时**，才按机型查本表兜底；
+///   - 横屏 iPhone 状态栏本就隐藏（系统值 0 是正确的），**不做兜底**，否则会凭空多出留白。
+///
+/// 数据来源：Apple Human Interface Guidelines 与各机型公开实测值。
+enum iOSSafeArea {
+
+    struct Inset {
+        /// 状态栏 / 刘海 / 灵动岛预留高度
+        let top: CGFloat
+        /// Home Indicator 预留高度
+        let bottom: CGFloat
+    }
+
+    /// 当前硬件标识符，如 "iPhone15,3"（iPhone 14 Pro Max）
+    static var machineIdentifier: String {
+        #if targetEnvironment(simulator)
+        return ProcessInfo().environment["SIMULATOR_MODEL_IDENTIFIER"] ?? "Simulator"
+        #else
+        var info = utsname()
+        uname(&info)
+        return Mirror(reflecting: info.machine).children.reduce("") { acc, el in
+            guard let v = el.value as? Int8, v != 0 else { return acc }
+            return acc + String(UnicodeScalar(UInt8(v)))
+        }
+        #endif
+    }
+
+    /// 机型对应的中文名（用于设置页/日志核对；未知机型返回标识符本身）
+    static var machineDisplayName: String {
+        let id = machineIdentifier
+        if let n = displayNames[id] { return n }
+        if id.hasPrefix("iPhone") { return "iPhone (未知机型 \(id))" }
+        if id.hasPrefix("iPad") { return "iPad (未知机型 \(id))" }
+        return id
+    }
+
+    /// iPhone 全系竖屏标准安全区
+    static let iPhone: [String: Inset] = [
+        // ── 有 Home 键：顶 20 / 底 0 ──
+        "iPhone8,1": Inset(top: 20, bottom: 0),   // 6s
+        "iPhone8,2": Inset(top: 20, bottom: 0),   // 6s Plus
+        "iPhone8,4": Inset(top: 20, bottom: 0),   // SE 1
+        "iPhone9,1": Inset(top: 20, bottom: 0),   // 7
+        "iPhone9,2": Inset(top: 20, bottom: 0),   // 7 Plus
+        "iPhone9,3": Inset(top: 20, bottom: 0),   // 7
+        "iPhone9,4": Inset(top: 20, bottom: 0),   // 7 Plus
+        "iPhone10,1": Inset(top: 20, bottom: 0),  // 8
+        "iPhone10,2": Inset(top: 20, bottom: 0),  // 8 Plus
+        "iPhone10,4": Inset(top: 20, bottom: 0),  // 8
+        "iPhone10,5": Inset(top: 20, bottom: 0),  // 8 Plus
+        "iPhone12,8": Inset(top: 20, bottom: 0),  // SE 2
+        "iPhone14,6": Inset(top: 20, bottom: 0),  // SE 3
+        // ── 刘海屏：底 34 ──
+        "iPhone10,3": Inset(top: 44, bottom: 34), // X
+        "iPhone10,6": Inset(top: 44, bottom: 34), // X
+        "iPhone11,2": Inset(top: 44, bottom: 34), // XS
+        "iPhone11,4": Inset(top: 44, bottom: 34), // XS Max
+        "iPhone11,6": Inset(top: 44, bottom: 34), // XS Max
+        "iPhone11,8": Inset(top: 48, bottom: 34), // XR
+        "iPhone12,1": Inset(top: 48, bottom: 34), // 11
+        "iPhone12,3": Inset(top: 44, bottom: 34), // 11 Pro
+        "iPhone12,5": Inset(top: 44, bottom: 34), // 11 Pro Max
+        "iPhone13,1": Inset(top: 50, bottom: 34), // 12 mini
+        "iPhone13,2": Inset(top: 47, bottom: 34), // 12
+        "iPhone13,3": Inset(top: 47, bottom: 34), // 12 Pro
+        "iPhone13,4": Inset(top: 47, bottom: 34), // 12 Pro Max
+        "iPhone14,2": Inset(top: 47, bottom: 34), // 13 Pro
+        "iPhone14,3": Inset(top: 47, bottom: 34), // 13 Pro Max
+        "iPhone14,4": Inset(top: 50, bottom: 34), // 13 mini
+        "iPhone14,5": Inset(top: 47, bottom: 34), // 13
+        "iPhone14,7": Inset(top: 47, bottom: 34), // 14
+        "iPhone14,8": Inset(top: 47, bottom: 34), // 14 Plus
+        // ── 灵动岛：顶 59（16 Pro 为 62）/ 底 34 ──
+        "iPhone15,2": Inset(top: 59, bottom: 34), // 14 Pro
+        "iPhone15,3": Inset(top: 59, bottom: 34), // 14 Pro Max
+        "iPhone15,4": Inset(top: 59, bottom: 34), // 15
+        "iPhone15,5": Inset(top: 59, bottom: 34), // 15 Plus
+        "iPhone16,1": Inset(top: 59, bottom: 34), // 15 Pro
+        "iPhone16,2": Inset(top: 59, bottom: 34), // 15 Pro Max
+        "iPhone17,1": Inset(top: 62, bottom: 34), // 16 Pro
+        "iPhone17,2": Inset(top: 62, bottom: 34), // 16 Pro Max
+        "iPhone17,3": Inset(top: 59, bottom: 34), // 16
+        "iPhone17,4": Inset(top: 59, bottom: 34), // 16 Plus
+        "iPhone17,5": Inset(top: 59, bottom: 34), // 16e
+    ]
+
+    /// 带 Home Indicator 的 iPad（2018 年 iPad Pro 及之后的全面屏款）
+    static let iPadWithIndicator: Set<String> = [
+        "iPad8,1", "iPad8,2", "iPad8,3", "iPad8,4", "iPad8,5", "iPad8,6", "iPad8,7", "iPad8,8",
+        "iPad8,9", "iPad8,10", "iPad8,11", "iPad8,12",
+        "iPad13,1", "iPad13,2", "iPad13,4", "iPad13,5", "iPad13,6", "iPad13,7",
+        "iPad13,8", "iPad13,9", "iPad13,10", "iPad13,11", "iPad13,16", "iPad13,17", "iPad13,18", "iPad13,19",
+        "iPad14,1", "iPad14,2", "iPad14,3", "iPad14,4", "iPad14,5", "iPad14,6",
+        "iPad14,8", "iPad14,9", "iPad14,10", "iPad14,11",
+        "iPad16,3", "iPad16,4", "iPad16,5", "iPad16,6",
+    ]
+
+    /// 机型标识 → 展示名（用于核对「检测到的是什么机器」）
+    static let displayNames: [String: String] = [
+        "iPhone14,6": "iPhone SE (3rd gen)",
+        "iPhone14,7": "iPhone 14", "iPhone14,8": "iPhone 14 Plus",
+        "iPhone15,2": "iPhone 14 Pro", "iPhone15,3": "iPhone 14 Pro Max",
+        "iPhone15,4": "iPhone 15", "iPhone15,5": "iPhone 15 Plus",
+        "iPhone16,1": "iPhone 15 Pro", "iPhone16,2": "iPhone 15 Pro Max",
+        "iPhone17,1": "iPhone 16 Pro", "iPhone17,2": "iPhone 16 Pro Max",
+        "iPhone17,3": "iPhone 16", "iPhone17,4": "iPhone 16 Plus", "iPhone17,5": "iPhone 16e",
+        "iPhone13,1": "iPhone 12 mini", "iPhone13,2": "iPhone 12",
+        "iPhone13,3": "iPhone 12 Pro", "iPhone13,4": "iPhone 12 Pro Max",
+        "iPhone14,2": "iPhone 13 Pro", "iPhone14,3": "iPhone 13 Pro Max",
+        "iPhone14,4": "iPhone 13 mini", "iPhone14,5": "iPhone 13",
+        "iPhone12,1": "iPhone 11", "iPhone12,3": "iPhone 11 Pro", "iPhone12,5": "iPhone 11 Pro Max",
+        "iPhone11,2": "iPhone XS", "iPhone11,4": "iPhone XS Max", "iPhone11,8": "iPhone XR",
+        "iPhone10,3": "iPhone X", "iPhone10,6": "iPhone X",
+        "iPhone12,8": "iPhone SE (2nd gen)",
+        "iPad14,1": "iPad mini (6th gen)", "iPad14,2": "iPad mini (6th gen)",
+        "iPad16,3": "iPad Pro 11-inch (M4)", "iPad16,4": "iPad Pro 11-inch (M4)",
+        "iPad16,5": "iPad Pro 13-inch (M4)", "iPad16,6": "iPad Pro 13-inch (M4)",
+        "iPad14,3": "iPad Pro 11-inch (4th gen)", "iPad14,4": "iPad Pro 11-inch (4th gen)",
+        "iPad14,5": "iPad Pro 12.9-inch (6th gen)", "iPad14,6": "iPad Pro 12.9-inch (6th gen)",
+        "iPad13,18": "iPad (10th gen)", "iPad13,19": "iPad (10th gen)",
+        "iPad14,8": "iPad Air 11-inch (M2)", "iPad14,9": "iPad Air 11-inch (M2)",
+        "iPad14,10": "iPad Air 13-inch (M2)", "iPad14,11": "iPad Air 13-inch (M2)",
+    ]
+
+    /// 按机型给出竖屏标准安全区；未知机型返回 nil
+    static func standard() -> Inset? {
+        let id = machineIdentifier
+        if id.hasPrefix("iPhone") { return iPhone[id] }
+        if id.hasPrefix("iPad") {
+            // 现代 iPad 竖屏：状态栏 24pt；全面屏款底部另有 20pt Home Indicator
+            return Inset(top: 24, bottom: iPadWithIndicator.contains(id) ? 20 : 0)
+        }
+        return nil
+    }
+
+    /// 实际生效的顶部预留：系统值优先，系统值异常为 0 且竖屏时用机型表兜底。
+    static func effectiveTop(systemTop: CGFloat, isPortrait: Bool) -> CGFloat {
+        if systemTop > 1 { return systemTop }
+        guard isPortrait else { return systemTop }
+        return standard()?.top ?? systemTop
+    }
+
+    /// 实际生效的底部预留：系统值优先，异常为 0 时用机型表兜底。
+    static func effectiveBottom(systemBottom: CGFloat) -> CGFloat {
+        if systemBottom > 1 { return systemBottom }
+        return standard()?.bottom ?? systemBottom
+    }
+
+    /// 一行摘要，便于在日志 / 设置页核对"检测到什么机型、取到什么值"
+    static func debugSummary(systemTop: CGFloat, systemBottom: CGFloat, isPortrait: Bool) -> String {
+        let id = machineIdentifier
+        let std = standard()
+        let effTop = effectiveTop(systemTop: systemTop, isPortrait: isPortrait)
+        let effBottom = effectiveBottom(systemBottom: systemBottom)
+        return "device=\(id)(\(machineDisplayName)) portrait=\(isPortrait) "
+            + "system=(\(Int(systemTop)),\(Int(systemBottom))) "
+            + "standard=\(std.map { "(\(Int($0.top)),\(Int($0.bottom)))" } ?? "nil") "
+            + "effective=(\(Int(effTop)),\(Int(effBottom)))"
+    }
+
+    /// 设置页自检摘要：只讲"检测到啥机型、标准值是多少"，不掺入运行时系统值
+    static func selfCheckSummary() -> String {
+        let id = machineIdentifier
+        guard let s = standard() else {
+            return "\(machineDisplayName)（\(id)）· 未知机型，按系统实时安全区自适应"
+        }
+        return "\(machineDisplayName)（\(id)）· 标准安全区 顶 \(Int(s.top))pt / 底 \(Int(s.bottom))pt"
     }
 }
 
