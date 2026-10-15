@@ -1,10 +1,10 @@
 {
-  "version": "1.0.102",
-  "build": 44,
-  "updated_at": "2026-10-15 10:52:45",
-  "title": "v1.0.102 界面整体垂直上移·顶部消除多余大空白·纯净公开版",
-  "changelog": "1. 界面整体垂直上移：顶栏贴近灵动岛/状态栏下方，彻底消除顶部虚高多余空白，输入框上移保留精致安全距；\n2. 纯净公开版：彻底移除个人私密密钥与外网穿透地址；\n3. 浮窗当前地址以 🔴 红色醒目标记；\n4. 修复模型快捷选择键盘误关与自动弹起问题。",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.102-44.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.102-44.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.102"
+  "version": "1.0.103",
+  "build": 46,
+  "updated_at": "2026-10-15 21:40:00",
+  "title": "v1.0.103 页面整体垂直上移·首页目录按钮修复·拦截卡片错误",
+  "changelog": "1. 页面整体垂直上移：切除顶栏顶部虚高空白占位，整体上提紧贴 iOS 状态栏下沿；\n2. 底栏所有统计与操作完整展露：UI 布局不改，整体上移后彻底消除底栏超出遮挡，保留舒适呼吸留白；\n3. 修复首页目录图标（问题 4）：校准状态栏安全区坐标，目录按钮饱满规整，彻底告别半截线框；\n4. 拦截安装包打开报错（问题 1）：点击 .tipa/.ipa 二进制文件直调手机原生分享保存，压制未注册 tab 错误弹窗；\n5. 全网单一公开版，零私密配置，巨魔一键无损升级。",
+  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.103-46.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.103-46.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.103"
 }
