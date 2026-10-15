@@ -2203,11 +2203,29 @@ final class ViewController: UIViewController {
             });
           }
 
-          // 动态注入 2：移除预览工具栏内多余的蓝色按钮，保持原版 DSH 纯净体验
+          // 动态注入 2：在不可预览文件页面（如 tipa/zip/exe/ipa）注入醒目的【📥 保存 / 分享到手机】按钮
           function enrichPreviewHeader() {
-            var btns = document.querySelectorAll('.dsh-mobile-download-btn');
-            for (var b = 0; b < btns.length; b++) {
-              if (btns[b].parentNode) btns[b].parentNode.removeChild(btns[b]);
+            var emptyContainer = document.querySelector('[data-textpreview-unsupported], [class*="unsupportedPreview"], [class*="unpreviewable"]');
+            if (emptyContainer && !emptyContainer.querySelector('.dsh-mobile-save-file-btn')) {
+              var pathEl = document.querySelector('[data-textpreview-path], [class*="previewPath"]');
+              var fullPath = pathEl ? (pathEl.getAttribute('title') || pathEl.textContent || '') : '';
+              if (!fullPath) {
+                var titleTab = document.querySelector('[data-dockkit-strip] [aria-selected="true"], [data-dockkit-strip] [class*="active"]');
+                fullPath = titleTab ? (titleTab.getAttribute('title') || titleTab.textContent || '') : '';
+              }
+              var btn = document.createElement('button');
+              btn.className = 'dsh-mobile-save-file-btn';
+              btn.type = 'button';
+              btn.innerHTML = '📥 保存 / 分享到手机';
+              btn.style.cssText = 'display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;height:38px!important;padding:0 20px!important;border-radius:19px!important;background:#007aff!important;color:#fff!important;font-size:15px!important;font-weight:600!important;border:none!important;box-shadow:0 4px 12px rgba(0,122,255,0.35)!important;cursor:pointer!important;margin:16px auto!important;';
+              btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (fullPath) {
+                  shareFileByPath(fullPath, fullPath.split(/[\/\\\\]/).pop());
+                }
+              });
+              emptyContainer.appendChild(btn);
             }
           }
 
@@ -2487,16 +2505,30 @@ final class ViewController: UIViewController {
             '  flex: none !important;',
             '}',
             '',
-            '/* v1.0.74：实测「文件浏览」(data-mobile-nav=files) 与「打开右侧边栏」同在 x=350 完全重叠。',
-            '   页面自身用属性选择器把它设成 display:flex，必须用同级属性选择器才能压住。 */',
+            '/* 彻底消灭与右侧抽屉开关重叠的文件夹图标（包括文件浏览、工作区文件） */',
             'button[aria-label="文件浏览"],',
-            '[data-mobile-nav="files"] {',
+            'button[title="文件浏览"],',
+            'button[aria-label="工作区文件"],',
+            'button[aria-label*="文件树"],',
+            'button[aria-label*="浏览文件"],',
+            '[data-mobile-nav="files"],',
+            '.ank0OG_headerCorner button:has(svg path[d*="M20 20a2"]),',
+            '.ank0OG_headerCorner button:has(svg path[d*="M4 4h16"]),',
+            '.ank0OG_headerCorner button:has(svg [d*="M3 7v10"]),',
+            '.ank0OG_headerCorner > button:not([data-sidebar-right-expand]):not([aria-label="打开右侧边栏"]):not([aria-label="收起右侧边栏"]) {',
             '  display: none !important;',
+            '  visibility: hidden !important;',
+            '  width: 0 !important;',
+            '  height: 0 !important;',
+            '  padding: 0 !important;',
+            '  margin: 0 !important;',
+            '  pointer-events: none !important;',
             '}',
             '',
-            '/* 智能体团队：单行水平并排，杜绝文字挤压换行变形（老总铁律：必须完整药丸横排） */',
+            '/* 智能体团队：左侧留足间距，杜绝最左侧数字被手机屏幕边缘切断，单行水平并排（老总铁律） */',
             'button[aria-label="智能体团队"],',
             'button[aria-label*="智能体团队"] {',
+            '  margin-left: 6px !important;',
             '  width: auto !important;',
             '  min-width: max-content !important;',
             '  max-width: none !important;',
@@ -2508,7 +2540,6 @@ final class ViewController: UIViewController {
             '  gap: 5px !important;',
             '  height: 28px !important;',
             '  padding: 0 10px !important;',
-            '  margin: 0 !important;',
             '  position: static !important;',
             '  border-radius: 14px !important;',
             '  word-break: keep-all !important;',
@@ -2545,7 +2576,8 @@ final class ViewController: UIViewController {
             '',
             '[data-phase] header [class*="tabs"],',
             '.ank0OG_tabs {',
-            '  margin-top: 2px !important;',
+            '  margin-top: 4px !important;',
+            '  margin-bottom: 6px !important;',
             '  flex: none !important;',
             '  max-width: 100% !important;',
             '}',
@@ -2652,11 +2684,47 @@ final class ViewController: UIViewController {
             '  padding: 0 8px !important;',
             '}',
             '',
-            '/* 会话消息内容区 (viewArea) 底部常驻 100px 裕量，避免悬浮输入框和键盘上浮遮挡思考中与流式输出，且键盘弹起时无需反复重排 */',
+            '/* 会话消息内容区 (viewArea) 底部常驻充足裕量，避免输入框遮挡 */',
             '[class*="viewArea"],',
             '.ank0OG_viewArea {',
-            '  padding-bottom: 100px !important;',
+            '  padding-bottom: 160px !important;',
             '  box-sizing: border-box !important;',
+            '}',
+            '',
+            '/* 底部 dock 统计条与操作栏：老总明确指令——距离屏幕底部保留两行空格行（约 32px 留白） */',
+            '[data-slot="conversation.composer.dock"],',
+            '.z4IYsq_root,',
+            '[data-composer-stats="true"] {',
+            '  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 20px)) !important;',
+            '  margin-bottom: 16px !important;',
+            '}',
+            '',
+            '/* 输入框底栏容器：严格适配底部两行空格留白，严禁底栏贴死屏幕底边缘 */',
+            '[class*="ank0OG_footArea"],',
+            '[class*="footArea"],',
+            '.ank0OG_footArea,',
+            '[data-conversation-footer],',
+            '[class*="inputContainer"],',
+            '[class*="promptInputArea"] {',
+            '  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 18px)) !important;',
+            '  box-sizing: border-box !important;',
+            '}',
+            '',
+            '/* 键盘弹起时或移动端模式下：费用明细与多余超长统计条弱化/隐藏，杜绝穿透键盘完成条 */',
+            'body[data-keyboard-open="true"] [class*="costMeter"],',
+            'body[data-keyboard-open="true"] [class*="billing"],',
+            'body[data-keyboard-open="true"] [class*="footerStats"],',
+            'body[data-keyboard-open="true"] [data-slot="conversation.composer.dock"],',
+            'body[data-keyboard-open="true"] .z4IYsq_root,',
+            '[class*="costMeter"][class*="detail"],',
+            '.dsh-cost-meter-bar button {',
+            '  display: none !important;',
+            '}',
+            '/* 聊天主界面底栏（输入框外层容器）常驻安全留白，距离屏幕底部保留两行空格行 */',
+            '.ank0OG_inputRoot,',
+            '[class*="ank0OG_inputRoot"],',
+            '[class*="inputRoot"] {',
+            '  margin-bottom: max(28px, calc(env(safe-area-inset-bottom) + 16px)) !important;',
             '}',
           ].join('\\n');
           function inject() {
@@ -2675,17 +2743,22 @@ final class ViewController: UIViewController {
           window.__dshSetStatusBar = function (px) {
             var h = Math.max(0, px || 0);
             document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
-            // 顶栏避让：刚好紧贴 iOS 状态栏/灵动岛下方，上移消除多余大空白
-            var topOffset = h > 20 ? Math.max(8, h - 26) : 8;
+            // 顶栏避让：刚好紧贴 iOS 状态栏/灵动岛下方，预留优雅呼吸安全感
+            var topOffset = h > 20 ? Math.max(12, h - 20) : 12;
             var headers = document.querySelectorAll('header');
             for (var i = 0; i < headers.length; i++) {
               headers[i].style.setProperty('margin-top', topOffset + 'px', 'important');
               headers[i].style.setProperty('background', 'transparent', 'important');
             }
-            // 侧栏与右侧边栏（Diff/预览/CHANGES）让出状态栏高度。
-            var cols = document.querySelectorAll('[class*="sidebarCol"], [class*="rightbarCol"], .CZPbNW_rightbarCol, [data-slot="sidebar.right"], .dMHGga_session, .dMHGga_panel, .YdIzba_header');
+            // 侧栏外层让出状态栏高度，内部子容器（.dMHGga_panel、.YdIzba_header 等）严禁重复叠加 padding-top，保持顶栏高度不变！
+            var cols = document.querySelectorAll('[class*="sidebarCol"], .CZPbNW_sidebarCol, [class*="rightbarCol"], .CZPbNW_rightbarCol');
             for (var j = 0; j < cols.length; j++) {
               cols[j].style.setProperty('padding-top', (h + 6) + 'px', 'important');
+            }
+            // 清理子容器可能叠加的多余 padding-top，保证打开文件页面时顶栏与主会话绝对平齐！
+            var subCols = document.querySelectorAll('.dMHGga_session, .dMHGga_panel, .YdIzba_header');
+            for (var sj = 0; sj < subCols.length; sj++) {
+              subCols[sj].style.setProperty('padding-top', '0px', 'important');
             }
             // 新建会话页的灰是 body 和空标签容器的底色，全部清成透明，不留任何颜色。
             document.body.style.setProperty('background', 'transparent', 'important');
@@ -2707,12 +2780,16 @@ final class ViewController: UIViewController {
             var raw = getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar');
             var h = parseFloat(raw);
             if (!(h > 0)) return;
-            var cols = document.querySelectorAll('[class*="sidebarCol"], [class*="rightbarCol"], .CZPbNW_rightbarCol, [data-slot="sidebar.right"], .dMHGga_session, .dMHGga_panel, .YdIzba_header');
+            var cols = document.querySelectorAll('[class*="sidebarCol"], .CZPbNW_sidebarCol, [class*="rightbarCol"], .CZPbNW_rightbarCol');
             for (var i = 0; i < cols.length; i++) {
               if (cols[i].dataset.dshInsetApplied !== String(h)) {
                 cols[i].dataset.dshInsetApplied = String(h);
                 cols[i].style.setProperty('padding-top', (h + 6) + 'px', 'important');
               }
+            }
+            var subCols = document.querySelectorAll('.dMHGga_session, .dMHGga_panel, .YdIzba_header');
+            for (var si = 0; si < subCols.length; si++) {
+              subCols[si].style.setProperty('padding-top', '0px', 'important');
             }
           }
           function shiftTitleCluster() {
@@ -2760,9 +2837,19 @@ final class ViewController: UIViewController {
                 stray[s].style.setProperty('visibility', targetVis, 'important');
               }
             }
-            var filesBtns = document.querySelectorAll('[data-mobile-nav="files"]');
+            var filesBtns = document.querySelectorAll('[data-mobile-nav="files"], button[aria-label="工作区文件"], button[aria-label="文件浏览"]');
             for (var f = 0; f < filesBtns.length; f++) {
               if (filesBtns[f].parentNode) filesBtns[f].parentNode.removeChild(filesBtns[f]);
+            }
+            // 确保右上角区域内只有唯一右侧抽屉开关，移除其它重叠子节点
+            var corners = document.querySelectorAll('.ank0OG_headerCorner, [class*="headerCorner"]');
+            for (var c = 0; c < corners.length; c++) {
+              var btns = corners[c].querySelectorAll('button');
+              if (btns.length > 1) {
+                for (var b = 0; b < btns.length - 1; b++) {
+                  btns[b].style.setProperty('display', 'none', 'important');
+                }
+              }
             }
           }
           shiftTitleCluster();
@@ -2914,6 +3001,9 @@ final class ViewController: UIViewController {
 
         webViewBottomConstraint.constant = -overlap
         view.setNeedsLayout()
+
+        let kbStatusJS = "document.body && document.body.setAttribute('data-keyboard-open', '\(!isHide)');"
+        webView.evaluateJavaScript(kbStatusJS) { _, _ in }
 
         if isHide {
             // 收起键盘：使用 0.32 秒高质感弹簧阻尼动画，优雅缓动下落，彻底消除骤降与生硬卡顿！
