@@ -128,13 +128,8 @@ enum ServiceStore {
     /// 种子版本：8 = 统一收拢至桌面端主控端口 3083，确保局域网与外网与当前电脑桌面窗口全量会话完全同步。
     static let currentSeedVersion = 8
 
-    /// 默认预置：实测能渲染网页页面的端口，同个端口局域网一条 + 外网一条，成对配置。
-    /// DSH 对：局域网走 Pocket 3083（桌面端主控事实源，明文 HTTP，免密码，全权限）；
-    ///         外网走 OpenFRP 穿透到 9060 认证网关（经 8080 反代直通桌面端 3083）。
-    /// 仪表盘对：9009 自包含单页，外网带密码直达，无需换票。
-    /// TTS 8210 外网 404（无外网入口），只配局域网一条。
-    #if PUBLIC_BUILD
-    /// 默认预置（纯净公开版模板，零个人信息、零私密穿透与密码，绝对安全）：
+    /// 默认预置（全网统一纯净公开版模板，零个人信息、零私密穿透与密码，绝对安全）：
+    /// 无论覆盖更新或初次安装，均保障零泄露。已安装用户的个人自定义外网配置保留在沙盒中，不受任何影响。
     static let defaults: [ServiceItem] = [
         ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.1.100:3083/",
                     note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
@@ -145,26 +140,6 @@ enum ServiceStore {
         ServiceItem(name: "本地 TTS", url: "http://192.168.1.100:8210/",
                     note: "局域网", resolverURL: nil)
     ]
-    #else
-    /// 默认预置（自用完整版：含本机全量外网穿透、私密密钥与内网端口）：
-    static let defaults: [ServiceItem] = [
-        ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.215.218:3083/",
-                    note: "桌面端主控·全量同步·秒开", resolverURL: nil),
-        ServiceItem(name: "DSH 外网（OpenFrp穿透）",
-                    url: "http://cn-hk-bgp-4.ofalias.net:47027/dsh/?password=Liu326766%40",
-                    note: "直通桌面端·出门随时用",
-                    resolverURL: "http://192.168.215.218:9009/api/dsh-url"),
-        ServiceItem(name: "WorkBuddy 账号切换", url: "http://192.168.215.218:57890/",
-                    note: "wb-switch·账号库/一键切换/到期监控", resolverURL: nil),
-        ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.215.218:9009/",
-                    note: "局域网", resolverURL: nil),
-        ServiceItem(name: "端口仪表盘（外网）",
-                    url: "http://cn-hk-bgp-4.ofalias.net:47027/?password=Liu326766%40",
-                    note: "OpenFRP 穿透", resolverURL: nil),
-        ServiceItem(name: "本地 TTS", url: "http://192.168.215.218:8210/",
-                    note: "局域网", resolverURL: nil)
-    ]
-    #endif
 
     /// 双轨读取（Documents/dsh_user_data/services_v1.json + UserDefaults），带初始化锁。
     /// 首次安装后只要未卸载，后续版本覆盖更新（无论个人版或公开版）均严格保留玩家已自定义的条目与配置，绝不重置覆盖。

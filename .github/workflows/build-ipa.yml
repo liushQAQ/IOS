@@ -1,4 +1,4 @@
-name: Build unsigned IPA (Personal & Public Dual Editions)
+name: Build unsigned IPA (Public Clean Edition)
 
 on:
   workflow_dispatch:
@@ -28,55 +28,7 @@ jobs:
           echo "Version: $MARKETING ($BUILD)"
 
       # ==========================================
-      # 1. 编译打包：自用完整版（包含本机内网、OpenFRP外网及私密配置）
-      # ==========================================
-      - name: Build Personal Edition (Archive)
-        run: |
-          rm -rf build Payload
-          xcodebuild archive \
-            -project DSHios.xcodeproj \
-            -scheme DSHios \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath build/DSHios-personal.xcarchive \
-            MARKETING_VERSION="${{ steps.ver.outputs.marketing }}" \
-            CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM="" \
-            AD_HOC_CODE_SIGNING_ALLOWED=NO
-
-      - name: Package Personal IPA
-        run: |
-          APP="build/DSHios-personal.xcarchive/Products/Applications/DSHios.app"
-          test -d "$APP" || { echo "missing $APP"; exit 1; }
-          mkdir -p Payload
-          cp -R "$APP" Payload/DSHios.app
-          rm -rf Payload/DSHios.app/_CodeSignature 2>/dev/null || true
-          rm -f  Payload/DSHios.app/embedded.mobileprovision 2>/dev/null || true
-          zip -qry DSHios-personal-unsigned.ipa Payload
-          cp DSHios-personal-unsigned.ipa "DSHios-personal-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}.ipa"
-          cp DSHios-personal-unsigned.ipa "DSHios-personal-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}.tipa"
-          cp DSHios-personal-unsigned.ipa DSHios-personal-unsigned.tipa
-          # 兼容老别名
-          cp DSHios-personal-unsigned.ipa DSHios-unsigned.ipa
-          cp DSHios-personal-unsigned.ipa DSHios-unsigned.tipa
-          ls -lh DSHios-personal-*.ipa DSHios-personal-*.tipa
-
-      - name: Upload Personal IPA artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: DSHios-personal-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}
-          path: |
-            DSHios-personal-unsigned.ipa
-            DSHios-personal-unsigned.tipa
-            DSHios-unsigned.ipa
-            DSHios-unsigned.tipa
-          if-no-files-found: error
-
-      # ==========================================
-      # 2. 编译打包：纯净公开版（零个人信息、零私密密钥、纯净模板）
+      # 编译打包：全网统一纯净公开版（零个人私密信息与外网穿透）
       # ==========================================
       - name: Build Public Edition (Archive)
         run: |
@@ -108,6 +60,9 @@ jobs:
           cp DSHios-public-unsigned.ipa "DSHios-public-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}.ipa"
           cp DSHios-public-unsigned.ipa "DSHios-public-${{ steps.ver.outputs.marketing }}-${{ steps.ver.outputs.build }}.tipa"
           cp DSHios-public-unsigned.ipa DSHios-public-unsigned.tipa
+          # 兼容通用别名
+          cp DSHios-public-unsigned.ipa DSHios-unsigned.ipa
+          cp DSHios-public-unsigned.ipa DSHios-unsigned.tipa
           ls -lh DSHios-public-*.ipa DSHios-public-*.tipa
 
       - name: Upload Public IPA artifact
@@ -117,4 +72,6 @@ jobs:
           path: |
             DSHios-public-unsigned.ipa
             DSHios-public-unsigned.tipa
+            DSHios-unsigned.ipa
+            DSHios-unsigned.tipa
           if-no-files-found: error

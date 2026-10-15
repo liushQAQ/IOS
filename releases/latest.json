@@ -1,10 +1,10 @@
 {
-  "version": "1.0.99",
-  "build": 41,
-  "updated_at": "2026-10-15 11:58:00",
-  "title": "v1.0.99 修复顶栏重叠与下移·底栏保留两行留白·恢复文件分享",
-  "changelog": "1. 恢复文件保存分享：不可预览文件（tipa/zip/exe/ipa）增加醒目【📥 保存 / 分享到手机】主按钮，直调 iOS 原生分享与存储；\n2. 修复打开文件页面顶栏下沉：清零内部子容器双重 padding-top，顶栏高度保持恒定不变；\n3. 根除顶栏图标重叠：彻底切除右上角多余文件夹图标，仅留唯一右侧边栏开关；\n4. 底栏防贴底与键盘穿透：底栏距屏幕底部保留两行空格留白（32px），键盘弹起自动隐藏超长统计条；\n5. 全网单一公开版架构，无任何私密外网地址，自动继承本地配置，巨魔一键无损升级。",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.99-41.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.99-41.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.99"
+  "version": "1.0.101",
+  "build": 43,
+  "updated_at": "2026-10-15 17:35:00",
+  "title": "v1.0.101 纯净公开版·红色选中服务标记·模型搜索键盘优化",
+  "changelog": "1. 全网统一纯净公开版：彻底移除个人私密密钥与外网穿透地址，保障隐私安全；\n2. 浮窗当前地址红色高亮：服务列表中正在使用的连接地址以 🔴 和红色文字醒目标记；\n3. 新增预置 WorkBuddy 账号切换：新增 57890 端口标准配置，老版本无损增量自动合并；\n4. 模型快捷选择交互优化：修复打开模型列表自动弹软键盘问题，修复收起软键盘导致模型界面误关问题，顶部增加快捷关闭按钮；\n5. 支持 App 自带更新检测与巨魔直装。",
+  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.101-43.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.101-43.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.101"
 }
