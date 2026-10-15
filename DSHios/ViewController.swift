@@ -2778,11 +2778,11 @@ final class ViewController: UIViewController {
             '.dsh-cost-meter-bar button {',
             '  display: none !important;',
             '}',
-            '/* 聊天主界面底栏（输入框外层容器）常驻安全留白，距离屏幕底部保留两行空格行 */',
+            '/* 聊天主界面底栏（输入框外层容器）：适度紧凑上移，消除多余虚假空白 */',
             '.ank0OG_inputRoot,',
             '[class*="ank0OG_inputRoot"],',
             '[class*="inputRoot"] {',
-            '  margin-bottom: max(28px, calc(env(safe-area-inset-bottom) + 16px)) !important;',
+            '  margin-bottom: max(8px, calc(env(safe-area-inset-bottom) + 2px)) !important;',
             '}',
           ].join('\\n');
           function inject() {
@@ -2801,8 +2801,8 @@ final class ViewController: UIViewController {
           window.__dshSetStatusBar = function (px) {
             var h = Math.max(0, px || 0);
             document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
-            // 顶栏避让：刚好紧贴 iOS 状态栏/灵动岛下方，预留优雅呼吸安全感
-            var topOffset = h > 20 ? Math.max(12, h - 20) : 12;
+            // 整体垂直上移：紧密贴合 iOS 灵动岛/状态栏下方，彻底消除顶部虚高大空白
+            var topOffset = 4;
             var headers = document.querySelectorAll('header');
             for (var i = 0; i < headers.length; i++) {
               headers[i].style.setProperty('margin-top', topOffset + 'px', 'important');

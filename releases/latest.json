@@ -1,10 +1,10 @@
 {
-  "version": "1.0.101",
-  "build": 43,
-  "updated_at": "2026-10-15 17:35:00",
-  "title": "v1.0.101 纯净公开版·红色选中服务标记·模型搜索键盘优化",
-  "changelog": "1. 全网统一纯净公开版：彻底移除个人私密密钥与外网穿透地址，保障隐私安全；\n2. 浮窗当前地址红色高亮：服务列表中正在使用的连接地址以 🔴 和红色文字醒目标记；\n3. 新增预置 WorkBuddy 账号切换：新增 57890 端口标准配置，老版本无损增量自动合并；\n4. 模型快捷选择交互优化：修复打开模型列表自动弹软键盘问题，修复收起软键盘导致模型界面误关问题，顶部增加快捷关闭按钮；\n5. 支持 App 自带更新检测与巨魔直装。",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.101-43.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.101-43.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.101"
+  "version": "1.0.102",
+  "build": 44,
+  "updated_at": "2026-10-15 10:52:45",
+  "title": "v1.0.102 界面整体垂直上移·顶部消除多余大空白·纯净公开版",
+  "changelog": "1. 界面整体垂直上移：顶栏贴近灵动岛/状态栏下方，彻底消除顶部虚高多余空白，输入框上移保留精致安全距；\n2. 纯净公开版：彻底移除个人私密密钥与外网穿透地址；\n3. 浮窗当前地址以 🔴 红色醒目标记；\n4. 修复模型快捷选择键盘误关与自动弹起问题。",
+  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.102-44.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.102-44.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.102"
 }
