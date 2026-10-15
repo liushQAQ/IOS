@@ -2263,7 +2263,8 @@ final class ViewController: UIViewController {
                 previewBtn.addEventListener('click', function(e) {
                   var currentPath = previewBtn.getAttribute('title') || filePath || fileName;
                   var lower = (currentPath || '').toLowerCase();
-                  var isBinary = /\.(ipa|tipa|zip|rar|7z|tar|gz|exe|dmg|apk|bin|iso|pkg|deb|pdf|mp4|mov|mp3)$/i.test(lower);
+                  var binExts = ['.ipa', '.tipa', '.zip', '.rar', '.7z', '.tar', '.gz', '.exe', '.dmg', '.apk', '.bin', '.iso', '.pkg', '.deb', '.pdf', '.mp4', '.mov', '.mp3'];
+                  var isBinary = binExts.some(function(ext) { return lower.endsWith(ext); });
                   if (isBinary) {
                     e.preventDefault();
                     e.stopImmediatePropagation();
