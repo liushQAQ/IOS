@@ -2084,7 +2084,14 @@ final class ViewController: UIViewController {
           });
           window.addEventListener('unhandledrejection', function (e) {
             var r = e.reason;
-            window.__dshReportError('未处理Promise拒绝: ' + (r && r.message ? r.message : String(r)));
+            var msg = (r && r.message ? r.message : String(r));
+            // 拦截不可预览文件触发的 sidebarRight tab 注册缺失报错，杜绝弹窗
+            if (msg.indexOf('no registered tab type claims') !== -1) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+            window.__dshReportError('未处理Promise拒绝: ' + msg);
           });
         })();
         """,
@@ -2239,8 +2246,8 @@ final class ViewController: UIViewController {
               shareBtn.type = 'button';
               shareBtn.className = 'dsh-mobile-share-btn';
               shareBtn.setAttribute('title', '分享 / 保存到手机');
-              shareBtn.style.cssText = 'height:24px;padding:0 8px;font-size:12px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;border:none;background:var(--dsw-alias-interactive-bg-hover, rgba(125,125,125,0.18));color:var(--dsw-alias-brand-primary, #007aff);font-weight:500;cursor:pointer;margin-left:auto;flex-shrink:0;';
-              shareBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg><span>分享</span>';
+              shareBtn.style.cssText = 'height:26px;padding:0 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;border-radius:13px;border:none;background:#007aff;color:#ffffff;font-weight:600;cursor:pointer;margin-left:auto;flex-shrink:0;z-index:10;position:relative;box-shadow:0 2px 6px rgba(0,122,255,0.35);';
+              shareBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg><span>保存</span>';
 
               shareBtn.addEventListener('click', function(ev) {
                 ev.preventDefault();
@@ -2249,6 +2256,21 @@ final class ViewController: UIViewController {
                 var currentPath = previewBtn ? (previewBtn.getAttribute('title') || '') : filePath;
                 shareFileByPath(currentPath, fileName);
               });
+
+              // 拦截整张卡片点击：如果文件是二进制/非文本（如 ipa, tipa, zip, exe, dmg, tar, gz 等），点击整张卡片直接触发保存/下载，
+              // 彻底阻断 sidebarRight 侧栏打不开非文本文件的报错模态框！
+              if (previewBtn) {
+                previewBtn.addEventListener('click', function(e) {
+                  var currentPath = previewBtn.getAttribute('title') || filePath || fileName;
+                  var lower = (currentPath || '').toLowerCase();
+                  var isBinary = /\.(ipa|tipa|zip|rar|7z|tar|gz|exe|dmg|apk|bin|iso|pkg|deb|pdf|mp4|mov|mp3)$/i.test(lower);
+                  if (isBinary) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    shareFileByPath(currentPath, fileName);
+                  }
+                }, true); // 捕获阶段拦截
+              }
 
               // 将按钮添加到卡片头部或尾部操作区
               var fileBody = card.querySelector('.JZoinq_fileBody');
@@ -2312,6 +2334,29 @@ final class ViewController: UIViewController {
               container.appendChild(btn);
             });
           }
+
+          // 核心修复（问题 1）：在事件捕获阶段拦截点击二进制交付物卡片，直接调起手机分享/保存，杜绝 sidebarRight 报错弹窗
+          document.addEventListener('click', function(e) {
+            var card = e.target && e.target.closest ? e.target.closest('.JZoinq_file, [data-presented-file]') : null;
+            if (!card) return;
+            if (e.target.closest('.dsh-mobile-share-btn')) return;
+
+            var previewBtn = card.querySelector('button.JZoinq_cardPreview');
+            var nameEl = card.querySelector('.JZoinq_fileName');
+            var fileName = nameEl ? (nameEl.innerText || '').trim() : '';
+            var filePath = previewBtn ? (previewBtn.getAttribute('title') || '') : '';
+            if (!filePath && fileName) filePath = fileName;
+
+            var ext = (filePath.split('.').pop() || '').toLowerCase();
+            var binaryExts = ['tipa', 'ipa', 'zip', 'exe', 'tar', 'gz', 'apk', 'dmg', 'bin', '7z', 'rar', 'iso'];
+            if (binaryExts.indexOf(ext) !== -1 || ext === 'tipa' || ext === 'ipa') {
+              e.preventDefault();
+              e.stopPropagation();
+              e.stopImmediatePropagation();
+              var cleanName = fileName || filePath.split(/[\\\\/]/).pop() || filePath;
+              shareFileByPath(filePath, cleanName);
+            }
+          }, true);
 
           setInterval(function() {
             enrichDeliverableCards();
@@ -2396,7 +2441,8 @@ final class ViewController: UIViewController {
             '  z-index: 1020 !important;',
             '  display: flex !important;',
             '  flex-direction: column !important;',
-            '  /* 顶栏紧凑贴合 iOS 状态栏/灵动岛，消除多余大空白，保留适度间距 */',
+            '  /* 顶栏紧凑贴合 iOS 状态栏/灵动岛下沿，消除多余大空白，整体垂直上移 */',
+            '  margin-top: calc(var(--dsh-statusbar, 54px) - 38px) !important;',
             '  padding: 2px 8px 0 8px !important;',
             '  min-height: 0 !important;',
             '  flex: none !important;',
@@ -2406,14 +2452,18 @@ final class ViewController: UIViewController {
             '  background: transparent !important;',
             '}',
             '',
-            '/* 隐藏顶部占位空容器，让标题行直接升到第 1 行，彻底消除顶栏与状态栏之间多余大空白 */',
+            '/* 彻底切除顶部 leading 空白占位层，让标题行自然升至第 1 行 */',
+            'header .ank0OG_headerLeading,',
             '.ank0OG_headerLeading,',
             '[data-conversation-header-leading] {',
             '  display: none !important;',
+            '  visibility: hidden !important;',
             '  height: 0 !important;',
             '  min-height: 0 !important;',
+            '  max-height: 0 !important;',
             '  margin: 0 !important;',
             '  padding: 0 !important;',
+            '  pointer-events: none !important;',
             '}',
             '',
             '/* 确保 overlayLayer 挂载层本身透明，杜绝首页与主界面全局发灰变暗 */',
@@ -2423,23 +2473,25 @@ final class ViewController: UIViewController {
             '  background-color: transparent !important;',
             '}',
             '',
-            '/* 新建会话首页目录按钮：位置精准位于状态栏/灵动岛下方，保持与会话页完全一致的扁平透明优雅质感 */',
+            '/* 新建会话首页目录按钮（问题 4 彻底修复）：精准位于状态栏下方安全区（54px + 8px = 62px），饱满居中不被截断 */',
             '[data-mobile-nav="fab"] {',
             '  display: inline-flex !important;',
             '  visibility: visible !important;',
             '  opacity: 1 !important;',
-            '  position: absolute !important;',
-            '  top: calc(var(--dsh-statusbar, 54px) - 24px) !important;',
-            '  left: 12px !important;',
+            '  position: fixed !important;',
+            '  top: calc(var(--dsh-statusbar, 54px) + 8px) !important;',
+            '  left: 14px !important;',
             '  width: 38px !important;',
             '  height: 38px !important;',
             '  padding: 0 !important;',
             '  border: none !important;',
             '  border-radius: 8px !important;',
-            '  background: transparent !important;',
-            '  color: var(--dsw-alias-label-secondary, #333) !important;',
+            '  background: var(--dsw-alias-interactive-bg-hover, rgba(125, 125, 125, 0.16)) !important;',
+            '  color: var(--dsw-alias-label-primary, currentColor) !important;',
             '  box-shadow: none !important;',
-            '  z-index: 21 !important;',
+            '  z-index: 99 !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
             '}',
             '',
             '/* 会话页时隐藏 fallback 浮动按钮，把空间交给顶栏内置侧栏按钮 */',
@@ -2749,22 +2801,21 @@ final class ViewController: UIViewController {
             '  box-sizing: border-box !important;',
             '}',
             '',
-            '/* 底部 dock 统计条与操作栏：老总明确指令——距离屏幕底部保留两行空格行（约 32px 留白） */',
+            '/* 底部 dock 统计条与操作栏：UI 页面布局不改，保持原有自然结构，随整页上移自然完整呈现 */',
             '[data-slot="conversation.composer.dock"],',
             '.z4IYsq_root,',
             '[data-composer-stats="true"] {',
-            '  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 20px)) !important;',
-            '  margin-bottom: 16px !important;',
+            '  margin-bottom: 8px !important;',
             '}',
             '',
-            '/* 输入框底栏容器：严格适配底部两行空格留白，严禁底栏贴死屏幕底边缘 */',
+            '/* 输入框底栏容器：底栏紧随整体上移，下方保留充足舒适的两行呼吸空间 */',
             '[class*="ank0OG_footArea"],',
             '[class*="footArea"],',
             '.ank0OG_footArea,',
             '[data-conversation-footer],',
             '[class*="inputContainer"],',
             '[class*="promptInputArea"] {',
-            '  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 18px)) !important;',
+            '  padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;',
             '  box-sizing: border-box !important;',
             '}',
             '',
@@ -2782,7 +2833,7 @@ final class ViewController: UIViewController {
             '.ank0OG_inputRoot,',
             '[class*="ank0OG_inputRoot"],',
             '[class*="inputRoot"] {',
-            '  margin-bottom: max(8px, calc(env(safe-area-inset-bottom) + 2px)) !important;',
+            '  margin-bottom: max(6px, calc(env(safe-area-inset-bottom) + 2px)) !important;',
             '}',
           ].join('\\n');
           function inject() {
