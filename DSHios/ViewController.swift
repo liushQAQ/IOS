@@ -2222,7 +2222,8 @@ final class ViewController: UIViewController {
                 e.preventDefault();
                 e.stopPropagation();
                 if (fullPath) {
-                  shareFileByPath(fullPath, fullPath.split(/[\/\\\\]/).pop());
+                  var cleanName = fullPath.split(/[\\\\/]/).pop() || fullPath;
+                  shareFileByPath(fullPath, cleanName);
                 }
               });
               emptyContainer.appendChild(btn);
