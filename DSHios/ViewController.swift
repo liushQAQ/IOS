@@ -1226,10 +1226,13 @@ final class ViewController: UIViewController {
               var target = e.target;
               if (!target) return;
 
-              // 如果用户点击的是 + 号按钮或命令弹窗菜单内部，严禁唤起虚拟键盘
-              if (target.closest('.uWtHQG_add') || target.closest('[data-trigger-menu]') || target.closest('.bqwvaa_menu')) {
-                allowUserTouchFocus = false;
-                return;
+              // 如果用户点击的是 + 号按钮、命令弹窗菜单内部、或者模型快捷选择按钮/菜单，严禁唤起虚拟键盘
+              if (target.closest('.uWtHQG_add') || target.closest('[data-trigger-menu]') || target.closest('.bqwvaa_menu') || target.closest('.VYXhfG_trigger') || target.closest('.VYXhfG_root')) {
+                // 特殊：只有真正直接点在模型搜索框 input 本身上才允许键盘，点外层/触发按钮绝对不准唤醒输入框
+                if (!target.classList.contains('VYXhfG_search') && target.getAttribute('role') !== 'searchbox') {
+                  allowUserTouchFocus = false;
+                  return;
+                }
               }
 
               var inputEl = target.closest('.uWtHQG_input') ||
@@ -1239,9 +1242,17 @@ final class ViewController: UIViewController {
                             target.closest('input[role="searchbox"]') ||
                             target.closest('input:not([type="button"]):not([type="submit"]):not([type="radio"]):not([type="checkbox"])');
 
+              // 如果正在显示模型选择菜单，严禁将附近的会话输入框误判为触碰目标！
+              if (document.querySelector('.VYXhfG_menu')) {
+                if (!target.classList.contains('VYXhfG_search') && target.getAttribute('role') !== 'searchbox') {
+                  allowUserTouchFocus = false;
+                  return;
+                }
+              }
+
               // v1.0.86：豆包验证码是点外层格子，再由页面自己调用 focus()。
               // 点的位置附近有输入框，也算用户主动要输入，放行随后的聚焦，键盘才能弹。
-              if (!inputEl && e.touches && e.touches.length) {
+              if (!inputEl && e.touches && e.touches.length && !document.querySelector('.VYXhfG_menu')) {
                 var touch = e.touches[0];
                 var near = document.elementsFromPoint(touch.clientX, touch.clientY) || [];
                 for (var k = 0; k < near.length && k < 8; k++) {
@@ -1272,6 +1283,20 @@ final class ViewController: UIViewController {
 
             // 拦截一切未经用户主动点击文本区域的自动化 .focus() 调用
             HTMLElement.prototype.focus = function(options) {
+              var isSearchBox = this && (
+                (this.classList && this.classList.contains('VYXhfG_search')) ||
+                this.getAttribute('role') === 'searchbox' ||
+                this.closest('.VYXhfG_menu') ||
+                this.closest('.VYXhfG_root')
+              );
+              if (isSearchBox) {
+                // 模型选择弹窗内部的搜索框绝对禁止程序自动调用 focus() 弹起软键盘！
+                // 只有当用户用手指真切点击该搜索框时，才由原生 click 事件自然唤起输入。
+                if (!allowUserTouchFocus) {
+                  return;
+                }
+              }
+
               var isTextInput = this && (
                 (this.classList && (this.classList.contains('uWtHQG_input') || this.classList.contains('VYXhfG_search'))) ||
                 this.getAttribute('role') === 'searchbox' ||
@@ -1310,43 +1335,75 @@ final class ViewController: UIViewController {
               return false;
             };
 
-            // 自动为弹出命令/选项菜单右上角挂载明显的 ✕ 关闭按钮，方便随时轻触关闭
+            // 自动为弹出命令/选项菜单以及模型快捷选择面板右上角挂载明显的 ✕ 关闭按钮
             setInterval(function() {
               var menu = document.querySelector('.bqwvaa_menu, [data-trigger-menu]');
-              if (!menu) return;
-              if (menu.querySelector('.dsh-mobile-menu-close-btn')) return;
+              if (menu && !menu.querySelector('.dsh-mobile-menu-close-btn')) {
+                var closeBtn = document.createElement('button');
+                closeBtn.type = 'button';
+                closeBtn.className = 'dsh-mobile-menu-close-btn';
+                closeBtn.setAttribute('aria-label', '关闭选项菜单');
+                closeBtn.innerHTML = '✕';
+                closeBtn.style.cssText = 'position:absolute; top:8px; right:8px; z-index:120; width:26px; height:26px; border-radius:50%; background:rgba(120,120,128,0.2); border:none; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; color:var(--dsw-alias-label-secondary, #666); cursor:pointer; padding:0;';
 
-              var closeBtn = document.createElement('button');
-              closeBtn.type = 'button';
-              closeBtn.className = 'dsh-mobile-menu-close-btn';
-              closeBtn.setAttribute('aria-label', '关闭选项菜单');
-              closeBtn.innerHTML = '✕';
-              closeBtn.style.cssText = 'position:absolute; top:8px; right:8px; z-index:120; width:26px; height:26px; border-radius:50%; background:rgba(120,120,128,0.2); border:none; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; color:var(--dsw-alias-label-secondary, #666); cursor:pointer; padding:0;';
-
-              function handleCloseClick(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                window.__dshDismissCommandMenu();
+                function handleCloseClick(e) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.__dshDismissCommandMenu();
+                }
+                closeBtn.addEventListener('click', handleCloseClick, true);
+                closeBtn.addEventListener('touchend', handleCloseClick, true);
+                menu.appendChild(closeBtn);
               }
 
-              closeBtn.addEventListener('click', handleCloseClick, true);
-              closeBtn.addEventListener('touchend', handleCloseClick, true);
-              menu.appendChild(closeBtn);
+              // 为模型快捷选择弹窗 (.VYXhfG_menu) 也挂载顶部显式关闭按钮
+              var modelMenu = document.querySelector('.VYXhfG_menu');
+              if (modelMenu && !modelMenu.querySelector('.dsh-mobile-model-close-btn')) {
+                var modelCloseBtn = document.createElement('button');
+                modelCloseBtn.type = 'button';
+                modelCloseBtn.className = 'dsh-mobile-model-close-btn';
+                modelCloseBtn.setAttribute('aria-label', '关闭模型选择');
+                modelCloseBtn.innerHTML = '✕';
+                modelCloseBtn.style.cssText = 'position:absolute; top:10px; right:12px; z-index:9999; width:28px; height:28px; border-radius:50%; background:rgba(120,120,128,0.25); border:none; display:inline-flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; color:var(--dsw-alias-label-secondary, #888); cursor:pointer; padding:0; -webkit-tap-highlight-color:transparent;';
+
+                function handleModelClose(e) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  var trigger = document.querySelector('.VYXhfG_trigger');
+                  if (trigger) {
+                    trigger.click();
+                  } else {
+                    modelMenu.remove();
+                  }
+                }
+                modelCloseBtn.addEventListener('click', handleModelClose, true);
+                modelCloseBtn.addEventListener('touchend', handleModelClose, true);
+                modelMenu.appendChild(modelCloseBtn);
+              }
             }, 150);
 
             // 监听 blur 事件捕获阶段：当搜索框失去焦点（比如用户轻触关闭软键盘、完成输入）时，
-            // 阻止该 blur 冒泡或把 relatedTarget 视作自身容器内部，避免 ModelSelect 触发 onBlur -> close()
+            // 阻止该 blur 冒泡，避免 React 的 ModelSelect 组件触发 onBlur -> close() 将整个面板关闭！
             window.addEventListener('blur', function(e) {
-              if (e.target && e.target.classList && (e.target.classList.contains('VYXhfG_search') || e.target.getAttribute('role') === 'searchbox')) {
+              if (e.target && (
+                (e.target.classList && e.target.classList.contains('VYXhfG_search')) ||
+                e.target.getAttribute('role') === 'searchbox' ||
+                (e.target.closest && e.target.closest('.VYXhfG_menu'))
+              )) {
                 e.stopImmediatePropagation();
               }
             }, true);
 
-            // 同时监听 focusout 事件
+            // 同时监听 focusout 事件：键盘收起时 target.blur() 会派发 focusout，
+            // 拦截它使其不冒泡到 document / window，确保模型选择面板稳固留在屏幕上！
             document.addEventListener('focusout', function(e) {
-              if (e.target && e.target.classList && (e.target.classList.contains('VYXhfG_search') || e.target.getAttribute('role') === 'searchbox')) {
-                // 如果菜单依然在屏幕上，阻止冒泡以防止外部组件认为点击了菜单外部而全部关闭
-                var menu = e.target.closest('.VYXhfG_menu') || document.querySelector('.VYXhfG_menu');
+              var target = e.target;
+              if (target && (
+                (target.classList && target.classList.contains('VYXhfG_search')) ||
+                target.getAttribute('role') === 'searchbox' ||
+                (target.closest && target.closest('.VYXhfG_menu'))
+              )) {
+                var menu = target.closest('.VYXhfG_menu') || document.querySelector('.VYXhfG_menu');
                 if (menu) {
                   e.stopImmediatePropagation();
                 }
@@ -3686,15 +3743,27 @@ final class ViewController: UIViewController {
         let sheet = UIAlertController(title: "选择服务与连接方式", message: nil, preferredStyle: .actionSheet)
 
         let services = ServiceStore.load()
+        let activeURL = UserDefaults.standard.string(forKey: "DSHios.activeServiceURL") ?? ""
         let currentURL = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? ""
+        let activeComps = URLComponents(string: activeURL)
         let currentComps = URLComponents(string: currentURL)
 
-        for item in services.prefix(6) {
+        for item in services.prefix(8) {
             let isSelected: Bool = {
-                if item.url == currentURL { return true }
-                if let itemComps = URLComponents(string: item.url), let currentComps {
-                    if itemComps.host == currentComps.host && itemComps.port == currentComps.port {
-                        return true
+                if !activeURL.isEmpty {
+                    if item.url == activeURL { return true }
+                    if let itemComps = URLComponents(string: item.url), let activeComps {
+                        if itemComps.host == activeComps.host && itemComps.port == activeComps.port && itemComps.path == activeComps.path {
+                            return true
+                        }
+                    }
+                }
+                if !currentURL.isEmpty {
+                    if item.url == currentURL { return true }
+                    if let itemComps = URLComponents(string: item.url), let currentComps {
+                        if itemComps.host == currentComps.host && itemComps.port == currentComps.port && itemComps.path == currentComps.path {
+                            return true
+                        }
                     }
                 }
                 return false
@@ -3703,6 +3772,7 @@ final class ViewController: UIViewController {
             let title = isSelected ? "🔴 \(item.name) (当前·点击刷新)" : item.name
             let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
                 guard let self else { return }
+                UserDefaults.standard.set(item.url, forKey: "DSHios.activeServiceURL")
                 if isSelected {
                     self.webView.reloadFromOrigin()
                     return
@@ -4200,6 +4270,7 @@ final class ViewController: UIViewController {
 
         // 双轨固化存储，跨版本覆盖安装升级永不丢失当前使用的 URL
         UserDefaults.standard.set(trimmed, forKey: Keys.lastURL)
+        UserDefaults.standard.set(trimmed, forKey: "DSHios.activeServiceURL")
         DSHPersistenceCenter.saveLastURL(trimmed)
         hideError()
         stopWhiteScreenDiagnostics()

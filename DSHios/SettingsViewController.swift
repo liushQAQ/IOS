@@ -133,43 +133,82 @@ enum ServiceStore {
     ///         外网走 OpenFRP 穿透到 9060 认证网关（经 8080 反代直通桌面端 3083）。
     /// 仪表盘对：9009 自包含单页，外网带密码直达，无需换票。
     /// TTS 8210 外网 404（无外网入口），只配局域网一条。
+    #if PUBLIC_BUILD
     /// 默认预置（纯净公开版模板，零个人信息、零私密穿透与密码，绝对安全）：
     static let defaults: [ServiceItem] = [
         ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.1.100:3083/",
                     note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
+        ServiceItem(name: "WorkBuddy 账号切换", url: "http://192.168.1.100:57890/",
+                    note: "局域网·WorkBuddy账号库/切换与到期监控", resolverURL: nil),
         ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.1.100:9009/",
                     note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
         ServiceItem(name: "本地 TTS", url: "http://192.168.1.100:8210/",
                     note: "局域网", resolverURL: nil)
     ]
+    #else
+    /// 默认预置（自用完整版：含本机全量外网穿透、私密密钥与内网端口）：
+    static let defaults: [ServiceItem] = [
+        ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.215.218:3083/",
+                    note: "桌面端主控·全量同步·秒开", resolverURL: nil),
+        ServiceItem(name: "DSH 外网（OpenFrp穿透）",
+                    url: "http://cn-hk-bgp-4.ofalias.net:47027/dsh/?password=Liu326766%40",
+                    note: "直通桌面端·出门随时用",
+                    resolverURL: "http://192.168.215.218:9009/api/dsh-url"),
+        ServiceItem(name: "WorkBuddy 账号切换", url: "http://192.168.215.218:57890/",
+                    note: "wb-switch·账号库/一键切换/到期监控", resolverURL: nil),
+        ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.215.218:9009/",
+                    note: "局域网", resolverURL: nil),
+        ServiceItem(name: "端口仪表盘（外网）",
+                    url: "http://cn-hk-bgp-4.ofalias.net:47027/?password=Liu326766%40",
+                    note: "OpenFRP 穿透", resolverURL: nil),
+        ServiceItem(name: "本地 TTS", url: "http://192.168.215.218:8210/",
+                    note: "局域网", resolverURL: nil)
+    ]
+    #endif
 
     /// 双轨读取（Documents/dsh_user_data/services_v1.json + UserDefaults），带初始化锁。
     /// 首次安装后只要未卸载，后续版本覆盖更新（无论个人版或公开版）均严格保留玩家已自定义的条目与配置，绝不重置覆盖。
     static func load() -> [ServiceItem] {
-        // 1. 优先从沙盒 Documents 持久化文件读取
+        var items: [ServiceItem] = []
         if let fileData = try? Data(contentsOf: DSHPersistenceCenter.servicesFileURL),
            let fileItems = try? JSONDecoder().decode([ServiceItem].self, from: fileData),
            !fileItems.isEmpty {
-            // 同步回写一份到 UserDefaults 保持双轨一致
             UserDefaults.standard.set(fileData, forKey: key)
             UserDefaults.standard.set(true, forKey: initializedLockKey)
-            return fileItems
-        }
-
-        // 2. 回退从 UserDefaults 读取（兼容旧版本已安装用户的数据无损升级）
-        if let udData = UserDefaults.standard.data(forKey: key),
-           let udItems = try? JSONDecoder().decode([ServiceItem].self, from: udData),
-           !udItems.isEmpty {
-            // 立即固化到 Documents 物理文件，完成双轨互备升级
+            items = fileItems
+        } else if let udData = UserDefaults.standard.data(forKey: key),
+                  let udItems = try? JSONDecoder().decode([ServiceItem].self, from: udData),
+                  !udItems.isEmpty {
             try? udData.write(to: DSHPersistenceCenter.servicesFileURL, options: .atomic)
             UserDefaults.standard.set(true, forKey: initializedLockKey)
-            return udItems
+            items = udItems
+        } else {
+            let initial = defaults
+            save(initial)
+            return initial
         }
 
-        // 3. 只有真正首次安装（两边均无数据）时，才写入默认预置并加锁
-        let initial = defaults
-        save(initial)
-        return initial
+        // 自动补齐当前版本新增的标准服务（如 WorkBuddy 账号切换 57890），老用户无损升级
+        var changed = false
+        for def in defaults {
+            let exists = items.contains { item in
+                if item.url == def.url || item.name == def.name { return true }
+                if let u1 = URLComponents(string: item.url), let u2 = URLComponents(string: def.url) {
+                    if u1.host == u2.host && u1.port == u2.port && u1.path == u2.path {
+                        return true
+                    }
+                }
+                return false
+            }
+            if !exists {
+                items.append(def)
+                changed = true
+            }
+        }
+        if changed {
+            save(items)
+        }
+        return items
     }
 
     static func save(_ items: [ServiceItem]) {
@@ -517,11 +556,21 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         var config = cell.defaultContentConfiguration()
 
         let isSelected: Bool = {
+            let active = UserDefaults.standard.string(forKey: "DSHios.activeServiceURL") ?? currentURL
+            if !active.isEmpty {
+                if item.url == active { return true }
+                if let itemComps = URLComponents(string: item.url),
+                   let activeComps = URLComponents(string: active) {
+                    if itemComps.host == activeComps.host && itemComps.port == activeComps.port && itemComps.path == activeComps.path {
+                        return true
+                    }
+                }
+            }
             if !currentURL.isEmpty {
                 if item.url == currentURL { return true }
                 if let itemComps = URLComponents(string: item.url),
                    let currComps = URLComponents(string: currentURL) {
-                    if itemComps.host == currComps.host && itemComps.port == currComps.port {
+                    if itemComps.host == currComps.host && itemComps.port == currComps.port && itemComps.path == currComps.path {
                         return true
                     }
                 }
