@@ -268,6 +268,72 @@ final class ViewController: UIViewController {
         }
     }
 
+    // MARK: - 首屏提前显形（v1.0.106）
+
+    /// DSH 官方前端启动时要同步解析执行「已安装插件」的 client bundle。
+    /// 实测本机两个 bundle 分别约 5.87MB / 5.60MB（合计 11.5MB，装的插件越多越胖），
+    /// 全部下载只要 30ms（局域网），但**解析执行**在桌面 CPU 上约 3 秒，
+    /// 在 iPhone（尤其巨魔 TrollStore 冻结在 iOS 16.3 的老机型，单核约为桌面 1/6~1/10）
+    /// 上线性放大到 20~40 秒 —— 而 `window.load`（= didFinish）正好落在这之后。
+    ///
+    /// 实测时间线（10x CPU 降频，430x932 iPhone 视口）：
+    ///   +0.73s readyState=interactive → +1.59s DOMContentLoaded
+    ///   → 主线程连续阻塞 28s（就是那 11.5MB 插件的解析执行）
+    ///   → +37.5s readyState=complete / window.load
+    /// 也就是说页面早就画出来了，却被 `alpha=0` 遮住干等 didFinish。
+    ///
+    /// 这里改为「探测到 #root 有子节点（React 已挂载并出首帧）就立刻显形」，
+    /// 不再死等 didFinish。真正白屏（#root 空）时依旧不显形，由白屏诊断报错。
+    private var earlyRevealTimer: Timer?
+    private var earlyRevealTicks = 0
+    /// 探测在途标记：WebContent 进程被长任务占住时回包会延迟，期间不再重复下发，
+    /// 避免积压上百个跨进程调用。
+    private var earlyRevealInFlight = false
+
+    /// 每 250ms 轻量探测 #root 是否已有子节点；一旦有就立刻显形。
+    /// 探测脚本极短（单次 querySelector + children.length），不会和主线程长任务抢资源。
+    private func startEarlyRevealProbe() {
+        stopEarlyRevealProbe()
+        earlyRevealTicks = 0
+        earlyRevealTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            guard let self, self.isViewLoaded, self.view.window != nil else { return }
+            self.earlyRevealTicks += 1
+            // 硬上限 4 分钟：真正异常时由导航超时 / 白屏诊断负责报错，这里只负责"能显就早显"。
+            if self.earlyRevealTicks > 960 {
+                self.stopEarlyRevealProbe()
+                return
+            }
+            guard !self.earlyRevealInFlight else { return }
+            self.earlyRevealInFlight = true
+            self.webView.evaluateJavaScript(
+                "(function(){var r=document.getElementById('root');return r?r.children.length:-1;})()"
+            ) { [weak self] result, _ in
+                guard let self else { return }
+                self.earlyRevealInFlight = false
+                let kids: Int
+                if let n = result as? NSNumber { kids = n.intValue }
+                else if let i = result as? Int { kids = i }
+                else { kids = -1 }
+                if kids > 0 { self.finishEarlyReveal() }
+            }
+        }
+    }
+
+    /// 首次发现页面已出首帧：停探测、停转圈、显形。幂等，重复调用无副作用。
+    private func finishEarlyReveal() {
+        stopEarlyRevealProbe()
+        hideError()
+        hasLoadedOnce = true
+        activityIndicator.stopAnimating()
+        revealWebView()
+    }
+
+    private func stopEarlyRevealProbe() {
+        earlyRevealTimer?.invalidate()
+        earlyRevealTimer = nil
+        earlyRevealInFlight = false
+    }
+
     private var webErrors: [String] = []
     /// Web 内容进程被系统回收的次数（内存压力导致白屏的重要嫌疑指标）。
     private var terminateCount = 0
@@ -4633,6 +4699,7 @@ final class ViewController: UIViewController {
         DSHPersistenceCenter.saveLastURL(trimmed)
         hideError()
         stopWhiteScreenDiagnostics()
+        stopEarlyRevealProbe()
         webErrors = []
         terminateCount = 0
         hasLoadedOnce = false
@@ -4644,6 +4711,9 @@ final class ViewController: UIViewController {
             self.webView.alpha = 0
         }
         webView.load(URLRequest(url: url))
+        // 注意：这里**不能**武装探测。webView.load 之后旧文档仍留在内存里（直到新响应提交），
+        // 此刻探测 #root 会立刻命中旧页面导致提前显形，等于改动了 URL 切换的观感。
+        // 正确时机是 didCommit（新文档已提交）——见 webView(_:didCommit:)。
     }
 
     // MARK: - 联网即加载 (1.0.70 零干扰黄金逻辑)
@@ -4688,6 +4758,8 @@ final class ViewController: UIViewController {
     }
 
     private func showError(detail: String) {
+        // v1.0.106：已经明确报错就不必再提前显形探测了。
+        stopEarlyRevealProbe()
         // 白屏 / 系统版本诊断路径已显式设过标题，这里不要覆盖；其余一律回到默认标题。
         let presetTitles: Set<String> = ["页面白屏", "系统版本过低"]
         if !presetTitles.contains(errorTitleLabel.text ?? "") {
@@ -4730,13 +4802,16 @@ final class ViewController: UIViewController {
         }
     }
 
-    /// 导航超时保护：服务端无响应时 WKWebView 默认要等很久，这里 20 秒兜底提示。
+    /// 导航超时保护：服务端无响应时 WKWebView 默认要等很久，这里兜底提示。
+    /// v1.0.106：只拦「服务器压根没响应」这一种情况。收到响应头 / 导航提交即取消（见
+    /// decidePolicyFor navigationResponse 与 didCommit），不再把慢机上的客户端 JS 解析耗时误判成超时。
+    /// 实测 DSH 已装插件 bundle 合计 11.5MB，慢机上解析执行要 20~40 秒，原 20 秒阈值必然误报。
     private func startNavigationTimeout() {
         navigationTimer?.invalidate()
-        navigationTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: false) { [weak self] _ in
+        navigationTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in
             guard let self, self.errorOverlay.isHidden else { return }
             self.activityIndicator.stopAnimating()
-            self.showError(detail: "连接超时：20 秒内未收到响应，请确认电脑端 DSH 在线")
+            self.showError(detail: "连接超时：30 秒内未收到任何响应，请确认电脑端 DSH 在线、地址与端口正确")
         }
     }
 
@@ -4766,6 +4841,9 @@ extension ViewController: WKNavigationDelegate {
             }
             // 识别 Pocket 握手过渡页（200 + x-dsh-pocket-handshake: transition）：
             // cookie 已手动入库，meta refresh 之前的下一次 GET / 就能带上，无需干预。
+            // v1.0.106：服务器已经回了响应头 = 网络这一腿通了，"连接超时"的使命到此结束。
+            // 若不在这里取消，慢机上「服务端 30ms 响应、客户端 JS 要跑 30 秒」会被误判成连接超时并弹假错误页。
+            stopNavigationTimeout()
         }
         decisionHandler(.allow)
     }
@@ -4773,17 +4851,26 @@ extension ViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         activityIndicator.startAnimating()
         startNavigationTimeout()
+        // v1.0.106：新导航开始——此刻 #root 仍属于上一个文档，先撤掉探测，
+        // 待 didCommit 新文档接手后再重新武装，避免把旧页面误判成新页面首帧。
+        stopEarlyRevealProbe()
     }
 
     /// v1.0.70：导航已提交（此时 webView.url 已是新页面）——
     /// 外部网页（免费网页对话等第三方站点）顶部避开 iOS 状态栏/灵动岛；DSH 页面保持全屏。
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         updateTopSafeAreaFor(url: webView.url)
+        // v1.0.106：导航已提交（首字节已到、新文档已接手）——网络腿完成，取消连接超时保护，
+        // 避免把后续纯客户端 JS 解析耗时（慢机上可达 30 秒）误报成"连接超时"。
+        stopNavigationTimeout()
+        // v1.0.106：此刻起 #root 一定属于新文档，武装首屏探测，出首帧即显形，不再死等 didFinish。
+        startEarlyRevealProbe()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         activityIndicator.stopAnimating()
         stopNavigationTimeout()
+        stopEarlyRevealProbe()
         // 完成即隐藏错误层（meta-refresh 握手页二跳也会走到这里）
         hideError()
         hasLoadedOnce = true
