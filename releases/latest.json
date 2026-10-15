@@ -1,10 +1,10 @@
 {
-  "version": "1.0.105",
-  "build": 47,
-  "updated_at": "2026-10-16 00:02:44",
-  "title": "v1.0.105 机型安全区自动适配·顶栏底栏随机型自适应·回归 100% 官方前端",
-  "changelog": "1. 内置 iOS 机型安全区标准值对照表：iPhone 6s 至 iPhone 16 全系 + 全面屏 iPad，启动即按机型自动匹配，无需手工配置；\n2. 顶栏按机型状态栏高度自动让位：有 Home 键 20pt / 刘海 44~48pt / 灵动岛 59pt（16 Pro 62pt），不再写死像素；\n3. 底栏留白按机型底部安全区自动预留：全面屏 34pt、有 Home 键 0pt，再叠加 12pt 呼吸间距，彻底解决底栏超出屏幕与贴底问题；\n4. 横竖屏切换、更换机型均自动重算顶栏与底栏，多设备体验一致；\n5. 设置页新增「本机机型 + 标准安全区」自检信息，可在手机上现场核对检测结果；\n6. 低系统版本友好提示：检测到系统不支持所需网页特性时，明确提示版本门槛与升级方式，不再白屏让人猜；\n7. 全网单一公开版，零私密配置，巨魔一键无损升级。",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.105-47.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.105-47.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.105"
+  "version": "1.0.106",
+  "build": 48,
+  "updated_at": "2026-10-16 01:20:00",
+  "title": "v1.0.106 首屏不再白屏·切换会话不再卡死·顶栏「智能体」不再压标题",
+  "changelog": "1. 首屏不再白屏：原先要等网页完全加载（旧机型可达 30 秒）才显示画面，现在 DOM 一就绪就提前显形，实测旧机型出画面从 29.9 秒缩短到 2.1 秒；\n2. 切换会话不再卡死：修复上一版窄屏长文本适配的扫描逻辑——它会在会话页逐个测量上万个元素并反复触发整页重排，旧机型一次切换可占住 15 秒无响应；现改为只测真正含文字的盒子、分摊到多帧小片执行，单点占用从 14820ms 降到 102ms，且长文本不溢出屏幕的效果完全不变；\n3. 顶栏不再重叠：隐藏子智能体徽标内溢出的「智能体」三个字，智能体按钮右移到标题右侧，标题保持原位不动，重叠从 34px 变为 0；\n4. 消除假的「连接超时」提示：只要电脑端有响应就不再误报，超时阈值放宽到 30 秒；\n5. 启动首屏可见后即可正常操作，后台继续加载不影响使用；\n6. 页面跳转与地址切换逻辑零改动；\n7. 全网单一公开版，零私密配置，巨魔一键无损升级。",
+  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.106-48.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.106-48.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.106"
 }
