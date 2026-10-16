@@ -2926,6 +2926,18 @@ final class ViewController: UIViewController {
             '[class*="inputRoot"] {',
             '  margin-bottom: max(6px, calc(env(safe-area-inset-bottom) + 2px)) !important;',
             '}',
+            '',
+            '/* ===== v1.0.108 会话页「底栏床垫」（老总 2026-10-16：会话记录穿过聊天框从底部露出）=====',
+            '   会话页 seat 下沿到屏幕底那 46pt 必须有实心底色，否则滚动的消息就从缝里顶出来。',
+            '   底色/厚度都由 shim_14 的 fixBottom 运行时实测写入（--dsh-pagebg 取 DSH 自己的页面底色，',
+            '   亮/暗主题自动跟随），这里只留一条属性选择器做兜底：',
+            '   React 重渲染会把 seat 的内联样式整条抹掉，而 data-dsh-bed 属性 + CSS 变量不会 ——',
+            '   有这条规则，抹掉之后到下一趟校正（≤320ms）之间也不会突然漏光。 */',
+            '[data-dsh-bed="1"] {',
+            '  bottom: 0 !important;',
+            '  padding-bottom: var(--dsh-bed, 46px) !important;',
+            '  background-color: var(--dsh-pagebg, transparent) !important;',
+            '}',
           ].join('\\n');
           function inject() {
             var root = document.head || document.documentElement;
@@ -2963,12 +2975,19 @@ final class ViewController: UIViewController {
             for (var sj = 0; sj < subCols.length; sj++) {
               subCols[sj].style.setProperty('padding-top', '0px', 'important');
             }
-            // 新建会话页的灰是 body 和空标签容器的底色，全部清成透明，不留任何颜色。
-            document.body.style.setProperty('background', 'transparent', 'important');
-            var hosts = document.querySelectorAll('[class*="_emptyTabHost"], [class*="CZPbNW_frame"], [class*="ank0OG_root"]');
-            for (var k = 0; k < hosts.length; k++) {
-              hosts[k].style.setProperty('background', 'transparent', 'important');
-            }
+            // 🔴 v1.0.108 撤销「把 body / 空标签容器 / frame / root 全部清成透明」这条老逻辑。
+            //    A/B 实测（2026-10-16，430x932 dsf3 iPhone UA，暗色）：
+            //      官方原版：body / [data-mobile-nav=frame] / .ank0OG_root / .CZPbNW_frame 四层**都自带
+            //                rgb(21,21,23)**（页面底色由 DSH 自己铺），全屏均匀、无接缝；
+            //      我们的构建：这四层被清成 rgba(0,0,0,0)，而顶栏几何校正把 .ank0OG_root 整体下推 57px
+            //                （fixTop 的 margin-top），于是 0..57 那条（状态栏下方）没有任何元素铺色，
+            //                直接透出 WebView 自身的底色 → 本机 Edge 是 #121212、真机 iOS 是近纯黑，
+            //                与页面底色 #151517 之间出现一条**横向色阶断层**。
+            //                实测实拍：老总截图 y0..55 = #010103（纯黑）、y60 起 = #16151a（DSH 页面底）。
+            //    这正是老总 2026-10-16 报的「暗黑模式下颜色灰色不是和背景一致的黑色，有分层，不好看」。
+            //    结论：这几层的底色是 DSH 的原生皮肤，**绝不能替它清掉**；一律交还 DSH 自己管。
+            //    （历史遗留注释说「新建会话页的灰是 body 和空标签容器的底色」——真凶不是这几层，
+            //      已由 A/B 证伪：官方同处就是同一个灰，属 DSH 皮肤色。）
           };
           // 确保 overlayLayer 挂载层全透明，杜绝首页全局暗淡发灰
           function ensureSidebarOverlay() {
@@ -3284,6 +3303,30 @@ final class ViewController: UIViewController {
             return (v > 0 ? v : SAFE_BOTTOM_FALLBACK) + BOT_BREATH_EXTRA;
           }
           function setP(el, prop, val) { try { el.style.setProperty(prop, val, 'important'); } catch (e) {} }
+          // 取「DSH 自己的页面底色」：从底栏座位往上找第一个**不透明**的祖先底色。
+          // 实测链路：composerSeat(透明) → scrollBody(透明) → centerCol(透明) → .ank0OG_root(rgb(21,21,23))。
+          // 亮色主题自动拿到 DSH 的浅底，不需要我们猜颜色。
+          function opaqueBg(el) {
+            var bg = '';
+            try { bg = getComputedStyle(el).backgroundColor || ''; } catch (e) { return ''; }
+            if (!bg || bg === 'transparent') return '';
+            var m = bg.match(/^rgba?\\(([^)]+)\\)$/);
+            if (!m) return '';
+            var p = m[1].split(',').map(function (s) { return parseFloat(s); });
+            if (p.length >= 4 && !(p[3] >= 0.999)) return '';   // 半透明不能当底色，会继续透
+            return bg;
+          }
+          function pageBg() {
+            try {
+              var n = document.querySelector('.ank0OG_composerSeat, [class*="composerSeat"]');
+              for (var i = 0; n && i < 8; i++) {
+                var bg = opaqueBg(n);
+                if (bg) return bg;
+                n = n.parentElement;
+              }
+            } catch (e) {}
+            return 'transparent';
+          }
           function pickHeader() {
             return document.querySelector('[data-phase] header')
               || document.querySelector('header.ank0OG_header')
@@ -3304,7 +3347,30 @@ final class ViewController: UIViewController {
             }
             setP(header, 'position', 'sticky');
             setP(header, 'top', '0px');
-            setP(header, 'z-index', '1020');
+            // 🔴 v1.0.108：顶栏 z-index 是「新建会话左上角按钮点不动」的元凶，必须分页处置。
+            //    实测（2026-10-16，430x932 暗色，elementFromPoint + 真点实验）：
+            //      官方原版：顶栏 z-index 是 auto（不建层叠上下文）；fab 是 position:absolute + z-index:21，
+            //                且 fab 住在 DSH 自己的 [class*="overlayLayer"] 里（该层 position:absolute + z-index:20）
+            //                → 官方层序 = overlayLayer(20) 在顶栏(auto)之上，**官方本来就要求 fab 压在顶栏之上**；
+            //                点 fab 中心 (31,49) 命中 svg/BUTTON，抽屉正常打开（实测 sbX -150 → 0）。
+            //      我们的构建：把顶栏钉成 sticky + z-index:1020，把 fab 那 38x38 整块罩住
+            //                （顶栏 y57..97，fab y65..103，重叠 32px），标题行 .ank0OG_titleRow 正好盖住按钮中心
+            //                → 点击被标题行吞掉，抽屉纹丝不动（实测点前点后 sbX 都是 -150）。
+            //    修法：**只降顶栏，绝不动 fab**（fab 保持官方 z-index:21 —— 抬它会让它冒到各种
+            //         弹出层之上，那是另一种错）。fab 可见的页面（首页/新会话页等）把顶栏压到
+            //         overlayLayer 之下；会话页（fab 被 display:none 隐藏）保持历史验证过的 1020，
+            //          行为一字不变。目标值动态取「overlayLayer 的 z-index - 1」，DSH 改了我们也跟着走。
+            var zTarget = '1020';
+            try {
+              var fabEl = document.querySelector('[data-mobile-nav="fab"]');
+              var fabVisible = !!fabEl && getComputedStyle(fabEl).display !== 'none' && getComputedStyle(fabEl).visibility !== 'hidden';
+              if (fabVisible) {
+                var ol = document.querySelector('[class*="overlayLayer"]');
+                var olZ = ol ? parseInt(getComputedStyle(ol).zIndex, 10) : NaN;
+                zTarget = (isFinite(olZ) && olZ > 0) ? String(Math.max(1, olZ - 1)) : '10';
+              }
+            } catch (e) {}
+            setP(header, 'z-index', zTarget);
             setP(header, 'display', 'flex');
             setP(header, 'flex-direction', 'column');
             setP(header, 'min-height', '0px');
@@ -3382,14 +3448,47 @@ final class ViewController: UIViewController {
             var mb = num(getComputedStyle(seat).marginBottom);
             if (room) {
               // 有滚动余量（会话页）：用 sticky 自身的 inset 定位 —— 绝对值，天然幂等，
-              // 且不受「元素是否在滚动内容末端」影响，滚到哪都是同一个位置。
-              if (seat.style.bottom !== need + 'px') setP(seat, 'bottom', need + 'px');
+              // 🔴 v1.0.108「底栏床垫」—— 老总 2026-10-16 报的「会话记录翻阅，穿过聊天框模块从底部露出」。
+              //    A/B 实测（同一会话页、同一滚动位置）：
+              //      官方原版：seat 自己 bottom:0 贴死滚动容器底（rect y761..932），座位下沿到屏底没有任何裸区；
+              //      我们的构建：seat bottom:46px → rect y638..886，886..932 这 46pt 成为**没被任何元素铺色的裸带**，
+              //                滚动中的消息就从这个缝里露出来（实测座位下缘往下逐点命中 = DIV.ank0OG_scrollBody；
+              //                老总实拍：「费用明细」下面那一大块就是一条完整的气泡从底部顶出来）。
+              //    修法（**不改任何可见布局**）：sticky inset 由 46px 收到 0，把这 46px 改成 seat 自己的
+              //    padding-bottom —— 盒子底边贴到滚动容器底、内容框仍止于原处（638..886 一寸不动），
+              //    只是那 46px 由「透明」变成「DSH 页面底色」的实心垫子；再给 seat 本身补同色底，
+              //    顺带盖掉座位内部残留的透光区。
+              //    ⚠️ 依旧必须是幂等写入（值对了就不写），与上面「绝不增量」是同一条铁律。
+              var pbg = pageBg();
+              // ⚠️ 必须**保留 DSH 自己的 padding-bottom**（实测 = 2px），不能拿 need 直接顶掉它：
+              //    否则内容框整体下移 2px（实测 卡片 675→677、统计条 769→771、费用条 856→858、
+              //    屏幕最底部那行文字 932→934 被顶出屏），凭空多出一个 2px 位移。
+              //    先记一次「DSH 原值」，之后每趟都按 need + 原值 幂等写入。
+              if (seat.dataset.dshOwnPadB === undefined) {
+                seat.dataset.dshOwnPadB = String(num(getComputedStyle(seat).paddingBottom));
+              }
+              var bedPad = need + num(seat.dataset.dshOwnPadB);
+              try { document.documentElement.style.setProperty('--dsh-pagebg', pbg); } catch (e) {}
+              try { document.documentElement.style.setProperty('--dsh-bed', bedPad + 'px'); } catch (e) {}
+              if (seat.dataset.dshBed !== '1') seat.dataset.dshBed = '1';
+              if (seat.style.bottom !== '0px') setP(seat, 'bottom', '0px');
+              if (seat.style.paddingBottom !== bedPad + 'px') setP(seat, 'padding-bottom', bedPad + 'px');
+              if (seat.dataset.dshBedBg !== pbg) { seat.dataset.dshBedBg = pbg; setP(seat, 'background', pbg); }
               if (mb !== 0) setP(seat, 'margin-bottom', '0px');
             } else {
               // 无滚动余量（首页/新会话页）：sticky 失效（内容不满一屏），只能用 margin 撑；
               // 此处 margin 与位置是 1:1 的，绝对赋值同样收敛安全。
               if (mb !== need) setP(seat, 'margin-bottom', need + 'px');
               if (seat.style.bottom !== '0px') setP(seat, 'bottom', '0px');
+              // 床垫只属于「有滚动余量」的会话页；切到首页/新会话页要原样撤掉，
+              // 用 removeProperty 交还 DSH 自己的值（不硬写 transparent，免得多留一道我们自己的痕迹）。
+              if (seat.dataset.dshBed === '1') {
+                delete seat.dataset.dshBed;
+                delete seat.dataset.dshOwnPadB;
+                try { seat.style.removeProperty('padding-bottom'); } catch (e) {}
+                try { seat.style.removeProperty('background'); } catch (e) {}
+                seat.dataset.dshBedBg = '';
+              }
             }
           }
           function fixFab() {
