@@ -1,10 +1,10 @@
 {
-  "version": "1.0.107",
-  "build": 49,
-  "updated_at": "2026-10-16 21:07:00",
-  "title": "v1.0.107 输入框只有两个位置·顶栏不再压标题·齿轮对齐·更新弹窗不再超屏",
-  "changelog": "1. 会话输入框不再乱滑（只有两个位置）：弹出键盘=最终高度、收起键盘=最低高度，实测任意滚动位置下都恒定停在距屏底 46pt，反复触发也不会漂移；\n2. 顶栏不再压标题：子智能体「⌄」与后台任务「⌄」两个入口从标题左侧移到右侧同一排，与标题文字零重叠，标题保持原位不动；\n3. 齿轮与「优化」上下居中对齐：即使换行把齿轮挤下去也会自动钉回同一水平中线；\n4. 设置/插件市场里的更新弹窗不再超出屏幕：越界浮层统一回收到屏幕内，抽屉等完全在屏外的容器不受影响；\n5. 修复切换会话后输入框短暂贴屏底不动的问题（注入脚本的观察器原先静默失效，现已生效并在 1 秒内自动补正）；\n6. 内容不足一屏时输入框不再浮在半空（自动贴底）；\n7. 页面跳转与地址切换逻辑零改动；DSH 电脑端保持 100% 官方原版；\n8. 全网单一公开版，零私密配置，巨魔一键无损升级。",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.107-49.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.107-49.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.107"
+  "version": "1.0.109",
+  "build": 50,
+  "updated_at": "2026-10-16 23:54:00",
+  "title": "v1.0.109 整体 UI 上移一格文字间距·顶栏贴近系统状态栏·暗色接缝与底栏穿透修复",
+  "changelog": "1. 顶栏整体上移一格文字间距（12pt）：顶栏与 iOS 系统状态栏之间那条空白被吃掉，标题、图标、左上角目录按钮一起上移，仍与状态栏文字保留 3pt 呼吸、零重叠；底栏与键盘两态位置逐项不变，输入框依旧只有两个位置；\n2. 暗色模式不再有分层接缝：状态栏下方那条区域改由 DSH 自己的页面底色铺满，与正文区域颜色完全一致（原先会透出 WebView 的近纯黑，形成一条横向色阶断层）；\n3. 会话记录不再从输入框底部露出：输入框下方原本的透明缺口补成实心底色垫子，滚动中的消息不会从缝里顶出来；\n4. 新建会话页左上角「目录」按钮点了没反应 → 已修复（顶栏层序调整，左侧抽屉正常拉出）；\n5. 侧栏抽屉顶部留白随整体一起上移，抽屉与主界面顶栏始终平齐，不会错位；\n6. 页面跳转与地址切换逻辑零改动；DSH 电脑端保持 100% 官方原版；\n7. 全网单一公开版，零私密配置，巨魔一键无损升级。",
+  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.109-50.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.109-50.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.109"
 }
