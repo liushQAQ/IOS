@@ -2789,9 +2789,15 @@ final class ViewController: UIViewController {
             '   3. 中间会话列表内容区（regionArea）根据滑块纵向滚动！ */',
             '[class*="sidebarCol"],',
             '.CZPbNW_sidebarCol {',
-            '  width: 280px !important;',
-            '  max-width: 85vw !important;',
-            '  min-width: 260px !important;',
+            '  /* 🔴 v1.0.110：老总「左侧侧边栏打开页面太宽了，缩到现在宽度的70%」。',
+            '     真机实测自然宽 360.3pt（占屏 83.8%）× 0.70 = 252pt。',
+            '     ⚠️ 这条规则实测**打不过 DSH 原生规则**（沙箱自然宽 374.5pt、DSH max-width 92%，',
+            '     命中规则的只有我们这一条却完全不见效）—— 真正生效的是 shim_11 里 applyDrawerWidth()',
+            '     写的**内联 !important**。这里同步成同一个值，只为「万一某机型上样式表能赢」时',
+            '     不至于又变回 280px / 被 min-width 撑开。 */',
+            '  width: 252px !important;',
+            '  max-width: 252px !important;',
+            '  min-width: 0 !important;',
             '  padding-top: calc(var(--dsh-statusbar, 54px) + 6px - var(--dsh-topshift, 0px)) !important;',
             '  padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;',
             '  height: 100vh !important;',
@@ -2910,12 +2916,22 @@ final class ViewController: UIViewController {
             '  box-sizing: border-box !important;',
             '}',
             '',
-            '/* 键盘弹起时或移动端模式下：费用明细与多余超长统计条弱化/隐藏，杜绝穿透键盘完成条 */',
-            'body[data-keyboard-open="true"] [class*="costMeter"],',
-            'body[data-keyboard-open="true"] [class*="billing"],',
-            'body[data-keyboard-open="true"] [class*="footerStats"],',
-            'body[data-keyboard-open="true"] [data-slot="conversation.composer.dock"],',
-            'body[data-keyboard-open="true"] .z4IYsq_root,',
+            '/* ===== 🔴 v1.0.110 撤销「键盘弹起时隐藏统计/费用条」这条老规则 =====',
+            '   老总 2026-10-16：「键盘弹出会话框，下面的插件显示用量/token/上下文的插件不显示，为什么。宽度是够的，预留了」。',
+            '   真因（三态复现 _probe_kbattr.cjs）：原生侧 keyboardFrameWillChange 在键盘弹起时会给 body 打上',
+            '   data-keyboard-open="true"（ViewController.swift 第 4138 行），而下面这几条规则一撞，',
+            '   就把整个 dock 槽位 display:none —— 而该槽位里装的正好是整排「用量/token/上下文」：',
+            '     · [data-slot="conversation.composer.dock"] 的 innerText 实测 =',
+            '       「1 轮 32 步·303 tok/s | 2.2M tok·缓存命中 79% | 费用明细 | CPU 52.19% · 内存 48.70% |',
+            '        本会话 ¥3.3461 · 命中 78.6% · 输入 472K · 缓存 1.7M · 输出 4.2K | gemini-gateway:...」',
+            '   实测三态（430x932 dsf3，会话页 vh=592，v1.0.109 构建）：',
+            '     ① 未打标记 → .cm-stat-dock y468..490 / .cm-session-cost y493..513 / .cm-model-top y516..536，display 正常；',
+            '     ② 打上标记 → 三者全部 y=0 h=0（最近 display:none 祖先 = DIV），',
+            '                  [data-slot="conversation.composer.dock"] 与 .z4IYsq_root 双双 display:none；',
+            '     ③ 摘掉标记 → 三者原样恢复（y468..536）。',
+            '   这条规则的历史意图是「杜绝穿透键盘完成条」，而那个问题早已由 shim_16 的键盘两态 + 座位钉底解决，',
+            '   现在它只剩副作用。老总明确要求显示，故整块撤销。',
+            '   （保留下面两条不带键盘前缀的规则：它们只在「费用明细」细展浮层里命中，与键盘无关。） */',
             '[class*="costMeter"][class*="detail"],',
             '.dsh-cost-meter-bar button {',
             '  display: none !important;',
@@ -2961,7 +2977,24 @@ final class ViewController: UIViewController {
           //      直接压到「周五 10/16 九月初七」上（对照图已附）。
           //   值定义在这里（而不是 shim_14）：因为 __dshSetStatusBar 给抽屉/面板写的是**内联**
           //   padding-top，样式表压不过它，必须在这一处统一扣减，shim_14 再从全局读。
-          window.__dshTopShift = 12;
+          //
+          // 🔴 v1.0.110：老总 2026-10-16 再提「顶栏还可以上移一刚文字间距。距离 iOS 顶栏还有空间。」
+          //   同一坐标系复量（老总新截图 clipboard-...e77b7b14.jpg，x40..130 窗口 _linepitch.cjs）：
+          //     · iOS 状态栏日期行「周六 10/17 九月初八」像素带 y101..125px（全宽）/ 103..121px（左窗）
+          //       → 内容下沿 125px = 41.7pt；
+          //     · 我们的顶栏图标绘制带 y186..227px = 62.0..75.7pt
+          //       （🔴 同一窗口跑沙箱 v1.0.109 会话页渲染图 v110_sess_kbdown.png 得 186..227px，
+          //        与老总截图**逐像素一致** → 证明老总运行的确实就是 v1.0.109，下面的差值可直接换算）；
+          //     · 当前间隙 = 186 − 125 = 61px = 20.3pt（确实还有空间，老总判断正确）。
+          //   上移量→间隙对照（1pt = 3px，图标带/间隙均为实测或按实测等比外推）：
+          //     TOP_SHIFT=12（v1.0.109 原值）→ 图标带 186..227px，间隙 61px = 20.3pt  ← 老总说「还有空间」
+          //     TOP_SHIFT=18                 → 图标带 168..209px，间隙 43px = 14.3pt  （实测）
+          //     TOP_SHIFT=24（本轮）          → 图标带 150..191px，间隙 25px =  8.3pt  ← 再上移一整格(12pt)
+          //     TOP_SHIFT=30                 → 图标带 132..173px，间隙  7px =  2.3pt  ← 安全极限
+          //     TOP_SHIFT=36（反例）          → 图标带 114..155px，**重叠 11px = 3.7pt**，压到「九月初八」底缘
+          //   故取 24。修改这一个值即可全局联动（fixTop 的 col.margin-top / fixFab 的 top /
+          //   抽屉与右侧面板的内联 padding-top / --dsh-topshift CSS 变量），无需改别处。
+          window.__dshTopShift = 24;
           // v1.0.76：原生侧把状态栏高度（CSS 像素）下发到这里。
           // 写成 CSS 变量，顶栏 padding 用它，换机型、转屏都跟着变。
           window.__dshSetStatusBar = function (px) {
@@ -3014,14 +3047,25 @@ final class ViewController: UIViewController {
           }
           function applySidebarInset() {
             ensureSidebarOverlay();
-            var raw = getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar');
-            var h = parseFloat(raw);
+            // 🔴 v1.0.110 性能：优先读原生下发的缓存值 window.__dshNativeStatusBar，
+            //   避免在 MutationObserver 回调（流式输出时每 300ms 一次）里调 getComputedStyle
+            //   —— 那会强制样式重算，属老总明令禁止的「注入层拖慢页面」。
+            var h = (typeof window.__dshNativeStatusBar === 'number') ? window.__dshNativeStatusBar
+                  : parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar'));
             if (!(h > 0)) return;
+            // 🔴 v1.0.110 修一个隐患：这里原先是 `(h + 6)`，**没有扣减 __dshTopShift**。
+            //   __dshSetStatusBar 写的是 `h + 6 - shift`，而本函数在 DOMContentLoaded / 观察器
+            //   回调里也会跑，一旦跑在 __dshSetStatusBar 之后，就会用 `h + 6` 把正确值覆盖掉
+            //   → 抽屉顶部比顶栏矮一整个 shift（v1.0.109 是 12pt，v1.0.110 起是 24pt）。
+            //   现在统一按 `h + 6 - shift` 写，并改用「读回内联值」判等（比 dataset 鲁棒：
+            //   React 复用元素只改 style 时 dataset 残留、dataset 判等会漏写，而读回不会）。
+            var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 0;
+            var padTop = (h + 6 - shift) + 'px';
             var cols = document.querySelectorAll('[class*="sidebarCol"], .CZPbNW_sidebarCol, [class*="rightbarCol"], .CZPbNW_rightbarCol');
             for (var i = 0; i < cols.length; i++) {
-              if (cols[i].dataset.dshInsetApplied !== String(h)) {
-                cols[i].dataset.dshInsetApplied = String(h);
-                cols[i].style.setProperty('padding-top', (h + 6) + 'px', 'important');
+              if (cols[i].style.getPropertyValue('padding-top') !== padTop ||
+                  cols[i].style.getPropertyPriority('padding-top') !== 'important') {
+                cols[i].style.setProperty('padding-top', padTop, 'important');
               }
             }
             var subCols = document.querySelectorAll('.dMHGga_session, .dMHGga_panel, .YdIzba_header');
@@ -3029,8 +3073,38 @@ final class ViewController: UIViewController {
               subCols[si].style.setProperty('padding-top', '0px', 'important');
             }
           }
+          // ===== 🔴 v1.0.110 左侧抽屉宽度：缩到「现在宽度的 70%」（老总 2026-10-16）=====
+          //   老总原话：「左侧侧边栏打开页面太宽了，缩到现在宽度的70%」。
+          //   「现在的宽度」量测（老总真机截图 clipboard-...0cd2aa15.jpg，横向扫描 _hscan.cjs，
+          //     y=1200px 与 y=1800px 两处一致）：右边界 x = 1081px = 360.3pt，占屏宽 430pt 的 83.8%。
+          //   ⚠️ 为什么必须走内联 !important：我们样式表里本来就写着
+          //     `[class*="sidebarCol"] { width: 280px !important; }`，但实测**完全打不过 DSH**
+          //     （沙箱 430x932 实测自然宽 374.5pt、max-width 395.6px=92%，命中规则只有我们那一条
+          //      却不见效）—— DSH 原生规则的权重/来源更高。唯一稳压的办法就是运行时写内联 !important
+          //     （和 shim_11 处理 fab 的 z-index 是同一套路）。
+          //   取值：真机自然宽 360.3pt × 0.70 = 252.2 → 取 252px（= 屏宽的 58.6%）。
+          //     用固定 px 而不是「自然宽 × 0.7」的动态算法，是为了**幂等**：每次写入都是同一个值，
+          //     绝不可能像旧 fixBottom 那样「读回自己写的值再乘一次」把抽屉越缩越小。
+          //     （换机型时按 252/430 的比例缩放即可，注释里给了换算依据。）
+          //   幂等实现：只在「读回的内联值 ≠ 目标值」时才写（读内联属性不触发布局重算）。
+          var DRAWER_W = 252;   // = 360.3pt(实测自然宽) × 0.70
+          function applyDrawerWidth() {
+            try {
+              var els = document.querySelectorAll('[class*="sidebarCol"], .CZPbNW_sidebarCol');
+              for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (el.style.getPropertyValue('width') === DRAWER_W + 'px' &&
+                    el.style.getPropertyPriority('width') === 'important') continue;
+                el.style.setProperty('width', DRAWER_W + 'px', 'important');
+                el.style.setProperty('min-width', DRAWER_W + 'px', 'important');
+                el.style.setProperty('max-width', DRAWER_W + 'px', 'important');
+                window.__dshDrawerW = DRAWER_W;
+              }
+            } catch (e) {}
+          }
           function shiftTitleCluster() {
             try { applySidebarInset(); } catch (e) {}
+            try { applyDrawerWidth(); } catch (e) {}
             // v1.0.104：绝不能再隐藏顶部首行（leading）——左右两个抽屉开关就住在里面，
             // 隐藏它等于把"打开侧边栏/文件"的入口一起干掉。纵向压缩交给 __dshLayoutFix 的负 margin。
             var rows = document.querySelectorAll('[class*="titleRow"]');
@@ -3089,6 +3163,30 @@ final class ViewController: UIViewController {
           if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', shiftTitleCluster, { once: true });
           }
+
+          // 🔴 v1.0.110 抽屉宽度/内边距的对外桥 + 持续兜底。
+          //   本 IIFE 与后面那个「顶栏智能体修复」IIFE 是各自独立的闭包，后者访问不到
+          //   applyDrawerWidth / applySidebarInset，所以在这里挂一个 window 入口给它调。
+          //   另外补三种触发时机，覆盖 React 重建（会抹掉内联样式）：
+          //     ① 观察器（由后面那个 IIFE 的 MutationObserver 驱动，见 __dshApplyDrawerWidth 调用）；
+          //     ② 任意点击后 350ms（老总点 fab 展开抽屉，滑入动画约 300ms 完成）；
+          //     ③ 60 秒内的低频兜底（1s × 60），确保冷启动阶段万无一失。
+          window.__dshApplyDrawerWidth = function () {
+            try { applySidebarInset(); } catch (e) {}
+            try { applyDrawerWidth(); } catch (e) {}
+          };
+          try {
+            document.addEventListener('click', function () {
+              setTimeout(function () { try { window.__dshApplyDrawerWidth(); } catch (e) {} }, 350);
+            }, true);
+          } catch (e) {}
+          (function drawerTicks() {
+            var n = 0;
+            var t = setInterval(function () {
+              try { window.__dshApplyDrawerWidth(); } catch (e) {}
+              if (++n >= 60) clearInterval(t);
+            }, 1000);
+          })();
 
           // v1.0.83：锁屏与后台切回毫秒级自愈支持 (搭配 dsh-anywhere)
           window.__dshFastResume = function () {
@@ -3180,13 +3278,19 @@ final class ViewController: UIViewController {
             try {
               new MutationObserver(function () {
                 if (pending) return;
-                pending = setTimeout(function () { pending = 0; fixHeaderAgent(); }, 300);
+                pending = setTimeout(function () {
+                  pending = 0;
+                  fixHeaderAgent();
+                  // v1.0.110：抽屉宽度/内边距一起兜底（React 重建会连内联样式一并抹掉）
+                  try { if (window.__dshApplyDrawerWidth) window.__dshApplyDrawerWidth(); } catch (e) {}
+                }, 300);
               }).observe(document.documentElement, { childList: true, subtree: true });
             } catch (e) {}
           })();
           var ticks = 0;
           var iv = setInterval(function () {
             fixHeaderAgent();
+            try { if (window.__dshApplyDrawerWidth) window.__dshApplyDrawerWidth(); } catch (e) {}
             if (++ticks >= 30) clearInterval(iv);
           }, 1000);
         })();
@@ -3289,9 +3393,11 @@ final class ViewController: UIViewController {
           if (window.__dshLayoutFix) { try { window.__dshLayoutFix(); } catch (e) {} return; }
           var TOP_BREATH = 6;    // 顶栏标题行与状态栏下沿之间的呼吸间距（CSS px = pt）
           // 🔴 v1.0.109：「整体 UI 从顶栏起再上移一格文字间距」（老总 2026-10-16）。
+          //   v1.0.110 老总再提「顶栏还可以上移一刚文字间距」→ 全局值 12 改 24（顶栏顶 45 → 33pt）。
           //   取值与完整量测依据见 shim_11 里的 window.__dshTopShift（定义在那边，因为
           //   __dshSetStatusBar 给抽屉/面板写的是内联 padding-top，必须由它统一扣减）。
-          var TOP_SHIFT = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 12;
+          //   这里的 24 只是「全局值还没广播过来」时的兜底，正常路径不会用到。
+          var TOP_SHIFT = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 24;
           // v1.0.105：底栏留白改为「按机型安全区自适应」= Home Indicator 安全区 + 固定呼吸间距。
           // 安全区由原生按机型下发（iPhone 全面屏 34 / iPad 全面屏 20 / 有 Home 键机型 0，
           // 见文件末尾 iOSSafeArea 对照表）；取不到时兜底 34，
@@ -5304,12 +5410,12 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.83)】
+            【最新特性 (v1.0.110)】
             1. ⚡ 首推插件 dsh-anywhere：支持多台手机、iPad、平板、电脑多设备同时在线访问，实时同屏收发与流式同步打印，无缝切换使用；内置毫秒级锁屏自愈（备选支持 dsh-pocket）；
-            2. 🛡 锁屏假死彻底自愈：锁屏 1~2 分钟切回自动恢复联通；手动点击刷新或当前地址 100% 强行恢复连接；
-            3. 📐 左侧侧边栏按 75% 缩放舒展展示（210px 宽度），隐藏电脑端快捷键，新会话按钮清爽居中；
-            4. 🚀 悬浮按钮内置「检查更新」：支持从 GitHub 仓库自动下载并唤起巨魔 (TrollStore) 一键覆盖安装；
-            5. ⌨️ 会话框上浮避让：键盘打开时消息内容区动态增加缓冲，思考中与流式输出最后三行零遮挡。
+            2. 📐 顶栏整体上移贴合 iOS 系统状态栏，状态栏下方不留空白；左侧侧边栏宽度缩至屏宽 70%（252pt），主内容区豁然开阔；
+            3. ⌨️ 输入框只有键盘弹起 / 收起两个固定位置，不再随流式输出上下飘移；键盘弹起时「用量 / token / 上下文」统计条完整显示；
+            4. 🌙 暗色模式分层接缝修复；会话记录不再从聊天框底部露出；新建会话左上角按钮恢复响应；
+            5. 🚀 悬浮按钮内置「检查更新」：支持从 GitHub 仓库自动下载并唤起巨魔 (TrollStore) 一键覆盖安装。
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
