@@ -3106,13 +3106,14 @@ final class ViewController: UIViewController {
               if (!header) return;
               var btns = header.querySelectorAll('button[aria-label*="智能体团队"]');
               for (var j = 0; j < btns.length; j++) {
-                var wrap = btns[j].parentElement;
-                if (!wrap) continue;
-                if (wrap.dataset.dshAgentMoved === '1') continue;
+            var wrap = btns[j].parentElement;
+              if (!wrap) continue;
+              if (window.__dshMobilePolish) return;   // shim_16 已接管顶栏摆位，避免两边互相覆盖
+              if (wrap.dataset.dshAgentMoved === '1') continue;
                 wrap.dataset.dshAgentMoved = '1';
                 wrap.style.setProperty('position', 'absolute', 'important');
                 wrap.style.setProperty('left', 'auto', 'important');
-                wrap.style.setProperty('right', '42px', 'important');
+                wrap.style.setProperty('right', '44px', 'important');
                 wrap.style.setProperty('top', '50%', 'important');
                 wrap.style.setProperty('transform', 'translateY(-50%)', 'important');
                 wrap.style.setProperty('margin', '0', 'important');
@@ -3134,13 +3135,21 @@ final class ViewController: UIViewController {
 
           // DSH 是 React 应用，切换会话时 header 会被整棵重建（内联样式一并丢失），
           // 因此必须持续兜底：MutationObserver 去抖 + 启动阶段额外补 30 秒。
+          // 🔴 v1.0.107 修正一个「从来就没生效过」的静默缺陷：本脚本在 documentStart 执行，
+          //    此刻 document.documentElement 还是 null（实测 de=false / readyState=loading），
+          //    直接 observe 会抛 TypeError: parameter 1 is not of type 'Node' 并被下面的 catch 吞掉
+          //    → 观察器从头到尾没装上（实测 fires=0）。必须等 documentElement 就绪再观察
+          //    （shim_00 的 watchdog 早就用同样的等待模式修过，shim_11/14/15/16 当年漏了）。
           var pending = 0;
-          try {
-            new MutationObserver(function () {
-              if (pending) return;
-              pending = setTimeout(function () { pending = 0; fixHeaderAgent(); }, 300);
-            }).observe(document.documentElement, { childList: true, subtree: true });
-          } catch (e) {}
+          (function startObserve() {
+            if (!document.documentElement) { setTimeout(startObserve, 16); return; }
+            try {
+              new MutationObserver(function () {
+                if (pending) return;
+                pending = setTimeout(function () { pending = 0; fixHeaderAgent(); }, 300);
+              }).observe(document.documentElement, { childList: true, subtree: true });
+            } catch (e) {}
+          })();
           var ticks = 0;
           var iv = setInterval(function () {
             fixHeaderAgent();
@@ -3358,10 +3367,29 @@ final class ViewController: UIViewController {
             if (!seat) return;
             var vh = window.innerHeight || document.documentElement.clientHeight || 0;
             if (!vh) return;
-            var delta = seat.getBoundingClientRect().bottom - (vh - botBreath());
-            if (Math.abs(delta) > 1) {
-              var mb = num(getComputedStyle(seat).marginBottom);
-              setP(seat, 'margin-bottom', Math.max(0, mb + delta) + 'px');
+            // 🔴 绝不能再用「增量公式」mb = mb + delta —— 2026-10-16 实测锁定两条致命后果：
+            //   ① 键盘弹起时 vh 突变（932→592），sticky 底栏那一帧读到的 bottom 还是旧值，
+            //      算出 +46 假偏差写死 margin-bottom（46→92），此后无人纠正 → 输入框一直悬空 92px。
+            //   ② 更狠：会话页滚到中间时，margin-bottom 对该元素位置**毫无影响**（它不在滚动内容末端），
+            //      于是每一趟校正都读回同一个 delta=+46 并再累加一次 ——
+            //      实测连跑 6 趟 mb 46 → 322，而输入框位置纹丝不动；
+            //      真实使用中每次滚动/流式输出引发的 DOM 变动都会触发一趟 → 
+            //      **输入框会一路往天上爬**，这正是老总报的「聊天框可以一直上下滑到天上」。
+            // 正解 = 幂等写入：值对了就不写，写多少次结果都一样，与滚动位置无关。
+            var need = botBreath();
+            var sbx = seat.parentElement;
+            var room = (sbx && sbx.scrollHeight - sbx.clientHeight > 4) ? 1 : 0;
+            var mb = num(getComputedStyle(seat).marginBottom);
+            if (room) {
+              // 有滚动余量（会话页）：用 sticky 自身的 inset 定位 —— 绝对值，天然幂等，
+              // 且不受「元素是否在滚动内容末端」影响，滚到哪都是同一个位置。
+              if (seat.style.bottom !== need + 'px') setP(seat, 'bottom', need + 'px');
+              if (mb !== 0) setP(seat, 'margin-bottom', '0px');
+            } else {
+              // 无滚动余量（首页/新会话页）：sticky 失效（内容不满一屏），只能用 margin 撑；
+              // 此处 margin 与位置是 1:1 的，绝对赋值同样收敛安全。
+              if (mb !== need) setP(seat, 'margin-bottom', need + 'px');
+              if (seat.style.bottom !== '0px') setP(seat, 'bottom', '0px');
             }
           }
           function fixFab() {
@@ -3406,20 +3434,46 @@ final class ViewController: UIViewController {
           run();
           if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
           window.addEventListener('load', run);
-          window.addEventListener('resize', run);
+          // 🔴 resize 必须走「跨帧收敛」，不能只跑单趟 passOnce —— 与上面 fixBottom 注释是同一个坑：
+          //    键盘弹出/收起会让 window.innerHeight 突变（932 → 592）。在 vh 突变那一帧，
+          //    sticky 底栏的 getBoundingClientRect().bottom 读到的还是旧值，
+          //    单趟的增量公式会算出 +46 的假偏差并写死 margin-bottom（46 → 92），
+          //    此后再没人纠正它 —— 实测键盘弹起后 7 秒纹丝不动，输入框一直悬空 92px。
+          //    改为 settle(3) 后：+50ms 内即收敛回 46px。
+          //    连发保护 60ms：键盘弹出动画期间 resize 可能连发多次，交已在跑的那串 settle 收敛，
+          //    避免同一瞬间堆多趟同步校正（每趟都要读 rect 强制重排）。
+          var lastResizeSettle = 0;
+          window.addEventListener('resize', function () {
+            var now = Date.now();
+            if (now - lastResizeSettle < 60) return;
+            lastResizeSettle = now;
+            settle(3);
+          });
           window.addEventListener('orientationchange', function () { setTimeout(run, 260); });
           var ticks = 0;
           var timer = setInterval(function () { ticks++; run(); if (ticks >= 30) clearInterval(timer); }, 400);
           // SPA 切换路由/面板时自动重算；只监听子节点变化（我们只改内联样式，不会自触发）
-          try {
-            var pending = false;
-            var mo = new MutationObserver(function () {
-              if (pending) return;
-              pending = true;
-              setTimeout(function () { pending = false; run(); }, 320);
-            });
-            mo.observe(document.documentElement, { childList: true, subtree: true });
-          } catch (e) {}
+          // 🔴 v1.0.107 修正一个「从来就没生效过」的静默缺陷：本脚本在 documentStart 执行，
+          //    此刻 document.documentElement 还是 null（实测 de=false / readyState=loading），
+          //    直接 observe 会抛 TypeError: parameter 1 is not of type 'Node' 并被下面的 catch 吞掉
+          //    → 观察器从头到尾没装上（实测 fires=0）。必须等 documentElement 就绪再观察
+          //    （shim_00 的 watchdog 早就用同样的等待模式修过，shim_11/14/15/16 当年漏了）。
+          (function startObserve() {
+            if (!document.documentElement) { setTimeout(startObserve, 16); return; }
+            try {
+              var pending = false;
+              var mo = new MutationObserver(function () {
+                if (pending) return;
+                pending = true;
+                setTimeout(function () { pending = false; run(); }, 320);
+              });
+              mo.observe(document.documentElement, { childList: true, subtree: true });
+            } catch (e) {}
+          })();
+          // 点进会话/换路由时 React 会把 composerSeat 的内联样式整条抹掉（实测变成「(空)」），
+          // 单等下一次 DOM 变动不保险（安静页面可以十几秒没有任何变动）→ 输入框会停在 0pt 贴着屏底。
+          // 「点进会话」这条路本身就是一次点击，所以在点击后补一趟（settle 已幂等，重复触发零副作用）。
+          try { document.addEventListener('click', function () { setTimeout(function () { settle(2); }, 320); }, true); } catch (e) {}
         })();
         """,
         // ===== shim_15（v1.0.104 引入，v1.0.106 性能重写）：窄屏长文本溢出自动降级（DSH-MOBILE-FIT v1）=====
@@ -3553,11 +3607,356 @@ final class ViewController: UIViewController {
           window.addEventListener('load', boot);
           window.addEventListener('resize', schedule, { passive: true });
           window.addEventListener('orientationchange', function () { setTimeout(schedule, 300); });
-          try { new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true }); } catch (e) {}
+          // 🔴 v1.0.107 修正一个「从来就没生效过」的静默缺陷：本脚本在 documentStart 执行，
+          //    此刻 document.documentElement 还是 null（实测 de=false / readyState=loading），
+          //    直接 observe 会抛 TypeError: parameter 1 is not of type 'Node' 并被下面的 catch 吞掉
+          //    → 观察器从头到尾没装上（实测 fires=0）。必须等 documentElement 就绪再观察
+          //    （shim_00 的 watchdog 早就用同样的等待模式修过，shim_11/14/15/16 当年漏了）。
+          (function startObserve() {
+            if (!document.documentElement) { setTimeout(startObserve, 16); return; }
+            try { new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true }); } catch (e) {}
+          })();
           // 首屏只补两次（旧实现 600ms×30 = 连跑 18 秒，是切换会话卡顿的主因之一）
           setTimeout(run, 1500);
           setTimeout(run, 5000);
           window.__dshMobileFitMark = scan;
+        })();
+        """,
+        // ===== shim_16（v1.0.107）：老总 2026-10-16 反馈的四个界面问题 =====
+        // ① 设置 → 插件市场，更新弹出界面超出屏幕范围
+        //    根因：窄屏下 DSH 仍会渲染按桌面宽度计算的浮层，某些 popover 被定位到视口之外
+        //    （left 为负 / right 超过 100vw）被裁掉。而 shim_00 的 installMobileLayoutWatchdog()
+        //    只覆盖 menu/modal/popup/dropdown/dialog/_portal_ 关键词，**popover/tooltip/sheet/
+        //    overlay/layer/picker/popper 这一类它根本不管** → 越界后无人回收（实测已确认）。
+        //    修法：在**不越过 watchdog 管辖**的前提下，把「部分可见但越界」的浮层强制收回视口内
+        //    （写 left/right，无效时再用 margin-left 硬拽）。完全在屏外的（抽屉、右侧边栏、
+        //    屏外隐藏层）一律不碰 —— 判据是「纵向与视口有交集 + 横向部分越界」。
+        // ② 「优化」按钮与齿轮图标没有上下居中对齐
+        //    注：这两个按钮（.dsh-po-btn-opt / .dsh-po-btn-gear）来自 DSH 插件，不属本 App 代码，
+        //    只能在注入层做布局矫正。修法：强制同一行 + 同高 + 垂直中心对齐；若已被换行，
+        //    直接把齿轮钉回「优化」右侧同一水平线。
+        // ③ 会话聊天框能一直上下滑到天上
+        //    根因：composerSeat 是 scrollBody（display:flex;column）里的 sticky;bottom:0 元素。
+        //    当会话内容不足一屏时容器没有滚动余量，sticky 失效 → composer 紧跟内容停在中间/上方。
+        //    实测新会话页 composer 在 y=399..625（屏高 932），下方空 307px。
+        //    修法：内容不足一屏时给 composerSeat 加 margin-top:auto，把它推到底部；
+        //    并给滚动容器加 overscroll-behavior:contain。键盘弹出时的位置仍由 DSH 自己处理。
+        // ④ 标题左侧的「⌄」（= 子智能体徽标，文字已隐藏只剩箭头）应移到智能体按钮旁
+        //    修法：把它收成紧凑图标，绝对定位到智能体团队按钮左侧（right:82px），标题完全不动。
+        // 全部走内联 !important；DSH 是 React 应用，切会话/开面板会重建 DOM 并丢掉内联样式，
+        // 故统一用 MutationObserver（600ms 停留去抖）持续兜底。
+        """
+        (function () {
+          if (window.__dshMobilePolish) return;
+          window.__dshMobilePolish = 1;
+          var LIMIT = 760;
+          function nowMs() { try { return performance.now(); } catch (e) { return Date.now(); } }
+          function vw() { return document.documentElement.clientWidth || window.innerWidth; }
+          function vh() { return document.documentElement.clientHeight || window.innerHeight; }
+          function isSmall() { return vw() <= LIMIT; }
+          function S(el, k, v) { try { el.style.setProperty(k, v, 'important'); } catch (e) {} }
+
+          // ---------- ② 「优化」与齿轮：同一行 + 同高 + 垂直中心对齐 ----------
+          function alignOptGear() {
+            try {
+              var opt = document.querySelector('.dsh-po-btn-opt');
+              var gear = document.querySelector('.dsh-po-btn-gear');
+              if (!opt || !gear) return;
+              var a = opt.getBoundingClientRect();
+              var b = gear.getBoundingClientRect();
+              if (a.width < 6 || b.width < 6) return;
+              var sameRow = Math.abs(a.top - b.top) < 1.5;
+              var sameH = Math.abs(a.height - b.height) < 1.5;
+              // 已钉过的情况不能提前返回 —— 必须每轮复查，跟着「优化」走
+              if (sameRow && sameH && opt.dataset.dshPoOk === '1' && gear.dataset.dshGearPinned !== '1') return;
+              var h = Math.round(Math.max(a.height, b.height, 22));
+              var list = [opt, gear];
+              for (var i = 0; i < list.length; i++) {
+                var el = list[i];
+                S(el, 'display', 'inline-flex');
+                S(el, 'align-items', 'center');
+                S(el, 'justify-content', 'center');
+                S(el, 'box-sizing', 'border-box');
+                S(el, 'height', h + 'px');
+                S(el, 'min-height', h + 'px');
+                S(el, 'line-height', '1');
+                S(el, 'vertical-align', 'middle');
+                S(el, 'margin-top', '0');
+                S(el, 'margin-bottom', '0');
+              }
+              // 让「胶囊」永不换行：真机反馈齿轮会掉到第二行，元凶是 opt→上溯某一层 flex-wrap:wrap，
+              // 逐层压成 nowrap（限定 4 层，避免影响 composer 整体布局）
+              var up = opt.parentElement;
+              for (var k2 = 0; up && k2 < 4; k2++) {
+                S(up, 'flex-wrap', 'nowrap');
+                S(up, 'align-items', 'center');
+                if (up === gear.parentElement) S(up, 'column-gap', '6px');
+                up = up.parentElement;
+              }
+              // 复查：仍不在同一水平线（确实被换行）→ 把齿轮钉到「优化」右侧同一水平中线。
+              // 必须钉「水平中线」（top 取 opt 的垂直中心 + translateY(-50%)），这才叫「上下居中对齐」。
+              var a2 = opt.getBoundingClientRect();
+              var b2 = gear.getBoundingClientRect();
+              if (Math.abs(a2.top - b2.top) > 1.5) {
+                var host = gear.offsetParent || opt.parentElement;
+                if (host) {
+                  var hs = null;
+                  try { hs = getComputedStyle(host); } catch (x) {}
+                  if (hs && hs.position === 'static') S(host, 'position', 'relative');
+                  var hr = host.getBoundingClientRect();
+                  S(gear, 'position', 'absolute');
+                  S(gear, 'left', Math.round(a2.right - hr.left + 6) + 'px');
+                  S(gear, 'top', Math.round(a2.top + a2.height / 2 - hr.top) + 'px');
+                  S(gear, 'transform', 'translateY(-50%)');
+                  S(gear, 'margin', '0');
+                  S(gear, 'z-index', '5');
+                  gear.dataset.dshGearPinned = '1';
+                }
+              } else if (gear.dataset.dshGearPinned === '1') {
+                // 排布已恢复正常 → 撤掉之前的绝对定位，交还给 DSH 原生流式布局（避免留下僵死坐标）
+                S(gear, 'position', 'static');
+                S(gear, 'left', 'auto');
+                S(gear, 'top', 'auto');
+                S(gear, 'transform', 'none');
+                S(gear, 'z-index', 'auto');
+                try { delete gear.dataset.dshGearPinned; } catch (x) {}
+              }
+              opt.dataset.dshPoOk = '1';
+            } catch (e) {}
+          }
+
+          // ---------- ③ 聊天框贴底（消除「滑到天上」）----------
+          function pinComposer() {
+            try {
+              if (!isSmall()) return;
+              var sb = document.querySelector('[class*="scrollBody"]');
+              if (!sb) return;
+              var seat = document.querySelector('[class*="composerSeat"]');
+              if (!seat || seat.parentElement !== sb) return;
+              var cs = null;
+              try { cs = getComputedStyle(sb); } catch (e) { return; }
+              if (cs.display.indexOf('flex') === -1) return;
+              // 容器没有滚动余量 = 内容不足一屏 → 此时 sticky 失效，composer 会浮到中间
+              if ((sb.scrollHeight - sb.clientHeight) > 4) return;
+              var gap = Math.round(sb.getBoundingClientRect().bottom - seat.getBoundingClientRect().bottom);
+              var mb = 0;
+              try { mb = parseFloat(getComputedStyle(seat).marginBottom) || 0; } catch (e) {}
+              if (gap > mb + 4) {
+                S(seat, 'margin-top', 'auto');
+                seat.dataset.dshPinned = '1';
+              }
+              S(sb, 'overscroll-behavior', 'contain');
+            } catch (e) {}
+          }
+
+          // ---------- ④ 子智能体徽标（那个「⌄」）+ 智能体团队按钮：统一精确摆位 ----------
+          // 注意：不能用固定 right 值 —— 实测这两个按钮的 offsetParent 只有 418px 宽（视口 430），
+          // 固定 right 会系统性偏 12px。所以这里用「先给 0、量出真实位置、再按目标纠偏」的方式。
+          function placeAbs(el, targetRight, forceWidth) {
+            try {
+              S(el, 'position', 'absolute');
+              S(el, 'left', 'auto');
+              S(el, 'top', '50%');
+              S(el, 'transform', 'translateY(-50%)');
+              S(el, 'margin', '0');
+              S(el, 'z-index', '6');
+              if (forceWidth) {
+                S(el, 'width', forceWidth + 'px');
+                S(el, 'min-width', '0');
+                S(el, 'padding', '0');
+                S(el, 'box-sizing', 'border-box');
+              }
+              S(el, 'right', '0px');
+              var r = el.getBoundingClientRect();
+              if (r.width < 2) return false;
+              S(el, 'right', Math.round(r.right - targetRight) + 'px');
+              return true;
+            } catch (e) { return false; }
+          }
+
+          function moveAgentBadge() {
+            try {
+              if (!isSmall()) return;
+              var header = document.querySelector('header');
+              if (!header) return;
+              var hw = header.getBoundingClientRect().width;
+              if (hw < 300) return;
+              // 标题容器收窄 28px：实测标题文字只用到 x≈293，容器到 322，收窄不影响标题显示，
+              // 但能给右侧那排动作按钮让出位置（否则 430 宽下根本排不下）。
+              var nav = header.querySelector('nav');
+              if (nav) {
+                var nr = nav.getBoundingClientRect();
+                if (nr.width > 210) S(nav, 'width', '228px');
+              }
+              var jobs = header.querySelector('button[aria-label*="后台任务"]');
+              var badge = header.querySelector('button[aria-label*="子智能体"]');
+              var team = header.querySelector('button[aria-label*="智能体团队"]');
+              // ---------- 🔴 老总定版（2026-10-16 20:50）：「③④ 不一样，可以两个下箭头」----------
+              // 曾于 20:15 按「去掉 ④」隐藏过它，老总看清两者功能不同后确认保留 → 恢复摆位。
+              // 结论：③「N 个子智能体」与 ④「N 个后台任务」是两个不同入口，两个 ⌄ 都保留、都收在标题右侧。
+              // 从右往左依次摆：右侧抽屉开关(386..418) | 团队(32) | 徽标(22) | 后台任务(22) | 标题文字(止于 301)
+              // 间距账（430 宽，实测）：标题文字右边界 301 → 可用到 386 共 85px，
+              // 三个图标 22+22+34=78px，剩 7px 分三段 ⇒ 每段约 2px，刚好不压标题、不互压。
+              if (team && team.parentElement && team.parentElement !== header) placeAbs(team.parentElement, hw - 52, 32);
+              if (badge && badge.parentElement && badge.parentElement !== header) {
+                if (badge.dataset.dshBadgeTight !== '1') {
+                  S(badge, 'width', '22px');
+                  S(badge, 'min-width', '0');
+                  S(badge, 'padding', '0');
+                  S(badge, 'box-sizing', 'border-box');
+                  badge.dataset.dshBadgeTight = '1';
+                }
+                placeAbs(badge.parentElement, hw - 80, 22);
+              }
+              // 「8 个后台任务」在窄屏下只剩一个图标（文字早被隐藏）。它原本被标题 absolute 层压住，
+              // 老总看到的就是那个「孤零零的 ⌄」——一并收到右侧同一排，并留出 3px 不压标题文字。
+              if (jobs && jobs.parentElement && jobs.parentElement !== header) {
+                if (jobs.dataset.dshJobsTight !== '1') {
+                  S(jobs, 'width', '22px');
+                  S(jobs, 'min-width', '0');
+                  S(jobs, 'padding', '0');
+                  S(jobs, 'box-sizing', 'border-box');
+                  jobs.dataset.dshJobsTight = '1';
+                }
+                placeAbs(jobs.parentElement, hw - 104, 22);
+              }
+            } catch (e) {}
+          }
+
+          // ---------- ① 越界浮层回收 ----------
+          // ⚠️ 管辖划分（关键，避免两处同时写 left/right 互相打架）：
+          //   shim_00 的 installMobileLayoutWatchdog() 已负责 [role=menu|listbox|dialog] 与
+          //   menu / modal / popup / dropdown / dialog / _portal_ 名单；本函数**只补它漏掉的**浮层类型。
+          //   因此下面的 OVER_SEL 里刻意不含上述关键词，WD_SEL 命中则直接跳过。
+          var OVER_SEL = '[role="tooltip"],'
+            + '[class*="popover" i],[class*="tooltip" i],[class*="sheet" i],[class*="picker" i],'
+            + '[class*="overlay" i],[class*="layer" i],[class*="floating" i],'
+            + '[class*="popper" i]:not([class*="_portal_"]),'
+            + '[data-radix-popper-content-wrapper],[data-floating-ui-portal],[data-popper-placement]';
+          // shim_00 watchdog 管辖的名单：元素「自身」命中即跳过（防双写）
+          var WD_SEL = '[role="menu"],[role="listbox"],[role="dialog"],[data-menu-material],[data-menu-surface],'
+            + '[class*="menu"],[class*="modal"],[class*="popup"],[class*="dropdown"],[class*="dialog"]';
+
+          function clampOverlays() {
+            try {
+              if (!isSmall()) return;
+              var w = vw();
+              var hgt = vh();
+              if (w < 200 || hgt < 200) return;
+              var cands = [];
+              var seen = null;
+              try { seen = new WeakSet(); } catch (e) { seen = null; }
+              function push(e) {
+                if (!e || e.nodeType !== 1) return;
+                if (seen) { if (seen.has(e)) return; seen.add(e); }
+                cands.push(e);
+              }
+              var list = null;
+              try { list = document.querySelectorAll(OVER_SEL); } catch (e) {}
+              if (list) { for (var i = 0; i < list.length; i++) push(list[i]); }
+              // 浅层兜底：浮层几乎都挂在 portal 容器下（body 浅层）；深挖会白扫几千个正常元素
+              (function shallow(root, depth) {
+                var kids = root.children;
+                for (var j = 0; j < kids.length; j++) {
+                  var c = kids[j];
+                  push(c);
+                  if (depth > 1) shallow(c, depth - 1);
+                }
+              })(document.body, 7);
+
+              var t0 = nowMs();
+              var hits = null;
+              var n = cands.length > 3000 ? 3000 : cands.length;
+              for (var k = 0; k < n; k++) {
+                // 时间预算保护：单次最多占用主线程约 30ms，剩下的交给下一轮
+                if ((k & 127) === 127 && nowMs() - t0 > 30) break;
+                var e = cands[k];
+                if (e.closest && e.closest('[data-mobile-nav]')) continue;   // App 自身 chrome
+                var isW = false;
+                try { isW = e.matches(WD_SEL); } catch (x) {}
+                if (isW) continue;                                          // 归 shim_00 watchdog 管
+                if (e.children.length === 0) continue;                      // 空容器不是浮层
+                var s = null;
+                try { s = getComputedStyle(e); } catch (x) { continue; }
+                if (s.position !== 'fixed' && s.position !== 'absolute') continue;
+                if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') continue;
+                if (s.pointerEvents === 'none') continue;
+                var b = e.getBoundingClientRect();
+                if (b.width < 80 || b.height < 28) continue;
+                // 纵向必须与视口有交集（否则是屏外隐藏层，别去动它）
+                if (b.bottom <= 8 || b.top >= hgt - 8) continue;
+                // 水平方向完全在屏外（抽屉 / 右侧边栏 / 屏外隐藏层）→ 一律不碰
+                if (b.right <= 8 || b.left >= w - 8) continue;
+                // 未越界（留 4px 容差避开亚像素噪声）→ 不动
+                if (b.left >= -4 && b.right <= w + 4) continue;
+                (hits || (hits = [])).push(e);
+              }
+              if (!hits) return;
+              // 先收集、后统一写入（避免边读边写造成布局抖动）
+              for (var m = 0; m < hits.length; m++) {
+                var el = hits[m];
+                var r = el.getBoundingClientRect();
+                if (r.left >= -4 && r.right <= w + 4) continue;
+                S(el, 'box-sizing', 'border-box');
+                S(el, 'max-width', (w - 16) + 'px');
+                S(el, 'max-height', (hgt - 24) + 'px');
+                S(el, 'overflow-y', 'auto');
+                if (r.left < -4) {
+                  S(el, 'left', '8px');
+                  S(el, 'right', 'auto');
+                } else {
+                  S(el, 'right', '8px');
+                  S(el, 'left', 'auto');
+                }
+                el.dataset.dshClamped = '1';
+              }
+              // 第二趟：若该浮层其实靠父级 / transform 定位（写 left/right 无效），
+              // 用 margin-left 把它硬拽回视口内（margin 位移不会破坏已有 transform）。
+              for (var q = 0; q < hits.length; q++) {
+                var e2 = hits[q];
+                if (e2.dataset.dshClamped !== '1') continue;
+                var r2 = e2.getBoundingClientRect();
+                var dx = 0;
+                if (r2.left < -4) dx = 8 - r2.left;
+                else if (r2.right > w + 4) dx = (w - 8) - r2.right;
+                if (dx !== 0) S(e2, 'margin-left', Math.round(dx) + 'px');
+              }
+            } catch (e) {}
+          }
+
+          // ---------- 调度 ----------
+          // cheap()（②③④）几乎零成本，可以每次都跑，保证 React 重建后立即复位；
+          // clampOverlays() 要扫浅层候选，较重，限「每轮交互」内的次数。
+          // ⚠️ runs 必须在每次点击时清零：老总是「打开 App 很久之后」才点设置→插件市场，
+          //    若总次数一次性用光，弹层出现时回收逻辑已经不跑了。
+          var timer = 0, runs = 0, MAX_RUNS = 10, DWELL = 600;
+          function cheap() { alignOptGear(); pinComposer(); moveAgentBadge(); }
+          function full() { cheap(); if (runs < MAX_RUNS) { runs++; clampOverlays(); } }
+          function run() { full(); }
+          function schedule() {
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(function () { timer = 0; run(); }, DWELL);
+          }
+          function boot() { cheap(); schedule(); }
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+          else boot();
+          window.addEventListener('load', boot);
+          window.addEventListener('resize', schedule, { passive: true });
+          window.addEventListener('orientationchange', function () { setTimeout(schedule, 300); });
+          // 🔴 v1.0.107 修正一个「从来就没生效过」的静默缺陷：本脚本在 documentStart 执行，
+          //    此刻 document.documentElement 还是 null（实测 de=false / readyState=loading），
+          //    直接 observe 会抛 TypeError: parameter 1 is not of type 'Node' 并被下面的 catch 吞掉
+          //    → 观察器从头到尾没装上（实测 fires=0）。必须等 documentElement 就绪再观察
+          //    （shim_00 的 watchdog 早就用同样的等待模式修过，shim_11/14/15/16 当年漏了）。
+          (function startObserve() {
+            if (!document.documentElement) { setTimeout(startObserve, 16); return; }
+            try { new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true }); } catch (e) {}
+          })();
+          // 弹层多数是「点出来的」→ 点击后单独补一次，并重置 clamp 预算（保证弹层出现时它一定在跑）
+          try { document.addEventListener('click', function () { runs = 0; setTimeout(schedule, 260); }, true); } catch (e) {}
+          setTimeout(run, 1200);
+          setTimeout(run, 3500);
+          window.__dshMobilePolishRun = full;
         })();
         """
     ]
