@@ -1,10 +1,10 @@
 {
-  "version": "1.0.106",
-  "build": 48,
-  "updated_at": "2026-10-16 01:20:00",
-  "title": "v1.0.106 首屏不再白屏·切换会话不再卡死·顶栏「智能体」不再压标题",
-  "changelog": "1. 首屏不再白屏：原先要等网页完全加载（旧机型可达 30 秒）才显示画面，现在 DOM 一就绪就提前显形，实测旧机型出画面从 29.9 秒缩短到 2.1 秒；\n2. 切换会话不再卡死：修复上一版窄屏长文本适配的扫描逻辑——它会在会话页逐个测量上万个元素并反复触发整页重排，旧机型一次切换可占住 15 秒无响应；现改为只测真正含文字的盒子、分摊到多帧小片执行，单点占用从 14820ms 降到 102ms，且长文本不溢出屏幕的效果完全不变；\n3. 顶栏不再重叠：隐藏子智能体徽标内溢出的「智能体」三个字，智能体按钮右移到标题右侧，标题保持原位不动，重叠从 34px 变为 0；\n4. 消除假的「连接超时」提示：只要电脑端有响应就不再误报，超时阈值放宽到 30 秒；\n5. 启动首屏可见后即可正常操作，后台继续加载不影响使用；\n6. 页面跳转与地址切换逻辑零改动；\n7. 全网单一公开版，零私密配置，巨魔一键无损升级。",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.106-48.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.106-48.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.106"
+  "version": "1.0.107",
+  "build": 49,
+  "updated_at": "2026-10-16 21:07:00",
+  "title": "v1.0.107 输入框只有两个位置·顶栏不再压标题·齿轮对齐·更新弹窗不再超屏",
+  "changelog": "1. 会话输入框不再乱滑（只有两个位置）：弹出键盘=最终高度、收起键盘=最低高度，实测任意滚动位置下都恒定停在距屏底 46pt，反复触发也不会漂移；\n2. 顶栏不再压标题：子智能体「⌄」与后台任务「⌄」两个入口从标题左侧移到右侧同一排，与标题文字零重叠，标题保持原位不动；\n3. 齿轮与「优化」上下居中对齐：即使换行把齿轮挤下去也会自动钉回同一水平中线；\n4. 设置/插件市场里的更新弹窗不再超出屏幕：越界浮层统一回收到屏幕内，抽屉等完全在屏外的容器不受影响；\n5. 修复切换会话后输入框短暂贴屏底不动的问题（注入脚本的观察器原先静默失效，现已生效并在 1 秒内自动补正）；\n6. 内容不足一屏时输入框不再浮在半空（自动贴底）；\n7. 页面跳转与地址切换逻辑零改动；DSH 电脑端保持 100% 官方原版；\n8. 全网单一公开版，零私密配置，巨魔一键无损升级。",
+  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.107-49.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.107-49.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.107"
 }
