@@ -834,7 +834,7 @@ final class ViewController: UIViewController {
             '[data-dockkit-surface],',
             '[data-dockkit-strip],',
             '[data-aionui-preview-col] {',
-            '  padding-top: calc(var(--dsh-statusbar, 54px) + 6px) !important;',
+            '  padding-top: calc(var(--dsh-statusbar, 54px) + 6px - var(--dsh-topshift, 0px)) !important;',
             '  box-sizing: border-box !important;',
             '}',
             '[class*="rightbarCol"],',
@@ -2564,13 +2564,13 @@ final class ViewController: UIViewController {
             '  background-color: transparent !important;',
             '}',
             '',
-            '/* 新建会话首页目录按钮（问题 4 彻底修复）：精准位于状态栏下方安全区（54px + 8px = 62px），饱满居中不被截断 */',
+            '/* 新建会话首页目录按钮（问题 4 彻底修复）：精准位于状态栏下方安全区（54px + 8px = 62px，v1.0.109 起再上移 --dsh-topshift），饱满居中不被截断 */',
             '[data-mobile-nav="fab"] {',
             '  display: inline-flex !important;',
             '  visibility: visible !important;',
             '  opacity: 1 !important;',
             '  position: fixed !important;',
-            '  top: calc(var(--dsh-statusbar, 54px) + 8px) !important;',
+            '  top: calc(var(--dsh-statusbar, 54px) + 8px - var(--dsh-topshift, 0px)) !important;',
             '  left: 14px !important;',
             '  width: 38px !important;',
             '  height: 38px !important;',
@@ -2792,7 +2792,7 @@ final class ViewController: UIViewController {
             '  width: 280px !important;',
             '  max-width: 85vw !important;',
             '  min-width: 260px !important;',
-            '  padding-top: calc(var(--dsh-statusbar, 54px) + 6px) !important;',
+            '  padding-top: calc(var(--dsh-statusbar, 54px) + 6px - var(--dsh-topshift, 0px)) !important;',
             '  padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;',
             '  height: 100vh !important;',
             '  height: 100dvh !important;',
@@ -2950,11 +2950,26 @@ final class ViewController: UIViewController {
             root.appendChild(style);
           }
           inject();
+          // 🔴 v1.0.109：老总 2026-10-16「顶栏距离 iOS 系统状态栏还有空间，整体 UI 从顶栏开始上移一格文字间距」。
+          //   量测依据（老总真机截图 1290x2796 = 430x932@3x，逐行像素剖面 _prof.cjs / _linepitch.cjs）：
+          //     · 安全区 top = 59pt；他的系统状态栏（状态栏增强主题）文字最下沿 = y45.0pt
+          //       （「周五 10/16 九月初七」那一行，实测带 y105..135px）；
+          //     · 我们的顶栏顶 = 57pt → 中间空出 12pt 纯色带（亮色主题下是一条肉眼明显的白富余）。
+          //   取值 12pt：正好吃掉这段空白；顶栏内图标（x 11.7..38.3pt）落到 48..71pt，
+          //   与状态栏文字（止于 45pt）仍留 3pt 呼吸、零重叠。
+          //   ⚠️ 不能取「一整格正文行距」的 22pt（实测正文行距 = 22.0pt）—— 那会把顶栏图标
+          //      直接压到「周五 10/16 九月初七」上（对照图已附）。
+          //   值定义在这里（而不是 shim_14）：因为 __dshSetStatusBar 给抽屉/面板写的是**内联**
+          //   padding-top，样式表压不过它，必须在这一处统一扣减，shim_14 再从全局读。
+          window.__dshTopShift = 12;
           // v1.0.76：原生侧把状态栏高度（CSS 像素）下发到这里。
           // 写成 CSS 变量，顶栏 padding 用它，换机型、转屏都跟着变。
           window.__dshSetStatusBar = function (px) {
             var h = Math.max(0, px || 0);
             document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
+            // v1.0.109：把整体上移量也广播成 CSS 变量，让样式表那几处 calc() 一起跟随。
+            var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 0;
+            document.documentElement.style.setProperty('--dsh-topshift', shift + 'px');
             // 原生下发的才是真·安全区高度（iPhone 14 Pro Max = 59）。DSH 自己也会写同名
             // 变量、而且写得比我们大（实测 75），会把几何校正的目标带偏，所以这里单独存一份。
             window.__dshNativeStatusBar = h;
@@ -2968,7 +2983,7 @@ final class ViewController: UIViewController {
             // 侧栏外层让出状态栏高度，内部子容器（.dMHGga_panel、.YdIzba_header 等）严禁重复叠加 padding-top，保持顶栏高度不变！
             var cols = document.querySelectorAll('[class*="sidebarCol"], .CZPbNW_sidebarCol, [class*="rightbarCol"], .CZPbNW_rightbarCol');
             for (var j = 0; j < cols.length; j++) {
-              cols[j].style.setProperty('padding-top', (h + 6) + 'px', 'important');
+              cols[j].style.setProperty('padding-top', (h + 6 - shift) + 'px', 'important');
             }
             // 清理子容器可能叠加的多余 padding-top，保证打开文件页面时顶栏与主会话绝对平齐！
             var subCols = document.querySelectorAll('.dMHGga_session, .dMHGga_panel, .YdIzba_header');
@@ -3273,6 +3288,10 @@ final class ViewController: UIViewController {
         (function () {
           if (window.__dshLayoutFix) { try { window.__dshLayoutFix(); } catch (e) {} return; }
           var TOP_BREATH = 6;    // 顶栏标题行与状态栏下沿之间的呼吸间距（CSS px = pt）
+          // 🔴 v1.0.109：「整体 UI 从顶栏起再上移一格文字间距」（老总 2026-10-16）。
+          //   取值与完整量测依据见 shim_11 里的 window.__dshTopShift（定义在那边，因为
+          //   __dshSetStatusBar 给抽屉/面板写的是内联 padding-top，必须由它统一扣减）。
+          var TOP_SHIFT = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 12;
           // v1.0.105：底栏留白改为「按机型安全区自适应」= Home Indicator 安全区 + 固定呼吸间距。
           // 安全区由原生按机型下发（iPhone 全面屏 34 / iPad 全面屏 20 / 有 Home 键机型 0，
           // 见文件末尾 iOSSafeArea 对照表）；取不到时兜底 34，
@@ -3408,7 +3427,7 @@ final class ViewController: UIViewController {
               col = col.parentElement;
             }
             if (!col) col = header;
-            var want = sbHeight() - 2;
+            var want = sbHeight() - 2 - TOP_SHIFT;
             var delta = want - header.getBoundingClientRect().top;
             if (Math.abs(delta) > 0.5 && Math.abs(delta) < 600) {
               var mt = num(getComputedStyle(col).marginTop);
@@ -3494,9 +3513,10 @@ final class ViewController: UIViewController {
           function fixFab() {
             // 首页左上角目录按钮：DSH 自带规则是 top: calc(var(--dsh-statusbar,54px) - 24px)，
             // 正好压进状态栏里被切掉半截。改为状态栏下沿 + TOP_BREATH，饱满完整呈现。
+            // v1.0.109：必须与 fixTop 的 TOP_SHIFT 同步上移，否则顶栏上去了、目录按钮留在原地 → 错位。
             var fabs = document.querySelectorAll('[data-mobile-nav="fab"]');
             for (var i = 0; i < fabs.length; i++) {
-              setP(fabs[i], 'top', (sbHeight() + TOP_BREATH) + 'px');
+              setP(fabs[i], 'top', (sbHeight() + TOP_BREATH - TOP_SHIFT) + 'px');
               setP(fabs[i], 'border-radius', '8px');
               setP(fabs[i], 'background', 'var(--dsw-alias-interactive-bg-hover, rgba(125,125,125,0.16))');
             }
@@ -3507,6 +3527,9 @@ final class ViewController: UIViewController {
           // 循环三次就等于把同一个偏差加了三次（46 → 92 → 138），底栏被顶到屏幕中间。
           // 必须跨帧收敛。
           function passOnce() {
+            // v1.0.109：把「整体上移量」广播成 CSS 变量，供 shim_00 / shim_11 的抽屉、面板顶部留白一起跟随。
+            // documentStart 阶段 documentElement 还是 null → 必须判空（§10.3 的老坑，漏判会被 catch 吞掉）。
+            try { if (document.documentElement) document.documentElement.style.setProperty('--dsh-topshift', TOP_SHIFT + 'px'); } catch (e) {}
             try { fixFab(); } catch (e) {}
             try { fixTop(); } catch (e) {}
             try { fixBottom(); } catch (e) {}
