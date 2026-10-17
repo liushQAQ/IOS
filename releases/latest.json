@@ -1,10 +1,10 @@
 {
-  "version": "1.0.110",
-  "build": 51,
-  "updated_at": "2026-10-17 07:12:00",
-  "title": "v1.0.110 侧边栏收紧到 70%·顶栏再上移一格·键盘弹起用量条恢复·文案更新",
-  "changelog": "1. 左侧侧边栏宽度缩到「现在宽度的 70%」：真机实测现宽 360.3pt（占屏 83.8%）→ 收紧至 252pt（58.6%），主内容区豁然开阔，抽屉内插件/工作区/会话列表/底部余额与设置全部完整显示、零截断；\n2. 顶栏再上移一整格文字间距（12pt）：与 iOS 系统状态栏之间的空白由 20.3pt 收窄到 8.3pt，图标、标题、左上角目录按钮一起上移且仍零重叠；底栏与输入框两态位置逐项不变；\n3. 键盘弹起后「用量 / token / 上下文」整排恢复显示：原先键盘一弹起，费用明细 · 本会话 ¥ · 命中% · 输入/缓存/输出 · 模型名+单价 这一整排会被隐藏（我们注入层里一条老规则与系统键盘标记撞车导致），现已彻底撤销，键盘弹起时该排完整可见；\n4. 抽屉顶部留白修正：侧栏抽屉与主界面顶栏始终严格平齐，不再比顶栏矮一格；\n5. 关于弹窗「最新特性」与设置页「功能特性说明」文案更新到 v1.0.110；\n6. 页面跳转与地址切换逻辑零改动；DSH 电脑端保持 100% 官方原版；\n7. 全网单一公开版，零私密配置，巨魔一键无损升级。",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.110-51.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.110-51.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.110"
+  "version": "1.0.113",
+  "build": 52,
+  "updated_at": "2026-10-17 09:45:00",
+  "title": "v1.0.113 右侧面板顶部留白收起·左上角目录按钮实测可点·顶栏档位定版",
+  "changelog": "1. 右侧面板顶部那块多余留白收起：官方在这一块叠了两段 65px 内边距（一段是状态栏让位、必须留；另一段在 tab 条上是纯浪费），只压第二段后「开始」那一行从 y=116pt 抬到 y=71pt，正好落在状态栏（59pt）下方 12pt，打开即见正文；\n2. 左上角「打开目录」按钮实测可直接点开：首页悬浮键与会话页左上角按钮双通道均已真机流程验证（抽屉从屏外 -277pt 滑入 0），抽屉宽度保持 252pt；\n3. 界面看护不再误伤「故意停在屏幕外」的弹层与抽屉：完全屏外（与视口零重叠）的元素一律不碰，修前会被硬拽进屏幕、修后与官方原版逐值一致；\n4. 顶栏档位定版微调：比上一版下移半格，与 iOS 系统状态栏留 3pt 呼吸、零重叠，图标/标题/目录按钮同步；\n5. 输入框仍然只有键盘弹起 / 收起两个固定位置，键盘弹起时「用量 / token / 上下文」统计条完整显示；\n6. 暗色模式分层接缝无、会话记录不再从聊天框底部露出；关于弹窗「最新特性」与设置页「功能特性说明」文案更新到 v1.0.113；\n7. 页面跳转与地址切换逻辑零改动；DSH 电脑端保持 100% 官方原版；全网单一公开版，零私密配置，巨魔一键无损升级。",
+  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.113-52.tipa",
+  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.113-52.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.113"
 }
