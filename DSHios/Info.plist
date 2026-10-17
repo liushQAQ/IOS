@@ -74,14 +74,14 @@
 		<true/>
 	</dict>
 	<key>DSHAppVersion</key>
-	<string>1.0.103</string>
+	<string>1.0.114</string>
+	<key>DSHFeedbackEmail</key>
+	<string>734530963@qq.com</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>需要访问局域网内的电脑端 DeepSeek Harness 服务与通信接口。</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_http._tcp</string>
-		<string>_bonjour._tcp</string>
-		<string>_lnp._tcp.</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>需要访问相机以扫描二维码等功能。</string>

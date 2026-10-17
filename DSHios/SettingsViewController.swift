@@ -128,17 +128,14 @@ enum ServiceStore {
     /// 种子版本：8 = 统一收拢至桌面端主控端口 3083，确保局域网与外网与当前电脑桌面窗口全量会话完全同步。
     static let currentSeedVersion = 8
 
-    /// 默认预置（全网统一纯净公开版模板，零个人信息、零私密穿透与密码，绝对安全）：
-    /// 无论覆盖更新或初次安装，均保障零泄露。已安装用户的个人自定义外网配置保留在沙盒中，不受任何影响。
+    /// 默认预置（全网统一纯净公开版模板）：
+    /// 🔴 v1.0.114：只保留 DSH 官方主控端口 3083 这一条通用占位。
+    ///   原模板混入了三个「开发者本机专有服务」（57890 WorkBuddy 账号切换 / 9009 端口仪表盘 / 8210 本地 TTS），
+    ///   任何陌生玩家装上后首屏都会看到 3 个永远连不上的条目 —— 属于特殊性污染，已移除。
+    ///   已安装用户沙盒里已保存的条目（含老用户自己加的）一律保留，不做删除；此处只影响全新安装的初始模板。
     static let defaults: [ServiceItem] = [
         ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.1.100:3083/",
-                    note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
-        ServiceItem(name: "WorkBuddy 账号切换", url: "http://192.168.1.100:57890/",
-                    note: "局域网·WorkBuddy账号库/切换与到期监控", resolverURL: nil),
-        ServiceItem(name: "端口仪表盘（局域网）", url: "http://192.168.1.100:9009/",
-                    note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
-        ServiceItem(name: "本地 TTS", url: "http://192.168.1.100:8210/",
-                    note: "局域网", resolverURL: nil)
+                    note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil)
     ]
 
     /// 双轨读取（Documents/dsh_user_data/services_v1.json + UserDefaults），带初始化锁。
@@ -474,12 +471,12 @@ final class SettingsViewController: UIViewController {
         }()
 
         alert.addTextField { tf in
-            tf.placeholder = "名称（如：端口仪表盘）"
+            tf.placeholder = "名称（如：我的电脑）"
             tf.text = existing?.item.name ?? suggestedName
             tf.autocapitalizationType = .none
         }
         alert.addTextField { tf in
-            tf.placeholder = "http://192.168.1.100:9009/"
+            tf.placeholder = "http://192.168.1.100:3083/"
             tf.text = existing?.item.url ?? prefilledURL
             tf.autocapitalizationType = .none
             tf.autocorrectionType = .no
@@ -689,9 +686,9 @@ final class ConnectionGuideViewController: UIViewController {
         let step1 = createStepCard(
             badge: "步骤 1",
             title: "电脑端安装插件（主推 dsh-anywhere / 备选 dsh-pocket）",
-            detail: "【首选方案 dsh-anywhere】支持多台手机与 iPad 同时在线访问与无缝切换：\n开源地址：https://github.com/liushQAQ/dsh-anywhere\n安装命令：",
-            code: "pnpm add dsh-anywhere",
-            tip: "【备选方案 dsh-pocket】若仅需单设备轻量访问，可安装官方备选：\ndsh plugin --profile web add dsh-pocket -w"
+            detail: "【首选方案 dsh-anywhere】支持多台手机与 iPad 同时在线访问与无缝切换：\n开源地址：https://github.com/liushQAQ/dsh-anywhere\n安装命令（务必带 github: 前缀，直接装本仓库）：",
+            code: "pnpm add github:liushQAQ/dsh-anywhere",
+            tip: "【备选方案 dsh-pocket】若仅需单设备轻量访问，可安装社区备选（npm 上的 dsh-pocket，作者 shaobeichen）：\ndsh plugin --profile web add dsh-pocket -w"
         )
         stack.addArrangedSubview(step1)
 
@@ -742,7 +739,9 @@ final class ConnectionGuideViewController: UIViewController {
     }
 
     @objc private func copyCommandTapped(_ sender: UIButton) {
-        let codeText = "pnpm add dsh-anywhere"
+        // 必须与卡片上展示的命令保持一致：带 github: 前缀直装本仓库，
+        // 不能写成裸包名 dsh-anywhere —— 该名字在 npm 上已被第三方占用（版本与功能完全不同）。
+        let codeText = "pnpm add github:liushQAQ/dsh-anywhere"
         UIPasteboard.general.string = codeText
         sender.setTitle("已复制", for: .normal)
         let feedback = UINotificationFeedbackGenerator()
@@ -906,37 +905,45 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.lineBreakMode = .byWordWrapping
 
         let logContent = """
-        ⚡ 1. 首推自研 dsh-anywhere 插件（多端协同枢纽）：
+        🧩 1. 通用性与分发修复（v1.0.114）：
+        • 插件安装命令改为直装本仓库：pnpm add github:liushQAQ/dsh-anywhere —— npm 上的同名包属第三方、功能完全不同，旧命令会把玩家装到错误的插件；
+        • 默认服务清单只保留「DSH 主控 3083」一条通用占位，移除开发者本机专用的三个服务条目，首屏不再出现永远连不上的地址；
+        • 检查更新改走公开仓库直链，并逐个加速镜像自动切换；不再依赖任何个人隧道节点，节点下线不影响所有玩家更新；
+        • 「检查更新」的巨魔一键直连也改为逐镜像探测，单条加速线挂掉不会整条路径失效；
+        • 连接教程里备选插件措辞修正为「社区备选」；反馈收件地址改为从配置读取，不再写死在代码里。
+
+        ⚡ 2. 首推自研 dsh-anywhere 插件（多端协同枢纽）：
         • 支持多台 iPhone、安卓手机、iPad 与电脑多设备同时在线访问；
         • 实时双向同屏收发、流式同步打印，不踢线、不冲突，多端无缝切换；
         • 内置毫秒级 Fast-Resume，锁屏一两分钟切回 App 均能自动秒级自愈恢复联通；
         • 纯净开源无个人外网密码（备选支持单端 dsh-pocket 插件）。
 
-        🛡 2. 锁屏假死彻底自愈与强行重连：
+        🛡 3. 锁屏假死彻底自愈与强行重连：
         • 针对锁屏后网络通信中断导致的页面卡死，切回前台自动触发强行重连自愈；
         • 悬浮菜单点击「刷新」或点击「当前服务地址」，100% 强行建立全新连接恢复通讯。
 
-        📐 3. 顶栏 / 侧边栏 / 右侧面板统一收紧（v1.0.110 / v1.0.113）：
+        📐 4. 顶栏 / 侧边栏 / 右侧面板统一收紧（v1.0.110 / v1.0.113）：
         • 顶栏、标题与目录按钮统一上移并对齐 iOS 系统状态栏，之间不再残留空白条（v1.0.113 定版再微调半格）；
         • 左侧侧边栏宽度收紧至屏宽的 70%（252pt），主内容区豁然开阔；
         • 右侧面板顶部多余留白收起（官方重复的一段内边距），内容整体上提 45pt，打开即见正文。
 
-        🖱️ 4. 入口按钮实测可直接点开（v1.0.112 / v1.0.113）：
+        🖱️ 5. 入口按钮实测可直接点开（v1.0.112 / v1.0.113）：
         • 首页悬浮键与会话页左上角「打开目录」按钮双通道均实测有效，点开即回落 252pt 抽屉；
         • 界面看护不再误伤「故意停在屏幕外」的弹层与抽屉，浮层不再乱飞。
 
-        ⌨️ 5. 输入框只有两个固定位置（v1.0.107 / v1.0.110）：
+        ⌨️ 6. 输入框只有两个固定位置（v1.0.107 / v1.0.110）：
         • 键盘弹起与收起各停一处，不再随流式输出上下飘移、也不再能一路滑到天上；
         • 键盘弹起时「用量 / token / 上下文」统计条完整显示，不再莫名消失。
 
-        🎨 6. 界面细节修复（v1.0.108 / v1.0.109）：
+        🎨 7. 界面细节修复（v1.0.108 / v1.0.109）：
         • 暗色模式分层接缝修复，状态栏下方不再出现横向色阶断层；
         • 会话记录不再从聊天框底部缝隙露出；新建会话左上角按钮恢复响应。
 
-        🚀 7. 远程仓库更新与巨魔 (TrollStore) 一键自动安装：
-        • 悬浮菜单内置「检查更新」，自动检测仓库新版本，支持巨魔一键覆盖安装。
+        🚀 8. 远程仓库更新与巨魔 (TrollStore) 一键自动安装：
+        • 悬浮菜单内置「检查更新」，自动检测仓库新版本，支持巨魔一键覆盖安装；
+        • 下载地址为公开仓库直链，内置多个加速镜像并自动逐个重试，单节点异常不影响更新。
 
-        📱 8. iOS 机型安全区自动适配（v1.0.105）：
+        📱 9. iOS 机型安全区自动适配（v1.0.105）：
         • 内置 iPhone / iPad 全系安全区标准值对照表，启动即按机型自动匹配，无需手工配置；
         • 本机检测：\(iOSSafeArea.selfCheckSummary())；
         • 顶栏按状态栏高度自动让位、底栏按底部安全区自动预留，换机与横竖屏切换均自动重算。

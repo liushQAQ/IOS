@@ -1,7 +1,7 @@
 import UIKit
 import MessageUI
 
-/// 反馈与建议页面：支持调用系统/第三方邮件 App 直接发送至 734530963@qq.com，一键提交诊断与建议
+/// 反馈与建议页面：调用系统/第三方邮件 App 发送反馈（收件地址从 Info.plist 的 DSHFeedbackEmail 读取），一键附带诊断信息
 final class FeedbackViewController: UIViewController, MFMailComposeViewControllerDelegate {
 
     private let scrollView = UIScrollView()
@@ -13,7 +13,13 @@ final class FeedbackViewController: UIViewController, MFMailComposeViewControlle
     private let contactField = UITextField()
     private let diagTextView = UITextView()
 
-    private static let feedbackEmail = "734530963@qq.com"
+    /// 反馈收件地址：从 Info.plist 的 `DSHFeedbackEmail` 读取。
+    /// 🔴 v1.0.114：不再把邮箱硬编码在源码里 —— 私有部署或更换维护人只需改 plist 一处；
+    ///   值留空（或用户自行编译时删掉该键）会自动降级为「内容已复制到剪贴板 + 提示自行发送」，不会崩也不会弹错。
+    private static var feedbackEmail: String {
+        let raw = (Bundle.main.infoDictionary?["DSHFeedbackEmail"] as? String) ?? ""
+        return raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     init() {
         super.init(nibName: nil, bundle: nil)
@@ -247,20 +253,25 @@ final class FeedbackViewController: UIViewController, MFMailComposeViewControlle
         UIPasteboard.general.string = body
 
         // 优先使用系统原生 MFMailComposeViewController 在 App 内直接发送
-        if MFMailComposeViewController.canSendMail() {
+        let toAddress = Self.feedbackEmail
+        if !toAddress.isEmpty, MFMailComposeViewController.canSendMail() {
             let mailVC = MFMailComposeViewController()
             mailVC.mailComposeDelegate = self
-            mailVC.setToRecipients([Self.feedbackEmail])
+            mailVC.setToRecipients([toAddress])
             mailVC.setSubject(subject)
             mailVC.setMessageBody(body, isHTML: false)
             present(mailVC, animated: true)
             return
         }
 
-        // 设备未配置系统邮箱时，通过 URL Scheme 唤起第三方邮件 App（QQ邮箱/网易邮箱/Outlook/Gmail等）
+        // 设备未配置系统邮箱（或未配置收件地址）时，通过 URL Scheme 唤起第三方邮件 App（QQ邮箱/网易邮箱/Outlook/Gmail等）
+        guard !toAddress.isEmpty else {
+            showFallbackAlert(body: body)
+            return
+        }
         let escapedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         let escapedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let mailtoURLString = "mailto:\(Self.feedbackEmail)?subject=\(escapedSubject)&body=\(escapedBody)"
+        let mailtoURLString = "mailto:\(toAddress)?subject=\(escapedSubject)&body=\(escapedBody)"
 
         if let mailtoURL = URL(string: mailtoURLString), UIApplication.shared.canOpenURL(mailtoURL) {
             UIApplication.shared.open(mailtoURL) { [weak self] success in

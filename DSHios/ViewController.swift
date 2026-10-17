@@ -5455,14 +5455,14 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.113)】
-            1. ⚡ 首推插件 dsh-anywhere：支持多台手机、iPad、平板、电脑多设备同时在线访问，实时同屏收发与流式同步打印，无缝切换使用；内置毫秒级锁屏自愈（备选支持 dsh-pocket）；
-            2. 📐 顶栏档位定版微调，比上一版下移半格，与状态栏留 3pt 呼吸、零重叠；
-            3. 📑 右侧面板顶部多余的 45pt 留白已收起（官方重复的一段内边距），内容整体上提，打开即见正文；
-            4. 🖱️ 左上角「打开目录」按钮已实测可直接点开（首页悬浮键与会话页左上角按钮双通道），抽屉宽度保持 252pt；
-            5. ⌨️ 输入框只有键盘弹起 / 收起两个固定位置，不再随流式输出上下飘移；键盘弹起时「用量 / token / 上下文」统计条完整显示；
-            6. 🌙 暗色模式分层接缝修复；会话记录不再从聊天框底部露出；屏外隐藏的弹层不再被误拽进屏幕；
-            7. 🚀 悬浮按钮内置「检查更新」：支持从 GitHub 仓库自动下载并唤起巨魔 (TrollStore) 一键覆盖安装。
+            【最新特性 (v1.0.114)】
+            1. 🔌 插件安装命令改为直装本仓库（pnpm add github:liushQAQ/dsh-anywhere）：npm 上的同名包属于第三方、功能完全不同，旧命令会把玩家带到错误的插件上；
+            2. 🧹 默认服务清单只保留「DSH 主控 3083」一条通用占位，移除了开发者本机专用的三个服务条目，玩家首屏不再出现永远连不上的地址；
+            3. 🚀 检查更新的下载地址改走公开仓库直链，并逐个加速镜像自动切换：不再依赖任何个人隧道节点，节点下线也不影响所有人更新；
+            4. ✉️ 反馈收件地址改为可从配置读取，不再写死在代码里（私有部署可自行填写）；
+            5. ⚡ 首推插件 dsh-anywhere：支持多台手机、iPad、平板、电脑多设备同时在线访问，实时同屏收发与流式同步打印，无缝切换使用；内置毫秒级锁屏自愈（备选支持 dsh-pocket）；
+            6. 📐 顶栏与状态栏留 3pt 呼吸；右侧面板顶部多余留白已收起；左上角「打开目录」实测可点开；输入框只有键盘弹起 / 收起两个固定位置；
+            7. 🌙 暗色模式分层接缝修复；会话记录不再从聊天框底部露出；屏外隐藏的弹层不再被误拽进屏幕。
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
@@ -5993,6 +5993,8 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         let changelog: String?
         let tipa_url: String?
         let public_tipa_url: String?
+        /// 备用下载地址（可选）：主地址是自己搭的统计网关时，用它在网关不可达时兜底。
+        let tipa_url_fallback: String?
         let release_url: String?
     }
 
@@ -6007,16 +6009,47 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     /// 将 GitHub 原始 TIPA 下载地址转换为国内免代理高速镜像地址列表
     private static func mirrorCandidates(for rawURL: String) -> [String] {
         guard !rawURL.isEmpty else { return [] }
-        // 如果已经是代理地址，直接优先使用
-        if rawURL.contains("ghfast.top") || rawURL.contains("gh-proxy.com") {
+        guard let host = URL(string: rawURL)?.host?.lowercased() else { return [rawURL] }
+
+        // 已经是加速镜像域名 → 原样使用，绝不二次套前缀。
+        let mirrorHosts = ["ghfast.top", "gh-proxy.com", "ghproxy.net"]
+        if mirrorHosts.contains(where: { host == $0 || host.hasSuffix("." + $0) }) {
             return [rawURL]
         }
-        let list: [String] = [
+
+        // 🔴 v1.0.114：只给 GitHub 系域名套加速前缀。
+        //   旧逻辑用 `rawURL.contains("gh-proxy.com")` 判断「是否已是代理」，那是纯字符串匹配：
+        //   当时恰好因为 Tailscale 地址的 query 里带了 `?m=gh-proxy.com` 才侥幸命中，
+        //   一旦换掉那个参数，就会给 https://liu-gw.xxx.ts.net/... 套上 GitHub 加速前缀 → 全部 404。
+        //   改成解析 host 后，局域网地址 / 自建网关 / 对象存储一律直连，不受影响。
+        let githubHosts = [
+            "github.com",
+            "raw.githubusercontent.com",
+            "objects.githubusercontent.com",
+            "codeload.github.com",
+            "release-assets.githubusercontent.com"
+        ]
+        let isGitHub = githubHosts.contains(where: { host == $0 || host.hasSuffix("." + $0) })
+        guard isGitHub else { return [rawURL] }
+
+        return [
             "https://ghfast.top/\(rawURL)",
             "https://gh-proxy.com/\(rawURL)",
             rawURL
         ]
-        return list
+    }
+
+    /// 把「主下载地址」与「备用地址」合成一条完整的候选链：
+    /// 主地址自己的镜像序列在前（例如统计网关就只有它自己），备用地址的镜像序列接在后面去重。
+    /// 这样「自己搭的统计网关」仍是第一顺位（下载计数不丢），网关不可达时自动兜底到公开仓库直链。
+    private static func candidateChain(primary: String, fallback: String?) -> [String] {
+        var out = mirrorCandidates(for: primary)
+        if let fb = fallback, !fb.isEmpty, fb != primary {
+            for u in mirrorCandidates(for: fb) where !out.contains(u) {
+                out.append(u)
+            }
+        }
+        return out
     }
 
     func checkForAppUpdates(manual: Bool = false) {
@@ -6137,9 +6170,11 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         }()
 
         let tipaURL = info.tipa_url ?? info.public_tipa_url ?? ""
+        let tipaFallback = info.tipa_url_fallback
 
         if hasNewVersion {
-            presentNewVersionPrompt(info: info, currentVer: currentVer, currentBuild: currentBuild, tipaURL: tipaURL)
+            presentNewVersionPrompt(info: info, currentVer: currentVer, currentBuild: currentBuild,
+                                    tipaURL: tipaURL, fallbackURL: tipaFallback)
         } else if manual {
             let alert = UIAlertController(
                 title: "✅ 当前已是最新版本",
@@ -6147,7 +6182,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
                 preferredStyle: .alert)
             if !tipaURL.isEmpty {
                 alert.addAction(UIAlertAction(title: "🚀 重新下载并用巨魔安装 (免代理加速)", style: .default) { [weak self] _ in
-                    self?.downloadAndInstallTIPA(remoteURLString: tipaURL, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
+                    self?.downloadAndInstallTIPA(remoteURLString: tipaURL, fallbackURL: tipaFallback, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
                 })
             }
             alert.addAction(UIAlertAction(title: "好", style: .cancel))
@@ -6155,7 +6190,8 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         }
     }
 
-    private func presentNewVersionPrompt(info: AppReleaseInfo, currentVer: String, currentBuild: Int, tipaURL: String) {
+    private func presentNewVersionPrompt(info: AppReleaseInfo, currentVer: String, currentBuild: Int,
+                                         tipaURL: String, fallbackURL: String?) {
         let remoteVer = info.version
         let remoteBuild = info.build ?? 0
         let notes = info.changelog ?? info.title ?? "包含最新的移动端布局优化与功能修复。"
@@ -6168,10 +6204,10 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
 
         if !tipaURL.isEmpty {
             alert.addAction(UIAlertAction(title: "🚀 极速下载并用巨魔安装 (推荐·零报错)", style: .default) { [weak self] _ in
-                self?.downloadAndInstallTIPA(remoteURLString: tipaURL, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
+                self?.downloadAndInstallTIPA(remoteURLString: tipaURL, fallbackURL: fallbackURL, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
             })
             alert.addAction(UIAlertAction(title: "⚡ 巨魔一键直连安装", style: .default) { [weak self] _ in
-                self?.installViaTrollStore(remoteURLString: tipaURL)
+                self?.installViaTrollStore(remoteURLString: tipaURL, fallbackURL: fallbackURL)
             })
         }
 
@@ -6185,62 +6221,72 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         present(alert, animated: true)
     }
 
-    func installViaTrollStore(remoteURLString: String) {
-        let candidates = Self.mirrorCandidates(for: remoteURLString)
-        let acceleratedURL = candidates.first(where: { $0.contains("ghfast.top") || $0.contains("gh-proxy.com") }) ?? candidates.first ?? remoteURLString
+    func installViaTrollStore(remoteURLString: String, fallbackURL: String? = nil) {
+        let candidates = Self.candidateChain(primary: remoteURLString, fallback: fallbackURL)
+        guard !candidates.isEmpty else { return }
 
         // 巨魔直接打开 URL 遇到 301 重定向时会直接弹错 301；
-        // 这里先用 URLSession 做一次 HEAD 预解析，解析出跟随重定向后的真实 200 终点直链
-        guard let reqURL = URL(string: acceleratedURL) else {
-            downloadAndInstallTIPA(remoteURLString: remoteURLString, filename: "DSHios-public-latest.tipa")
+        // 这里先用 URLSession 做一次 HEAD 预解析，解析出跟随重定向后的真实 200 终点直链。
+        // 🔴 v1.0.114：改成逐个候选探测 —— 旧逻辑只探第一条，那条加速镜像一挂，
+        //   「巨魔一键直连安装」整条路径就不可用（还没轮到下载通道兜底）。
+        func probe(_ index: Int) {
+            guard index < candidates.count, let reqURL = URL(string: candidates[index]) else {
+                downloadAndInstallTIPA(remoteURLString: remoteURLString, fallbackURL: fallbackURL, filename: "DSHios-public-latest.tipa")
+                return
+            }
+            var req = URLRequest(url: reqURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 5)
+            req.httpMethod = "HEAD"
+            URLSession.shared.dataTask(with: req) { [weak self] _, resp, error in
+                let http = resp as? HTTPURLResponse
+                let reached = (error == nil) && (http.map { $0.statusCode < 400 } ?? false)
+                let finalTarget = ((http?.url?.absoluteString).flatMap { $0.isEmpty ? nil : $0 }) ?? candidates[index]
+                DispatchQueue.main.async {
+                    if reached {
+                        self?.openTrollStoreInstall(target: finalTarget,
+                                                    fallbackRemote: remoteURLString,
+                                                    fallbackURL: fallbackURL)
+                    } else {
+                        probe(index + 1)
+                    }
+                }
+            }.resume()
+        }
+        probe(0)
+    }
+
+    /// 用巨魔（或其分支 apple-magnifier）唤起安装；两个 scheme 都打不开时回落到 App 内极速下载。
+    private func openTrollStoreInstall(target: String, fallbackRemote: String, fallbackURL: String?) {
+        guard let encoded = target.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            downloadAndInstallTIPA(remoteURLString: fallbackRemote, fallbackURL: fallbackURL, filename: "DSHios-public-latest.tipa")
             return
         }
 
-        var req = URLRequest(url: reqURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 4)
-        req.httpMethod = "HEAD"
+        let schemes = [
+            "apple-magnifier://install?url=\(encoded)",
+            "trollstore://install?url=\(encoded)"
+        ]
 
-        URLSession.shared.dataTask(with: req) { [weak self] _, resp, error in
-            let finalTarget: String = {
-                if let http = resp as? HTTPURLResponse, let finalURL = http.url?.absoluteString, !finalURL.isEmpty {
-                    return finalURL
-                }
-                return acceleratedURL
-            }()
-
-            DispatchQueue.main.async {
-                guard let encoded = finalTarget.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-                    self?.downloadAndInstallTIPA(remoteURLString: remoteURLString, filename: "DSHios-public-latest.tipa")
-                    return
-                }
-
-                let schemes = [
-                    "apple-magnifier://install?url=\(encoded)",
-                    "trollstore://install?url=\(encoded)"
-                ]
-
-                var didOpen = false
-                let group = DispatchGroup()
-                for s in schemes {
-                    if let u = URL(string: s) {
-                        group.enter()
-                        UIApplication.shared.open(u, options: [:]) { success in
-                            if success { didOpen = true }
-                            group.leave()
-                        }
-                    }
-                }
-
-                group.notify(queue: .main) {
-                    if !didOpen {
-                        self?.downloadAndInstallTIPA(remoteURLString: remoteURLString, filename: "DSHios-public-latest.tipa")
-                    }
+        var didOpen = false
+        let group = DispatchGroup()
+        for s in schemes {
+            if let u = URL(string: s) {
+                group.enter()
+                UIApplication.shared.open(u, options: [:]) { success in
+                    if success { didOpen = true }
+                    group.leave()
                 }
             }
-        }.resume()
+        }
+
+        group.notify(queue: .main) { [weak self] in
+            if !didOpen {
+                self?.downloadAndInstallTIPA(remoteURLString: fallbackRemote, fallbackURL: fallbackURL, filename: "DSHios-public-latest.tipa")
+            }
+        }
     }
 
-    private func downloadAndInstallTIPA(remoteURLString: String, filename: String) {
-        let candidates = Self.mirrorCandidates(for: remoteURLString)
+    private func downloadAndInstallTIPA(remoteURLString: String, fallbackURL: String? = nil, filename: String) {
+        let candidates = Self.candidateChain(primary: remoteURLString, fallback: fallbackURL)
         guard !candidates.isEmpty else { return }
 
         let progressAlert = UIAlertController(title: "正在加速下载最新包", message: "正在通过国内镜像下载 \(filename)…\n进度：0%", preferredStyle: .alert)
