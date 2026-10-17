@@ -1795,6 +1795,14 @@ final class ViewController: UIViewController {
                 var winH = window.innerHeight;
                 if (winW > 768) return;
 
+                // 0. 🔴 v1.0.112：完全在屏幕外的元素一律不碰（关闭态的抽屉 / 弹层会故意停在屏外）。
+                //    老逻辑只判「rect.left < PADDING 就硬写 left:10px」，不看元素是不是故意停在屏外，
+                //    会把停在外面的弹层直接拽进屏幕（实证：left:-300px → x=10；top:1000px → 被强制居中）。
+                //    判定用「与视口零重叠」= 整个盒子都在视口外（贴边 0px 也算屏外，因为它本来就看不见）；
+                //    只要还有 1px 露在屏里就照旧处理，所以「越界浮层回收」的既有行为零变化。
+                var pre = el.getBoundingClientRect();
+                if (pre.right <= 0 || pre.left >= winW || pre.bottom <= 0 || pre.top >= winH) return;
+
                 // 1. 宽度与高度安全限制与多级插件通用规范
                 el.style.maxWidth = (winW - PADDING * 2) + 'px';
                 el.style.boxSizing = 'border-box';
@@ -2986,15 +2994,19 @@ final class ViewController: UIViewController {
           //       （🔴 同一窗口跑沙箱 v1.0.109 会话页渲染图 v110_sess_kbdown.png 得 186..227px，
           //        与老总截图**逐像素一致** → 证明老总运行的确实就是 v1.0.109，下面的差值可直接换算）；
           //     · 当前间隙 = 186 − 125 = 61px = 20.3pt（确实还有空间，老总判断正确）。
+          //   🔴 v1.0.111（老总 2026-10-17 07:21，附微信顶栏截图对比）：「顶栏太靠上了。需要下移半格文字高度吧。」
+          //   「一格」在 v1.0.109 时已与老总对齐为 12pt（他当时认可 12pt 的位移量），故「半格」= 6pt。
+          //   TOP_SHIFT 24 → 18（顶栏顶 33 → 39pt；图标带 150..191px → 168..209px，实测）。
           //   上移量→间隙对照（1pt = 3px，图标带/间隙均为实测或按实测等比外推）：
-          //     TOP_SHIFT=12（v1.0.109 原值）→ 图标带 186..227px，间隙 61px = 20.3pt  ← 老总说「还有空间」
-          //     TOP_SHIFT=18                 → 图标带 168..209px，间隙 43px = 14.3pt  （实测）
-          //     TOP_SHIFT=24（本轮）          → 图标带 150..191px，间隙 25px =  8.3pt  ← 再上移一整格(12pt)
+          //     TOP_SHIFT=0                  → 顶栏顶 57pt（= v1.0.108，与 iOS 安全区底 59pt 基本齐平）
+          //     TOP_SHIFT=12（v1.0.109）      → 图标带 186..227px，间隙 61px = 20.3pt  ← 老总说「还有空间」
+          //     TOP_SHIFT=18（v1.0.111 本轮） → 图标带 168..209px，间隙 43px = 14.3pt  ← 老总说「下移半格」
+          //     TOP_SHIFT=24（v1.0.110）      → 图标带 150..191px，间隙 25px =  8.3pt  ← 老总说「太靠上」
           //     TOP_SHIFT=30                 → 图标带 132..173px，间隙  7px =  2.3pt  ← 安全极限
           //     TOP_SHIFT=36（反例）          → 图标带 114..155px，**重叠 11px = 3.7pt**，压到「九月初八」底缘
-          //   故取 24。修改这一个值即可全局联动（fixTop 的 col.margin-top / fixFab 的 top /
+          //   修改这一个值即可全局联动（fixTop 的 col.margin-top / fixFab 的 top /
           //   抽屉与右侧面板的内联 padding-top / --dsh-topshift CSS 变量），无需改别处。
-          window.__dshTopShift = 24;
+          window.__dshTopShift = 18;
           // v1.0.76：原生侧把状态栏高度（CSS 像素）下发到这里。
           // 写成 CSS 变量，顶栏 padding 用它，换机型、转屏都跟着变。
           window.__dshSetStatusBar = function (px) {
@@ -3045,8 +3057,40 @@ final class ViewController: UIViewController {
               layers[i].style.setProperty('background-color', 'transparent', 'important');
             }
           }
+          // ===== 🔴 v1.0.113 右侧面板顶部留白：把官方重复的那一段压掉 =====
+          //   老总 2026-10-17 09:20「留白问题也要修复」（承接上一轮「具体截图看看」，
+          //   说明图 v1.0.111_右侧面板顶部留白_具体说明.png）。
+          //   实测链（沙箱 430x932 dsf3 iPhone UA + __dshSetStatusBar(59)，进会话 → 开右侧面板；
+          //   面板在手机上以**全屏浮层**呈现：width:100vw、data-sidebar-right-panel="fullscreen"）：
+          //     [data-dockkit-surface="true"]             padding-top: 65px  ← 状态栏让位（59+6），**必须保留**
+          //       └ [role="tablist"][data-dockkit-strip]  padding-top: 65px  ← 重复的一段，纯浪费
+          //           └ [data-dockkit-strip-tabs]「开始」   y = 116pt
+          //   ⇒ 两段 65 叠在一起，状态栏（59pt）到「开始」那一行之间空了 57pt，这就是老总看到的那块空白。
+          //   A/B 矩阵实测（_probe_panel_matrix.cjs，1:1 线性）：
+          //     surface 65→12 / 65→20 ：把 _surface 的状态栏让位也一起压掉了（strip 的 65 会顶上来）
+          //       →「开始」落到 63 / 71，63 < 我们顶栏底 115 ⇒ 内容钻进状态栏/顶栏下面，❌ 不可取
+          //     strip   65→12        ：「开始」116 → **71pt** ✅（= 状态栏 59 + 12pt 呼吸，正合适）
+          //       （strip 的盒高会跟着缩，所以不是 65+12=77，实测就是 71）
+          //   ⇒ 取 **strip 的 padding-top = 12px**，_surface 的 65 原样不动。
+          //   🔴 定位用 **data-* 语义属性**（data-dockkit-*），不依赖 CSS Modules 哈希类名；
+          //      用 [data-sidebar-right-panel] 限定在右侧面板内，避免误伤其它 tablist；找不到静默跳过。
+          //   🔴 幂等：只在「读回内联值 ≠ 目标」时才写（读内联属性不触发布局重算），
+          //      绝不重蹈旧 fixBottom「读回自己写的值再算一次」的累加覆辙。
+          var PANEL_STRIP_PT = 12;
+          function tightenRightPanelTop() {
+            try {
+              var strips = document.querySelectorAll('[data-sidebar-right-panel] [role="tablist"][data-dockkit-strip]');
+              for (var i = 0; i < strips.length; i++) {
+                var el = strips[i];
+                if (el.style.getPropertyValue('padding-top') === PANEL_STRIP_PT + 'px' &&
+                    el.style.getPropertyPriority('padding-top') === 'important') continue;
+                el.style.setProperty('padding-top', PANEL_STRIP_PT + 'px', 'important');
+              }
+            } catch (e) {}
+          }
           function applySidebarInset() {
             ensureSidebarOverlay();
+            try { tightenRightPanelTop(); } catch (e) {}
             // 🔴 v1.0.110 性能：优先读原生下发的缓存值 window.__dshNativeStatusBar，
             //   避免在 MutationObserver 回调（流式输出时每 300ms 一次）里调 getComputedStyle
             //   —— 那会强制样式重算，属老总明令禁止的「注入层拖慢页面」。
@@ -3056,7 +3100,7 @@ final class ViewController: UIViewController {
             // 🔴 v1.0.110 修一个隐患：这里原先是 `(h + 6)`，**没有扣减 __dshTopShift**。
             //   __dshSetStatusBar 写的是 `h + 6 - shift`，而本函数在 DOMContentLoaded / 观察器
             //   回调里也会跑，一旦跑在 __dshSetStatusBar 之后，就会用 `h + 6` 把正确值覆盖掉
-            //   → 抽屉顶部比顶栏矮一整个 shift（v1.0.109 是 12pt，v1.0.110 起是 24pt）。
+            //   → 抽屉顶部比顶栏矮一整个 shift（v1.0.109 是 12pt，v1.0.110 是 24pt，v1.0.111 起是 18pt）。
             //   现在统一按 `h + 6 - shift` 写，并改用「读回内联值」判等（比 dataset 鲁棒：
             //   React 复用元素只改 style 时 dataset 残留、dataset 判等会漏写，而读回不会）。
             var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 0;
@@ -3393,11 +3437,12 @@ final class ViewController: UIViewController {
           if (window.__dshLayoutFix) { try { window.__dshLayoutFix(); } catch (e) {} return; }
           var TOP_BREATH = 6;    // 顶栏标题行与状态栏下沿之间的呼吸间距（CSS px = pt）
           // 🔴 v1.0.109：「整体 UI 从顶栏起再上移一格文字间距」（老总 2026-10-16）。
-          //   v1.0.110 老总再提「顶栏还可以上移一刚文字间距」→ 全局值 12 改 24（顶栏顶 45 → 33pt）。
+          //   v1.0.110 老总再提「顶栏还可以上移一刚文字间距」→ 12 改 24（顶栏顶 45 → 33pt）。
+          //   v1.0.111 老总又提「顶栏太靠上了，下移半格文字高度」→ 24 改 18（顶栏顶 33 → 39pt）。
           //   取值与完整量测依据见 shim_11 里的 window.__dshTopShift（定义在那边，因为
           //   __dshSetStatusBar 给抽屉/面板写的是内联 padding-top，必须由它统一扣减）。
-          //   这里的 24 只是「全局值还没广播过来」时的兜底，正常路径不会用到。
-          var TOP_SHIFT = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 24;
+          //   这里的 18 只是「全局值还没广播过来」时的兜底，正常路径不会用到。
+          var TOP_SHIFT = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 18;
           // v1.0.105：底栏留白改为「按机型安全区自适应」= Home Indicator 安全区 + 固定呼吸间距。
           // 安全区由原生按机型下发（iPhone 全面屏 34 / iPad 全面屏 20 / 有 Home 键机型 0，
           // 见文件末尾 iOSSafeArea 对照表）；取不到时兜底 34，
@@ -5410,12 +5455,14 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.110)】
+            【最新特性 (v1.0.113)】
             1. ⚡ 首推插件 dsh-anywhere：支持多台手机、iPad、平板、电脑多设备同时在线访问，实时同屏收发与流式同步打印，无缝切换使用；内置毫秒级锁屏自愈（备选支持 dsh-pocket）；
-            2. 📐 顶栏整体上移贴合 iOS 系统状态栏，状态栏下方不留空白；左侧侧边栏宽度缩至屏宽 70%（252pt），主内容区豁然开阔；
-            3. ⌨️ 输入框只有键盘弹起 / 收起两个固定位置，不再随流式输出上下飘移；键盘弹起时「用量 / token / 上下文」统计条完整显示；
-            4. 🌙 暗色模式分层接缝修复；会话记录不再从聊天框底部露出；新建会话左上角按钮恢复响应；
-            5. 🚀 悬浮按钮内置「检查更新」：支持从 GitHub 仓库自动下载并唤起巨魔 (TrollStore) 一键覆盖安装。
+            2. 📐 顶栏档位定版微调，比上一版下移半格，与状态栏留 3pt 呼吸、零重叠；
+            3. 📑 右侧面板顶部多余的 45pt 留白已收起（官方重复的一段内边距），内容整体上提，打开即见正文；
+            4. 🖱️ 左上角「打开目录」按钮已实测可直接点开（首页悬浮键与会话页左上角按钮双通道），抽屉宽度保持 252pt；
+            5. ⌨️ 输入框只有键盘弹起 / 收起两个固定位置，不再随流式输出上下飘移；键盘弹起时「用量 / token / 上下文」统计条完整显示；
+            6. 🌙 暗色模式分层接缝修复；会话记录不再从聊天框底部露出；屏外隐藏的弹层不再被误拽进屏幕；
+            7. 🚀 悬浮按钮内置「检查更新」：支持从 GitHub 仓库自动下载并唤起巨魔 (TrollStore) 一键覆盖安装。
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
