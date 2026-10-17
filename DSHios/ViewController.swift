@@ -6226,7 +6226,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         guard !candidates.isEmpty else { return }
 
         // 巨魔直接打开 URL 遇到 301 重定向时会直接弹错 301；
-        // 这里先用 URLSession 做一次 HEAD 预解析，解析出跟随重定向后的真实 200 终点直链。
+        // 这里先用 URLSession 做一次「1 字节 Range」预解析，解析出跟随重定向后的真实 200 终点直链。
         // 🔴 v1.0.114：改成逐个候选探测 —— 旧逻辑只探第一条，那条加速镜像一挂，
         //   「巨魔一键直连安装」整条路径就不可用（还没轮到下载通道兜底）。
         func probe(_ index: Int) {
@@ -6234,8 +6234,14 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
                 downloadAndInstallTIPA(remoteURLString: remoteURLString, fallbackURL: fallbackURL, filename: "DSHios-public-latest.tipa")
                 return
             }
-            var req = URLRequest(url: reqURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 5)
-            req.httpMethod = "HEAD"
+            // 🔴 v1.0.114：这里原来发 HEAD，但统计网关（dshstat/1.0）只实现了 GET，对 HEAD 直接回 501
+            //   → 被下方 `statusCode < 400` 判成「不可达」→ 第一个候选就被跳过 → 统计地址一次都没被请求，
+            //   下载/更新人数全统计不到（而且还会一路退到公开仓库直链，白瞎自建网关）。
+            //   改成 GET + `Range: bytes=0-0`：只取 1 字节（实测终点回 206、Content-Length=1），
+            //   既能拿到「跟随 302 之后的真实 200 终点直链」交给巨魔（否则巨魔遇 301/302 直接报错），
+            //   又能让统计网关真的记到这一次下载。判定仍用 `< 400`（206 天然通过）。
+            var req = URLRequest(url: reqURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
+            req.setValue("bytes=0-0", forHTTPHeaderField: "Range")
             URLSession.shared.dataTask(with: req) { [weak self] _, resp, error in
                 let http = resp as? HTTPURLResponse
                 let reached = (error == nil) && (http.map { $0.statusCode < 400 } ?? false)
