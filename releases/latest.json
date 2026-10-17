@@ -4,7 +4,7 @@
   "updated_at": "2026-10-17 09:45:00",
   "title": "v1.0.113 右侧面板顶部留白收起·左上角目录按钮实测可点·顶栏档位定版",
   "changelog": "1. 右侧面板顶部那块多余留白收起：官方在这一块叠了两段 65px 内边距（一段是状态栏让位、必须留；另一段在 tab 条上是纯浪费），只压第二段后「开始」那一行从 y=116pt 抬到 y=71pt，正好落在状态栏（59pt）下方 12pt，打开即见正文；\n2. 左上角「打开目录」按钮实测可直接点开：首页悬浮键与会话页左上角按钮双通道均已真机流程验证（抽屉从屏外 -277pt 滑入 0），抽屉宽度保持 252pt；\n3. 界面看护不再误伤「故意停在屏幕外」的弹层与抽屉：完全屏外（与视口零重叠）的元素一律不碰，修前会被硬拽进屏幕、修后与官方原版逐值一致；\n4. 顶栏档位定版微调：比上一版下移半格，与 iOS 系统状态栏留 3pt 呼吸、零重叠，图标/标题/目录按钮同步；\n5. 输入框仍然只有键盘弹起 / 收起两个固定位置，键盘弹起时「用量 / token / 上下文」统计条完整显示；\n6. 暗色模式分层接缝无、会话记录不再从聊天框底部露出；关于弹窗「最新特性」与设置页「功能特性说明」文案更新到 v1.0.113；\n7. 页面跳转与地址切换逻辑零改动；DSH 电脑端保持 100% 官方原版；全网单一公开版，零私密配置，巨魔一键无损升级。",
-  "tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.113-52.tipa",
-  "public_tipa_url": "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/DSHios-public-1.0.113-52.tipa",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.113-52.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.113-52.tipa?m=gh-proxy.com",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.113"
 }
