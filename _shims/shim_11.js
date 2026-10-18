@@ -797,15 +797,75 @@
             }
             return out;
           }
-          var __dshStretchAt = 0;
-          function fixStretchedControls() {
+          // ── 🔴 v1.0.116：两条「坑」的根治（老总：不可能解决不了）─────────────────
+          //   坑 A「CSS 一刀切会连行首文本块一起改」
+          //     → 改用 **`:has()`** 精确分流：只在「内部真的有控件」时才命中。
+          //       行首文本块内部只有 DIV ⇒ `:has(button)` 天然不匹配 ⇒ 不再需要任何
+          //       JS 逐元素判定。「要通用性」= CSS 天生通用，不枚举任何控件类型。
+          //   坑 B「写死像素会量到偏小（108 而官方 110）」
+          //     → **根本不量**。值固定 `fit-content`，由浏览器按当时字体/字号/语言实时算。
+          //       桌面 1280 官方就是 flex row + align-items:center 的 shrink-to-fit，
+          //       与 `fit-content` 数学等价（_cmp_controls.cjs 实测 9/9 精确相等）。
+          //       既然不测量，就永远不受「字体还没加载完」影响，也不会过时。
+          //   🔴 为什么这套比 JS 逐元素判定更强：
+          //     ① 零 JS、零重排（不动任何 el.style，只插一个 <style>）；
+          //     ② 零时机依赖 —— 官方 CSS 晚 append 也自动落进同一条 cascade；
+          //     ③ 纯 CSS 生效，MutationObserver 反复触发也不抖（内容未变即不重建）。
+          //   🔴 特异性：`html body` 前缀 + `:has()` 参数 → 实测压过官方 (0,4,0)；
+          //     `:has()` 不支持时整条规则被浏览器丢弃 ⇒ 自动退回官方原样，绝不更坏，
+          //     此时由 fallback（老 JS 判定）接管，两条路径互不干扰。
+          //   🔴 兼容：`:has()` 需 Safari/iOS 15.4+；本项目最低 iOS 16.4。
+          var __dshHasOk = false;
+          try { __dshHasOk = !!(window.CSS && CSS.supports && CSS.supports('selector(:has(*))')); } catch (e) {}
+          var __dshStretchCssAt = 0;
+          // 「行尾到底该不该通栏」的唯一判据：**里面有真控件**，或者自身就是控件。
+          var __dshCtlHas = [':has(button)', ':has(input)', ':has(select)', ':has(textarea)',
+                             ':has(a[href])', ':has([role])', ':has([tabindex])', ':has([aria-haspopup])'];
+          var __dshCtlSelf = ':is(button,input,select,textarea,a[href],[role],[tabindex],[aria-haspopup])';
+          function buildStretchFixCss() {
+            var sels = findFullWidthSelectors();
+            if (!sels.length) return null;          // 官方 CSS 还没注入 → 不写任何兜底规则
+            var out = [];
+            for (var i = 0; i < sels.length; i++) {
+              var parts = String(sels[i]).split(',');
+              for (var j = 0; j < parts.length; j++) {
+                var p = parts[j].replace(/\s+/g, ' ').trim();
+                if (!p) continue;
+                for (var h = 0; h < __dshCtlHas.length; h++) out.push('html body ' + p + __dshCtlHas[h]);
+                // 自身即控件（行尾直接放 button/input 的情况）：剥掉末尾 child 伪类再套 :is()
+                var q = p.replace(/:(last|first)-child$/, '');
+                if (q && /[a-zA-Z\]\)]/.test(q)) out.push('html body ' + q + __dshCtlSelf);
+              }
+            }
+            if (!out.length) return null;
+            return '@media (max-width: 1023px) {\n' + out.join(',\n') + ' {\n' +
+                   '  width: -webkit-fit-content !important;\n' +
+                   '  width: fit-content !important;\n' +
+                   '  max-width: none !important;\n' +
+                   '} }';
+          }
+          function refreshStretchFixCss() {
             try {
               var now = Date.now();
-              if (now - __dshStretchAt < 600) return;
-              __dshStretchAt = now;
-              // 官方那条规则住在 @media (max-width:1023px) 里，宽屏下不生效 → 宽屏直接跳过，
-              // 绝不在宽屏上写任何宽度（那会把官方本来正确的布局改坏）。
-              if ((window.innerWidth || 0) > 1023) return;
+              if (now - __dshStretchCssAt < 600) return;
+              __dshStretchCssAt = now;
+              var text = buildStretchFixCss();
+              if (!text) return;
+              var id = 'dsh-ios-stretch-fix';
+              var old = document.getElementById(id);
+              if (old && old.textContent === text) return;        // 幂等：内容一致不重建
+              if (old && old.parentNode) old.parentNode.removeChild(old);
+              var st = document.createElement('style');
+              st.id = id;
+              st.textContent = text;
+              (document.head || document.documentElement).appendChild(st);
+            } catch (e) {}
+          }
+          var __dshStretchAt = 0;
+          // 🔴 fallback：仅当浏览器不支持 `:has()` 时才走（本项目不会触发，纯保险）
+          function fixStretchedControlsFallback() {
+            try {
+              // 节流与宽屏判定已由主入口 fixStretchedControls 统一处理
               var sels = findFullWidthSelectors();
               if (!sels.length) return;                  // 官方 CSS 还没注入，下一轮再来
               // ── ① 收集（纯只读）──────────────────────────────────────────
@@ -873,6 +933,23 @@
                 //   变化都会自动跟随，且实测精确等于桌面 1280 官方宽度。
                 if (it.el.dataset) it.el.dataset.dshCtl = '1';
               }
+            } catch (e) {}
+          }
+          // 主入口：统一节流 + 宽屏判定，再按能力分流（CSS `:has()` 优先，JS 兜底）
+          function fixStretchedControls() {
+            try {
+              var now = Date.now();
+              if (now - __dshStretchAt < 600) return;
+              __dshStretchAt = now;
+              // 官方那条规则住在 @media (max-width:1023px) 里，宽屏下不生效 → 宽屏直接跳过，
+              // 绝不在宽屏上写任何宽度（那会把官方本来正确的布局改坏）；顺手撤掉我们的样式表。
+              if ((window.innerWidth || 0) > 1023) {
+                var oldW = document.getElementById('dsh-ios-stretch-fix');
+                if (oldW && oldW.parentNode) oldW.parentNode.removeChild(oldW);
+                return;
+              }
+              if (__dshHasOk) { refreshStretchFixCss(); return; }   // 主路径：纯 CSS
+              fixStretchedControlsFallback();                        // 兜底：老 JS 判定
             } catch (e) {}
           }
           function scheduleStretchFix() {
