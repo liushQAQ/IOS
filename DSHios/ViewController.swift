@@ -3022,6 +3022,15 @@ final class ViewController: UIViewController {
             // 而且真机多出来的那段空白根本不是 header 撑的，写死必然对不上）。
             var headers = document.querySelectorAll('header');
             for (var i = 0; i < headers.length; i++) {
+              // 🔴 v1.0.115：只把**主顶栏**清透明（治顶栏发灰）。住在滚动容器里的页面内
+              //   吸顶条（如插件页 pageHead）必须保留底色，否则滚上去的内容会从它下面透出来。
+              if (headers[i].dataset && headers[i].dataset.dshPageHead === '1') continue;
+              var hp = headers[i].parentElement;
+              if (hp) {
+                var hpcs = null;
+                try { hpcs = getComputedStyle(hp); } catch (e) {}
+                if (hpcs && (hpcs.overflowY === 'auto' || hpcs.overflowY === 'scroll')) continue;
+              }
               headers[i].style.setProperty('background', 'transparent', 'important');
             }
             if (window.__dshLayoutFix) { try { window.__dshLayoutFix(); } catch (e) {} }
@@ -3198,11 +3207,35 @@ final class ViewController: UIViewController {
                 try { pcs = getComputedStyle(par); } catch (e) { continue; }
                 var scrollable = (pcs.overflowY === 'auto' || pcs.overflowY === 'scroll');
                 if (!scrollable) continue;               // 主顶栏：父级不可滚 → 跳过
-                if (hd.style.getPropertyValue('min-height') === 'fit-content' &&
-                    hd.style.getPropertyPriority('min-height') === 'important' &&
-                    hd.style.getPropertyValue('flex-shrink') === '0') continue;
-                hd.style.setProperty('min-height', 'fit-content', 'important');
-                hd.style.setProperty('flex-shrink', '0', 'important');
+                if (hd.dataset) hd.dataset.dshPageHead = '1';   // 打标：__dshSetStatusBar 见标即跳过
+                if (hd.style.getPropertyValue('min-height') !== 'fit-content' ||
+                    hd.style.getPropertyPriority('min-height') !== 'important' ||
+                    hd.style.getPropertyValue('flex-shrink') !== '0') {
+                  hd.style.setProperty('min-height', 'fit-content', 'important');
+                  hd.style.setProperty('flex-shrink', '0', 'important');
+                }
+                // 🔴 v1.0.115 补：这类 header 是**吸顶条**，必须有底色。
+                //   实测（_cmp_scroll_115.cjs 三态滚动截图）：高度修好后往下滑，
+                //   卡片文字仍会从吸顶条区域**透上来**（「在本机使用 SenseVoice 转写录音…」
+                //   浮在「插件」标题行里）—— 因为 __dshSetStatusBar 里那条
+                //   `header { background: transparent }` 是为**主顶栏**写的（治顶栏发灰），
+                //   却把所有 <header> 都清了。主顶栏确实要透明，页面内吸顶条不行。
+                //   取页面底色（上溯第一个不透明祖先），让滚动内容被真正挡住。
+                var bgOk = hd.style.getPropertyPriority('background-color') === 'important' &&
+                           hd.style.getPropertyValue('background-color') !== '' &&
+                           hd.style.getPropertyValue('background-color') !== 'transparent';
+                if (!bgOk) {
+                  var bg = null;
+                  var n = par;
+                  while (n && n !== document.documentElement) {
+                    var ncs;
+                    try { ncs = getComputedStyle(n); } catch (e) { break; }
+                    var bc = ncs.backgroundColor;
+                    if (bc && bc !== 'transparent' && bc !== 'rgba(0, 0, 0, 0)') { bg = bc; break; }
+                    n = n.parentElement;
+                  }
+                  if (bg) hd.style.setProperty('background-color', bg, 'important');
+                }
               }
             } catch (e) {}
           }
@@ -3581,7 +3614,7 @@ final class ViewController: UIViewController {
           // 其次读 CSS 变量，最后兜底 34（全面屏 iPhone 主流值）。
           //   ⚠️ 必须用 __dshSafeAreaReady 区分「原生还没下发」和「原生下发的就是 0」——
           //      有 Home 键机型（iPhone SE / 6s~8）底部安全区**就是 0**，
-          //      若按 `b > 0` 判断会把 0 当成"没值"，错误套用全面屏的 34，SE 上凭空多出 34px 空白。
+          //      若按 `b > 0` 判断会把 0 当成\"没值\"，错误套用全面屏的 34，SE 上凭空多出 34px 空白。
           function botBreath() {
             try {
               if (window.__dshSafeAreaReady === 1 && window.__dshSafeArea) {
@@ -3608,7 +3641,7 @@ final class ViewController: UIViewController {
           }
           function pageBg() {
             try {
-              var n = document.querySelector('.ank0OG_composerSeat, [class*="composerSeat"]');
+              var n = document.querySelector('.ank0OG_composerSeat, [class*=\"composerSeat\"]');
               for (var i = 0; n && i < 8; i++) {
                 var bg = opaqueBg(n);
                 if (bg) return bg;
@@ -3617,19 +3650,53 @@ final class ViewController: UIViewController {
             } catch (e) {}
             return 'transparent';
           }
+          // 🔴 v1.0.115：只认「DSH 主顶栏」，绝不碰页面内吸顶条。
+          //   老总 2026-10-18 报「打开插件按钮，弹出页面和按钮选项重叠」。
+          //   真凶就在本函数的**第三候选 `document.querySelector('header')`**：
+          //   插件页/设置页是**全屏浮层**，此时主顶栏（[data-phase] header / .ank0OG_header）
+          //   **根本不在 DOM 里**，于是第一个 header 命中的是页面内的
+          //   `<header class=\"u9Hv6q_pageHead\">`（插件标题行）→ 被当成主顶栏做全套装校：
+          //     min-height:0px（官方 auto）→ 被 flex 压成 8px；
+          //     background:transparent → 滚动时卡片文字从它下面透上来；
+          //     padding-top:8px / z-index / 甚至当成 col 写死 height=vh-colTop。
+          //   实测（_probe_bg_which.cjs）：触发一次 __dshSetStatusBar 后该 header
+          //   内联值由 `min-height:fit-content` + `rgb(21,21,23)` → `0px` + `transparent`。
+          //   判据：**住在「真能纵向滚动」的祖先里 ⇒ 页面内吸顶条，不是主顶栏**。
+          //   主顶栏的祖先链（centerCol overflow:hidden / frame / root）都不满足。
+          function isInnerHeader(hd) {
+            var n = hd.parentElement, d = 0;
+            while (n && d < 12) {
+              var c = null;
+              try { c = getComputedStyle(n); } catch (e) { break; }
+              if ((c.overflowY === 'auto' || c.overflowY === 'scroll') &&
+                  n.scrollHeight > n.clientHeight + 4) return true;
+              n = n.parentElement; d++;
+            }
+            return false;
+          }
           function pickHeader() {
-            return document.querySelector('[data-phase] header')
-              || document.querySelector('header.ank0OG_header')
-              || document.querySelector('header');
+            var list = [];
+            var a = document.querySelector('[data-phase] header');
+            if (a) list.push(a);
+            var b = document.querySelector('header.ank0OG_header');
+            if (b) list.push(b);
+            var all = document.querySelectorAll('header');
+            for (var i = 0; i < all.length; i++) {
+              if (list.indexOf(all[i]) < 0) list.push(all[i]);
+            }
+            for (var j = 0; j < list.length; j++) {
+              if (!isInnerHeader(list[j])) return list[j];
+            }
+            return null;   // 找不到真主顶栏就什么都不做（绝不把浮层里的 header 当主顶栏）
           }
           function fixTop() {
             var header = pickHeader();
             if (!header) return;
-            // 真凶就在这：[data-mobile-nav="frame"] 被 DSH 塞了 padding-top: env(safe-area-inset-top)
+            // 真凶就在这：[data-mobile-nav=\"frame\"] 被 DSH 塞了 padding-top: env(safe-area-inset-top)
             // （真机 59~75px）。它只把内容整体往下推，却不缩减自身高度，
             // 于是整列比屏幕高出 75px —— 顶栏下方多一大段空白 + 输入框整块被顶出屏幕底部，
             // 两个毛病是同一个原因。这里直接清零，状态栏高度改由我们自己按真实几何预留。
-            var frame = header.closest('[data-mobile-nav="frame"]');
+            var frame = header.closest('[data-mobile-nav=\"frame\"]');
             if (frame) {
               setP(frame, 'padding-top', '0px');
               setP(frame, 'box-sizing', 'border-box');
@@ -3640,7 +3707,7 @@ final class ViewController: UIViewController {
             // 🔴 v1.0.108：顶栏 z-index 是「新建会话左上角按钮点不动」的元凶，必须分页处置。
             //    实测（2026-10-16，430x932 暗色，elementFromPoint + 真点实验）：
             //      官方原版：顶栏 z-index 是 auto（不建层叠上下文）；fab 是 position:absolute + z-index:21，
-            //                且 fab 住在 DSH 自己的 [class*="overlayLayer"] 里（该层 position:absolute + z-index:20）
+            //                且 fab 住在 DSH 自己的 [class*=\"overlayLayer\"] 里（该层 position:absolute + z-index:20）
             //                → 官方层序 = overlayLayer(20) 在顶栏(auto)之上，**官方本来就要求 fab 压在顶栏之上**；
             //                点 fab 中心 (31,49) 命中 svg/BUTTON，抽屉正常打开（实测 sbX -150 → 0）。
             //      我们的构建：把顶栏钉成 sticky + z-index:1020，把 fab 那 38x38 整块罩住
@@ -3652,10 +3719,10 @@ final class ViewController: UIViewController {
             //          行为一字不变。目标值动态取「overlayLayer 的 z-index - 1」，DSH 改了我们也跟着走。
             var zTarget = '1020';
             try {
-              var fabEl = document.querySelector('[data-mobile-nav="fab"]');
+              var fabEl = document.querySelector('[data-mobile-nav=\"fab\"]');
               var fabVisible = !!fabEl && getComputedStyle(fabEl).display !== 'none' && getComputedStyle(fabEl).visibility !== 'hidden';
               if (fabVisible) {
-                var ol = document.querySelector('[class*="overlayLayer"]');
+                var ol = document.querySelector('[class*=\"overlayLayer\"]');
                 var olZ = ol ? parseInt(getComputedStyle(ol).zIndex, 10) : NaN;
                 zTarget = (isFinite(olZ) && olZ > 0) ? String(Math.max(1, olZ - 1)) : '10';
               }
@@ -3674,7 +3741,7 @@ final class ViewController: UIViewController {
             // 直接把首行高度压成 0（内联 !important 能压过 DSH 样式表里的 min-height:36px），
             // 标题行随即上提到「顶栏顶 + padding-top」，而两个开关是绝对定位挂在顶栏上的，
             // 位置完全不受影响 —— 比用标题行负 margin 更确定、也不会被 React 重渲染冲掉。
-            var leading = header.querySelector('.ank0OG_headerLeading, [data-conversation-header-leading], [class*="headerLeading"]');
+            var leading = header.querySelector('.ank0OG_headerLeading, [data-conversation-header-leading], [class*=\"headerLeading\"]');
             if (leading) {
               setP(leading, 'min-height', '0px');
               setP(leading, 'height', '0px');
@@ -3719,7 +3786,7 @@ final class ViewController: UIViewController {
             }
           }
           function fixBottom() {
-            var seat = document.querySelector('.ank0OG_composerSeat, [class*="composerSeat"]');
+            var seat = document.querySelector('.ank0OG_composerSeat, [class*=\"composerSeat\"]');
             if (!seat) return;
             var vh = window.innerHeight || document.documentElement.clientHeight || 0;
             if (!vh) return;
@@ -3785,7 +3852,7 @@ final class ViewController: UIViewController {
             // 首页左上角目录按钮：DSH 自带规则是 top: calc(var(--dsh-statusbar,54px) - 24px)，
             // 正好压进状态栏里被切掉半截。改为状态栏下沿 + TOP_BREATH，饱满完整呈现。
             // v1.0.109：必须与 fixTop 的 TOP_SHIFT 同步上移，否则顶栏上去了、目录按钮留在原地 → 错位。
-            var fabs = document.querySelectorAll('[data-mobile-nav="fab"]');
+            var fabs = document.querySelectorAll('[data-mobile-nav=\"fab\"]');
             for (var i = 0; i < fabs.length; i++) {
               setP(fabs[i], 'top', (sbHeight() + TOP_BREATH - TOP_SHIFT) + 'px');
               setP(fabs[i], 'border-radius', '8px');
