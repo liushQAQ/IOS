@@ -741,11 +741,165 @@
               }
             } catch (e) {}
           }
+          // ===== 🔴 v1.0.115 三（通用版）：官方「行尾控件通栏」规则成片误伤小控件 =====
+          //   老总 2026-10-18：「只能改 ios app 里面。不止这一个按钮这种情况。要通用性」
+          //   起因只是「显示代码工作视图」的开关被拉成 390x20 通栏白条，但深挖发现
+          //   **同一条官方规则一共误伤了 9 个控件**（_cmp_controls.cjs，430x932 dsf3）：
+          //     完全权限 110 / 中文 82 / 字号 14px 95 / 简洁 82 / 应用内侧边栏 138 /
+          //     排队发送 110 / 详细 82 / 开关 x2 = 36x20
+          //   —— 这 9 个宽度是**桌面 1280 官方原版实测值**，手机 430 下全部被拉成 390。
+          //   真凶（全量扫 CSSOM，唯一带 !important 的尺寸规则；MODE=official A/B 同样 390，
+          //   ⇒ 不是我们注入层引入的，是 DSH 自己的移动端适配缺陷）：
+          //     @media (max-width:1023px){
+          //       [aria-modal="true"] [class$="_section"] [class$="_row"] > :last-child {
+          //         width:100% !important; max-width:none !important; } }
+          //   它本意对「文本框 / 长按钮」通栏是合理的，但 `:last-child` 把胶囊下拉、开关、
+          //   数字输入组一起吃了。
+          //
+          //   🔴 通用修法分两层，**主路径是运行时判定，不是 CSS 一刀切**：
+          //     ① `findFullWidthSelectors()` 运行时遍历 CSSOM，动态抓出「width:100% !important
+          //        + max-width:none」的规则并取其 selectorText —— 官方以后改哈希类名/改结构，
+          //        这里自动跟随，绝不写死 `_section` / `_row` 这些类名；
+          //     ② `fixStretchedControls()` 对命中元素逐个判：只有**可交互控件**才复位宽度，
+          //        纯文本块一律放过。
+          //   🔴 为什么不能用 CSS 一刀切（踩过的坑）：官方同一条规则对 `<row> > :first-child`
+          //     **也**写了 width:100%，而 first-child 是「标签 + 说明」的文本块，
+          //     给它 fit-content 会把「繁忙时的发送行为」的描述挤到两行（实测 44 → 62px 高）。
+          //     ⇒ 用 CSS 只会把文本块和控件一起改，必须按元素性质分流。
+          //   🔴 判据「可交互」（_classify_stretch.cjs 实测，9 行首 vs 9 行尾）：
+          //     行首文本块：自身**无任何属性**（无 role/tabindex/aria），子元素只有 DIV，固有宽 76~433；
+          //     行尾控件  ：自身或**内部**有 button/input（胶囊下拉内部是 BUTTON、数字框内部是 INPUT），
+          //                 固有宽 20~138（占行宽 5%~35%）。
+          //     ⇒ 「自身或内部存在可交互元素」是唯一能干净分开两者的判据（单看宽度会误判
+          //       「语言」那一行：它的文本块固有宽只有 76px，比任何控件都窄）。
+          //   🔴 值取 fit-content 实测像素：实测 9/9 精确等于桌面 1280 官方宽度。
+          //   🔴 幂等：dataset.dshCtl 打标 + 读回宽度判「已不通栏」即跳过。
+          //   🔴 性能：读写严格分离（统一写 → 统一读 → 统一裁决），全程只触发一次重排。
+          function findFullWidthSelectors() {
+            var out = [];
+            function scan(rules) {
+              for (var i = 0; i < rules.length; i++) {
+                var r = rules[i];
+                // 4 = @media，12 = @supports：都要钻进去找
+                if ((r.type === 4 || r.type === 12) && r.cssRules) { scan(r.cssRules); continue; }
+                if (!r.selectorText || !r.style) continue;
+                if (r.style.getPropertyValue('width') !== '100%') continue;
+                if (r.style.getPropertyPriority('width') !== 'important') continue;
+                if (r.style.getPropertyValue('max-width') !== 'none') continue;
+                if (out.indexOf(r.selectorText) < 0) out.push(r.selectorText);
+              }
+            }
+            var sheets = document.styleSheets || [];
+            for (var s = 0; s < sheets.length; s++) {
+              var rs = null;
+              try { rs = sheets[s].cssRules; } catch (e) { continue; }   // 跨域样式表直接跳过
+              if (rs) { try { scan(rs); } catch (e) {} }
+            }
+            return out;
+          }
+          var __dshStretchAt = 0;
+          function fixStretchedControls() {
+            try {
+              var now = Date.now();
+              if (now - __dshStretchAt < 600) return;
+              __dshStretchAt = now;
+              // 官方那条规则住在 @media (max-width:1023px) 里，宽屏下不生效 → 宽屏直接跳过，
+              // 绝不在宽屏上写任何宽度（那会把官方本来正确的布局改坏）。
+              if ((window.innerWidth || 0) > 1023) return;
+              var sels = findFullWidthSelectors();
+              if (!sels.length) return;                  // 官方 CSS 还没注入，下一轮再来
+              // ── ① 收集（纯只读）──────────────────────────────────────────
+              var seen = [];
+              for (var s = 0; s < sels.length; s++) {
+                var list;
+                try { list = document.querySelectorAll(sels[s]); } catch (e) { continue; }
+                for (var i = 0; i < list.length; i++) {
+                  if (seen.indexOf(list[i]) < 0) seen.push(list[i]);
+                }
+              }
+              var todo = [];
+              for (var k = 0; k < seen.length; k++) {
+                var el = seen[k];
+                if (!el || el.nodeType !== 1) continue;
+                var tag = el.tagName;
+                // 排除「通栏是官方本意」的文本输入类
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') continue;
+                var role = el.getAttribute('role');
+                if (role === 'textbox' || role === 'searchbox') continue;
+                if (role === 'switch') continue;         // switch 走上面那条专用 36x20 规则
+                if (el.hasAttribute('contenteditable')) continue;
+                // 🔴 核心判据：可交互控件才复位；纯文本块（行首标签）绝不动
+                var interactive = false;
+                try {
+                  interactive = el.matches('button,input,select,textarea,a[href],[role],[tabindex],[aria-haspopup]') ||
+                    !!el.querySelector('button,input,select,textarea,a[href],[role],[tabindex],[aria-haspopup]');
+                } catch (e) { continue; }
+                if (!interactive) continue;
+                var par = el.parentElement;
+                if (!par) continue;
+                var pw = par.getBoundingClientRect().width;
+                if (!(pw > 40)) continue;
+                var w = el.getBoundingClientRect().width;
+                if (w < pw - 8) continue;                // 已经不通栏 → 幂等跳过
+                if (el.dataset && el.dataset.dshCtl === '1') continue;
+                todo.push({ el: el, pw: pw });
+              }
+              if (!todo.length) return;
+              // ── ② 统一写 fit-content（写）─────────────────────────────────
+              for (var a = 0; a < todo.length; a++) {
+                var e1 = todo[a].el;
+                e1.style.setProperty('width', '-webkit-fit-content', 'important');
+                e1.style.setProperty('width', 'fit-content', 'important');
+                e1.style.setProperty('max-width', 'none', 'important');
+              }
+              // ── ③ 统一读回固有宽度（读，一次重排）────────────────────────
+              //   这一步只用于「裁决」，不作为最终值。
+              for (var b = 0; b < todo.length; b++) {
+                todo[b].fw = Math.round(todo[b].el.getBoundingClientRect().width);
+              }
+              // ── ④ 统一裁决（写）────────────────────────────────────────────
+              for (var c = 0; c < todo.length; c++) {
+                var it = todo[c];
+                var rat = it.fw / it.pw;
+                // 固有宽度本来就接近满宽（≥85%）或测不出 → 说明它确实该占满，交还官方 100%
+                if (!(it.fw >= 12) || rat > 0.85) {
+                  it.el.style.removeProperty('width');
+                  it.el.style.removeProperty('max-width');
+                  continue;
+                }
+                // 🔴 终值**必须保持 fit-content，绝不写死像素**：实测写死会在字体加载完成前
+                //   量到偏小的值（108 而官方 110 / 80 而 82 / 135 而 138），
+                //   一旦写死就再也回不来；fit-content 由浏览器按当时内容算，字体/字号/语言
+                //   变化都会自动跟随，且实测精确等于桌面 1280 官方宽度。
+                if (it.el.dataset) it.el.dataset.dshCtl = '1';
+              }
+            } catch (e) {}
+          }
+          function scheduleStretchFix() {
+            // 官方 CSS 可能晚于 documentStart 注入（hydration 后才 append），
+            // 故 DOMContentLoaded 后补几拍；稳态由 applySidebarInset（MutationObserver 驱动）兜底。
+            var step = function (i) {
+              if (i > 3) return;
+              setTimeout(function () {
+                try { fixStretchedControls(); } catch (e) {}
+                step(i + 1);
+              }, i === 0 ? 120 : (i === 1 ? 600 : 1400));
+            };
+            step(0);
+          }
+          try {
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', scheduleStretchFix);
+            } else {
+              scheduleStretchFix();
+            }
+          } catch (e) {}
           function applySidebarInset() {
             ensureSidebarOverlay();
             try { tightenRightPanelTop(); } catch (e) {}
             try { restorePageHeadHeight(); } catch (e) {}
             try { fixOverlayOverflow(); } catch (e) {}
+            try { fixStretchedControls(); } catch (e) {}   // v1.0.115 通用：行内控件被通栏
             // 🔴 v1.0.110 性能：优先读原生下发的缓存值 window.__dshNativeStatusBar，
             //   避免在 MutationObserver 回调（流式输出时每 300ms 一次）里调 getComputedStyle
             //   —— 那会强制样式重算，属老总明令禁止的「注入层拖慢页面」。
