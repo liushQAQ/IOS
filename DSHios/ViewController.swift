@@ -5200,6 +5200,11 @@ final class ViewController: UIViewController {
         let pan = UIPanGestureRecognizer(target: self, action: #selector(menuPanned(_:)))
         button.addGestureRecognizer(pan)
 
+        // 🌟 长按小鲸鱼悬浮球：直接呼出当前网页的快捷添加/管理（符合老总「长按才有选择」铁律）
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(menuLongPressed(_:)))
+        longPress.minimumPressDuration = 0.45
+        button.addGestureRecognizer(longPress)
+
         // 添加右侧全屏幕边缘滑动手势：屏幕右边缘任何位置向左滑，均可呼出悬浮鲸鱼按钮
         let edgePan = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(rightEdgePanned(_:)))
         edgePan.edges = .right
@@ -5433,6 +5438,69 @@ final class ViewController: UIViewController {
     }
 
     /// 点一下：无论当前是展开还是收起，直接弹出菜单（避免用户误以为无响应）。
+    /// 长按悬浮球：直接弹出当前页快捷管理（长按才有选择）
+    @objc private func menuLongPressed(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+
+        let currentURL = webView.url?.absoluteString ?? ""
+        guard let cur = URL(string: currentURL), (cur.scheme == "http" || cur.scheme == "https") else {
+            presentMenuSheet()
+            return
+        }
+
+        let isDefaultDSH = (cur.port == 3083 || cur.port == 3081 || cur.port == 3082) && (cur.host == "192.168.1.100" || cur.host == "127.0.0.1" || cur.host == "localhost")
+        if isDefaultDSH {
+            showToast(message: "当前是 DSH 本地主控，无需重复添加快捷方式")
+            return
+        }
+
+        let services = ServiceStore.load()
+        let isAlreadySaved = services.contains {
+            let u = $0.url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            let c = currentURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            return u == c || (URL(string: $0.url)?.host == cur.host && cur.host != nil)
+        }
+
+        let pageTitle = webView.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        var name = (pageTitle?.isEmpty == false && (pageTitle?.count ?? 0) < 18) ? pageTitle! : (cur.host ?? "网页")
+        if name.contains("DeepSeek") { name = "DeepSeek网页版" }
+        else if name.contains("豆包") { name = "豆包网页版" }
+        else if name.contains("Kimi") { name = "Kimi网页版" }
+        else if name.contains("通义") { name = "通义千问网页版" }
+        else if name.contains("文心") { name = "文心一言网页版" }
+        else if name.contains("元宝") { name = "腾讯元宝网页版" }
+        else if name.contains("ChatGPT") { name = "ChatGPT网页版" }
+        else if name.contains("Claude") { name = "Claude网页版" }
+
+        let sheet = UIAlertController(title: "网页快捷方式设置", message: "当前网页：\(name)\n\(currentURL)", preferredStyle: .actionSheet)
+
+        if !isAlreadySaved {
+            sheet.addAction(UIAlertAction(title: "⭐ 将当前页面添加为快捷打开", style: .default) { [weak self] _ in
+                ServiceStore.add(ServiceItem(name: name, url: currentURL, note: "网页快捷方式", resolverURL: nil))
+                self?.showToast(message: "已添加「\(name)」到快捷服务！\n在「切换服务」首屏即可直接打开。")
+            })
+        } else {
+            sheet.addAction(UIAlertAction(title: "🗑 从快捷服务中移除当前页面", style: .destructive) { [weak self] _ in
+                var all = ServiceStore.load()
+                all.removeAll {
+                    let u = $0.url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                    let c = currentURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                    return u == c || (URL(string: $0.url)?.host == cur.host && cur.host != nil)
+                }
+                ServiceStore.save(all)
+                self?.showToast(message: "已从快捷服务中移除「\(name)」")
+            })
+        }
+
+        sheet.addAction(UIAlertAction(title: "📡 全部服务与快捷方式管理…", style: .default) { [weak self] _ in
+            self?.openServiceList()
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
     @objc private func menuTapped() {
         // fisharchive.cc 果冻 Q 弹物理动效 (Jelly Spring Animation)
         UIView.animate(withDuration: 0.12, delay: 0, options: [.curveEaseIn], animations: {
@@ -5722,145 +5790,20 @@ final class ViewController: UIViewController {
     })();
     """
 
-    /// 一级菜单：免费网页版（主流 AI 模型）
-    /// 支持二级菜单查看国内主流模型与海外主流模型，用户登录自己账号后，Cookie 与登录态由 WKWebsiteDataStore 永久保持
-    private func presentFreeWebActionSheet() {
-        let sheet = UIAlertController(
-            title: "免费网页版（主流AI模型）",
-            message: "登录个人账号即可免费使用。登录态 Cookie 自动持久化保存，除非平台官方过期否则无需重复登录。",
-            preferredStyle: .actionSheet)
-
-        sheet.addAction(UIAlertAction(title: "🇨🇳 国内主流模型（手机号即可直接免费用）", style: .default) { [weak self] _ in
-            self?.presentDomesticWebActionSheet()
-        })
-
-        sheet.addAction(UIAlertAction(title: "🌐 国外主流模型（需海外网络环境+账号）", style: .default) { [weak self] _ in
-            self?.presentOverseasWebActionSheet()
-        })
-
-        sheet.addAction(UIAlertAction(title: "返回上级菜单", style: .default) { [weak self] _ in
-            self?.presentMenuSheet()
-        })
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        sheet.popoverPresentationController?.sourceView = menuButton
-        present(sheet, animated: true)
-    }
-
-    /// 二级菜单：国内主流免费模型
-    private func presentDomesticWebActionSheet() {
-        let sheet = UIAlertController(
-            title: "国内主流模型网页端",
-            message: "点击条目可选择「立即进入」或「添加为快捷打开」：",
-            preferredStyle: .actionSheet)
-
-        let items = FreeWebStore.domesticDefaults
-        let currentURL = webView.url?.absoluteString ?? ""
-        let services = ServiceStore.load()
-
-        for item in items {
-            let isCurrent = currentURL.hasPrefix(item.url)
-            let isSaved = services.contains {
-                let u = $0.url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                let itm = item.url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                return u == itm || u.hasPrefix(itm) || itm.hasPrefix(u)
-            }
-
-            var prefix = ""
-            if isCurrent {
-                prefix = "🔴 "
-            } else if isSaved {
-                prefix = "⭐ "
-            }
-            let suffix = isSaved ? " (已在快捷打开)" : ""
-            let title = "\(prefix)\(item.name)\(suffix)"
-
-            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
-                self?.presentFreeWebItemOptions(item: item, isSaved: isSaved)
-            }
-            if isCurrent, action.responds(to: NSSelectorFromString("titleTextColor")) {
-                action.setValue(UIColor.systemRed, forKey: "titleTextColor")
-            }
-            sheet.addAction(action)
-        }
-
-        sheet.addAction(UIAlertAction(title: "‹ 返回免费网页版目录", style: .default) { [weak self] _ in
-            self?.presentFreeWebActionSheet()
-        })
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        sheet.popoverPresentationController?.sourceView = menuButton
-        present(sheet, animated: true)
-    }
-
-    /// 二级菜单：国外主流免费模型
-    private func presentOverseasWebActionSheet() {
-        let sheet = UIAlertController(
-            title: "国外主流模型网页端",
-            message: "点击条目可选择「立即进入」或「添加为快捷打开」：",
-            preferredStyle: .actionSheet)
-
-        let items = FreeWebStore.overseasDefaults
-        let currentURL = webView.url?.absoluteString ?? ""
-        let services = ServiceStore.load()
-
-        for item in items {
-            let isCurrent = currentURL.hasPrefix(item.url)
-            let isSaved = services.contains {
-                let u = $0.url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                let itm = item.url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                return u == itm || u.hasPrefix(itm) || itm.hasPrefix(u)
-            }
-
-            var prefix = ""
-            if isCurrent {
-                prefix = "🔴 "
-            } else if isSaved {
-                prefix = "⭐ "
-            }
-            let suffix = isSaved ? " (已在快捷打开)" : ""
-            let title = "\(prefix)\(item.name)\(suffix)"
-
-            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
-                self?.presentFreeWebItemOptions(item: item, isSaved: isSaved)
-            }
-            if isCurrent, action.responds(to: NSSelectorFromString("titleTextColor")) {
-                action.setValue(UIColor.systemRed, forKey: "titleTextColor")
-            }
-            sheet.addAction(action)
-        }
-
-        sheet.addAction(UIAlertAction(title: "‹ 返回免费网页版目录", style: .default) { [weak self] _ in
-            self?.presentFreeWebActionSheet()
-        })
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        sheet.popoverPresentationController?.sourceView = menuButton
-        present(sheet, animated: true)
-    }
-
-    /// 点击某个大模型网页条目弹出的操作选项
-    private func presentFreeWebItemOptions(item: FreeWebItem, isSaved: Bool) {
-        let cleanName = item.name.replacingOccurrences(of: #"^\d+\.\s*"#, with: "", options: .regularExpression)
-        let sheet = UIAlertController(
-            title: "\(item.name)",
-            message: "\(item.subtitle)\n网址：\(item.url)",
-            preferredStyle: .actionSheet)
-
-        sheet.addAction(UIAlertAction(title: "🚀 立即进入网页版", style: .default) { [weak self] _ in
-            self?.loadURLString(item.url, markAsDSHService: false)
-        })
-
-        if !isSaved {
-            sheet.addAction(UIAlertAction(title: "⭐ 添加到快捷服务列表（主页快捷打开）", style: .default) { [weak self] _ in
+    /// 免费网页版（主流 AI 模型）专属界面：轻点直接进入打开链接，长按弹出快捷打开设置（老总交互定版）
+    private func presentFreeWebActionSheet(category: String = "domestic") {
+        let vc = FreeWebListViewController(
+            initialCategory: category,
+            onSelect: { [weak self] url in
+                self?.loadURLString(url, markAsDSHService: false)
+            },
+            onAddShortcut: { [weak self] item in
+                let cleanName = item.name.replacingOccurrences(of: #"^\d+\.\s*"#, with: "", options: .regularExpression)
                 ServiceStore.add(ServiceItem(name: "\(cleanName)网页版", url: item.url, note: item.subtitle, resolverURL: nil))
-                self?.showToast(message: "已添加「\(cleanName)网页版」到快捷打开列表！\n随时可在「切换服务」中一键直达。")
-            })
-
-            sheet.addAction(UIAlertAction(title: "✨ 添加到快捷服务并立即进入", style: .default) { [weak self] _ in
-                ServiceStore.add(ServiceItem(name: "\(cleanName)网页版", url: item.url, note: item.subtitle, resolverURL: nil))
-                self?.showToast(message: "已添加「\(cleanName)网页版」到快捷打开")
-                self?.loadURLString(item.url, markAsDSHService: false)
-            })
-        } else {
-            sheet.addAction(UIAlertAction(title: "🗑 从快捷服务列表中移除", style: .destructive) { [weak self] _ in
+                self?.showToast(message: "已添加「\(cleanName)网页版」到快捷打开！\n在「切换服务」中可随时直达。")
+            },
+            onRemoveShortcut: { [weak self] item in
+                let cleanName = item.name.replacingOccurrences(of: #"^\d+\.\s*"#, with: "", options: .regularExpression)
                 var all = ServiceStore.load()
                 all.removeAll {
                     let u = $0.url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -5868,13 +5811,19 @@ final class ViewController: UIViewController {
                     return u == itm || u.hasPrefix(itm) || itm.hasPrefix(u)
                 }
                 ServiceStore.save(all)
-                self?.showToast(message: "已从快捷服务列表中移除「\(cleanName)」")
+                self?.showToast(message: "已从快捷服务中移除「\(cleanName)」")
             })
-        }
 
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        sheet.popoverPresentationController?.sourceView = menuButton
-        present(sheet, animated: true)
+        let nav = UINavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .pageSheet
+        if #available(iOS 15.0, *) {
+            if let sheet = nav.sheetPresentationController {
+                sheet.detents = [.medium(), .large()]
+                sheet.prefersGrabberVisible = true
+                sheet.preferredCornerRadius = 24
+            }
+        }
+        present(nav, animated: true)
     }
 
     @objc private func openConnectionGuide() {

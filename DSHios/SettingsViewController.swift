@@ -986,3 +986,250 @@ final class ConnectionGuideViewController: UIViewController {
 }
 
 
+
+// MARK: - 国内外主流大模型网页版列表（轻点直接打开，长按弹出快捷添加/管理）
+
+final class FreeWebListViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
+    private let onSelect: (String) -> Void
+    private let onAddShortcut: (FreeWebItem) -> Void
+    private let onRemoveShortcut: (FreeWebItem) -> Void
+
+    private var currentCategory: String = "domestic" // "domestic" | "overseas"
+    private var segmentedControl: UISegmentedControl!
+    private var tableView: UITableView!
+
+    private var items: [FreeWebItem] {
+        return currentCategory == "domestic" ? FreeWebStore.domesticDefaults : FreeWebStore.overseasDefaults
+    }
+
+    init(initialCategory: String = "domestic",
+         onSelect: @escaping (String) -> Void,
+         onAddShortcut: @escaping (FreeWebItem) -> Void,
+         onRemoveShortcut: @escaping (FreeWebItem) -> Void) {
+        self.currentCategory = initialCategory
+        self.onSelect = onSelect
+        self.onAddShortcut = onAddShortcut
+        self.onRemoveShortcut = onRemoveShortcut
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "主流AI大模型网页版"
+        view.backgroundColor = .systemGroupedBackground
+
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "完成", style: .done, target: self, action: #selector(closeTapped))
+
+        setupHeader()
+        setupTableView()
+    }
+
+    @objc private func closeTapped() {
+        dismiss(animated: true)
+    }
+
+    private func setupHeader() {
+        let headerView = UIView()
+        headerView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(headerView)
+
+        segmentedControl = UISegmentedControl(items: ["🇨🇳 国内主流 (8)", "🌐 国外主流 (4)"])
+        segmentedControl.selectedSegmentIndex = (currentCategory == "domestic") ? 0 : 1
+        segmentedControl.addTarget(self, action: #selector(segmentChanged(_:)), for: .valueChanged)
+        segmentedControl.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(segmentedControl)
+
+        let tipLabel = UILabel()
+        tipLabel.text = "💡 操作提示：轻点直接进入打开链接；长按条目弹出快捷打开设置。"
+        tipLabel.font = .systemFont(ofSize: 12.5, weight: .regular)
+        tipLabel.textColor = .secondaryLabel
+        tipLabel.textAlignment = .center
+        tipLabel.numberOfLines = 0
+        tipLabel.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(tipLabel)
+
+        NSLayoutConstraint.activate([
+            headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+
+            segmentedControl.topAnchor.constraint(equalTo: headerView.topAnchor),
+            segmentedControl.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
+            segmentedControl.trailingAnchor.constraint(equalTo: headerView.trailingAnchor),
+            segmentedControl.heightAnchor.constraint(equalToConstant: 34),
+
+            tipLabel.topAnchor.constraint(equalTo: segmentedControl.bottomAnchor, constant: 8),
+            tipLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
+            tipLabel.trailingAnchor.constraint(equalTo: headerView.trailingAnchor),
+            tipLabel.bottomAnchor.constraint(equalTo: headerView.bottomAnchor, constant: -4)
+        ])
+    }
+
+    private func setupTableView() {
+        tableView = UITableView(frame: .zero, style: .insetGrouped)
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.rowHeight = 64
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(tableView)
+
+        // 挂长按手势（双保险：长按弹出添加/移除选项）
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+        longPress.minimumPressDuration = 0.42
+        tableView.addGestureRecognizer(longPress)
+
+        NSLayoutConstraint.activate([
+            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 86),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+    }
+
+    @objc private func segmentChanged(_ sender: UISegmentedControl) {
+        currentCategory = (sender.selectedSegmentIndex == 0) ? "domestic" : "overseas"
+        tableView.reloadData()
+    }
+
+    private func isItemSaved(_ item: FreeWebItem) -> Bool {
+        let services = ServiceStore.load()
+        let itm = item.url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return services.contains {
+            let u = $0.url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            return u == itm || u.hasPrefix(itm) || itm.hasPrefix(u)
+        }
+    }
+
+    // MARK: - UITableViewDataSource & Delegate
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return items.count
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "FreeWebCell")
+            ?? UITableViewCell(style: .subtitle, reuseIdentifier: "FreeWebCell")
+
+        let item = items[indexPath.row]
+        let isSaved = isItemSaved(item)
+
+        cell.textLabel?.text = item.name
+        cell.textLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+
+        cell.detailTextLabel?.text = item.subtitle
+        cell.detailTextLabel?.font = .systemFont(ofSize: 12.5)
+        cell.detailTextLabel?.textColor = .secondaryLabel
+
+        if isSaved {
+            let starBadge = UIButton(type: .system)
+            starBadge.setImage(UIImage(systemName: "star.fill"), for: .normal)
+            starBadge.tintColor = .systemOrange
+            starBadge.setTitle(" 快捷", for: .normal)
+            starBadge.titleLabel?.font = .systemFont(ofSize: 12, weight: .bold)
+            starBadge.sizeToFit()
+            cell.accessoryView = starBadge
+        } else {
+            let arrow = UIImageView(image: UIImage(systemName: "arrow.up.right"))
+            arrow.tintColor = .tertiaryLabel
+            cell.accessoryView = arrow
+        }
+
+        return cell
+    }
+
+    /// 点击进入打开链接（符合老总指令：点击进入打开链接）
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+        let item = items[indexPath.row]
+        dismiss(animated: true) { [weak self] in
+            self?.onSelect(item.url)
+        }
+    }
+
+    /// iOS 13+ 原生触觉长按菜单（符合老总指令：长按才有选择）
+    func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+        let item = items[indexPath.row]
+        let isSaved = isItemSaved(item)
+        let cleanName = item.name.replacingOccurrences(of: #"^\d+\.\s*"#, with: "", options: .regularExpression)
+
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            guard let self = self else { return UIMenu() }
+            var actions: [UIAction] = []
+
+            if !isSaved {
+                let addAction = UIAction(title: "添加到快捷服务（主页快捷打开）", image: UIImage(systemName: "star.fill")) { _ in
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    self.onAddShortcut(item)
+                    self.tableView.reloadData()
+                }
+                actions.append(addAction)
+            } else {
+                let removeAction = UIAction(title: "从快捷服务中移除", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    self.onRemoveShortcut(item)
+                    self.tableView.reloadData()
+                }
+                actions.append(removeAction)
+            }
+
+            let openAction = UIAction(title: "进入网页版", image: UIImage(systemName: "arrow.up.right")) { _ in
+                self.dismiss(animated: true) {
+                    self.onSelect(item.url)
+                }
+            }
+            actions.append(openAction)
+
+            return UIMenu(title: "\(cleanName) 快捷设置", children: actions)
+        }
+    }
+
+    /// 长按手势兜底触发弹窗选择（确保任何情况下长按都有操作反馈）
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        let point = gesture.location(in: tableView)
+        guard let indexPath = tableView.indexPathForRow(at: point) else { return }
+
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        let item = items[indexPath.row]
+        let isSaved = isItemSaved(item)
+        let cleanName = item.name.replacingOccurrences(of: #"^\d+\.\s*"#, with: "", options: .regularExpression)
+
+        let sheet = UIAlertController(
+            title: "\(item.name)",
+            message: "网址：\(item.url)\n长按快捷选项：",
+            preferredStyle: .actionSheet)
+
+        if !isSaved {
+            sheet.addAction(UIAlertAction(title: "⭐ 添加到快捷服务列表（主页快捷打开）", style: .default) { [weak self] _ in
+                guard let self = self else { return }
+                self.onAddShortcut(item)
+                self.tableView.reloadData()
+            })
+        } else {
+            sheet.addAction(UIAlertAction(title: "🗑 从快捷服务列表中移除", style: .destructive) { [weak self] _ in
+                guard let self = self else { return }
+                self.onRemoveShortcut(item)
+                self.tableView.reloadData()
+            })
+        }
+
+        sheet.addAction(UIAlertAction(title: "🚀 进入该网页版", style: .default) { [weak self] _ in
+            self?.dismiss(animated: true) {
+                self?.onSelect(item.url)
+            }
+        })
+
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        if let cell = tableView.cellForRow(at: indexPath) {
+            sheet.popoverPresentationController?.sourceView = cell
+            sheet.popoverPresentationController?.sourceRect = cell.bounds
+        }
+        present(sheet, animated: true)
+    }
+}
