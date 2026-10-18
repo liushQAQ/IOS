@@ -987,16 +987,18 @@ final class ConnectionGuideViewController: UIViewController {
 
 
 
-// MARK: - 国内外主流大模型网页版列表（轻点直接打开，长按弹出快捷添加/管理）
+// MARK: - 国内外主流大模型网页版专属固定面板（彻底解决忽大忽小、位置不固定、滑动多下）
+// 方案：固定底部优雅抽屉面板 + 双列 8 宫格紧凑布局，零滚动、一屏全部装下，点击秒开，长按设置快捷打开
 
-final class FreeWebListViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
+final class FreeWebListViewController: UIViewController {
     private let onSelect: (String) -> Void
     private let onAddShortcut: (FreeWebItem) -> Void
     private let onRemoveShortcut: (FreeWebItem) -> Void
 
     private var currentCategory: String = "domestic" // "domestic" | "overseas"
+    private var containerView: UIView!
     private var segmentedControl: UISegmentedControl!
-    private var tableView: UITableView!
+    private var gridStackView: UIStackView!
 
     private var items: [FreeWebItem] {
         return currentCategory == "domestic" ? FreeWebStore.domesticDefaults : FreeWebStore.overseasDefaults
@@ -1011,6 +1013,8 @@ final class FreeWebListViewController: UIViewController, UITableViewDataSource, 
         self.onAddShortcut = onAddShortcut
         self.onRemoveShortcut = onRemoveShortcut
         super.init(nibName: nil, bundle: nil)
+        self.modalPresentationStyle = .overFullScreen
+        self.modalTransitionStyle = .crossDissolve
     }
 
     required init?(coder: NSCoder) {
@@ -1019,80 +1023,168 @@ final class FreeWebListViewController: UIViewController, UITableViewDataSource, 
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "主流AI大模型网页版"
-        view.backgroundColor = .systemGroupedBackground
+        view.backgroundColor = .clear
 
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "完成", style: .done, target: self, action: #selector(closeTapped))
+        // 1. 半透明暗色背景遮罩，点背景任意处即可退出
+        let backdrop = UIView()
+        backdrop.backgroundColor = UIColor(white: 0, alpha: 0.55)
+        backdrop.translatesAutoresizingMaskIntoConstraints = false
+        let tapBackdrop = UITapGestureRecognizer(target: self, action: #selector(closeTapped))
+        backdrop.addGestureRecognizer(tapBackdrop)
+        view.addSubview(backdrop)
+
+        // 2. 核心：绝对固定在底部的卡片容器（固定高度，严禁忽大忽小伸缩，零滚动！）
+        containerView = UIView()
+        containerView.backgroundColor = UIColor(red: 0.11, green: 0.11, blue: 0.13, alpha: 0.98)
+        containerView.layer.cornerRadius = 24
+        containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        containerView.layer.borderWidth = 0.5
+        containerView.layer.borderColor = UIColor(white: 1.0, alpha: 0.15).cgColor
+        containerView.layer.shadowColor = UIColor.black.cgColor
+        containerView.layer.shadowOpacity = 0.5
+        containerView.layer.shadowRadius = 25
+        containerView.layer.shadowOffset = CGSize(width: 0, height: -8)
+        containerView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(containerView)
+
+        NSLayoutConstraint.activate([
+            backdrop.topAnchor.constraint(equalTo: view.topAnchor),
+            backdrop.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            backdrop.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backdrop.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+
+            containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            containerView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            // 固定高度：底部安全区 + 390pt 内容，确保整洁紧凑固定，杜绝滑动多下
+            containerView.heightAnchor.constraint(equalToConstant: 440)
+        ])
 
         setupHeader()
-        setupTableView()
+        setupGrid()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // 底部固定面板轻微上弹动画
+        containerView.transform = CGAffineTransform(translationX: 0, y: 440)
+        UIView.animate(withDuration: 0.28, delay: 0, usingSpringWithDamping: 0.82, initialSpringVelocity: 1.2, options: .curveEaseOut) {
+            self.containerView.transform = .identity
+        }
     }
 
     @objc private func closeTapped() {
-        dismiss(animated: true)
+        UIView.animate(withDuration: 0.22, delay: 0, options: .curveEaseIn, animations: {
+            self.containerView.transform = CGAffineTransform(translationX: 0, y: 440)
+            self.view.alpha = 0
+        }) { _ in
+            self.dismiss(animated: false)
+        }
     }
 
     private func setupHeader() {
-        let headerView = UIView()
-        headerView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(headerView)
+        let grabber = UIView()
+        grabber.backgroundColor = UIColor(white: 0.35, alpha: 1.0)
+        grabber.layer.cornerRadius = 2.5
+        grabber.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(grabber)
 
-        segmentedControl = UISegmentedControl(items: ["🇨🇳 国内主流 (8)", "🌐 国外主流 (4)"])
+        // 顶栏水平条
+        let topBar = UIView()
+        topBar.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(topBar)
+
+        let titleLabel = UILabel()
+        titleLabel.text = "主流AI大模型"
+        titleLabel.font = .systemFont(ofSize: 16.5, weight: .bold)
+        titleLabel.textColor = .white
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        topBar.addSubview(titleLabel)
+
+        segmentedControl = UISegmentedControl(items: ["🇨🇳 国内 (8)", "🌐 国外 (4)"])
         segmentedControl.selectedSegmentIndex = (currentCategory == "domestic") ? 0 : 1
         segmentedControl.addTarget(self, action: #selector(segmentChanged(_:)), for: .valueChanged)
         segmentedControl.translatesAutoresizingMaskIntoConstraints = false
-        headerView.addSubview(segmentedControl)
+        topBar.addSubview(segmentedControl)
+
+        let closeBtn = UIButton(type: .system)
+        closeBtn.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
+        closeBtn.tintColor = UIColor(white: 0.5, alpha: 1.0)
+        closeBtn.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+        closeBtn.translatesAutoresizingMaskIntoConstraints = false
+        topBar.addSubview(closeBtn)
+
+        // 操作规则提示栏
+        let tipBar = UIView()
+        tipBar.backgroundColor = UIColor(red: 0.18, green: 0.82, blue: 0.34, alpha: 0.12)
+        tipBar.layer.cornerRadius = 8
+        tipBar.layer.borderWidth = 0.5
+        tipBar.layer.borderColor = UIColor(red: 0.18, green: 0.82, blue: 0.34, alpha: 0.3).cgColor
+        tipBar.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(tipBar)
 
         let tipLabel = UILabel()
-        tipLabel.text = "💡 操作提示：轻点直接进入打开链接；长按条目弹出快捷打开设置。"
-        tipLabel.font = .systemFont(ofSize: 12.5, weight: .regular)
-        tipLabel.textColor = .secondaryLabel
+        tipLabel.text = "💡 操作规则：轻点卡片直接打开链接 · 长按弹出快捷打开设置"
+        tipLabel.font = .systemFont(ofSize: 11.5, weight: .medium)
+        tipLabel.textColor = UIColor(red: 0.25, green: 0.85, blue: 0.4, alpha: 1.0)
         tipLabel.textAlignment = .center
-        tipLabel.numberOfLines = 0
         tipLabel.translatesAutoresizingMaskIntoConstraints = false
-        headerView.addSubview(tipLabel)
+        tipBar.addSubview(tipLabel)
 
         NSLayoutConstraint.activate([
-            headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            grabber.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
+            grabber.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+            grabber.widthAnchor.constraint(equalToConstant: 38),
+            grabber.heightAnchor.constraint(equalToConstant: 5),
 
-            segmentedControl.topAnchor.constraint(equalTo: headerView.topAnchor),
-            segmentedControl.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
-            segmentedControl.trailingAnchor.constraint(equalTo: headerView.trailingAnchor),
-            segmentedControl.heightAnchor.constraint(equalToConstant: 34),
+            topBar.topAnchor.constraint(equalTo: grabber.bottomAnchor, constant: 6),
+            topBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 16),
+            topBar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
+            topBar.heightAnchor.constraint(equalToConstant: 34),
 
-            tipLabel.topAnchor.constraint(equalTo: segmentedControl.bottomAnchor, constant: 8),
-            tipLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
-            tipLabel.trailingAnchor.constraint(equalTo: headerView.trailingAnchor),
-            tipLabel.bottomAnchor.constraint(equalTo: headerView.bottomAnchor, constant: -4)
+            titleLabel.leadingAnchor.constraint(equalTo: topBar.leadingAnchor),
+            titleLabel.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
+
+            segmentedControl.centerXAnchor.constraint(equalTo: topBar.centerXAnchor, constant: 10),
+            segmentedControl.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
+            segmentedControl.heightAnchor.constraint(equalToConstant: 28),
+
+            closeBtn.trailingAnchor.constraint(equalTo: topBar.trailingAnchor),
+            closeBtn.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
+            closeBtn.widthAnchor.constraint(equalToConstant: 30),
+            closeBtn.heightAnchor.constraint(equalToConstant: 30),
+
+            tipBar.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 8),
+            tipBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 16),
+            tipBar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
+            tipBar.heightAnchor.constraint(equalToConstant: 26),
+
+            tipLabel.centerXAnchor.constraint(equalTo: tipBar.centerXAnchor),
+            tipLabel.centerYAnchor.constraint(equalTo: tipBar.centerYAnchor)
         ])
     }
 
-    private func setupTableView() {
-        tableView = UITableView(frame: .zero, style: .insetGrouped)
-        tableView.dataSource = self
-        tableView.delegate = self
-        tableView.rowHeight = 64
-        tableView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(tableView)
-
-        // 挂长按手势（双保险：长按弹出添加/移除选项）
-        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
-        longPress.minimumPressDuration = 0.42
-        tableView.addGestureRecognizer(longPress)
+    private func setupGrid() {
+        gridStackView = UIStackView()
+        gridStackView.axis = .vertical
+        gridStackView.spacing = 8
+        gridStackView.distribution = .fillEqually
+        gridStackView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(gridStackView)
 
         NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 86),
-            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            gridStackView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 94),
+            gridStackView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 14),
+            gridStackView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -14),
+            gridStackView.heightAnchor.constraint(equalToConstant: 270)
         ])
+
+        reloadGridData()
     }
 
     @objc private func segmentChanged(_ sender: UISegmentedControl) {
         currentCategory = (sender.selectedSegmentIndex == 0) ? "domestic" : "overseas"
-        tableView.reloadData()
+        reloadGridData()
     }
 
     private func isItemSaved(_ item: FreeWebItem) -> Bool {
@@ -1104,132 +1196,171 @@ final class FreeWebListViewController: UIViewController, UITableViewDataSource, 
         }
     }
 
-    // MARK: - UITableViewDataSource & Delegate
-
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return items.count
-    }
-
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "FreeWebCell")
-            ?? UITableViewCell(style: .subtitle, reuseIdentifier: "FreeWebCell")
-
-        let item = items[indexPath.row]
-        let isSaved = isItemSaved(item)
-
-        cell.textLabel?.text = item.name
-        cell.textLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-
-        cell.detailTextLabel?.text = item.subtitle
-        cell.detailTextLabel?.font = .systemFont(ofSize: 12.5)
-        cell.detailTextLabel?.textColor = .secondaryLabel
-
-        if isSaved {
-            let starBadge = UIButton(type: .system)
-            starBadge.setImage(UIImage(systemName: "star.fill"), for: .normal)
-            starBadge.tintColor = .systemOrange
-            starBadge.setTitle(" 快捷", for: .normal)
-            starBadge.titleLabel?.font = .systemFont(ofSize: 12, weight: .bold)
-            starBadge.sizeToFit()
-            cell.accessoryView = starBadge
-        } else {
-            let arrow = UIImageView(image: UIImage(systemName: "arrow.up.right"))
-            arrow.tintColor = .tertiaryLabel
-            cell.accessoryView = arrow
+    /// 重新填入宫格（2 列排列，零滚动，一屏全收录）
+    private func reloadGridData() {
+        gridStackView.arrangedSubviews.forEach {
+            gridStackView.removeArrangedSubview($0)
+            $0.removeFromSuperview()
         }
 
-        return cell
-    }
+        let currentItems = items
+        let count = currentItems.count
+        let rows = 4 // 固定 4 行，双列
 
-    /// 点击进入打开链接（符合老总指令：点击进入打开链接）
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        for r in 0..<rows {
+            let rowStack = UIStackView()
+            rowStack.axis = .horizontal
+            rowStack.spacing = 8
+            rowStack.distribution = .fillEqually
 
-        let item = items[indexPath.row]
-        dismiss(animated: true) { [weak self] in
-            self?.onSelect(item.url)
+            let i1 = r * 2
+            let i2 = r * 2 + 1
+
+            if i1 < count {
+                let card1 = createModelCard(item: currentItems[i1])
+                rowStack.addArrangedSubview(card1)
+            } else {
+                let empty = UIView()
+                rowStack.addArrangedSubview(empty)
+            }
+
+            if i2 < count {
+                let card2 = createModelCard(item: currentItems[i2])
+                rowStack.addArrangedSubview(card2)
+            } else {
+                let empty = UIView()
+                rowStack.addArrangedSubview(empty)
+            }
+
+            gridStackView.addArrangedSubview(rowStack)
         }
     }
 
-    /// iOS 13+ 原生触觉长按菜单（符合老总指令：长按才有选择）
-    func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
-        let item = items[indexPath.row]
+    /// 构建单个模型双列卡片：轻点直接进入，长按才有选择
+    private func createModelCard(item: FreeWebItem) -> UIView {
         let isSaved = isItemSaved(item)
         let cleanName = item.name.replacingOccurrences(of: #"^\d+\.\s*"#, with: "", options: .regularExpression)
 
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
-            guard let self = self else { return UIMenu() }
-            var actions: [UIAction] = []
+        let card = UIView()
+        card.backgroundColor = UIColor(red: 0.16, green: 0.16, blue: 0.19, alpha: 0.95)
+        card.layer.cornerRadius = 10
+        card.layer.borderWidth = isSaved ? 1.2 : 0.6
+        card.layer.borderColor = isSaved ? UIColor(red: 1.0, green: 0.62, blue: 0.04, alpha: 0.7).cgColor : UIColor(white: 1.0, alpha: 0.1).cgColor
 
-            if !isSaved {
-                let addAction = UIAction(title: "添加到快捷服务（主页快捷打开）", image: UIImage(systemName: "star.fill")) { _ in
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    self.onAddShortcut(item)
-                    self.tableView.reloadData()
-                }
-                actions.append(addAction)
-            } else {
-                let removeAction = UIAction(title: "从快捷服务中移除", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    self.onRemoveShortcut(item)
-                    self.tableView.reloadData()
-                }
-                actions.append(removeAction)
-            }
+        let nameLabel = UILabel()
+        nameLabel.text = cleanName
+        nameLabel.font = .systemFont(ofSize: 14.5, weight: .bold)
+        nameLabel.textColor = .white
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(nameLabel)
 
-            let openAction = UIAction(title: "进入网页版", image: UIImage(systemName: "arrow.up.right")) { _ in
-                self.dismiss(animated: true) {
-                    self.onSelect(item.url)
-                }
-            }
-            actions.append(openAction)
+        let subLabel = UILabel()
+        let sub = item.subtitle.components(separatedBy: "·").first?.trimmingCharacters(in: .whitespaces) ?? item.subtitle
+        subLabel.text = sub
+        subLabel.font = .systemFont(ofSize: 11, weight: .regular)
+        subLabel.textColor = UIColor(white: 0.65, alpha: 1.0)
+        subLabel.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(subLabel)
 
-            return UIMenu(title: "\(cleanName) 快捷设置", children: actions)
+        let rightIcon = UILabel()
+        if isSaved {
+            rightIcon.text = "⭐"
+            rightIcon.font = .systemFont(ofSize: 13)
+        } else {
+            rightIcon.text = "›"
+            rightIcon.textColor = UIColor(white: 0.45, alpha: 1.0)
+            rightIcon.font = .systemFont(ofSize: 16, weight: .semibold)
         }
+        rightIcon.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(rightIcon)
+
+        NSLayoutConstraint.activate([
+            nameLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 10),
+            nameLabel.topAnchor.constraint(equalTo: card.topAnchor, constant: 8),
+
+            subLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 10),
+            subLabel.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -8),
+            subLabel.trailingAnchor.constraint(lessThanOrEqualTo: rightIcon.leadingAnchor, constant: -4),
+
+            rightIcon.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -10),
+            rightIcon.centerYAnchor.constraint(equalTo: card.centerYAnchor)
+        ])
+
+        // 1. 点击手势：直接进入打开链接（零多余弹窗打扰！）
+        let tap = UITapGestureRecognizer(target: self, action: #selector(cardTapped(_:)))
+        card.addGestureRecognizer(tap)
+
+        // 2. 长按手势：长按才有选择（长按 0.38 秒弹出设置）
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(cardLongPressed(_:)))
+        longPress.minimumPressDuration = 0.38
+        card.addGestureRecognizer(longPress)
+
+        // 绑定数据用于手势响应
+        card.tag = FreeWebStore.allDefaults.firstIndex(of: item) ?? 0
+
+        return card
     }
 
-    /// 长按手势兜底触发弹窗选择（确保任何情况下长按都有操作反馈）
-    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began else { return }
-        let point = gesture.location(in: tableView)
-        guard let indexPath = tableView.indexPathForRow(at: point) else { return }
+    /// 点击卡片：直接进入打开链接
+    @objc private func cardTapped(_ gesture: UITapGestureRecognizer) {
+        guard let card = gesture.view else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
 
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        let item = items[indexPath.row]
+        // 按钮轻微触觉回弹动画
+        UIView.animate(withDuration: 0.1, animations: {
+            card.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+        }) { _ in
+            UIView.animate(withDuration: 0.1) {
+                card.transform = .identity
+            }
+        }
+
+        let idx = card.tag
+        guard FreeWebStore.allDefaults.indices.contains(idx) else { return }
+        let item = FreeWebStore.allDefaults[idx]
+
+        closeTapped()
+        self.onSelect(item.url)
+    }
+
+    /// 长按卡片：长按才有选择（弹出快捷操作选项）
+    @objc private func cardLongPressed(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began, let card = gesture.view else { return }
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+
+        let idx = card.tag
+        guard FreeWebStore.allDefaults.indices.contains(idx) else { return }
+        let item = FreeWebStore.allDefaults[idx]
         let isSaved = isItemSaved(item)
         let cleanName = item.name.replacingOccurrences(of: #"^\d+\.\s*"#, with: "", options: .regularExpression)
 
         let sheet = UIAlertController(
-            title: "\(item.name)",
-            message: "网址：\(item.url)\n长按快捷选项：",
+            title: "\(cleanName) 快捷设置",
+            message: "网址：\(item.url)\n长按弹出快捷操作：",
             preferredStyle: .actionSheet)
 
         if !isSaved {
             sheet.addAction(UIAlertAction(title: "⭐ 添加到快捷服务列表（主页快捷打开）", style: .default) { [weak self] _ in
                 guard let self = self else { return }
                 self.onAddShortcut(item)
-                self.tableView.reloadData()
+                self.reloadGridData()
             })
         } else {
             sheet.addAction(UIAlertAction(title: "🗑 从快捷服务列表中移除", style: .destructive) { [weak self] _ in
                 guard let self = self else { return }
                 self.onRemoveShortcut(item)
-                self.tableView.reloadData()
+                self.reloadGridData()
             })
         }
 
         sheet.addAction(UIAlertAction(title: "🚀 进入该网页版", style: .default) { [weak self] _ in
-            self?.dismiss(animated: true) {
-                self?.onSelect(item.url)
-            }
+            self?.closeTapped()
+            self?.onSelect(item.url)
         })
 
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        if let cell = tableView.cellForRow(at: indexPath) {
-            sheet.popoverPresentationController?.sourceView = cell
-            sheet.popoverPresentationController?.sourceRect = cell.bounds
-        }
+        sheet.popoverPresentationController?.sourceView = card
+        sheet.popoverPresentationController?.sourceRect = card.bounds
         present(sheet, animated: true)
     }
 }

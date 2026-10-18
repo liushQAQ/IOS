@@ -5814,16 +5814,10 @@ final class ViewController: UIViewController {
                 self?.showToast(message: "已从快捷服务中移除「\(cleanName)」")
             })
 
-        let nav = UINavigationController(rootViewController: vc)
-        nav.modalPresentationStyle = .pageSheet
-        if #available(iOS 15.0, *) {
-            if let sheet = nav.sheetPresentationController {
-                sheet.detents = [.medium(), .large()]
-                sheet.prefersGrabberVisible = true
-                sheet.preferredCornerRadius = 24
-            }
-        }
-        present(nav, animated: true)
+        // 彻底根治「忽大忽小、位置不固定、还要上下滑动多下」：
+        // 废除系统的 sheetPresentationController 动态拉伸（.medium/.large 会弹来弹去忽大忽小），
+        // 直接由 FreeWebListViewController 自带的底部固定面板展示：位置固定、高度固定440pt、8大模型双列宫格零滑动一屏全收录！
+        present(vc, animated: false)
     }
 
     @objc private func openConnectionGuide() {
