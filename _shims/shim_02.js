@@ -1,0 +1,7 @@
+        if (typeof Promise.withResolvers !== 'function') {
+          Promise.withResolvers = function () {
+            var resolve, reject;
+            var promise = new Promise(function (res, rej) { resolve = res; reject = rej; });
+            return { promise: promise, resolve: resolve, reject: reject };
+          };
+        }

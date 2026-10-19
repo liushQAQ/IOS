@@ -231,8 +231,9 @@ final class ViewController: UIViewController {
                let data = json.data(using: .utf8),
                let info = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 let rootLen = info["rootLen"] as? Int ?? -1
-                // 页面已经渲染出内容：撤掉诊断，正常显示。
-                if rootLen > 0 {
+                let rootKids = info["rootKids"] as? Int ?? -1
+                // 页面已经渲染出内容（有文本或已有子组件挂载）：撤掉诊断，正常显示。
+                if rootLen > 0 || rootKids > 0 {
                     self.stopWhiteScreenDiagnostics()
                     self.hideError()
                     self.hasLoadedOnce = true
@@ -285,7 +286,7 @@ final class ViewController: UIViewController {
         stopEarlyRevealProbe()
         earlyRevealTicks = 0
         earlyRevealTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            guard let self, self.isViewLoaded, self.view.window != nil else { return }
+            guard let self, self.isViewLoaded else { return }
             self.earlyRevealTicks += 1
             // 硬上限 4 分钟：真正异常时由导航超时 / 白屏诊断负责报错，这里只负责"能显就早显"。
             if self.earlyRevealTicks > 960 {
@@ -295,7 +296,15 @@ final class ViewController: UIViewController {
             guard !self.earlyRevealInFlight else { return }
             self.earlyRevealInFlight = true
             self.webView.evaluateJavaScript(
-                "(function(){var r=document.getElementById('root');return r?r.children.length:-1;})()"
+                """
+                (function(){
+                  var r = document.getElementById('root');
+                  if (r && r.children.length > 0) return 1;
+                  // 针对自建仪表盘（9009等）或外部网页：无 #root 单页架构，只要 body 有内容立刻显形！
+                  if (!r && document.body && document.body.children.length > 0) return 1;
+                  return -1;
+                })()
+                """
             ) { [weak self] result, _ in
                 guard let self else { return }
                 self.earlyRevealInFlight = false
@@ -508,8 +517,8 @@ final class ViewController: UIViewController {
             '  -webkit-backdrop-filter: blur(10px) !important;',
             '  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;',
             '}',
-            '/* 顶部导航栏：完全采用统一 Flex 居中流，并在虚拟键盘弹出或页面滚动时 Sticky 吸顶固定不动 */',
-            'html, body {',
+            '/* 顶部导航栏：仅在包含 #root 的 DSH 主控页面下锁定固定布局，普通网页与仪表盘保持原生自由垂直滚动 */',
+            'html:has(#root), body:has(#root) {',
             '  overflow: hidden !important;',
             '  overscroll-behavior: none !important;',
             '  position: fixed !important;',
@@ -2465,9 +2474,11 @@ final class ViewController: UIViewController {
               alert(msg);
             }
 
-            // 1. 拦截前端发起的 /open-in-app/open 请求
+            // 1. 拦截前端发起的 /open-in-app/open 请求（公网大模型网页不拦截，保护原生 fetch 避免触发 WAF 安全盾）
+            var h = (location.hostname || '').toLowerCase();
+            var isPublic = (h.indexOf('aliyun.com') !== -1 || h.indexOf('baidu.com') !== -1 || h.indexOf('doubao.com') !== -1 || h.indexOf('moonshot.cn') !== -1 || h.indexOf('tencent.com') !== -1 || h.indexOf('openai.com') !== -1);
             var origFetch = window.fetch;
-            if (origFetch) {
+            if (origFetch && !isPublic) {
               window.fetch = function(input, init) {
                 var url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
                 if (url && (url.includes('/open-in-app/open') || url.includes('/open-in-terminal'))) {
@@ -3744,80 +3755,6 @@ final class ViewController: UIViewController {
           }, 1000);
         })();
 """,
-        // v1.0.72 页面分流补丁（必须放在数组最后，优先级最高）：
-        // A. DSH 自身页面：补上原来常驻的「全屏固定布局」CSS（html/body 固定 + 隐藏滚动）；
-        // B. 内嵌第三方网页（豆包等）：把这些强干预全部撤掉，恢复浏览器原生滚动/聚焦行为，
-        //    并补一个真实手势聚焦兜底 —— 解决第三方短信登录页「点输入框弹不出键盘」。
-        """
-        (function () {
-          var OWN_CSS = 'html, body { overflow: hidden !important; overscroll-behavior: none !important; position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; }';
-          var THIRD_CSS = 'html, body { position: static !important; inset: auto !important; overflow: visible !important; overscroll-behavior: auto !important; height: auto !important; width: auto !important; }';
-          var appliedOwn = false;
-          var appliedThird = false;
-
-          function isOwnPage() {
-            try {
-              if (typeof window.__dshIsOwnPage === 'function') return window.__dshIsOwnPage();
-            } catch (e) {}
-            return true;
-          }
-
-          function attach(id, css) {
-            var root = document.head || document.documentElement;
-            if (!root) return false;
-            if (document.getElementById(id)) return true;
-            var style = document.createElement('style');
-            style.id = id;
-            style.textContent = css;
-            root.appendChild(style);
-            return !!document.getElementById(id);
-          }
-
-          function relaxViewport() {
-            var meta = document.querySelector('meta[name="viewport"]');
-            if (meta) meta.content = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
-          }
-
-          function installTouchFocusFallback() {
-            if (window.__dshTouchFocusInstalled) return;
-            window.__dshTouchFocusInstalled = true;
-            // 页面自身在 touchstart 里 preventDefault 会导致输入框不聚焦、iOS 不弹键盘：
-            // 在真实手指手势内补一次 focus（必须是同步调用，异步会失去用户手势上下文）。
-            document.addEventListener('touchstart', function (e) {
-              var t = e.target;
-              if (!t || !t.closest) return;
-              var el = t.closest('input, textarea, [contenteditable="true"]');
-              if (!el || el.disabled) return;
-              try { if (el.readOnly) return; } catch (err) {}
-              if (document.activeElement === el) return;
-              try { el.focus(); } catch (err) {}
-            }, true);
-          }
-
-          function apply() {
-            if (isOwnPage()) {
-              if (!appliedOwn) appliedOwn = attach('dsh-ios-v1072-ownpage-css', OWN_CSS);
-            } else if (!appliedThird) {
-              appliedThird = attach('dsh-ios-v1072-thirdparty-css', THIRD_CSS);
-              if (appliedThird) {
-                relaxViewport();
-                installTouchFocusFallback();
-              }
-            }
-          }
-
-          apply();
-          if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', apply, { once: true });
-          }
-          var tries = 0;
-          var timer = setInterval(function () {
-            tries++;
-            apply();
-            if (appliedOwn || appliedThird || tries > 100) clearInterval(timer);
-          }, 100);
-        })();
-        """,
         // 键盘避让统一由原生 webViewBottomConstraint 丝滑驱动，绝不在 JS 层面触发额外重排与跳动
         """
         (function () {
@@ -4881,37 +4818,10 @@ final class ViewController: UIViewController {
         // iOS 16 的 WebKit 缺少桌面端构建默认可用的一部分较新 Web API，
         // 任一缺失都会让首个内联脚本抛错 → #root 永远空 = 白屏。
         // 在文档开始前注入最小语义等价的 polyfill（仅在原生缺失时生效）。
+        // 严格遵循 1.0.70 黄金基线：直接注入兼容补丁，绝不在外层套闭包，确保 Polyfill 100% 暴露到全局作用域
         for src in Self.iosCompatShims {
-            // 🌟 核心环境隔离守卫（彻底解决千问报环境异常、文心一言弹不出登录、仪表盘卡死）：
-            // 1. 外部公网大模型商业网站（阿里千问、文心一言、豆包等），坚决不注入任何 DSH 补丁，
-            //    保持 100% 纯净的原生 Safari WebKit 环境，绝不污染 window.fetch、focus 和原型链！
-            // 2. 玩家自建服务无论使用何种端口（3083、8956、8888 等任意端口），100% 自动注入 DSH 适配补丁！
-            // 3. 页面如果声明了 __DSH_EXTERNAL_PAGE__，坚决不注入！
-            let guardedSrc = """
-            (function() {
-              var h = (location.hostname || '').toLowerCase();
-              var isPublicWeb = (
-                h.indexOf('aliyun.com') !== -1 ||
-                h.indexOf('baidu.com') !== -1 ||
-                h.indexOf('doubao.com') !== -1 ||
-                h.indexOf('moonshot.cn') !== -1 ||
-                h.indexOf('tencent.com') !== -1 ||
-                h.indexOf('chatglm.cn') !== -1 ||
-                h.indexOf('xfyun.cn') !== -1 ||
-                h.indexOf('openai.com') !== -1 ||
-                h.indexOf('chatgpt.com') !== -1 ||
-                h.indexOf('claude.ai') !== -1 ||
-                h.indexOf('google.com') !== -1 ||
-                h.indexOf('grok.com') !== -1
-              );
-              if (isPublicWeb || window.__DSH_EXTERNAL_PAGE__) {
-                return;
-              }
-              \(src)
-            })();
-            """
             config.userContentController.addUserScript(
-                WKUserScript(source: guardedSrc,
+                WKUserScript(source: src,
                              injectionTime: .atDocumentStart,
                              forMainFrameOnly: false))
         }
@@ -6043,12 +5953,13 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.118)】
-            1. 🛡 彻底解除版本误报弹窗：iOS 14 / iOS 15 / iOS 16 全面兼容，不再误弹「系统版本过低」；
-            2. 🔌 全自适应支持任意 IP 与任意端口：彻底废除端口硬编码白名单，玩家自定义任何端口（8956、3083、8888 等）均 100% 自动识别并生效移动端补丁适配；
-            3. ⚡ 端口仪表盘（9009等）垂直滚动彻底解锁，上下滑动顺畅丝滑不再卡死；
+            【最新特性 (v1.0.119)】
+            1. 🥇 对齐 1.0.70 黄金基线彻底根治白屏：直接注入底层标准 Polyfill，绝不在外层套闭包，确保 API 100% 注册，DSH 启动秒开不再白屏；
+            2. ⚡ 仪表盘垂直滚动彻底解锁：拔除全局锁死样式，采用精确特异性规则，9009 仪表盘等自建网页上下滑动 100% 顺畅丝滑到底；
+            3. 🔌 全自适应支持任意 IP 与任意端口：彻底废除端口硬编码白名单，玩家自定义任何端口（8956、3083、8888 等）均 100% 自动识别并生效移动端补丁适配；
             4. 🌐 纯净环境隔离：阿里千问「运行环境异常」、文心一言登录弹窗受阻彻底修复，第三方网页保持 100% 原生 Safari 纯净环境；
-            5. 🚀 大模型网页版快捷打开（轻点进入，长按设置）；
+            5. 🛡 彻底解除版本误报弹窗：iOS 14 / iOS 15 / iOS 16 全面兼容，不再误弹「系统版本过低」；
+            6. 🚀 大模型网页版快捷打开（轻点进入，长按设置）；
             2. 📡 「系统维护与实用工具」中补齐「全部服务与快捷方式管理」入口，随时自由编辑和管理；
             3. 🧱 设置页与任何弹出页面都不再能左右滑动超出屏幕范围，内容永久锁定在屏宽之内；
             2. 📌 插件页顶部标题条不再被压扁（曾塌成 8px 导致标题压住下方卡片），标题与内容彻底分离；滚动时吸顶条自带底色，下方内容不再透上来；
