@@ -1,11 +1,11 @@
 {
-  "version": "1.0.119",
-  "build": 58,
-  "updated_at": "2026-10-19 11:55:00",
-  "title": "v1.0.119 黄金定版：对齐1.0.70黄金基线彻底根治白屏·解除仪表盘滑动死锁",
-  "changelog": "1. DSH 启动秒开不再白屏：对齐 1.0.70 黄金基线，彻底移除外层闭包包裹，原汁原味注入底层标准 Polyfill，确保全局 API 完整注册，DSH 官方前端秒级渲染显形；\n2. 端口服务仪表盘（9009等）垂直滚动彻底解锁：拔除全局锁死样式，采用精确特异性规则，自建仪表盘与普通网页上下滑动 100% 顺畅丝滑到底；\n3. 任意 IP 与任意端口全自适应支持：彻底废除端口硬编码白名单限制，玩家自定义任何端口（8956、3083、8888 等）均 100% 自动识别并全量享受移动端补丁适配；\n4. 核心注入环境隔离：DSH 适配脚本只在 DSH 主控生效，外部大模型（通义千问、文心一言等）保持 100% 纯净原生浏览器环境，彻底根除千问「运行环境异常」与文心一言登录弹窗受阻问题；\n5. 彻底解除系统版本硬阻断弹窗：iOS 14 / iOS 15 / iOS 16 及以上全面原生兼容，杜绝误报误拦截；\n6. 大模型网页版固定双列面板与长按快捷交互全部继承保留；全网单一公开版，巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.119-58.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.119-58.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.119/DSHios-public-1.0.119-58.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.119"
+  "version": "1.0.120",
+  "build": 59,
+  "updated_at": "2026-10-19 15:40:00",
+  "title": "v1.0.120 白屏根治版：拔除:has()布局锁·首帧真实绘制才显形·仪表盘滚动彻底解锁",
+  "changelog": "1. 彻底拔除 :has() 布局锁：旧 WebKit 对 :has() 支持不完整会整条丢弃规则，直接导致 DSH 布局崩坏与白屏；本版改为运行期按页面类型动态加锁，DSH 主控页与 1.0.70 黄金基线逐字一致；\n2. 首帧显形改按「真实绘制」判据：只有 #root 真正渲出文字或可见输入框才显形，插件 bundle（约 10MB）解析的 20~40 秒期间保持原生加载态，再也不会出现一片白屏；\n3. 加载期底色跟随系统深浅色：暗黑模式直接铺 #151517 沉浸黑，React 挂载后立刻撤掉覆盖，完全交还 DSH 自身主题；\n4. 端口服务仪表盘（9009 等无 #root 页面）垂直滚动彻底解锁，上下滑动 100% 顺畅到底；\n5. 白屏诊断采样后移到 15/35/70 秒，只有 70 秒仍为空才判定白屏，杜绝慢机误报；\n6. 任意 IP 与任意端口全自适应（8956、3083、8888 等），彻底废除端口硬编码；\n7. iOS 14 / iOS 15 / iOS 16 全面原生兼容，不再误弹「系统版本过低」；全网单一公开版，巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.120-59.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.120-59.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.120/DSHios-public-1.0.120-59.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.120"
 }
