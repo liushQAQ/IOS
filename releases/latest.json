@@ -1,11 +1,11 @@
 {
-  "version": "1.0.120",
-  "build": 59,
-  "updated_at": "2026-10-19 15:40:00",
-  "title": "v1.0.120 白屏根治版：拔除:has()布局锁·首帧真实绘制才显形·仪表盘滚动彻底解锁",
-  "changelog": "1. 彻底拔除 :has() 布局锁：旧 WebKit 对 :has() 支持不完整会整条丢弃规则，直接导致 DSH 布局崩坏与白屏；本版改为运行期按页面类型动态加锁，DSH 主控页与 1.0.70 黄金基线逐字一致；\n2. 首帧显形改按「真实绘制」判据：只有 #root 真正渲出文字或可见输入框才显形，插件 bundle（约 10MB）解析的 20~40 秒期间保持原生加载态，再也不会出现一片白屏；\n3. 加载期底色跟随系统深浅色：暗黑模式直接铺 #151517 沉浸黑，React 挂载后立刻撤掉覆盖，完全交还 DSH 自身主题；\n4. 端口服务仪表盘（9009 等无 #root 页面）垂直滚动彻底解锁，上下滑动 100% 顺畅到底；\n5. 白屏诊断采样后移到 15/35/70 秒，只有 70 秒仍为空才判定白屏，杜绝慢机误报；\n6. 任意 IP 与任意端口全自适应（8956、3083、8888 等），彻底废除端口硬编码；\n7. iOS 14 / iOS 15 / iOS 16 全面原生兼容，不再误弹「系统版本过低」；全网单一公开版，巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.120-59.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.120-59.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.120/DSHios-public-1.0.120-59.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.120"
+  "version": "1.0.121",
+  "build": 60,
+  "updated_at": "2026-10-19 19:15:00",
+  "title": "v1.0.121 仪表盘锁屏根治版：钉高补丁加页面守卫·9009等自建网页彻底解锁上下滑动",
+  "changelog": "1. 🥇 9009 端口服务台等自建网页彻底解锁上下滑动：DSH 专用的「钉高」布局补丁（fixTop）此前会越界命中仪表盘容器 body > .container，把它压成一屏高（898px）并裁掉全部溢出；本版为该补丁加上页面类型守卫（DOM 里没有 #root 一律一个元素都不碰），实测页面高度 956 → 9328px，上下滑动完全自由；\n2. DSH 主控页零影响：__dshLayoutFix 正常安装、顶栏 sticky、安全区归零，布局与 1.0.70 黄金基线逐字一致；\n3. ⚡ 布局锁改运行期按页面类型动态注入（彻底拔除 :has()）：DSH 主控页与自建网页、外部网页互不干扰；\n4. 🌙 加载期底色修正：跟随系统深浅色，暗黑模式直接铺 #151517 沉浸黑，React 挂载后立刻撤还 DSH 自身主题；\n5. 🌐 纯净环境隔离：公网大模型网页 100% 原生 Safari WebKit，不注入任何 DSH 补丁，防 WAF 风控；\n6. 🔌 全自适应任意 IP 与任意端口（8956、3083、8888 等），彻底废除端口硬编码白名单；\n7. 🛡 彻底解除版本误报弹窗：iOS 14 / iOS 15 / iOS 16 全面兼容，不再误弹「系统版本过低」；\n8. 🚀 大模型网页版快捷打开（轻点进入，长按设置）；全网单一公开版，巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.121-60.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.121-60.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.121/DSHios-public-1.0.121-60.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.121"
 }
