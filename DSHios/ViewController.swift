@@ -4207,6 +4207,18 @@ final class ViewController: UIViewController {
           // 循环三次就等于把同一个偏差加了三次（46 → 92 → 138），底栏被顶到屏幕中间。
           // 必须跨帧收敛。
           function passOnce() {
+            // 🔴 v1.0.121 页面隔离铁律（老总 2026-10-19：「9009 页面固定了，无法上下滑动」）：
+            //   本段全部是 DSH 主控页专用补丁 —— fixTop() 会沿 DOM 往上找到顶栏所在的那一列，
+            //   随后强制写内联 height = 视口高 - 列顶 / max-height 同值 / overflow: hidden。
+            //   自建仪表盘（9009 端口服务台等）与外部网页没有 #root，一旦被误命中：
+            //   body > .container 就被钉成一屏高（实测 898px）并裁掉全部溢出 → 整页只剩一屏、永远滑不动。
+            //   实测取证（_diag/wk_bisect.js，Playwright WebKit 430x932 真机等价）：
+            //     零 shim / 其它 16 个 shim 任意单个 → scrollHeight 8909、container 8853、可滚 600px
+            //     仅注入本段                        → scrollHeight 956、container 898、overflow hidden、只能滚 24px
+            //   ⚠️ 判定必须放在这里，绝不能放在 IIFE 顶端：documentStart 阶段 DSH 的 #root 还没挂载，
+            //      放顶端会把整个补丁一次性 return 掉，布局补丁在 DSH 上永不生效（已实测踩过这个坑）。
+            //      passOnce 是每趟几何校正的汇总入口，此时 DOM 已就绪，判定才准确。
+            if (!document.getElementById('root')) return;
             // v1.0.109：把「整体上移量」广播成 CSS 变量，供 shim_00 / shim_11 的抽屉、面板顶部留白一起跟随。
             // documentStart 阶段 documentElement 还是 null → 必须判空（§10.3 的老坑，漏判会被 catch 吞掉）。
             try { if (document.documentElement) document.documentElement.style.setProperty('--dsh-topshift', TOP_SHIFT + 'px'); } catch (e) {}
@@ -6112,9 +6124,9 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.120)】
-            1. 🥇 彻底拔除 :has() 布局锁：旧 WebKit 对 :has() 支持不完整会整条丢弃规则，直接导致 DSH 布局崩坏与白屏；本版改为运行期按页面类型动态加锁，DSH 主控页与 1.0.70 黄金基线逐字一致；
-            2. ⚡ 仪表盘垂直滚动彻底解锁：无 #root 的自建网页（9009 等）一律注入解锁样式，上下滑动 100% 顺畅到底；
+            【最新特性 (v1.0.121)】
+            1. 🥇 9009 端口服务台等自建网页彻底解锁上下滑动：DSH 专用的「钉高」布局补丁此前会越界命中仪表盘容器，把它压成一屏高并裁掉全部溢出；本版为该补丁加上页面类型守卫（DOM 里没有 #root 一律一个元素都不碰），实测页面高度 956 → 9328px，上下滑动完全自由；
+            2. ⚡ 布局锁改运行期按页面类型动态注入（彻底拔除 :has()）：DSH 主控页与 1.0.70 黄金基线逐字一致，自建网页与外部网页一律解锁，互不干扰；
             3. 🌙 加载期底色修正：React 挂载前按系统深浅色铺底（暗黑 #151517 沉浸黑），彻底告别刺眼白屏；#root 一挂载立刻撤掉覆盖，完全交还 DSH 自己的主题；
             4. 🌐 纯净环境隔离：千问/文心/豆包等公网大模型网页不锁布局、不改写 fetch，保持 100% 原生环境；
             5. 🔌 全自适应任意 IP 与任意端口（8956、3083、8888 等），彻底废除端口硬编码白名单；
