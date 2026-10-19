@@ -517,15 +517,6 @@ final class ViewController: UIViewController {
             '  -webkit-backdrop-filter: blur(10px) !important;',
             '  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;',
             '}',
-            '/* 顶部导航栏：仅在包含 #root 的 DSH 主控页面下锁定固定布局，普通网页与仪表盘保持原生自由垂直滚动 */',
-            'html:has(#root), body:has(#root) {',
-            '  overflow: hidden !important;',
-            '  overscroll-behavior: none !important;',
-            '  position: fixed !important;',
-            '  inset: 0 !important;',
-            '  width: 100% !important;',
-            '  height: 100% !important;',
-            '}',
             '[data-phase] header,',
             '.ank0OG_header {',
             '  position: sticky !important;',
@@ -1296,6 +1287,106 @@ final class ViewController: UIViewController {
             }
           }
           attach();
+
+          // v1.0.120 页面类型自适应布局锁（彻底废除 :has() 选择器，iOS 14/15/16 全兼容）
+          // 1. DSH 主控页（DOM 内存在 #root 且加载 /assets/ 打包脚本）→ 锁定 html/body 为视口固定布局，
+          //    与 1.0.70 黄金基线逐字一致，保证 DSH 首屏布局绝不回退；
+          // 2. 自建仪表盘（9009 等）/外部网页 → 立刻注入解锁样式，恢复 100% 原生纵向滚动，绝不锁死；
+          // 3. 顺带补齐首屏底色：暗黑模式直接铺 #151517 深色底，绝不再出现刺眼白屏。
+          (function adaptPageLayoutLock() {
+            var LOCK_ID = 'dsh-ios-page-lock';
+            var UNLOCK_ID = 'dsh-ios-page-unlock';
+            var LOCK_CSS = 'html, body { overflow: hidden !important; overscroll-behavior: none !important; position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; }';
+            var UNLOCK_CSS = 'html, body { overflow: auto !important; overscroll-behavior: auto !important; position: static !important; inset: auto !important; width: auto !important; height: auto !important; min-height: 100% !important; }';
+            var decided = false;
+            var tries = 0;
+
+            function isPublicWebHost() {
+              var h = (location.hostname || '').toLowerCase();
+              var keys = ['aliyun.com', 'baidu.com', 'doubao.com', 'moonshot.cn', 'tencent.com',
+                          'openai.com', 'chatgpt.com', 'claude.ai', 'google.com', 'grok.com',
+                          'xfyun.cn', 'chatglm.cn', 'zhipuai.cn', 'minimax.chat', 'deepseek.com',
+                          'volces.com', 'bigmodel.cn', 'qianwen.com'];
+              for (var i = 0; i < keys.length; i++) { if (h.indexOf(keys[i]) !== -1) return true; }
+              return false;
+            }
+
+            function isOwnPage() {
+              // 公网大模型网页一律按外部网页处理，绝不锁定、绝不注入任何 DSH 布局补丁
+              if (isPublicWebHost()) return false;
+              // DSH 单页应用固定挂载在 #root 上；自建仪表盘（9009 等）与外部网页没有 #root
+              return !!document.getElementById('root');
+            }
+
+            function put(id, css) {
+              var head = document.head || document.documentElement;
+              if (!head) return;
+              var el = document.getElementById(id);
+              if (!el) {
+                el = document.createElement('style');
+                el.id = id;
+                el.textContent = css;
+                head.appendChild(el);
+              } else if (document.head && el.parentNode !== document.head) {
+                document.head.appendChild(el);
+              }
+            }
+
+            function apply() {
+              var own = isOwnPage();
+              var drop = document.getElementById(own ? UNLOCK_ID : LOCK_ID);
+              if (drop && drop.parentNode) drop.parentNode.removeChild(drop);
+              if (own) { put(LOCK_ID, LOCK_CSS); } else { put(UNLOCK_ID, UNLOCK_CSS); }
+              return own;
+            }
+
+            // 加载期底色统一：DSH 首屏在 React 挂载前是「无样式白底」，
+            // 暗黑模式下极为刺眼。这里在挂载前按系统深浅色铺 html/body 底色，
+            // 一旦 #root 真正挂载就立刻撤掉覆盖，完全交还给 DSH 自己的主题样式。
+            function paintPageBackground() {
+              var html = document.documentElement;
+              var body = document.body;
+              if (!html) return;
+              var rootEl = document.getElementById('root');
+              var mounted = !!(rootEl && rootEl.children && rootEl.children.length > 0);
+              if (mounted) {
+                try { html.style.removeProperty('background-color'); } catch (e0) {}
+                if (body) { try { body.style.removeProperty('background-color'); } catch (e1) {} }
+                return true;
+              }
+              var dark = false;
+              try {
+                dark = !!(body && body.hasAttribute && body.hasAttribute('data-ds-dark-theme'));
+              } catch (e2) { dark = false; }
+              if (!dark) {
+                try { dark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); } catch (e3) {}
+              }
+              var color = dark ? '#151517' : '#ffffff';
+              try { html.style.setProperty('background-color', color, 'important'); } catch (e4) {}
+              if (body) { try { body.style.setProperty('background-color', color, 'important'); } catch (e5) {} }
+              return false;
+            }
+
+            function watchTheme() {
+              var ticks = 0;
+              (function loop() {
+                var done = paintPageBackground();
+                if (done) return;                 // 已挂载：撤掉覆盖，停止轮询
+                if (++ticks > 480) return;        // 最长 4 分钟，之后交给页面自身
+                setTimeout(loop, 500);
+              })();
+            }
+
+            function tick() {
+              if (decided) return;
+              if (!document.documentElement) { setTimeout(tick, 20); return; }
+              if (apply()) { decided = true; watchTheme(); return; }
+              // 普通网页 / 仪表盘：已立刻解锁原生滚动；3 秒内若确认是 DSH 页面则自动切换为锁定态。
+              if (++tries > 120) { decided = true; return; }
+              setTimeout(tick, 25);
+            }
+            tick();
+          })();
 
           // 修复 iOS 移动端输入框与搜索框自动聚焦导致键盘弹窗问题：
           // 1. 切换会话时，Lexical 编辑器会自动调用 focusDraftEditor，导致切换会话直接弹出虚拟键盘；
@@ -5953,13 +6044,14 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.119)】
-            1. 🥇 对齐 1.0.70 黄金基线彻底根治白屏：直接注入底层标准 Polyfill，绝不在外层套闭包，确保 API 100% 注册，DSH 启动秒开不再白屏；
-            2. ⚡ 仪表盘垂直滚动彻底解锁：拔除全局锁死样式，采用精确特异性规则，9009 仪表盘等自建网页上下滑动 100% 顺畅丝滑到底；
-            3. 🔌 全自适应支持任意 IP 与任意端口：彻底废除端口硬编码白名单，玩家自定义任何端口（8956、3083、8888 等）均 100% 自动识别并生效移动端补丁适配；
-            4. 🌐 纯净环境隔离：阿里千问「运行环境异常」、文心一言登录弹窗受阻彻底修复，第三方网页保持 100% 原生 Safari 纯净环境；
-            5. 🛡 彻底解除版本误报弹窗：iOS 14 / iOS 15 / iOS 16 全面兼容，不再误弹「系统版本过低」；
-            6. 🚀 大模型网页版快捷打开（轻点进入，长按设置）；
+            【最新特性 (v1.0.120)】
+            1. 🥇 彻底拔除 :has() 布局锁：旧 WebKit 对 :has() 支持不完整会整条丢弃规则，直接导致 DSH 布局崩坏与白屏；本版改为运行期按页面类型动态加锁，DSH 主控页与 1.0.70 黄金基线逐字一致；
+            2. ⚡ 仪表盘垂直滚动彻底解锁：无 #root 的自建网页（9009 等）一律注入解锁样式，上下滑动 100% 顺畅到底；
+            3. 🌙 加载期底色修正：React 挂载前按系统深浅色铺底（暗黑 #151517 沉浸黑），彻底告别刺眼白屏；#root 一挂载立刻撤掉覆盖，完全交还 DSH 自己的主题；
+            4. 🌐 纯净环境隔离：千问/文心/豆包等公网大模型网页不锁布局、不改写 fetch，保持 100% 原生环境；
+            5. 🔌 全自适应任意 IP 与任意端口（8956、3083、8888 等），彻底废除端口硬编码白名单；
+            6. 🛡 彻底解除版本误报弹窗：iOS 14 / iOS 15 / iOS 16 全面兼容，不再误弹「系统版本过低」；
+            7. 🚀 大模型网页版快捷打开（轻点进入，长按设置）；
             2. 📡 「系统维护与实用工具」中补齐「全部服务与快捷方式管理」入口，随时自由编辑和管理；
             3. 🧱 设置页与任何弹出页面都不再能左右滑动超出屏幕范围，内容永久锁定在屏宽之内；
             2. 📌 插件页顶部标题条不再被压扁（曾塌成 8px 导致标题压住下方卡片），标题与内容彻底分离；滚动时吸顶条自带底色，下方内容不再透上来；
