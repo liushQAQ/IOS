@@ -1,11 +1,11 @@
 {
-  "version": "1.0.117",
-  "build": 56,
-  "updated_at": "2026-10-19 00:15:00",
-  "title": "v1.0.117 体验定版：大模型网页版固定双列面板·长按才有选择·点击直接打开",
-  "changelog": "1. 主流大模型网页版专属固定面板：彻底废除系统弹性拉伸，高度绝对固定 440pt、位置死死固定在屏幕底部，杜绝忽大忽小、位置不固定与手势晃动；\n2. 双列 8 宫格一屏全收录：国内 8 大模型（豆包、DeepSeek、Kimi、通义千问、腾讯元宝、智谱清言、文心一言、讯飞星火）以 2 列 × 4 行紧凑卡片排布，零滚动、一眼看全，彻底告别上下滑动多下；\n3. 老总交互铁律落地：轻点任意模型卡片直接进入打开链接，绝不多弹确认框打扰；长按 0.38 秒弹出快捷设置菜单，真正做到「长按才有选择」；\n4. 网页中长按小鲸鱼一键收录：正在浏览任何大模型或外部网页时，长按右侧悬浮小鲸鱼 0.45 秒原地弹出面板，直接设为快捷打开；\n5. 快捷方式首屏常驻：添加到快捷服务后，在「切换服务」首屏常驻展示并一秒切入，自动保持 Web 登录态；\n6. 维护与工具中补齐「全部服务与快捷方式管理」入口，支持自由编辑、排序与删除；\n7. 弹层不横滑出屏、插件页吸顶条防塌陷防透字、控件宽度自适应等既有修复全部保留；DSH 电脑端保持 100% 官方原版；全网单一公开版，零私密配置，巨魔一键无损升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.117-56.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.117-56.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.117/DSHios-public-1.0.117-56.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.117"
+  "version": "1.0.118",
+  "build": 57,
+  "updated_at": "2026-10-19 10:10:00",
+  "title": "v1.0.118 通用定版：全自适应支持任意IP与任意端口·彻底废除端口硬编码·解锁自建仪表盘原生滚动",
+  "changelog": "1. 任意 IP 与任意端口全自适应支持：彻底废除端口硬编码白名单限制，玩家自定义任何端口（8956、3083、8888 等）均 100% 自动识别并全量享受移动端补丁适配；\n2. 端口服务仪表盘（9009等）垂直滚动彻底解锁：拔除旧代码对非零滚动的强制钉死逻辑，普通网页与自建仪表盘上下滑动 100% 顺畅丝滑，零卡顿；\n3. 核心注入环境隔离：DSH 适配脚本只在 DSH 主控生效，外部大模型（通义千问、文心一言等）保持 100% 纯净原生浏览器环境，彻底根除千问「运行环境异常」与文心一言登录弹窗受阻问题；\n4. 彻底解除系统版本硬阻断弹窗：iOS 14 / iOS 15 / iOS 16 及以上全面原生兼容，杜绝误报误拦截；\n5. 大模型网页版固定双列面板与长按快捷交互全部继承保留；\n6. 弹层防溢出、插件页吸顶防塌陷、控件宽度自适应等全部基线保持稳固；DSH 电脑端保持 100% 官方原版；全网单一公开版，巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.118-57.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.118-57.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.118/DSHios-public-1.0.118-57.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.118"
 }
