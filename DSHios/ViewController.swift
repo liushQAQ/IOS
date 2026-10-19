@@ -232,6 +232,15 @@ final class ViewController: UIViewController {
                let info = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 let rootLen = info["rootLen"] as? Int ?? -1
                 let rootKids = info["rootKids"] as? Int ?? -1
+                // 页面压根没有 #root：说明它不是 DSH 单页应用（自建仪表盘 / 普通网页），
+                // 这类页面本来就没有 #root，绝不能误报白屏，直接显形收工。
+                if rootLen == -1 && rootKids == -1 {
+                    self.stopWhiteScreenDiagnostics()
+                    self.hideError()
+                    self.hasLoadedOnce = true
+                    self.revealWebView()
+                    return
+                }
                 // 页面已经渲染出内容（有文本或已有子组件挂载）：撤掉诊断，正常显示。
                 if rootLen > 0 || rootKids > 0 {
                     self.stopWhiteScreenDiagnostics()
@@ -4797,6 +4806,12 @@ final class ViewController: UIViewController {
         if publicWebKeywords.contains(where: { host.contains($0) }) {
             return false
         }
+
+        // 1.5 路径层权威信号：/dsh/ 是 DSH 前端固定挂载路径（隧道、网关、dsh-anywhere 全走这里）。
+        //     用户从快捷卡片或外链打开时 markAsDSHService 为 false，但路径已经说明它就是 DSH 页面，
+        //     否则白屏诊断与状态栏留白会被整段跳过（v1.0.120 实测隧道地址踩到过这个坑）。
+        let path = url.path.lowercased()
+        if path.contains("/dsh") { return true }
 
         // 2. 权威生命周期标记：由用户操作或入口显式指定的属性（切换到外部网页时明确为 false）
         if let isDSH = isCurrentServiceDSH {
