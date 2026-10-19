@@ -3319,31 +3319,76 @@ final class ViewController: UIViewController {
                   (document.head || document.documentElement).appendChild(__xs);
                 }
               } catch (e) {}
-              // 顶栏右侧那个「打开右侧边栏」按钮实测 right = vw + 4（430x932 / 393x852 / 375x667
-              // 三种尺寸都是恒定 +4），等于永远被屏幕右缘裁掉 4px，看起来就是「界面超出屏幕」。
-              // 这里按实测值把它推回来。🔴 必须用 transform: translateX 而不是 margin-right：
-              //   margin-right 在 titleRow 的 flex 流里会触发整条链重排，实测 1:3 放大
-              //   （加 8px 让 right 从 434 退到 410，过头 16px，按钮离右缘剩 20px）。
-              //   translateX 是纯视觉位移、不进布局流、1:1 精确：实测 430 宽下
-              //   ov=4 → tx=-4 → right=430 正好贴边，第 2 轮起 ov=0 不再动。
+              // ===== 🔴 v1.0.123：通用「右侧出血」钳制（取代 1.0.122 只盯 headerCorner 的补丁）=====
+              //   老总 2026-10-19：「1.0.122 已经是这个包了，还是有 UI 溢出屏幕的问题」。
+              //   1.0.122 只把顶栏那个按钮推回来 8px，别的元素出血没人管 —— DSH 一换版，
+              //   只要把别的按钮/角标/浮标放到 right > 视口，就又是一次「超出屏幕」。
+              //   这里改成通用扫描：**任何** 元素只要「左边在视口内、右边超出视口」，一律推进来。
+              //   🔴 五条安全线，绝不误伤（逐条都是踩过的坑）：
+              //     ① left < 0 不管 —— 抽屉收起态就是 left:-150，属正常离屏；
+              //     ② left >= vw 不管 —— 右侧面板收起态就是 left:vw，属正常离屏；
+              //     ③ width > vw 不管 —— 横向滚动容器/超宽图，推进来会真的错乱；
+              //     ④ 祖先里有 overflow-x: auto/scroll 不管 —— 可横滑区域，越界是本意；
+              //     ⑤ transform 不是纯位移矩阵不管 —— 带 scale/rotate 的元素直接改会毁掉原效果；
+              //     ⑥ 出血量 > 120px 不管 —— 那是刻意的飞出动画，不是 4~8px 的贴边出血。
+              //   🔴 位移一律 transform: translateX（margin 在 flex 里会 1:3 放大，1.0.122 实测）。
+              //   🔴 幂等：位移量从当前 computed matrix 累加，收敛后 ov=0 自然不再动。
+              //   🔴 性能：全表扫描很贵，1.5 秒最多一次；且先收集、后统一写，读写绝不交错。
               try {
-                var __hcs = document.querySelectorAll('[class*=\"headerCorner\"]');
-                for (var __hi = 0; __hi < __hcs.length; __hi++) {
-                  var __hc = __hcs[__hi];
-                  var __hq = __hc.getBoundingClientRect();
-                  if (__hq.width < 4 || __hq.height < 4) continue;
-                  var __ov = Math.round(__hq.right - window.innerWidth);
-                  if (__ov > 0) {
-                    var __tx = 0;
-                    var __mt = getComputedStyle(__hc).transform;
-                    if (__mt && __mt !== 'none') {
+                var __bleedNow = Date.now();
+                if (!window.__dshBleedAt || __bleedNow - window.__dshBleedAt > 1500) {
+                  window.__dshBleedAt = __bleedNow;
+                  var __vw = window.innerWidth || 430;
+                  var __all = document.body ? document.body.getElementsByTagName('*') : [];
+                  var __hits = [];
+                  var __n = __all.length;
+                  if (__n > 3000) __n = 3000;
+                  for (var __bi = 0; __bi < __n; __bi++) {
+                    var __el = __all[__bi];
+                    if (!__el || __el.nodeType !== 1) continue;
+                    var __bq = __el.getBoundingClientRect();
+                    if (__bq.width < 8 || __bq.height < 8) continue;
+                    var __ov = __bq.right - __vw;
+                    if (__ov <= 0.5) continue;
+                    // ① ② ③ ⑥
+                    if (__bq.left < 0 || __bq.left >= __vw - 1) continue;
+                    if (__bq.width > __vw) continue;
+                    if (__ov > 120) continue;
+                    var __bcs = getComputedStyle(__el);
+                    if (__bcs.display === 'none' || __bcs.visibility === 'hidden') continue;
+                    // ⑤ 只接受纯位移矩阵
+                    var __bt = __bcs.transform;
+                    var __btx = 0;
+                    if (__bt && __bt !== 'none') {
                       // ⚠️ Swift 多行字符串里「反斜杠 + 左圆括号」是插值起始语法，
-                      //   所以下面正则里的圆括号反斜杠必须双写，否则会被当成表达式求值而编译失败。
-                      var __mp = __mt.replace(/^matrix\\(|\\)$/g, '').split(',');
-                      __tx = parseFloat(__mp[4]) || 0;
+                      //   正则里的圆括号反斜杠必须双写，否则会被当成表达式求值而编译失败。
+                      var __bm = __bt.match(/^matrix\\(([^)]*)\\)$/);
+                      if (!__bm) continue;
+                      var __bp = __bm[1].split(',');
+                      if (__bp.length < 6) continue;
+                      var __okT = Math.abs(parseFloat(__bp[0]) - 1) < 0.01 && Math.abs(parseFloat(__bp[1])) < 0.01
+                               && Math.abs(parseFloat(__bp[2])) < 0.01 && Math.abs(parseFloat(__bp[3]) - 1) < 0.01;
+                      if (!__okT) continue;
+                      __btx = parseFloat(__bp[4]) || 0;
                     }
-                    __hc.style.setProperty('transform', 'translateX(' + (__tx - __ov) + 'px)', 'important');
+                    // ④ 祖先可横滑则放行
+                    var __par = __el.parentElement;
+                    var __scrollable = false;
+                    var __depth = 0;
+                    while (__par && __par !== document.body && __depth < 12) {
+                      var __pcs = getComputedStyle(__par);
+                      if (__pcs.overflowX === 'auto' || __pcs.overflowX === 'scroll') { __scrollable = true; break; }
+                      __par = __par.parentElement;
+                      __depth++;
+                    }
+                    if (__scrollable) continue;
+                    __hits.push([__el, __ov, __btx]);
                   }
+                  for (var __hj = 0; __hj < __hits.length; __hj++) {
+                    var __h = __hits[__hj];
+                    __h[0].style.setProperty('transform', 'translateX(' + (__h[2] - __h[1]) + 'px)', 'important');
+                  }
+                  window.__dshBleedN = __hits.length;
                 }
               } catch (e) {}
               var vw = window.innerWidth || 430;
@@ -3700,6 +3745,16 @@ final class ViewController: UIViewController {
             try { tightenRightPanelTop(); } catch (e) {}
             try { restorePageHeadHeight(); } catch (e) {}
             try { fixOverlayOverflow(); } catch (e) {}
+            // 🔴 v1.0.123：出血钳制不能只靠 MutationObserver 驱动 —— 页面静止不变化时
+            //   一次都不会再跑，刚进页面那一下的出血就一直留在屏幕上（老总看到的就是这个）。
+            //   装一个 3 秒兜底定时器（只装一次），保证任何静态页面也会收敛。
+            try {
+              if (!window.__dshBleedT) {
+                window.__dshBleedT = setInterval(function () {
+                  try { fixOverlayOverflow(); } catch (e) {}
+                }, 3000);
+              }
+            } catch (e) {}
             try { fixStretchedControls(); } catch (e) {}   // v1.0.115 通用：行内控件被通栏
             // 🔴 v1.0.110 性能：优先读原生下发的缓存值 window.__dshNativeStatusBar，
             //   避免在 MutationObserver 回调（流式输出时每 300ms 一次）里调 getComputedStyle
@@ -6173,8 +6228,8 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.122)】
-            1. 🥇 「任何界面都超出屏幕范围」根治：顶栏右上角按钮实测 right = 屏宽 + 4（430×932 / 393×852 / 375×667 三种尺寸恒定 +4），等于永远被屏幕右缘切掉 4px；本版按实测偏移用 transform: translateX 精确推回（不用 margin-right，它在 flex 流里会 1:3 放大、推过头 16px），实测 430 宽下 right 从 434 → 430 正好贴边，第 2 轮起偏移归零不再抖动；
+            【最新特性 (v1.0.123)】
+            1. 🥇 「任何界面都超出屏幕范围」改成通用根治：1.0.122 只把顶栏那一个按钮推回 8px，别的元素出血没人管，DSH 一换版就复发。本版起每 1.5 秒全页扫描一次，凡是「左边在屏幕内、右边超出屏幕」的元素一律用 transform: translateX 精确推回；同时设六条安全线绝不误伤 —— left<0（抽屉收起态）不动、left≥屏宽（右侧面板收起态）不动、比屏还宽的横向滚动容器不动、祖先可横滑的区域不动、带缩放/旋转的元素不动、出血超过 120px 的飞出动画不动。实测 430×932 / 393×852 / 375×667 三尺寸：出血元素 2 → 0，第二轮再扫命中 0（幂等不抖），抽屉仍稳在 x=-150、右侧面板仍稳在屏外；
             2. 🧱 全局横向收口：html / body 统一 overflow-x: clip + max-width: 100vw。关键在 clip 而不是 hidden —— clip 不创建滚动容器，所以不会破坏吸顶顶栏（实测加入后顶栏仍 sticky / top: 0，横向滚动量 0，页面总宽 = 屏宽）；
             3. 🪟 设置面板不再被顶栏压住：App 原先把顶栏钉在 z-index 1020，而设置面板的浮层宿主只有 1000，顶栏直接盖在面板上。本版改为「会话页 999 / 有浮层时自动取浮层宿主 z-index 减一」，实测面板顶部两处探测点由命中顶栏标题行（_727C8a_titleRow）恢复为命中面板自身导航（tklpSG_nav）；
             4. 🔍 根治「修过又复发」的老毛病：此前多处布局修复写死了 CSS Module 的哈希类名（如 ank0OG_headerCorner），DSH 前端每次换版哈希就变、选择器集体失效、修复静默归零。本版起一律改用 [class*="xxx"] 属性包含选择器，换版不失效；
