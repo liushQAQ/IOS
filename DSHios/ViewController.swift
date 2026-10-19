@@ -192,7 +192,9 @@ final class ViewController: UIViewController {
         // 严禁对外部网页（仪表盘9009、千问、文心一言、豆包等）执行白屏诊断，避免误报！
         guard isOwnServicePage(url: webView?.url) else { return }
         diagnoseTimers.forEach { $0.invalidate() }
-        let delays: [TimeInterval] = [10.0, 18.0, 28.0]
+        // v1.0.120：插件 bundle（合计约 10MB）在巨魔冻结的 iOS 16.3 老机型上实测要 20~40 秒才能解析完，
+        // 采样点整体后移，只有最后一针（70 秒）仍为空才判定白屏，避免误报。
+        let delays: [TimeInterval] = [15.0, 35.0, 70.0]
         diagnoseTimers = delays.enumerated().map { index, delay in
             Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
                 // 最后一次采样才允许报警；前几次只负责提前确认页面已渲染。
@@ -288,6 +290,8 @@ final class ViewController: UIViewController {
     /// 探测在途标记：WebContent 进程被长任务占住时回包会延迟，期间不再重复下发，
     /// 避免积压上百个跨进程调用。
     private var earlyRevealInFlight = false
+    /// didFinish 之后强制显形的兜底任务（v1.0.120）。
+    private var revealFallbackWork: DispatchWorkItem?
 
     /// 每 250ms 轻量探测 #root 是否已有子节点；一旦有就立刻显形。
     /// 探测脚本极短（单次 querySelector + children.length），不会和主线程长任务抢资源。
@@ -297,24 +301,18 @@ final class ViewController: UIViewController {
         earlyRevealTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             guard let self, self.isViewLoaded else { return }
             self.earlyRevealTicks += 1
-            // 硬上限 4 分钟：真正异常时由导航超时 / 白屏诊断负责报错，这里只负责"能显就早显"。
+            // 硬上限 4 分钟：真正异常时由导航超时 / 白屏诊断负责报错。
+            // v1.0.120：超时后必须强制显形并收掉转圈，绝不让用户一直卡在加载态。
             if self.earlyRevealTicks > 960 {
                 self.stopEarlyRevealProbe()
+                self.activityIndicator.stopAnimating()
+                self.revealWebView()
+                self.sampleRoot(report: true)
                 return
             }
             guard !self.earlyRevealInFlight else { return }
             self.earlyRevealInFlight = true
-            self.webView.evaluateJavaScript(
-                """
-                (function(){
-                  var r = document.getElementById('root');
-                  if (r && r.children.length > 0) return 1;
-                  // 针对自建仪表盘（9009等）或外部网页：无 #root 单页架构，只要 body 有内容立刻显形！
-                  if (!r && document.body && document.body.children.length > 0) return 1;
-                  return -1;
-                })()
-                """
-            ) { [weak self] result, _ in
+            self.webView.evaluateJavaScript(Self.firstPaintProbeJS) { [weak self] result, _ in
                 guard let self else { return }
                 self.earlyRevealInFlight = false
                 let kids: Int
@@ -326,13 +324,68 @@ final class ViewController: UIViewController {
         }
     }
 
+    /// 「首帧真的画出来了」的统一判据（v1.0.120）。
+    /// 关键点：`#root` 有子节点 ≠ 已出首帧 —— React 一挂载就会建一个全尺寸的空容器，
+    /// 而插件 bundle 还在解析时里面什么都没有，此时显形就是一片纯白。
+    /// 因此改用「有真实文字」或「有可见输入框」作为已绘制的证据。
+    private static let firstPaintProbeJS = """
+    (function(){
+      var r = document.getElementById('root');
+      if (!r) {
+        // 非 DSH 单页（自建仪表盘 / 普通网页）：body 一有内容就算首帧到了
+        return (document.body && document.body.children.length > 0) ? 1 : -1;
+      }
+      if ((r.innerText || '').trim().length > 0) return 1;
+      var ed = r.querySelector('textarea, input, [contenteditable="true"]');
+      if (ed) {
+        try {
+          var b = ed.getBoundingClientRect();
+          if (b.width > 20 && b.height > 10) return 1;
+        } catch (e) {}
+      }
+      return -1;
+    })()
+    """
+
     /// 首次发现页面已出首帧：停探测、停转圈、显形。幂等，重复调用无副作用。
     private func finishEarlyReveal() {
         stopEarlyRevealProbe()
+        revealFallbackWork?.cancel()
+        revealFallbackWork = nil
         hideError()
         hasLoadedOnce = true
         activityIndicator.stopAnimating()
         revealWebView()
+    }
+
+    /// didFinish 后的显形决策（v1.0.120 关键修复）：
+    /// `didFinish` 只代表 HTML + 入口 JS 就绪。DSH 还要再解析执行合计约 10MB 的插件 bundle，
+    /// 在巨魔冻结的 iOS 16.3 老机型上实测可达 20~40 秒 —— 这段时间 `#root` 还是空的，
+    /// 一显形就是纯白一片，看起来「一直是白屏」。这里改为：
+    /// `#root` 已有子节点 → 立刻显形；否则保持原生加载态（暗色底 + 转圈），等首屏探针接手。
+    private func confirmFirstPaintOrKeepLoading() {
+        webView.evaluateJavaScript(Self.firstPaintProbeJS) { [weak self] result, _ in
+            guard let self else { return }
+            let kids: Int
+            if let n = result as? NSNumber { kids = n.intValue }
+            else if let i = result as? Int { kids = i }
+            else { kids = 1 }   // 取不到结果就按已就绪处理，绝不死等
+            if kids > 0 { self.finishEarlyReveal() } else { self.scheduleRevealFallback() }
+        }
+    }
+
+    /// 兜底：最多再等 75 秒，超时强制显形并做一次白屏诊断，绝不无限转圈。
+    private func scheduleRevealFallback() {
+        revealFallbackWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.stopEarlyRevealProbe()
+            self.activityIndicator.stopAnimating()
+            self.revealWebView()
+            self.sampleRoot(report: true)
+        }
+        revealFallbackWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 75, execute: work)
     }
 
     private func stopEarlyRevealProbe() {
@@ -6137,6 +6190,8 @@ final class ViewController: UIViewController {
         hideError()
         stopWhiteScreenDiagnostics()
         stopEarlyRevealProbe()
+        revealFallbackWork?.cancel()
+        revealFallbackWork = nil
         webErrors = []
         terminateCount = 0
         hasLoadedOnce = false
@@ -6197,6 +6252,8 @@ final class ViewController: UIViewController {
     private func showError(detail: String) {
         // v1.0.106：已经明确报错就不必再提前显形探测了。
         stopEarlyRevealProbe()
+        revealFallbackWork?.cancel()
+        revealFallbackWork = nil
         // 白屏 / 系统版本诊断路径已显式设过标题，这里不要覆盖；其余一律回到默认标题。
         let presetTitles: Set<String> = ["页面白屏", "系统版本过低"]
         if !presetTitles.contains(errorTitleLabel.text ?? "") {
@@ -6288,6 +6345,9 @@ extension ViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         activityIndicator.startAnimating()
         startNavigationTimeout()
+        // v1.0.120：新导航开始，撤销上一次的显形兜底任务，避免旧页面残留计时器提前显形新页面。
+        revealFallbackWork?.cancel()
+        revealFallbackWork = nil
         // v1.0.106：新导航开始——此刻 #root 仍属于上一个文档，先撤掉探测，
         // 待 didCommit 新文档接手后再重新武装，避免把旧页面误判成新页面首帧。
         stopEarlyRevealProbe()
@@ -6305,9 +6365,14 @@ extension ViewController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        activityIndicator.stopAnimating()
         stopNavigationTimeout()
-        stopEarlyRevealProbe()
+        // v1.0.120：DSH 页面的转圈与首屏探针必须活到「插件 bundle 解析完、#root 真正挂载」为止，
+        // 这里不再无条件下线（否则慢机上直接露出一片白）。普通网页由 finishEarlyReveal 统一收尾。
+        let isOwnPage = isOwnServicePage(url: webView.url)
+        if !isOwnPage {
+            activityIndicator.stopAnimating()
+            stopEarlyRevealProbe()
+        }
         // 完成即隐藏错误层（meta-refresh 握手页二跳也会走到这里）
         hideError()
         hasLoadedOnce = true
@@ -6324,7 +6389,12 @@ extension ViewController: WKNavigationDelegate {
             applyLayoutEditMode()
         }
         // 内容首帧就绪后才显形：加载过程只显示原生加载态，永不白屏
-        revealWebView()
+        if isOwnPage {
+            // DSH 页面：didFinish 之后插件 bundle 还要解析数十秒，此处不能直接显形。
+            confirmFirstPaintOrKeepLoading()
+        } else {
+            finishEarlyReveal()
+        }
         detectStaleTokenPage()
         detectPocketHandshakeBlocked()
         startWhiteScreenDiagnostics()
