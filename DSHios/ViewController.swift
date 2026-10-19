@@ -4753,34 +4753,29 @@ final class ViewController: UIViewController {
     /// `dshServiceHost` 尚未标记时（冷启动 / 重试 / 清缓存路径不会更新它）默认按自身页面处理，
     /// 避免 DSH 页被当成外部网页、顶部被多推一个安全区（v1.0.70 的「顶部多一块空白」就是这么来的）。
     /// 通用性判据：当前加载的页面是否为 DSH 自身主控页面
-    /// 无论任何玩家使用何种 IP、域名、内网穿透：
-    /// 1. 加载时显式标记的 isCurrentServiceDSH 具有最高权威；
-    /// 2. 只要是非 3083/3081/3082 端口（例如玩家自建的其它端口服务），或外部公网网页，100% 判定为外部页面，绝不锁死滚动！
+    /// 无论任何玩家使用何种 IP、域名、内网穿透、任意端口（3083、8956、8888 等任意端口均 100% 自动支持）：
+    /// 1. 外部公网大模型（通义千问、文心一言等），100% 判定为外部页面；
+    /// 2. 加载时由用户操作或入口显式指定的 isCurrentServiceDSH 具有权威判定；
+    /// 3. 与当前激活或配置的主控地址同 host，且非已知外部公网网页，即为自身服务。
     private func isOwnServicePage(url: URL?) -> Bool {
         guard let url = url else { return false }
         guard let host = url.host?.lowercased(), !host.isEmpty else { return false }
-        let port = url.port ?? (url.scheme?.lowercased() == "https" ? 443 : 80)
 
-        // 任何外部 http(s) 公网域名（无论是不是知名大模型），都不可能是用户的局域网/自建 DSH 服务
-        if !host.contains(".") || host.hasSuffix(".com") || host.hasSuffix(".cn") || host.hasSuffix(".ai") || host.hasSuffix(".org") || host.hasSuffix(".net") {
-            // 排除可能绑了私有域名的 DSH，但其它已知大模型/服务一律不是 DSH
-            let publicWebKeywords = ["aliyun.", "baidu.", "doubao.", "moonshot.", "tencent.", "chatglm.", "xfyun.", "openai.", "chatgpt.", "claude.", "google.", "grok."]
-            if publicWebKeywords.contains(where: { host.contains($0) }) {
-                return false
-            }
-        }
-
-        // 非 3083/3081/3082 端口的自建服务（例如玩家的 9009、8080、5000 等），绝非 DSH 主控
-        let dshPorts: Set<Int> = [3083, 3081, 3082]
-        if !dshPorts.contains(port) && port != 80 && port != 443 {
+        // 1. 任何外部 http(s) 公网域名（无论是不是知名大模型），都不可能是用户的局域网/自建 DSH 服务
+        let publicWebKeywords = [
+            "aliyun.", "baidu.", "doubao.", "moonshot.", "tencent.",
+            "chatglm.", "xfyun.", "openai.", "chatgpt.", "claude.", "google.", "grok."
+        ]
+        if publicWebKeywords.contains(where: { host.contains($0) }) {
             return false
         }
 
-        // 权威标记：当前加载是否为 DSH 服务的生命周期
+        // 2. 权威生命周期标记：由用户操作或入口显式指定的属性（切换到外部网页时明确为 false）
         if let isDSH = isCurrentServiceDSH {
             return isDSH
         }
 
+        // 3. 动态匹配：只要是用户当前连接的电脑端主控地址（无论端口是 3083、8956 还是任意端口）
         if let svc = dshServiceHost?.lowercased(), !svc.isEmpty {
             return host == svc
         }
@@ -4888,18 +4883,13 @@ final class ViewController: UIViewController {
         // 在文档开始前注入最小语义等价的 polyfill（仅在原生缺失时生效）。
         for src in Self.iosCompatShims {
             // 🌟 核心环境隔离守卫（彻底解决千问报环境异常、文心一言弹不出登录、仪表盘卡死）：
-            // DSH 的 17 个补丁只在 DSH 官方主控（3083/3081/3082）下运行；
-            // 外部大模型页面（阿里千问、文心一言、豆包等）和自建 Web 端口（9009 仪表盘等）
-            // 保持 100% 纯净的原生 Safari WebKit 环境，绝不污染 window.fetch、focus 和原型链！
-            // 🌟 普适通用环境守卫（适合全网任何玩家的任意 IP、任意端口、任意域名）：
-            // 判据 1：如果是知名第三方网页/大模型域名，100% 拦截不注入；
-            // 判据 2：如果端口不是 3083/3081/3082（即玩家自建的其它端口服务），100% 拦截不注入；
-            // 判据 3：页面如果声明了 __DSH_EXTERNAL_PAGE__，坚决不注入！
-            // 确保除 DSH 官方主控外，全网玩家的所有其它服务与网页保持 100% 纯净原生浏览器环境！
+            // 1. 外部公网大模型商业网站（阿里千问、文心一言、豆包等），坚决不注入任何 DSH 补丁，
+            //    保持 100% 纯净的原生 Safari WebKit 环境，绝不污染 window.fetch、focus 和原型链！
+            // 2. 玩家自建服务无论使用何种端口（3083、8956、8888 等任意端口），100% 自动注入 DSH 适配补丁！
+            // 3. 页面如果声明了 __DSH_EXTERNAL_PAGE__，坚决不注入！
             let guardedSrc = """
             (function() {
               var h = (location.hostname || '').toLowerCase();
-              var p = String(location.port || '');
               var isPublicWeb = (
                 h.indexOf('aliyun.com') !== -1 ||
                 h.indexOf('baidu.com') !== -1 ||
@@ -4914,9 +4904,7 @@ final class ViewController: UIViewController {
                 h.indexOf('google.com') !== -1 ||
                 h.indexOf('grok.com') !== -1
               );
-              // 如果是非 DSH 端口（既不是 3083 也不在 3081/3082），绝对是玩家自建的其它端口
-              var isOtherPort = (p !== '' && p !== '3083' && p !== '3081' && p !== '3082' && p !== '80' && p !== '443');
-              if (isPublicWeb || isOtherPort || window.__DSH_EXTERNAL_PAGE__) {
+              if (isPublicWeb || window.__DSH_EXTERNAL_PAGE__) {
                 return;
               }
               \(src)
@@ -6057,9 +6045,10 @@ final class ViewController: UIViewController {
 
             【最新特性 (v1.0.118)】
             1. 🛡 彻底解除版本误报弹窗：iOS 14 / iOS 15 / iOS 16 全面兼容，不再误弹「系统版本过低」；
-            2. ⚡ 端口仪表盘（9009等）垂直滚动彻底解锁，上下滑动顺畅丝滑不再卡死；
-            3. 🌐 纯净环境隔离：阿里千问「运行环境异常」、文心一言登录弹窗受阻彻底修复，第三方网页保持 100% 原生 Safari 纯净环境；
-            4. 🚀 大模型网页版快捷打开（轻点进入，长按设置）；
+            2. 🔌 全自适应支持任意 IP 与任意端口：彻底废除端口硬编码白名单，玩家自定义任何端口（8956、3083、8888 等）均 100% 自动识别并生效移动端补丁适配；
+            3. ⚡ 端口仪表盘（9009等）垂直滚动彻底解锁，上下滑动顺畅丝滑不再卡死；
+            4. 🌐 纯净环境隔离：阿里千问「运行环境异常」、文心一言登录弹窗受阻彻底修复，第三方网页保持 100% 原生 Safari 纯净环境；
+            5. 🚀 大模型网页版快捷打开（轻点进入，长按设置）；
             2. 📡 「系统维护与实用工具」中补齐「全部服务与快捷方式管理」入口，随时自由编辑和管理；
             3. 🧱 设置页与任何弹出页面都不再能左右滑动超出屏幕范围，内容永久锁定在屏宽之内；
             2. 📌 插件页顶部标题条不再被压扁（曾塌成 8px 导致标题压住下方卡片），标题与内容彻底分离；滚动时吸顶条自带底色，下方内容不再透上来；
@@ -6120,6 +6109,7 @@ final class ViewController: UIViewController {
         isCurrentServiceDSH = markAsDSHService
         if markAsDSHService {
             dshServiceHost = url.host
+            UserDefaults.standard.set(trimmed, forKey: "DSHios.mainDSHURL")
         }
 
         // 双轨固化存储，跨版本覆盖安装升级永不丢失当前使用的 URL
@@ -6587,16 +6577,12 @@ extension ViewController: UIScrollViewDelegate {
     /// 现在只在「整页被顶到屏幕上方」（contentOffset.y < 0，顶栏被顶出状态栏）时才钳回 0，
     /// 正向滚动一律放行，让输入框能滚到键盘正上方。
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        if isOwnServicePage(url: webView?.url) {
-            if scrollView.contentOffset.y != 0 {
-                scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: 0)
-            }
-        } else {
-            guard isKeyboardVisible else { return }
-            guard !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else { return }
-            if scrollView.contentOffset.y < 0 {
-                scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: 0)
-            }
+        // 键盘可见期间防 WebKit 把整页顶出屏幕（仅在整页被顶出屏幕上方 contentOffset.y < 0 时钳回 0）
+        // 正向滚动（contentOffset.y > 0）一律放行，无论是 9009 仪表盘、外部网页还是内部输入框均能自由滑动！
+        guard isKeyboardVisible else { return }
+        guard !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else { return }
+        if scrollView.contentOffset.y < 0 {
+            scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: 0)
         }
     }
 }
