@@ -34,6 +34,8 @@ final class ViewController: UIViewController {
     private var webViewBottomConstraint: NSLayoutConstraint!
     /// DSH 服务的 host:port（用于区分 DSH 页面与外嵌免费网页对话等第三方页面）
     private var dshServiceHost: String?
+    /// 当前页面是否为 DSH 服务的权威运行时标记（通用适配任意玩家的任意 IP 与端口）
+    private var isCurrentServiceDSH: Bool? = true
     /// 键盘当前是否可见
     private var isKeyboardVisible = false
     /// 键盘遮挡高度（pt）。下发给页内脚本，让输入框滚到键盘正上方。
@@ -4750,28 +4752,33 @@ final class ViewController: UIViewController {
     /// 判定当前页面是不是 DSH 自身页面：与最近一次「标记为 DSH 服务」的地址同主机即为自身页面。
     /// `dshServiceHost` 尚未标记时（冷启动 / 重试 / 清缓存路径不会更新它）默认按自身页面处理，
     /// 避免 DSH 页被当成外部网页、顶部被多推一个安全区（v1.0.70 的「顶部多一块空白」就是这么来的）。
+    /// 通用性判据：当前加载的页面是否为 DSH 自身主控页面
+    /// 无论任何玩家使用何种 IP、域名、内网穿透：
+    /// 1. 加载时显式标记的 isCurrentServiceDSH 具有最高权威；
+    /// 2. 只要是非 3083/3081/3082 端口（例如玩家自建的其它端口服务），或外部公网网页，100% 判定为外部页面，绝不锁死滚动！
     private func isOwnServicePage(url: URL?) -> Bool {
         guard let url = url else { return false }
         guard let host = url.host?.lowercased(), !host.isEmpty else { return false }
         let port = url.port ?? (url.scheme?.lowercased() == "https" ? 443 : 80)
 
-        // 1. 明确的非 DSH 端口/外部服务，绝对不是 DSH 页面，绝不锁死滚动！
-        // 9009（端口仪表盘）、9060（网关认证）、8050、8200、8060、8030、8120、9050、8020
-        let nonDshPorts: Set<Int> = [9009, 9060, 8050, 8200, 8060, 8030, 8120, 9050, 8020]
-        if nonDshPorts.contains(port) {
-            return false
+        // 任何外部 http(s) 公网域名（无论是不是知名大模型），都不可能是用户的局域网/自建 DSH 服务
+        if !host.contains(".") || host.hasSuffix(".com") || host.hasSuffix(".cn") || host.hasSuffix(".ai") || host.hasSuffix(".org") || host.hasSuffix(".net") {
+            // 排除可能绑了私有域名的 DSH，但其它已知大模型/服务一律不是 DSH
+            let publicWebKeywords = ["aliyun.", "baidu.", "doubao.", "moonshot.", "tencent.", "chatglm.", "xfyun.", "openai.", "chatgpt.", "claude.", "google.", "grok."]
+            if publicWebKeywords.contains(where: { host.contains($0) }) {
+                return false
+            }
         }
 
-        // 2. 知名大模型网页版与外部站点，绝对不是 DSH 页面！
-        let thirdPartyKeywords = ["aliyun.com", "baidu.com", "doubao.com", "moonshot.cn", "tencent.com", "chatglm.cn", "xfyun.cn", "openai.com", "chatgpt.com", "claude.ai", "google.com", "grok.com"]
-        if thirdPartyKeywords.contains(where: { host.contains($0) }) {
-            return false
-        }
-
-        // 3. 只有 DSH 官方主控端口（3083, 3081, 3082）或者 DSH 服务地址才算自身页面
+        // 非 3083/3081/3082 端口的自建服务（例如玩家的 9009、8080、5000 等），绝非 DSH 主控
         let dshPorts: Set<Int> = [3083, 3081, 3082]
         if !dshPorts.contains(port) && port != 80 && port != 443 {
             return false
+        }
+
+        // 权威标记：当前加载是否为 DSH 服务的生命周期
+        if let isDSH = isCurrentServiceDSH {
+            return isDSH
         }
 
         if let svc = dshServiceHost?.lowercased(), !svc.isEmpty {
@@ -4884,24 +4891,32 @@ final class ViewController: UIViewController {
             // DSH 的 17 个补丁只在 DSH 官方主控（3083/3081/3082）下运行；
             // 外部大模型页面（阿里千问、文心一言、豆包等）和自建 Web 端口（9009 仪表盘等）
             // 保持 100% 纯净的原生 Safari WebKit 环境，绝不污染 window.fetch、focus 和原型链！
+            // 🌟 普适通用环境守卫（适合全网任何玩家的任意 IP、任意端口、任意域名）：
+            // 判据 1：如果是知名第三方网页/大模型域名，100% 拦截不注入；
+            // 判据 2：如果端口不是 3083/3081/3082（即玩家自建的其它端口服务），100% 拦截不注入；
+            // 判据 3：页面如果声明了 __DSH_EXTERNAL_PAGE__，坚决不注入！
+            // 确保除 DSH 官方主控外，全网玩家的所有其它服务与网页保持 100% 纯净原生浏览器环境！
             let guardedSrc = """
             (function() {
               var h = (location.hostname || '').toLowerCase();
-              var p = location.port || '';
-              // 外部大模型域名与自建监控端口：坚决不注入任何 DSH 补丁，零篡改
-              if (h.indexOf('aliyun.com') !== -1 ||
-                  h.indexOf('baidu.com') !== -1 ||
-                  h.indexOf('doubao.com') !== -1 ||
-                  h.indexOf('moonshot.cn') !== -1 ||
-                  h.indexOf('tencent.com') !== -1 ||
-                  h.indexOf('chatglm.cn') !== -1 ||
-                  h.indexOf('xfyun.cn') !== -1 ||
-                  h.indexOf('openai.com') !== -1 ||
-                  h.indexOf('chatgpt.com') !== -1 ||
-                  h.indexOf('claude.ai') !== -1 ||
-                  h.indexOf('google.com') !== -1 ||
-                  h.indexOf('grok.com') !== -1 ||
-                  p === '9009' || p === '9060' || p === '8050' || p === '8200' || p === '8060') {
+              var p = String(location.port || '');
+              var isPublicWeb = (
+                h.indexOf('aliyun.com') !== -1 ||
+                h.indexOf('baidu.com') !== -1 ||
+                h.indexOf('doubao.com') !== -1 ||
+                h.indexOf('moonshot.cn') !== -1 ||
+                h.indexOf('tencent.com') !== -1 ||
+                h.indexOf('chatglm.cn') !== -1 ||
+                h.indexOf('xfyun.cn') !== -1 ||
+                h.indexOf('openai.com') !== -1 ||
+                h.indexOf('chatgpt.com') !== -1 ||
+                h.indexOf('claude.ai') !== -1 ||
+                h.indexOf('google.com') !== -1 ||
+                h.indexOf('grok.com') !== -1
+              );
+              // 如果是非 DSH 端口（既不是 3083 也不在 3081/3082），绝对是玩家自建的其它端口
+              var isOtherPort = (p !== '' && p !== '3083' && p !== '3081' && p !== '3082' && p !== '80' && p !== '443');
+              if (isPublicWeb || isOtherPort || window.__DSH_EXTERNAL_PAGE__) {
                 return;
               }
               \(src)
@@ -6102,6 +6117,7 @@ final class ViewController: UIViewController {
             showError(detail: "地址无效：\(finalString)")
             return
         }
+        isCurrentServiceDSH = markAsDSHService
         if markAsDSHService {
             dshServiceHost = url.host
         }
