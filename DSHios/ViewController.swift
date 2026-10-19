@@ -3305,6 +3305,47 @@ final class ViewController: UIViewController {
               var now0 = Date.now();
               if (now0 - __dshOverlayLastRun < 400) return;
               __dshOverlayLastRun = now0;
+              // ===== 🔴 v1.0.122：全局横向收口（老总 2026-10-19「任何界面都超出屏幕范围」）=====
+              //   之前只在「浮层根」内做 border-box 修正，主界面和表头右侧那 4px 没人管。
+              //   `overflow-x: clip` 与 `hidden` 的关键区别：**clip 不创建滚动容器**，
+              //   所以不会把 html/body 变成 scroll container、也不会破坏 sticky 顶栏；
+              //   DSH 主界面本来就靠内部滚动容器，html 自己不滚，这条只裁横向。
+              //   一次性注入 + id 去重，幂等。
+              try {
+                if (!document.getElementById('__dsh-xclip')) {
+                  var __xs = document.createElement('style');
+                  __xs.id = '__dsh-xclip';
+                  __xs.textContent = 'html, body { overflow-x: clip !important; max-width: 100vw !important; }';
+                  (document.head || document.documentElement).appendChild(__xs);
+                }
+              } catch (e) {}
+              // 顶栏右侧那个「打开右侧边栏」按钮实测 right = vw + 4（430x932 / 393x852 / 375x667
+              // 三种尺寸都是恒定 +4），等于永远被屏幕右缘裁掉 4px，看起来就是「界面超出屏幕」。
+              // 这里按实测值把它推回来。🔴 必须用 transform: translateX 而不是 margin-right：
+              //   margin-right 在 titleRow 的 flex 流里会触发整条链重排，实测 1:3 放大
+              //   （加 8px 让 right 从 434 退到 410，过头 16px，按钮离右缘剩 20px）。
+              //   translateX 是纯视觉位移、不进布局流、1:1 精确：实测 430 宽下
+              //   ov=4 → tx=-4 → right=430 正好贴边，第 2 轮起 ov=0 不再动。
+              try {
+                var __hcs = document.querySelectorAll('[class*=\"headerCorner\"]');
+                for (var __hi = 0; __hi < __hcs.length; __hi++) {
+                  var __hc = __hcs[__hi];
+                  var __hq = __hc.getBoundingClientRect();
+                  if (__hq.width < 4 || __hq.height < 4) continue;
+                  var __ov = Math.round(__hq.right - window.innerWidth);
+                  if (__ov > 0) {
+                    var __tx = 0;
+                    var __mt = getComputedStyle(__hc).transform;
+                    if (__mt && __mt !== 'none') {
+                      // ⚠️ Swift 多行字符串里「反斜杠 + 左圆括号」是插值起始语法，
+                      //   所以下面正则里的圆括号反斜杠必须双写，否则会被当成表达式求值而编译失败。
+                      var __mp = __mt.replace(/^matrix\\(|\\)$/g, '').split(',');
+                      __tx = parseFloat(__mp[4]) || 0;
+                    }
+                    __hc.style.setProperty('transform', 'translateX(' + (__tx - __ov) + 'px)', 'important');
+                  }
+                }
+              } catch (e) {}
               var vw = window.innerWidth || 430;
               var hosts = document.querySelectorAll('[class*=\"overlayLayer\"], body > div');
               // 🔴 候选池必须**同时包含挂载层自身**：实测设置面板的根 [class*=\"overlay\"]
@@ -4056,10 +4097,18 @@ final class ViewController: UIViewController {
             //                （顶栏 y57..97，fab y65..103，重叠 32px），标题行 .ank0OG_titleRow 正好盖住按钮中心
             //                → 点击被标题行吞掉，抽屉纹丝不动（实测点前点后 sbX 都是 -150）。
             //    修法：**只降顶栏，绝不动 fab**（fab 保持官方 z-index:21 —— 抬它会让它冒到各种
-            //         弹出层之上，那是另一种错）。fab 可见的页面（首页/新会话页等）把顶栏压到
-            //         overlayLayer 之下；会话页（fab 被 display:none 隐藏）保持历史验证过的 1020，
-            //          行为一字不变。目标值动态取「overlayLayer 的 z-index - 1」，DSH 改了我们也跟着走。
-            var zTarget = '1020';
+            //         弹出层之上，那是另一种错）。目标值动态取「overlayLayer 的 z-index - 1」，
+            //         DSH 改了我们也跟着走。
+            // 🔴 v1.0.122（老总 2026-10-19：「任何界面都超出屏幕范围」）：
+            //    原实现在「fab 不可见」（= 会话页）时把顶栏钉死在 1020，而设置面板这类浮层的
+            //    宿主层（overlayLayer）只有 1000 → 顶栏直接压在面板上面。
+            //    实测（393x852 WebKit + iOS16.3 UA，elementFromPoint）：面板顶部 y=20 / y=38
+            //    两处命中的都是 `_727C8a_titleRow`（顶栏标题行），不是面板自己的 `tklpSG_nav`；
+            //    把顶栏降到 999 后两处立刻回到 `tklpSG_nav` —— 严格因果，不是玄学。
+            //    故把会话页的默认值从 1020 下调到 **999**（低于浮层基准 1000），
+            //    fab 可见时的分支一字不动（仍是 overlayLayer.zIndex - 1 = 19，
+            //    「新建会话按钮点不动」那个历史问题不受影响）。
+            var zTarget = '999';
             try {
               var fabEl = document.querySelector('[data-mobile-nav=\"fab\"]');
               var fabVisible = !!fabEl && getComputedStyle(fabEl).display !== 'none' && getComputedStyle(fabEl).visibility !== 'hidden';
@@ -6124,13 +6173,17 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.121)】
-            1. 🥇 9009 端口服务台等自建网页彻底解锁上下滑动：DSH 专用的「钉高」布局补丁此前会越界命中仪表盘容器，把它压成一屏高并裁掉全部溢出；本版为该补丁加上页面类型守卫（DOM 里没有 #root 一律一个元素都不碰），实测页面高度 956 → 9328px，上下滑动完全自由；
-            2. ⚡ 布局锁改运行期按页面类型动态注入（彻底拔除 :has()）：DSH 主控页与 1.0.70 黄金基线逐字一致，自建网页与外部网页一律解锁，互不干扰；
-            3. 🌙 加载期底色修正：React 挂载前按系统深浅色铺底（暗黑 #151517 沉浸黑），彻底告别刺眼白屏；#root 一挂载立刻撤掉覆盖，完全交还 DSH 自己的主题；
-            4. 🌐 纯净环境隔离：千问/文心/豆包等公网大模型网页不锁布局、不改写 fetch，保持 100% 原生环境；
-            5. 🔌 全自适应任意 IP 与任意端口（8956、3083、8888 等），彻底废除端口硬编码白名单；
-            6. 🛡 彻底解除版本误报弹窗：iOS 14 / iOS 15 / iOS 16 全面兼容，不再误弹「系统版本过低」；
+            【最新特性 (v1.0.122)】
+            1. 🥇 「任何界面都超出屏幕范围」根治：顶栏右上角按钮实测 right = 屏宽 + 4（430×932 / 393×852 / 375×667 三种尺寸恒定 +4），等于永远被屏幕右缘切掉 4px；本版按实测偏移用 transform: translateX 精确推回（不用 margin-right，它在 flex 流里会 1:3 放大、推过头 16px），实测 430 宽下 right 从 434 → 430 正好贴边，第 2 轮起偏移归零不再抖动；
+            2. 🧱 全局横向收口：html / body 统一 overflow-x: clip + max-width: 100vw。关键在 clip 而不是 hidden —— clip 不创建滚动容器，所以不会破坏吸顶顶栏（实测加入后顶栏仍 sticky / top: 0，横向滚动量 0，页面总宽 = 屏宽）；
+            3. 🪟 设置面板不再被顶栏压住：App 原先把顶栏钉在 z-index 1020，而设置面板的浮层宿主只有 1000，顶栏直接盖在面板上。本版改为「会话页 999 / 有浮层时自动取浮层宿主 z-index 减一」，实测面板顶部两处探测点由命中顶栏标题行（_727C8a_titleRow）恢复为命中面板自身导航（tklpSG_nav）；
+            4. 🔍 根治「修过又复发」的老毛病：此前多处布局修复写死了 CSS Module 的哈希类名（如 ank0OG_headerCorner），DSH 前端每次换版哈希就变、选择器集体失效、修复静默归零。本版起一律改用 [class*="xxx"] 属性包含选择器，换版不失效；
+            5. 🔌 低版本系统通用适配：iOS 14 / 15 / 16.x（含 16.3 及以下）全通吃，配套插件 dsh-anywhere 1.0.6 已改为对任意形态的 lookbehind 一律安全降级，不再只认某一份前端包；
+            6. 🥇 9009 端口服务台等自建网页彻底解锁上下滑动：DSH 专用的「钉高」布局补丁此前会越界命中仪表盘容器，把它压成一屏高并裁掉全部溢出；本版为该补丁加上页面类型守卫（DOM 里没有 #root 一律一个元素都不碰），实测页面高度 956 → 9328px，上下滑动完全自由；
+            7. ⚡ 布局锁改运行期按页面类型动态注入（彻底拔除 :has()）：DSH 主控页与 1.0.70 黄金基线逐字一致，自建网页与外部网页一律解锁，互不干扰；
+            8. 🌙 加载期底色修正：React 挂载前按系统深浅色铺底（暗黑 #151517 沉浸黑），彻底告别刺眼白屏；#root 一挂载立刻撤掉覆盖，完全交还 DSH 自己的主题；
+            9. 🌐 纯净环境隔离：千问/文心/豆包等公网大模型网页不锁布局、不改写 fetch，保持 100% 原生环境；
+            10. 🛡 彻底解除版本误报弹窗：iOS 14 / iOS 15 / iOS 16 全面兼容，不再误弹「系统版本过低」；
             7. 🚀 大模型网页版快捷打开（轻点进入，长按设置）；
             2. 📡 「系统维护与实用工具」中补齐「全部服务与快捷方式管理」入口，随时自由编辑和管理；
             3. 🧱 设置页与任何弹出页面都不再能左右滑动超出屏幕范围，内容永久锁定在屏宽之内；

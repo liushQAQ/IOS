@@ -905,7 +905,13 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.lineBreakMode = .byWordWrapping
 
         let logContent = """
-        🥇 1. 9009 端口服务台等自建网页彻底解锁上下滑动（v1.0.121）：
+        🥇 1. 「任何界面都超出屏幕范围」根治（v1.0.122）：
+        • 真凶一：顶栏右上角按钮实测 right = 屏宽 + 4（430×932 / 393×852 / 375×667 三种尺寸恒定 +4），永远被屏幕右缘切掉 4px；按实测偏移用 transform: translateX 精确推回（不用 margin-right —— 它在 flex 流里会 1:3 放大、推过头 16px，按钮反而离右缘剩 20px）；实测 430 宽下 right 434 → 430 正好贴边，第 2 轮起偏移归零不再抖动；
+        • 真凶二：顶栏被钉在 z-index 1020，而设置面板的浮层宿主只有 1000，顶栏直接盖在面板上（elementFromPoint 在面板顶部命中的是顶栏标题行 _727C8a_titleRow，不是面板自己的导航 tklpSG_nav）；改为 999 后立刻恢复命中 tklpSG_nav，严格因果；
+        • 兜底：html / body 统一 overflow-x: clip + max-width: 100vw。关键在 clip 而不是 hidden —— clip 不创建滚动容器，不会破坏吸顶顶栏（实测加入后顶栏仍 sticky / top: 0，横向滚动量 0，页面总宽 = 屏宽）；
+        • 根治「修过又复发」：此前多处修复写死 CSS Module 哈希类名（如 ank0OG_headerCorner），DSH 前端每次换版哈希就变、选择器集体失效、修复静默归零；本版起一律改用 [class*="xxx"] 属性包含选择器，换版不失效。
+
+        🥇 2. 9009 端口服务台等自建网页彻底解锁上下滑动（v1.0.121）：
         • 真凶定案：DSH 专用的「钉高」布局补丁（fixTop）会沿 DOM 往上找到顶栏所在那一列，强制写内联 height = 视口高 − 列顶 / max-height 同值 / overflow:hidden；在仪表盘上它越界命中了 body > .container，把整页压成一屏高（898px）并裁掉全部溢出 —— 这就是「只显示一页、怎么滑都不动」的根因；
         • 修法：为该补丁加上页面类型守卫，DOM 里没有 #root（非 DSH 页面）就地返回，一个元素都不碰；
         • 实测（Playwright WebKit 430×932 真机等价，注入全部 17 个 shim）：修复前页面 scrollHeight 956px、只能滚 24px；修复后 9328px、可自由滚到底；
