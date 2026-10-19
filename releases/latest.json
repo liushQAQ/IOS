@@ -1,11 +1,11 @@
 {
-  "version": "1.0.121",
-  "build": 60,
-  "updated_at": "2026-10-19 19:15:00",
-  "title": "v1.0.121 仪表盘锁屏根治版：钉高补丁加页面守卫·9009等自建网页彻底解锁上下滑动",
-  "changelog": "1. 🥇 9009 端口服务台等自建网页彻底解锁上下滑动：DSH 专用的「钉高」布局补丁（fixTop）此前会越界命中仪表盘容器 body > .container，把它压成一屏高（898px）并裁掉全部溢出；本版为该补丁加上页面类型守卫（DOM 里没有 #root 一律一个元素都不碰），实测页面高度 956 → 9328px，上下滑动完全自由；\n2. DSH 主控页零影响：__dshLayoutFix 正常安装、顶栏 sticky、安全区归零，布局与 1.0.70 黄金基线逐字一致；\n3. ⚡ 布局锁改运行期按页面类型动态注入（彻底拔除 :has()）：DSH 主控页与自建网页、外部网页互不干扰；\n4. 🌙 加载期底色修正：跟随系统深浅色，暗黑模式直接铺 #151517 沉浸黑，React 挂载后立刻撤还 DSH 自身主题；\n5. 🌐 纯净环境隔离：公网大模型网页 100% 原生 Safari WebKit，不注入任何 DSH 补丁，防 WAF 风控；\n6. 🔌 全自适应任意 IP 与任意端口（8956、3083、8888 等），彻底废除端口硬编码白名单；\n7. 🛡 彻底解除版本误报弹窗：iOS 14 / iOS 15 / iOS 16 全面兼容，不再误弹「系统版本过低」；\n8. 🚀 大模型网页版快捷打开（轻点进入，长按设置）；全网单一公开版，巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.121-60.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.121-60.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.121/DSHios-public-1.0.121-60.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.121"
+  "version": "1.0.122",
+  "build": 61,
+  "updated_at": "2026-10-19 22:22:00",
+  "title": "v1.0.122 横向溢出根治版：任何界面都不再超出屏幕·顶栏角标精确推回·设置面板不再被压",
+  "changelog": "1. 🥇 「任何界面都超出屏幕范围」根治：顶栏右上角按钮实测 right = 屏宽 + 4（430×932 / 393×852 / 375×667 三种尺寸恒定 +4），等于永远被屏幕右缘切掉 4px；本版按实测偏移用 transform: translateX 精确推回（不用 margin-right —— 它在 flex 流里会 1:3 放大、推过头 16px，按钮反而离右缘剩 20px）；实测 430 宽下 right 由 434 → 430 正好贴边，第 2 轮起偏移归零不再抖动；\n2. 🧱 全局横向收口：html / body 统一 overflow-x: clip + max-width: 100vw。关键在 clip 而不是 hidden —— clip 不创建滚动容器，所以不会破坏吸顶顶栏（实测加入后顶栏仍 sticky / top: 0，横向滚动量 0，页面总宽 = 屏宽）；\n3. 🪟 设置面板不再被顶栏压住：App 原先把顶栏钉在 z-index 1020，而设置面板的浮层宿主只有 1000，顶栏直接盖在面板上。本版改为「会话页 999 / 有浮层时自动取浮层宿主 z-index 减一」，实测面板顶部两处探测点由命中顶栏标题行（_727C8a_titleRow）恢复为命中面板自身导航（tklpSG_nav）；\n4. 🔍 根治「修过又复发」的老毛病：此前多处布局修复写死了 CSS Module 的哈希类名（如 ank0OG_headerCorner），DSH 前端每次换版哈希就变、选择器集体失效、修复静默归零。本版起一律改用 [class*=xxx] 属性包含选择器，换版不失效；\n5. 🔌 低版本系统通用适配：iOS 14 / 15 / 16.x（含 16.3 及以下）全通吃，配套插件 dsh-anywhere 1.0.8 已改为对任意形态的 lookbehind 一律安全降级，不再只认某一份前端包；\n6. 🥇 9009 端口服务台等自建网页彻底解锁上下滑动：钉高补丁加页面类型守卫（DOM 里没有 #root 一律不碰），实测页面高度 956 → 9328px，上下滑动完全自由；\n7. ⚡ 布局锁改运行期按页面类型动态注入（彻底拔除 :has()）：DSH 主控页与自建网页、外部网页互不干扰；\n8. 🌙 加载期底色修正：跟随系统深浅色，暗黑模式直接铺 #151517 沉浸黑，React 挂载后立刻撤还 DSH 自身主题；\n9. 🌐 纯净环境隔离：公网大模型网页 100% 原生 Safari WebKit，不注入任何 DSH 补丁，防 WAF 风控；\n10. 🛡 彻底解除版本误报弹窗：iOS 14 / iOS 15 / iOS 16 全面兼容，不再误弹「系统版本过低」；全网单一公开版，巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.122-61.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.122-61.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.122/DSHios-public-1.0.122-61.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.122"
 }
