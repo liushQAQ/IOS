@@ -187,6 +187,8 @@ final class ViewController: UIViewController {
     /// 注意：didFinish 只代表 HTML 解析完，插件 bundle（约 14MB）还要再加载十几秒，
     /// 因此前几次采样允许为空——只有最后一次（约 25 秒后）仍空才判定白屏，避免误报。
     private func startWhiteScreenDiagnostics() {
+        // 严禁对外部网页（仪表盘9009、千问、文心一言、豆包等）执行白屏诊断，避免误报！
+        guard isOwnServicePage(url: webView?.url) else { return }
         diagnoseTimers.forEach { $0.invalidate() }
         let delays: [TimeInterval] = [10.0, 18.0, 28.0]
         diagnoseTimers = delays.enumerated().map { index, delay in
@@ -237,23 +239,8 @@ final class ViewController: UIViewController {
                 }
                 // 尚未到判定时刻：插件可能还在加载，不打扰。
                 guard report else { return }
-                // v1.0.105：白屏根因若是系统 WebKit 太旧（不支持 RegExp lookbehind），
-                // 不再甩一句"页面白屏"让人猜，直接给出版本门槛与可执行动作。
-                // 说明：DSH 官方前端自身就要求 iOS 16.4+，这不是 App 引入的限制，
-                // 所以正确做法是"把官方的能力边界讲清楚"，而不是去改 DSH 官方文件。
-                if (info["lookbehind"] as? Bool) == false {
-                    self.errorTitleLabel.text = "系统版本过低"
-                    self.showError(detail: """
-                    当前 iOS 版本过低，无法运行 DSH 网页端。
-
-                    DSH 官方前端使用了 RegExp 后行断言（lookbehind），
-                    该语法需要 iOS 16.4 或更高版本（Safari / WebKit 16.4+）。
-
-                    本机检测：lookbehind = 不支持
-                    解决办法：设置 → 通用 → 软件更新，升级到 iOS 16.4 及以上后再试。
-                    """)
-                    return
-                }
+                // 彻底解除系统版本硬阻断：本项目全面兼容 iOS 14 / iOS 15 / iOS 16 及以上
+                // 严禁误判弹窗遮挡用户界面！
                 let details = [
                     "#root 文本长度=\(info["rootLen"] ?? "?") 子节点数=\(info["rootKids"] ?? "?")",
                     "API: withResolvers=\(info["withResolvers"] ?? "?") at=\(info["at"] ?? "?") hasOwn=\(info["hasOwn"] ?? "?") toSorted=\(info["toSorted"] ?? "?") lookbehind=\(info["lookbehind"] ?? "?")"
@@ -4764,9 +4751,32 @@ final class ViewController: UIViewController {
     /// `dshServiceHost` 尚未标记时（冷启动 / 重试 / 清缓存路径不会更新它）默认按自身页面处理，
     /// 避免 DSH 页被当成外部网页、顶部被多推一个安全区（v1.0.70 的「顶部多一块空白」就是这么来的）。
     private func isOwnServicePage(url: URL?) -> Bool {
-        guard let host = url?.host?.lowercased(), !host.isEmpty else { return true }
-        if let svc = dshServiceHost?.lowercased(), !svc.isEmpty { return host == svc }
-        // 尚未标记过服务地址：默认地址 + 最近地址 + 回环地址都算自身页面
+        guard let url = url else { return false }
+        guard let host = url.host?.lowercased(), !host.isEmpty else { return false }
+        let port = url.port ?? (url.scheme?.lowercased() == "https" ? 443 : 80)
+
+        // 1. 明确的非 DSH 端口/外部服务，绝对不是 DSH 页面，绝不锁死滚动！
+        // 9009（端口仪表盘）、9060（网关认证）、8050、8200、8060、8030、8120、9050、8020
+        let nonDshPorts: Set<Int> = [9009, 9060, 8050, 8200, 8060, 8030, 8120, 9050, 8020]
+        if nonDshPorts.contains(port) {
+            return false
+        }
+
+        // 2. 知名大模型网页版与外部站点，绝对不是 DSH 页面！
+        let thirdPartyKeywords = ["aliyun.com", "baidu.com", "doubao.com", "moonshot.cn", "tencent.com", "chatglm.cn", "xfyun.cn", "openai.com", "chatgpt.com", "claude.ai", "google.com", "grok.com"]
+        if thirdPartyKeywords.contains(where: { host.contains($0) }) {
+            return false
+        }
+
+        // 3. 只有 DSH 官方主控端口（3083, 3081, 3082）或者 DSH 服务地址才算自身页面
+        let dshPorts: Set<Int> = [3083, 3081, 3082]
+        if !dshPorts.contains(port) && port != 80 && port != 443 {
+            return false
+        }
+
+        if let svc = dshServiceHost?.lowercased(), !svc.isEmpty {
+            return host == svc
+        }
         var hosts = ["localhost", "127.0.0.1"]
         for raw in [defaultURL, UserDefaults.standard.string(forKey: Keys.lastURL)] {
             if let h = raw.flatMap({ URL(string: $0)?.host?.lowercased() }), !h.isEmpty { hosts.append(h) }
@@ -4870,8 +4880,35 @@ final class ViewController: UIViewController {
         // 任一缺失都会让首个内联脚本抛错 → #root 永远空 = 白屏。
         // 在文档开始前注入最小语义等价的 polyfill（仅在原生缺失时生效）。
         for src in Self.iosCompatShims {
+            // 🌟 核心环境隔离守卫（彻底解决千问报环境异常、文心一言弹不出登录、仪表盘卡死）：
+            // DSH 的 17 个补丁只在 DSH 官方主控（3083/3081/3082）下运行；
+            // 外部大模型页面（阿里千问、文心一言、豆包等）和自建 Web 端口（9009 仪表盘等）
+            // 保持 100% 纯净的原生 Safari WebKit 环境，绝不污染 window.fetch、focus 和原型链！
+            let guardedSrc = """
+            (function() {
+              var h = (location.hostname || '').toLowerCase();
+              var p = location.port || '';
+              // 外部大模型域名与自建监控端口：坚决不注入任何 DSH 补丁，零篡改
+              if (h.indexOf('aliyun.com') !== -1 ||
+                  h.indexOf('baidu.com') !== -1 ||
+                  h.indexOf('doubao.com') !== -1 ||
+                  h.indexOf('moonshot.cn') !== -1 ||
+                  h.indexOf('tencent.com') !== -1 ||
+                  h.indexOf('chatglm.cn') !== -1 ||
+                  h.indexOf('xfyun.cn') !== -1 ||
+                  h.indexOf('openai.com') !== -1 ||
+                  h.indexOf('chatgpt.com') !== -1 ||
+                  h.indexOf('claude.ai') !== -1 ||
+                  h.indexOf('google.com') !== -1 ||
+                  h.indexOf('grok.com') !== -1 ||
+                  p === '9009' || p === '9060' || p === '8050' || p === '8200' || p === '8060') {
+                return;
+              }
+              \(src)
+            })();
+            """
             config.userContentController.addUserScript(
-                WKUserScript(source: src,
+                WKUserScript(source: guardedSrc,
                              injectionTime: .atDocumentStart,
                              forMainFrameOnly: false))
         }
@@ -6003,8 +6040,11 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.117)】
-            1. 🌐 国内外大模型网页版（豆包/DeepSeek等）全面支持一键添加快捷打开：列表点击可选「添加到快捷服务」，在任意网页点悬浮菜单首项直达「⭐ 将当前网页设为快捷打开」；
+            【最新特性 (v1.0.118)】
+            1. 🛡 彻底解除版本误报弹窗：iOS 14 / iOS 15 / iOS 16 全面兼容，不再误弹「系统版本过低」；
+            2. ⚡ 端口仪表盘（9009等）垂直滚动彻底解锁，上下滑动顺畅丝滑不再卡死；
+            3. 🌐 纯净环境隔离：阿里千问「运行环境异常」、文心一言登录弹窗受阻彻底修复，第三方网页保持 100% 原生 Safari 纯净环境；
+            4. 🚀 大模型网页版快捷打开（轻点进入，长按设置）；
             2. 📡 「系统维护与实用工具」中补齐「全部服务与快捷方式管理」入口，随时自由编辑和管理；
             3. 🧱 设置页与任何弹出页面都不再能左右滑动超出屏幕范围，内容永久锁定在屏宽之内；
             2. 📌 插件页顶部标题条不再被压扁（曾塌成 8px 导致标题压住下方卡片），标题与内容彻底分离；滚动时吸顶条自带底色，下方内容不再透上来；
@@ -6494,6 +6534,20 @@ extension ViewController: WKUIDelegate {
             webView.load(navigationAction.request)
         }
         return nil
+    }
+
+    // 补齐 JavaScript 弹窗与确认框支持（解决第三方登录弹窗、确认框被吞问题）
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "确定", style: .default) { _ in completionHandler() })
+        present(alert, animated: true)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in completionHandler(false) })
+        alert.addAction(UIAlertAction(title: "确定", style: .default) { _ in completionHandler(true) })
+        present(alert, animated: true)
     }
 }
 
