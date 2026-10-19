@@ -1229,6 +1229,52 @@ final class ViewController: UIViewController {
             '  padding-bottom: 2px !important;',
             '}',
             '/* 会话框 + 号对齐居中，防止图标偏下或未居中 */',
+            '/* 🔴 v1.0.124：DSH 换版后旧的 .uWtHQG_add / .ank0OG_composerSeat 等哈希类名全部失效',
+            '   （实测命中数 0），会话框底部的「圆圈 / 方框 / +号」集体失去居中 —— 老总报「又出现了」。',
+            '   改用 [class*=] 属性包含选择器，并把按钮内部改成 flex 居中 + padding 清零：',
+            '   实测 DSH 原生给这些按钮写的是 padding: 2px 6px 3px（上下不等），grid 布局下',
+            '   图标恒定偏上 0.5px。清零后 Δy = 0。 */',
+            '[class*=\"composerStack\"] [class*=\"_add\"],',
+            '[class*=\"composerStack\"] [class*=\"_primary\"],',
+            '[class*=\"composerStack\"] [class*=\"_send\"],',
+            '[class*=\"composerStack\"] [class*=\"_stop\"],',
+            '[class*=\"composerStack\"] [class*=\"_attach\"],',
+            '[class*=\"composerStack\"] [class*=\"_voice\"],',
+            '[class*=\"composerStack\"] [class*=\"_mic\"],',
+            '[class*=\"composerStack\"] .dsh-po-btn-gear,',
+            '[class*=\"composerStack\"] .dsh-po-btn-opt {',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  justify-content: center !important;',
+            '  padding: 0 !important;',
+            '  box-sizing: border-box !important;',
+            '}',
+            '[class*=\"composerStack\"] [class*=\"_add\"] > svg,',
+            '[class*=\"composerStack\"] [class*=\"_primary\"] > svg,',
+            '[class*=\"composerStack\"] [class*=\"_send\"] > svg,',
+            '[class*=\"composerStack\"] [class*=\"_stop\"] > svg,',
+            '[class*=\"composerStack\"] [class*=\"_attach\"] > svg,',
+            '[class*=\"composerStack\"] [class*=\"_voice\"] > svg,',
+            '[class*=\"composerStack\"] [class*=\"_mic\"] > svg,',
+            '[class*=\"composerStack\"] .dsh-po-btn-gear > svg,',
+            '[class*=\"composerStack\"] .dsh-po-btn-opt > svg {',
+            '  display: block !important;',
+            '  margin: auto !important;',
+            '  flex: 0 0 auto !important;',
+            '}',
+            '[class*=\"composerStack\"] [class*=\"_row\"] {',
+            '  align-items: center !important;',
+            '}',
+            '/* 🔴 v1.0.124 真凶：DSH 原生给发送那个大圆按钮加了 transform: translateY(-2px)',
+            '   （实测 computed = matrix(1,0,0,1,0,-2)），把它单独抬高 2px。',
+            '   结果 28px 的小按钮中心在 544.9、34px 的圆按钮中心在 542.9 —— 恒定差 2px，',
+            '   视觉上就是「圆圈比 + 号高一点」。清掉这条位移后，5 个按钮中心全部落在 544.9，',
+            '   离散度 2px → 0px。 */',
+            '[class*=\"composerStack\"] [class*=\"_primary\"],',
+            '[class*=\"composerStack\"] [class*=\"_send\"],',
+            '[class*=\"composerStack\"] [class*=\"_stop\"] {',
+            '  transform: none !important;',
+            '}',
             '.uWtHQG_add {',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
@@ -3793,10 +3839,58 @@ final class ViewController: UIViewController {
               scheduleStretchFix();
             }
           } catch (e) {}
+          // ===== 🔴 v1.0.124：会话框底部按钮「圆圈 / 方框 / +号」垂直对齐校准 =====
+          //   老总：「以前版本修改了的按钮（圆圈，方框，+号）不居中问题又出现了」。
+          //   两层原因：
+          //   ① 旧修复写的是 .uWtHQG_add 这类 CSS Module 哈希类名，DSH 换版后命中数=0（已换 CSS 修掉）；
+          //   ② 就算图标自身居中了，按钮之间仍然错位：实测 DSH 的原生行容器 padding 是
+          //      「上 2 / 下 6」，而发送大圆按钮（34px）是贴行顶锚定的，小按钮（28px）是按内容区
+          //      居中的 → 两者中心恒定差 2px，肉眼就是「圆圈比 + 号高一点」。
+          //   这里用纯视觉位移 translateY 校准：目标中心取本行所有按钮中心的中位数，
+          //   逐个把偏差补平。幂等（偏差 < 0.5px 就撤掉 transform，不再动），
+          //   不做任何布局改动，也不写死任何像素（换版/换机型自适应）。
+          function alignComposerButtons() {
+            try {
+              var host = document.querySelector('[class*=\"composerStack\"]');
+              if (!host) return;
+              var rows = host.querySelectorAll('[class*=\"_row\"]');
+              for (var r = 0; r < rows.length; r++) {
+                var row = rows[r];
+                var list = [];
+                var bs = row.getElementsByTagName('button');
+                for (var i = 0; i < bs.length; i++) {
+                  var b = bs[i];
+                  var bcs = getComputedStyle(b);
+                  if (bcs.display === 'none' || bcs.visibility === 'hidden') continue;
+                  var q = b.getBoundingClientRect();
+                  if (q.width < 14 || q.width > 80 || q.height < 14 || q.height > 80) continue;
+                  list.push([b, q]);
+                }
+                if (list.length < 2) continue;
+                var cys = [];
+                for (var j = 0; j < list.length; j++) cys.push(list[j][1].y + list[j][1].height / 2);
+                cys.sort(function (x, y) { return x - y; });
+                var target = cys[Math.floor(cys.length / 2)];
+                for (var k = 0; k < list.length; k++) {
+                  var el = list[k][0], eq = list[k][1];
+                  var d = Math.round((eq.y + eq.height / 2 - target) * 10) / 10;
+                  if (Math.abs(d) < 0.5) {
+                    if (el.style.getPropertyValue('transform') &&
+                        el.style.getPropertyValue('transform').indexOf('translateY') >= 0) {
+                      el.style.removeProperty('transform');
+                    }
+                    continue;
+                  }
+                  el.style.setProperty('transform', 'translateY(' + (-d) + 'px)', 'important');
+                }
+              }
+            } catch (e) {}
+          }
           function applySidebarInset() {
             ensureSidebarOverlay();
             try { tightenRightPanelTop(); } catch (e) {}
             try { restorePageHeadHeight(); } catch (e) {}
+            try { alignComposerButtons(); } catch (e) {}
             try { fixOverlayOverflow(); } catch (e) {}
             // 🔴 v1.0.123：出血钳制不能只靠 MutationObserver 驱动 —— 页面静止不变化时
             //   一次都不会再跑，刚进页面那一下的出血就一直留在屏幕上（老总看到的就是这个）。

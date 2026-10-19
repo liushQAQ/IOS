@@ -140,29 +140,39 @@ enum ServiceStore {
 
     /// 双轨读取（Documents/dsh_user_data/services_v1.json + UserDefaults），带初始化锁。
     /// 首次安装后只要未卸载，后续版本覆盖更新（无论个人版或公开版）均严格保留玩家已自定义的条目与配置，绝不重置覆盖。
+    ///
+    /// 🔴 v1.0.124 两个致命 bug 修复（老总：「预设的快捷链接，修改 url 可以，删除直接报错」）：
+    ///   ① 原实现用 `!fileItems.isEmpty` 判断「有没有数据」——用户把条目删光后文件里是 `[]`，
+    ///      会被当成「没数据」直接重置回预设，等于删不掉；
+    ///   ② 原实现无条件自动补齐 defaults —— 删掉预设条目后，下一次 load() 立刻把它**补回来**，
+    ///      列表条数没变，而表格那边已经 `deleteRows` 删了一行 → UIKit 直接抛
+    ///      「invalid number of rows」异常崩溃。
+    ///   现在：空列表是合法状态；删掉的默认条目记进「墓碑」，再也不自动补。
     static func load() -> [ServiceItem] {
-        var items: [ServiceItem] = []
+        var decoded: [ServiceItem]?
         if let fileData = try? Data(contentsOf: DSHPersistenceCenter.servicesFileURL),
-           let fileItems = try? JSONDecoder().decode([ServiceItem].self, from: fileData),
-           !fileItems.isEmpty {
+           let fileItems = try? JSONDecoder().decode([ServiceItem].self, from: fileData) {
             UserDefaults.standard.set(fileData, forKey: key)
             UserDefaults.standard.set(true, forKey: initializedLockKey)
-            items = fileItems
+            decoded = fileItems
         } else if let udData = UserDefaults.standard.data(forKey: key),
-                  let udItems = try? JSONDecoder().decode([ServiceItem].self, from: udData),
-                  !udItems.isEmpty {
+                  let udItems = try? JSONDecoder().decode([ServiceItem].self, from: udData) {
             try? udData.write(to: DSHPersistenceCenter.servicesFileURL, options: .atomic)
             UserDefaults.standard.set(true, forKey: initializedLockKey)
-            items = udItems
-        } else {
+            decoded = udItems
+        }
+        guard var items = decoded else {
             let initial = defaults
             save(initial)
             return initial
         }
 
-        // 自动补齐当前版本新增的标准服务（如 WorkBuddy 账号切换 57890），老用户无损升级
+        // 自动补齐当前版本新增的标准服务（老用户无损升级）；
+        // 但用户**明确删除过**的默认条目一律跳过，绝不复活。
+        let tombstones = deletedDefaultKeys()
         var changed = false
         for def in defaults {
+            if tombstones.contains(identity(def)) { continue }
             let exists = items.contains { item in
                 if item.url == def.url || item.name == def.name { return true }
                 if let u1 = URLComponents(string: item.url), let u2 = URLComponents(string: def.url) {
@@ -183,6 +193,28 @@ enum ServiceStore {
         return items
     }
 
+    // MARK: - 默认条目墓碑（用户删掉的预置项，永远不再自动补回）
+
+    static let deletedDefaultsKey = "DSHios.servicesDeletedDefaults"
+
+    static func identity(_ item: ServiceItem) -> String {
+        return item.name + "|" + item.url
+    }
+
+    static func deletedDefaultKeys() -> Set<String> {
+        let arr = UserDefaults.standard.stringArray(forKey: deletedDefaultsKey) ?? []
+        return Set(arr)
+    }
+
+    static func markDefaultDeleted(_ item: ServiceItem) {
+        var arr = UserDefaults.standard.stringArray(forKey: deletedDefaultsKey) ?? []
+        let id = identity(item)
+        if !arr.contains(id) {
+            arr.append(id)
+            UserDefaults.standard.set(arr, forKey: deletedDefaultsKey)
+        }
+    }
+
     static func save(_ items: [ServiceItem]) {
         guard let data = try? JSONEncoder().encode(items) else { return }
         UserDefaults.standard.set(data, forKey: key)
@@ -199,14 +231,25 @@ enum ServiceStore {
     static func update(at index: Int, with item: ServiceItem) {
         var items = load()
         guard items.indices.contains(index) else { return }
+        let old = items[index]
         items[index] = item
+        // 改掉预设条目的地址/名字后，原始预设身份就不存在了 —— 记账，
+        // 否则下次 load() 会认定「预设缺失」再补一条一模一样的新条目（用户会看到重复行）。
+        if defaults.contains(where: { identity($0) == identity(old) }) && identity(old) != identity(item) {
+            markDefaultDeleted(old)
+        }
         save(items)
     }
 
     static func remove(at index: Int) {
         var items = load()
         guard items.indices.contains(index) else { return }
+        let gone = items[index]
         items.remove(at: index)
+        // 🔴 删的是预设条目 → 记墓碑，防止 load() 自动补回来（补回来就是「删了没反应」甚至崩溃）
+        if defaults.contains(where: { identity($0) == identity(gone) }) {
+            markDefaultDeleted(gone)
+        }
         save(items)
     }
 }
@@ -366,6 +409,22 @@ final class SettingsViewController: UIViewController {
         ])
         tableView.tableFooterView = footer
         probeAll()
+        updateEmptyState()
+    }
+
+    /// 列表空态：所有服务都被删光时给一句提示（删光不再被重置回预设，必须让人知道怎么加回来）
+    private func updateEmptyState() {
+        guard services.isEmpty else {
+            tableView.backgroundView = nil
+            return
+        }
+        let label = UILabel()
+        label.text = "还没有任何服务\n点右上角 + 添加，或用扫码导入"
+        label.numberOfLines = 0
+        label.textAlignment = .center
+        label.font = .preferredFont(forTextStyle: .subheadline)
+        label.textColor = .secondaryLabel
+        tableView.backgroundView = label
     }
 
     @objc private func feedbackTapped() {
@@ -511,6 +570,7 @@ final class SettingsViewController: UIViewController {
             self.services = ServiceStore.load()
             self.tableView.reloadData()
             self.probeAll()
+            self.updateEmptyState()
         })
         present(alert, animated: true)
     }
@@ -614,9 +674,15 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView,
                    trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         let delete = UIContextualAction(style: .destructive, title: "删除") { [weak self] _, _, done in
+            guard let self else { done(false); return }
             ServiceStore.remove(at: indexPath.row)
-            self?.services = ServiceStore.load()
-            tableView.deleteRows(at: [indexPath], with: .automatic)
+            self.services = ServiceStore.load()
+            // 🔴 v1.0.124：这里原来用 deleteRows，一旦「删掉预设后 load() 又把它补回来」，
+            //   表格删一行 vs 数据没少 → UIKit 直接抛 invalid number of rows 崩溃（老总说的「删除直接报错」）。
+            //   现在 ServiceStore 不再复活被删的预设，同时这里改用 reloadData 做兜底：
+            //   即使将来数据层再出意外，也只会刷新，绝不会崩。
+            tableView.reloadData()
+            self.updateEmptyState()
             done(true)
         }
         let edit = UIContextualAction(style: .normal, title: "编辑") { [weak self] _, _, done in
