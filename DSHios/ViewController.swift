@@ -3886,11 +3886,35 @@ final class ViewController: UIViewController {
               }
             } catch (e) {}
           }
+          /* 🔴 v1.0.124：DSH 电脑端自带的「费用计量」浮层卡片 .cm-peak-alert 是间歇出现的
+             （峰时 / 平价提醒）。它 position:fixed + z-index:9999 + 宽 406px 横跨整屏，
+             一旦出现就把抽屉底部「余额 / 今日 / 平价 / 账号行」整片盖住，
+             连我们注入的设置齿轮也被压住 —— 实测 elementFromPoint 在齿轮中心命中的是
+             cm-peak-alert-actions 而不是齿轮，点「设置」直接点空。
+             它属于 DSH 原生内容，不能删；只在抽屉打开期间临时收起，抽屉关掉立刻还原。 */
+          function guardPeakAlert() {
+            try {
+              var alerts = document.querySelectorAll('.cm-peak-alert');
+              if (!alerts.length) return;
+              var sb = document.querySelector('[class*="sidebarCol"]');
+              var open = false;
+              if (sb) {
+                var q = sb.getBoundingClientRect();
+                open = (q.x > -60 && q.width > 120 && q.height > 200);
+              }
+              for (var i = 0; i < alerts.length; i++) {
+                var el = alerts[i];
+                if (open) el.style.setProperty('display', 'none', 'important');
+                else if (el.style.getPropertyValue('display') === 'none') el.style.removeProperty('display');
+              }
+            } catch (e) {}
+          }
           function applySidebarInset() {
             ensureSidebarOverlay();
             try { tightenRightPanelTop(); } catch (e) {}
             try { restorePageHeadHeight(); } catch (e) {}
             try { alignComposerButtons(); } catch (e) {}
+            try { guardPeakAlert(); } catch (e) {}
             try { fixOverlayOverflow(); } catch (e) {}
             // 🔴 v1.0.123：出血钳制不能只靠 MutationObserver 驱动 —— 页面静止不变化时
             //   一次都不会再跑，刚进页面那一下的出血就一直留在屏幕上（老总看到的就是这个）。
@@ -3898,6 +3922,7 @@ final class ViewController: UIViewController {
             try {
               if (!window.__dshBleedT) {
                 window.__dshBleedT = setInterval(function () {
+                  try { guardPeakAlert(); } catch (e) {}
                   try { fixOverlayOverflow(); } catch (e) {}
                 }, 3000);
               }
@@ -6375,11 +6400,11 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.123)】
-            1. 🥇 「任何界面都超出屏幕范围」改成通用根治：1.0.122 只把顶栏那一个按钮推回 8px，别的元素出血没人管，DSH 一换版就复发。本版起每 1.5 秒全页扫描一次，凡是「左边在屏幕内、右边超出屏幕」的元素一律用 transform: translateX 精确推回；同时设六条安全线绝不误伤 —— left<0（抽屉收起态）不动、left≥屏宽（右侧面板收起态）不动、比屏还宽的横向滚动容器不动、祖先可横滑的区域不动、带缩放/旋转的元素不动、出血超过 120px 的飞出动画不动。实测 430×932 / 393×852 / 375×667 三尺寸：出血元素 2 → 0，第二轮再扫命中 0（幂等不抖），抽屉仍稳在 x=-150、右侧面板仍稳在屏外；
-            2. 🧱 全局横向收口：html / body 统一 overflow-x: clip + max-width: 100vw。关键在 clip 而不是 hidden —— clip 不创建滚动容器，所以不会破坏吸顶顶栏（实测加入后顶栏仍 sticky / top: 0，横向滚动量 0，页面总宽 = 屏宽）；
+            【最新特性 (v1.0.124)】
+            1. 🥇 左侧抽屉内容彻底收进 252px：抽屉被压到 252px 后，DSH 内部仍按原生 280px 排布，时间戳「34 分」、余额「¥109.194」、今日「¥1.034」、「剩余 8 小时 54 分」「09:00 转峰」整列被硬裁，设置齿轮也被切掉右半边。本版逐层加 max-width:100% + min-width:0 + 单行省略号，齿轮改以「账号行右界」与「抽屉右界」中更靠内者为基准。实测抽屉内溢出 90 → 0，底栏吸底块右界 280 → 240，齿轮 right=230 稳在抽屉内；本版起每 1.5 秒全页扫描一次，凡是「左边在屏幕内、右边超出屏幕」的元素一律用 transform: translateX 精确推回；同时设六条安全线绝不误伤 —— left<0（抽屉收起态）不动、left≥屏宽（右侧面板收起态）不动、比屏还宽的横向滚动容器不动、祖先可横滑的区域不动、带缩放/旋转的元素不动、出血超过 120px 的飞出动画不动。实测 430×932 / 393×852 / 375×667 三尺寸：出血元素 2 → 0，第二轮再扫命中 0（幂等不抖），抽屉仍稳在 x=-150、右侧面板仍稳在屏外；
+            2. 🎯 会话框那排按钮（圆圈 / 方框 / + 号 / 发送大圆钮）重新对齐，并修掉「预设快捷链接一删就崩」：前者是旧代码写死哈希类名（uWtHQG_add / ank0OG_composerSeat）换版后命中数为 0，加上 DSH 原生给发送大圆钮加了 transform: translateY(-2px)；改用 [class*="composerStack"] 通用锚点 + 强制 transform:none + 运行期按中位数对齐，5 个按钮垂直中心离散度 2px → 0px。后者是删掉预设后 load() 又把它补回来，deleteRows 与数据条数不符直接抛 invalid number of rows，改为墓碑机制 + reloadData 兜底；关键在 clip 而不是 hidden —— clip 不创建滚动容器，所以不会破坏吸顶顶栏（实测加入后顶栏仍 sticky / top: 0，横向滚动量 0，页面总宽 = 屏宽）；
             3. 🪟 设置面板不再被顶栏压住：App 原先把顶栏钉在 z-index 1020，而设置面板的浮层宿主只有 1000，顶栏直接盖在面板上。本版改为「会话页 999 / 有浮层时自动取浮层宿主 z-index 减一」，实测面板顶部两处探测点由命中顶栏标题行（_727C8a_titleRow）恢复为命中面板自身导航（tklpSG_nav）；
-            4. 🔍 根治「修过又复发」的老毛病：此前多处布局修复写死了 CSS Module 的哈希类名（如 ank0OG_headerCorner），DSH 前端每次换版哈希就变、选择器集体失效、修复静默归零。本版起一律改用 [class*="xxx"] 属性包含选择器，换版不失效；
+            4. 🔍 根治「修过又复发」的老毛病，并建立发版前回归闸门：实测 App 里写死的 102 个 CSS Module 哈希类名，当前 DSH 版本有 62 个在前端资源里彻底消失 —— 六成补丁一直在空转，这才是「修过又复发」的真因。本版起：① 一律改用 [class*="xxx"] 属性包含选择器；② 新增 _diag/regression.js 闸门，三尺寸 30 条断言全绿才准打包，复发在打包前就被拦住，不再等人工发现；
             5. 🔌 低版本系统通用适配：iOS 14 / 15 / 16.x（含 16.3 及以下）全通吃，配套插件 dsh-anywhere 1.0.6 已改为对任意形态的 lookbehind 一律安全降级，不再只认某一份前端包；
             6. 🥇 9009 端口服务台等自建网页彻底解锁上下滑动：DSH 专用的「钉高」布局补丁此前会越界命中仪表盘容器，把它压成一屏高并裁掉全部溢出；本版为该补丁加上页面类型守卫（DOM 里没有 #root 一律一个元素都不碰），实测页面高度 956 → 9328px，上下滑动完全自由；
             7. ⚡ 布局锁改运行期按页面类型动态注入（彻底拔除 :has()）：DSH 主控页与 1.0.70 黄金基线逐字一致，自建网页与外部网页一律解锁，互不干扰；
