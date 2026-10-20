@@ -466,6 +466,44 @@ const A_PLUGIN_PAGE = () => {
   console.log('='.repeat(72));
   console.log(' DSH iOS 适配 · 发版前回归闸门   ' + new Date().toLocaleString('zh-CN'));
   console.log('='.repeat(72));
+
+  /* ===== 断言 0（编译级，最便宜也最致命）：JS shim 块里的非法转义 =====
+     v1.0.129 事故：JS 正则 matrix\\(...) 在 Swift 多行字符串里只写了单反斜杠，
+     \\( 变成 Swift 字符串插值起点 → swiftc 报 invalid escape sequence → CI 编译直接挂
+     （发布凭证校验都过了，却栽在编译上）。此断言在起浏览器之前就拦下这类错误。
+     ⚠️ 只查「JS shim 块」（块内含 document./window./querySelector 等标记）；
+     showAbout() 那种普通 Swift 多行文案里的 \\(version) 是合法插值，绝不能误伤。 */
+  {
+    const bad = [];
+    try {
+      const src = fs.readFileSync(path.join(DIR, '..', 'DSHios', 'ViewController.swift'), 'utf8').split(/\r?\n/);
+      const Q = String.fromCharCode(34, 34, 34);
+      const JS_MARK = /document\.|window\.|querySelector|getElementById|createElement|addEventListener/;
+      let buf = null, startLine = 0;
+      for (let i = 0; i < src.length; i++) {
+        const line = src[i];
+        let cnt = 0, idx = 0;
+        while ((idx = line.indexOf(Q, idx)) >= 0) { cnt++; idx += 3; }
+        if (buf === null) {
+          if (cnt % 2 === 1) { buf = []; startLine = i + 1; }
+          continue;
+        }
+        if (cnt % 2 === 1) {           // 块结束
+          const text = buf.join('\n');
+          if (JS_MARK.test(text)) {
+            buf.forEach((l, k) => { if (/(^|[^\\])\\\(/.test(l)) bad.push('L' + (startLine + 1 + k)); });
+          }
+          buf = null;
+          continue;
+        }
+        buf.push(line);
+      }
+    } catch (e) {
+      bad.push('读取失败:' + String(e).slice(0, 40));
+    }
+    chk(bad.length === 0, '[源码] JS shim 块无非法转义（Swift 插值陷阱）', bad.length ? ('疑似非法 \\( : ' + bad.slice(0, 6).join(', ')) : '全部合法');
+  }
+
   const b = await webkit.launch({ headless: true });
 
   for (const size of SIZES) {

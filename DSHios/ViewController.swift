@@ -4050,9 +4050,13 @@ final class ViewController: UIViewController {
                   /* v1.0.129：扣掉已有 translateY，用「净几何」参与分组与对齐，否则已校准的
                      按钮会带着旧位移参加下一轮中位数计算，越算越歪（幂等性被破坏） */
                   var ty = 0;
-                  if (bcs.transform && bcs.transform.indexOf('matrix') === 0) {
-                    var mp = bcs.transform.match(/matrix\(([^)]+)\)/);
-                    if (mp) ty = parseFloat(mp[1].split(',')[5]) || 0;
+                  var tf = bcs.transform || '';
+                  if (tf.indexOf('matrix') === 0) {
+                    var lp = tf.indexOf('('), rp = tf.indexOf(')');
+                    if (lp > 0 && rp > lp) {
+                      var ps = tf.substring(lp + 1, rp).split(',');
+                      ty = parseFloat(ps[5]) || 0;
+                    }
                   }
                   list.push([b, { y: q.y - ty, height: q.height }]);
                 }
