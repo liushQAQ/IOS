@@ -1,5 +1,11 @@
 # DeepSeek Harness iOS
 
+> ## 🔴 AI / 协作者必读
+> **任何 AI 或新人接手本项目，动手前必须先读 [`AGENTS.md`](AGENTS.md)（铁律 + 强制流程 + 排障速查），
+> 修复问题前再查 [`REGRESSION.md`](REGRESSION.md)（R01~R20 问题清单与防复发校验规程）。**
+> 2026-10-20 老总令：「切换了其他 AI 也要知道如何处理，不犯同样错误。」
+> 与聊天记忆冲突时，以这两份仓库内文件为准。
+
 从零开发的 DeepSeek Harness 移动客户端（iOS 16+）。采用与 Hermes Studio 一致的方案：**原生 Swift + WKWebView 薄壳**，加载 DSH 的 web UI，不重写任何客户端业务逻辑。
 
 > 证书、签名、Apple Developer 账号由你自己搞定，本工程只提供完整源码 + 在线编译配置。
