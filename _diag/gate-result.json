@@ -5,7 +5,7 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-20T14:01:37.656Z",
+  "startedAt": "2026-10-20T14:15:16.793Z",
   "dshFingerprint": "ybmk74",
   "dshAssets": 9,
   "domClasses": 0,
@@ -20,13 +20,10 @@
     "dead": []
   },
   "ok": true,
-  "pass": 62,
+  "pass": 65,
   "fail": 0,
   "failures": [],
-  "blocked": [
-    "[dock] 插件行换行/零重叠 — 会话页 30 秒无响应（DSH 前端死循环）",
-    "[会话页] 顶栏顶=39 — 会话页 30 秒无响应（DSH 前端死循环）"
-  ],
-  "sourceHash": "c9fbe750716fc393cee05fb14c1207debce9c3287f43c89d565fd713a001b81e",
-  "finishedAt": "2026-10-20T14:05:47.573Z"
+  "blocked": [],
+  "sourceHash": "ab3f02fbe271482c198293d04c29fde7c749dc11dbd534eb5bae858ee36a137e",
+  "finishedAt": "2026-10-20T14:18:37.271Z"
 }

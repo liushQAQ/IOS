@@ -252,6 +252,17 @@ enum ServiceStore {
         }
         save(items)
     }
+
+    /// 🔴 v1.0.130 排序（老总：「没有编辑，排序，上移下移最前末尾」）：
+    ///   把 from 位置的条目挪到 to 位置并持久化。上移=to-1 / 下移=to+1 / 最前=0 / 末尾=count-1。
+    ///   排序结果原样写入存储 —— 与删除/编辑共用同一份 JSON，下次打开顺序保持。
+    static func move(from: Int, to: Int) {
+        var items = load()
+        guard items.indices.contains(from), items.indices.contains(to), from != to else { return }
+        let item = items.remove(at: from)
+        items.insert(item, at: to)
+        save(items)
+    }
 }
 
 // MARK: - 外网地址换票
@@ -359,6 +370,10 @@ final class SettingsViewController: UIViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "service")
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
+        // 🔴 v1.0.130 长按行弹排序菜单（上移/下移/最前/末尾）—— 与右侧 ☰ 按钮双入口。
+        let lp = UILongPressGestureRecognizer(target: self, action: #selector(rowLongPressed(_:)))
+        lp.minimumPressDuration = 0.45
+        tableView.addGestureRecognizer(lp)
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.topAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -368,7 +383,7 @@ final class SettingsViewController: UIViewController {
 
         let footer = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 160))
         let footerLabel = UILabel()
-        footerLabel.text = "点行打开该服务；右侧 ✎ 编辑（名称/地址/备注）；左滑删除。列表保存在本机，电脑 IP 变化时只需编辑对应条目。"
+        footerLabel.text = "点行打开该服务；右侧 ✎ 编辑、⇅ 排序（上移/下移/最前/末尾），长按行也可排序；左滑删除。列表保存在本机，电脑 IP 变化时只需编辑对应条目。"
         footerLabel.font = .preferredFont(forTextStyle: .footnote)
         footerLabel.textColor = .secondaryLabel
         footerLabel.numberOfLines = 0
@@ -642,7 +657,17 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         editButton.setImage(UIImage(systemName: "square.and.pencil"), for: .normal)
         editButton.tintColor = .systemBlue
         editButton.addTarget(self, action: #selector(editTapped(_:)), for: .touchUpInside)
-        cell.accessoryView = editButton
+        // 🔴 v1.0.130 「排序」按钮（老总：「没有编辑，排序，上移下移最前末尾」）：
+        //   右侧再挂一枚 ☰ 按钮，点它弹 上移/下移/移到最前/移到末尾 菜单；
+        //   长按行同样弹出（viewDidLoad 里装了长按手势）—— 显式按钮 + 手势双入口。
+        let orderButton = UIButton(type: .system)
+        orderButton.setImage(UIImage(systemName: "arrow.up.arrow.down"), for: .normal)
+        orderButton.tintColor = .systemOrange
+        orderButton.addTarget(self, action: #selector(orderTapped(_:)), for: .touchUpInside)
+        let accessory = UIStackView(arrangedSubviews: [orderButton, editButton])
+        accessory.axis = .horizontal
+        accessory.spacing = 12
+        cell.accessoryView = accessory
         return cell
     }
 
@@ -653,6 +678,77 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         guard let indexPath = tableView.indexPathForRow(at: point),
               services.indices.contains(indexPath.row) else { return }
         presentEditor((indexPath.row, services[indexPath.row]))
+    }
+
+    // MARK: - 排序（v1.0.130：上移 / 下移 / 移到最前 / 移到末尾）
+
+    /// 排序按钮（cell.accessoryView 上的 ☰）：与编辑笔同一套 hit-test 反查所在行。
+    @objc private func orderTapped(_ sender: UIButton) {
+        let center = CGPoint(x: sender.bounds.midX, y: sender.bounds.midY)
+        let point = sender.convert(center, to: tableView)
+        guard let indexPath = tableView.indexPathForRow(at: point),
+              services.indices.contains(indexPath.row) else { return }
+        showOrderMenu(forRowAt: indexPath)
+    }
+
+    /// 长按行 = 弹出排序菜单（与 ☰ 按钮同一入口，老总不用去找小按钮）。
+    @objc private func rowLongPressed(_ g: UILongPressGestureRecognizer) {
+        guard g.state == .began else { return }
+        let p = g.location(in: tableView)
+        guard let indexPath = tableView.indexPathForRow(at: p),
+              services.indices.contains(indexPath.row) else { return }
+        showOrderMenu(forRowAt: indexPath)
+    }
+
+    func showOrderMenu(forRowAt indexPath: IndexPath) {
+        guard services.indices.contains(indexPath.row) else { return }
+        let row = indexPath.row
+        let last = services.count - 1
+        let item = services[row]
+        let sheet = UIAlertController(
+            title: item.name,
+            message: "调整排列顺序（保存到本机，下次打开保持）",
+            preferredStyle: .actionSheet)
+        if row > 0 {
+            sheet.addAction(UIAlertAction(title: "⬆️ 上移", style: .default) { [weak self] _ in
+                self?.moveService(from: row, to: row - 1)
+            })
+        }
+        if row < last {
+            sheet.addAction(UIAlertAction(title: "⬇️ 下移", style: .default) { [weak self] _ in
+                self?.moveService(from: row, to: row + 1)
+            })
+        }
+        if row > 0 {
+            sheet.addAction(UIAlertAction(title: "⏫ 移到最前", style: .default) { [weak self] _ in
+                self?.moveService(from: row, to: 0)
+            })
+        }
+        if row < last {
+            sheet.addAction(UIAlertAction(title: "⏬ 移到末尾", style: .default) { [weak self] _ in
+                self?.moveService(from: row, to: last)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "✏️ 编辑（名称/地址/备注）", style: .default) { [weak self] _ in
+            guard let self, self.services.indices.contains(row) else { return }
+            self.presentEditor((row, self.services[row]))
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        // iPad 的 actionSheet 必须给 anchor，否则直接崩；iPhone 不受影响。
+        if let anchor = tableView.cellForRow(at: indexPath) {
+            sheet.popoverPresentationController?.sourceView = anchor
+            sheet.popoverPresentationController?.sourceRect = anchor.bounds
+        }
+        present(sheet, animated: true)
+    }
+
+    /// 落库 + 刷新。与删除同一套兜底哲学：一律 reloadData（绝不做增量 moveRow），
+    /// 数据层无论发生什么，界面永远和数据一致，绝无 invalid number of rows 崩溃。
+    private func moveService(from: Int, to: Int) {
+        ServiceStore.move(from: from, to: to)
+        services = ServiceStore.load()
+        tableView.reloadData()
+        probeAll()
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -975,7 +1071,8 @@ final class ConnectionGuideViewController: UIViewController {
         • 真机三张截图（16:20 / 18:41 / 21:09）与沙箱逐条带像素对拍实锤：标题 +59.7 / Tab 文字 +59.3 / Tab 下划线 +61.0，页内布局与沙箱完全一致 —— 整个 WebView 被原生层整体下移一个状态栏高度（59pt），页面层（CSS/JS/env）彻底无辜，此前几版页面层修法全部打不中；
         • 真凶：「重试」按钮与「清缓存重载」把页面归属标记 isCurrentServiceDSH 写死成 false —— 它们加载的明明就是 DSH 地址，却被当成外部网页，顶部约束被原生层多推一个状态栏高度（冷启动 PC 未就绪 → 报错页 → 点重试，必踩）；
         • 修法四处：重试/清缓存一律继承当前归属绝不重置；归属判据新增「与主控地址同 host 即 DSH 页」并自愈掰正标记；页内探针确认 DSH 页时原生顶部约束强制归零（与滚动锁共用同一条只认页内 DOM 的判据，外部网页/仪表盘零影响）；
-        • 连坐修复：归属被写坏期间白屏诊断（sampleRoot）也被跳过 —— 本版一并恢复。
+        • 连坐修复：归属被写坏期间白屏诊断（sampleRoot）也被跳过 —— 本版一并恢复；
+        • 服务列表新增排序：右侧 ⇅ 按钮或长按行弹菜单 —— 上移、下移、移到最前、移到末尾（菜单内同时带编辑入口），顺序持久化到本机，编辑笔与排序按钮并排更醒目。
         🥇 1. 整页滚动锁：顶栏/底栏钉死，只有会话内容区滚（v1.0.129）：
         • 真机实锤：顶栏、底栏（含会话框）跟着整页一起上下滑，键盘弹出/收起会话框还各换一个位置；本版双通道根治 —— 页内探针 shim（数组第 1 位、不依赖后续脚本）识别 DSH 主控页后注入 html/body 固定 + 框架高度跟随视口（键盘压缩视口时整页自动收高，绝不靠滚动去够输入框），原生层把 WKScrollView 偏移恒定钳回 0 并关橡皮筋（JS 全死整页也拖不动）；
         • 键盘收尾双保险：WebKit 聚焦输入框自作主张 scrollIntoView 的偏移，在键盘动画结束瞬间清零、120ms 后再清一次 —— 弹键盘一个位置、收键盘一个位置，各自钉死不许再滑；
