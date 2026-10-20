@@ -41,6 +41,16 @@ final class ViewController: UIViewController {
     /// 键盘遮挡高度（pt）。下发给页内脚本，让输入框滚到键盘正上方。
     private var keyboardOverlap: CGFloat = 0
 
+    // MARK: 整页滚动锁（v1.0.129）
+    /// 页内探针确认「这是 DSH 主控页」的运行时标记。
+    /// 判据与 App 侧注入隔离完全一致：#root + DSH 移动框架特征
+    /// （`data-mobile-nav="frame"` / `composerStack` / `headerCorner`）。
+    /// **只认这个标记来锁滚动** —— 绝不按 host/端口猜，否则 9009 等自建仪表盘
+    /// 与 DSH 同主机同域名时会被一起锁死（老总的仪表盘必须能自由滚）。
+    private var domConfirmsDSHPage = false
+    /// 当前页面是否处于「整页锁死」状态：顶栏/底栏钉死，只有会话内容区自己滚。
+    private var pageScrollLocked = false
+
     /// 语音听写识别器与音频引擎（调用 iOS 原生语音听写）
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -88,6 +98,31 @@ final class ViewController: UIViewController {
         func userContentController(_ userContentController: WKUserContentController,
                                    didReceive message: WKScriptMessage) {
             if let text = message.body as? String { onMessage(text) }
+        }
+    }
+
+    /// 页内探针 → 原生：这个文档是 DSH 主控页（v1.0.129）。
+    ///
+    /// 为什么不让原生自己猜：DSH 可以部署在任意 IP / 任意端口 / 内网穿透域名上，
+    /// 而 9009 自建仪表盘、外部大模型网页可能与 DSH **同主机同域名**，
+    /// 按 host 或端口判定必然误伤（老总的仪表盘必须能自由上下滚）。
+    /// 唯一精确的判据是页内 DOM 特征，所以由页内探针回报，原生只认这份回报。
+    private static func makePageKindBridge(owner: ViewController) -> WKScriptMessageHandler {
+        return PageKindBridge { [weak owner] isDSH in
+            owner?.updatePageScrollLock(domIsDSH: isDSH)
+        }
+    }
+
+    private final class PageKindBridge: NSObject, WKScriptMessageHandler {
+        let onKind: (Bool) -> Void
+        init(onKind: @escaping (Bool) -> Void) { self.onKind = onKind }
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            if let text = message.body as? String {
+                onKind(text == "1")
+            } else if let flag = message.body as? Bool {
+                onKind(flag)
+            }
         }
     }
 
@@ -411,6 +446,69 @@ final class ViewController: UIViewController {
     /// iOS 16 缺失的关键 Web API 兜底。页面构建目标定得比 16 高，
     /// 缺失任一都会导致启动脚本抛错白屏。每条只在原生不存在时补齐。
     static let iosCompatShims: [String] = [
+        // ================= v1.0.129 整页滚动锁探针（必须排在数组第一位）=================
+        // 老总真机实锤：顶栏、底栏（含会话框）跟着整页一起上下滑，键盘弹出/收起还各换一个位置。
+        // 正确行为：顶栏/底栏钉死，只有中间会话内容区自己滚，键盘两态各自固定不许再滑。
+        //
+        // 为什么单独立一个最靠前的 shim：
+        // 1. 后续任何一个 shim 抛错都**不会**连累它（它只依赖 DOM 判断 + 两条 postMessage）；
+        // 2. 它同时承担「这是不是 DSH 页」的唯一判据 —— 原生只认它的回报，绝不按 host/端口猜；
+        // 3. 判据与 App 侧注入隔离完全一致：#root + DSH 移动框架特征。
+        //    外部大模型网页、9009 自建仪表盘、WorkBuddy 等一律零命中 → 不锁、不注入，保持原生滚动。
+        """
+        (function () {
+          if (window.top !== window) { return; }   // 只认主文档，iframe 一律不参与判定
+          var POSTED = 0;
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function lockPage() {
+            try {
+              if (document.getElementById('dsh-ios-scroll-lock')) { return; }
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-scroll-lock';
+              // 页面本身不许滚；frame 高度跟随视口（键盘压缩视口时自动收高，
+              // 不靠滚动去够输入框 → 会话框永远停在键盘正上方）。
+              st.textContent = [
+                'html, body {',
+                '  overflow: hidden !important;',
+                '  overscroll-behavior: none !important;',
+                '  position: fixed !important;',
+                '  inset: 0 !important;',
+                '  width: 100% !important;',
+                '  height: 100% !important;',
+                '  max-height: 100% !important;',
+                '}',
+                '[data-mobile-nav="frame"] {',
+                '  height: 100% !important;',
+                '  max-height: 100% !important;',
+                '  overflow: hidden !important;',
+                '}'
+              ].join('\\n');
+              (document.head || document.documentElement).appendChild(st);
+            } catch (e) {}
+          }
+          function report() {
+            try {
+              var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dshPage;
+              if (h) { h.postMessage('1'); POSTED = 1; }
+            } catch (e) {}
+          }
+          function tick() {
+            if (isDSH()) { lockPage(); if (!POSTED) { report(); } }
+          }
+          tick();
+          var tries = 0;
+          var timer = setInterval(function () {
+            tries++;
+            tick();
+            if (tries > 150 || (POSTED && tries > 80)) { clearInterval(timer); }
+          }, 400);
+        })();
+        """,
         // 移动端视觉与对比度增强：
         // 1. 消除所有浮层/弹窗（包括Token用量弹窗、模型选择、右键菜单、设置面板）过透导致的文字重叠与背景干扰，
         //    提升至 98% 接近纯色的高对比度背景（浅色模式白底 / 深色模式沉浸黑底），并辅以柔和阴影，字迹清晰锐利。
@@ -5393,14 +5491,36 @@ function applySidebarInset() {
                 options: [.curveEaseInOut, .allowUserInteraction, .beginFromCurrentState],
                 animations: {
                     self.view.layoutIfNeeded()
+                },
+                completion: { [weak self] _ in
+                    self?.settleScrollAfterKeyboard()
                 })
         } else {
             let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
             let curveRaw = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7
             let options: UIView.AnimationOptions = [UIView.AnimationOptions(rawValue: curveRaw << 16), .beginFromCurrentState]
-            UIView.animate(withDuration: duration, delay: 0, options: options) {
+            UIView.animate(withDuration: duration, delay: 0, options: options, animations: {
                 self.view.layoutIfNeeded()
-            }
+            }, completion: { [weak self] _ in
+                self?.settleScrollAfterKeyboard()
+            })
+        }
+    }
+
+    /// 键盘动画收尾（v1.0.129）：DSH 页面把整页偏移钉回 0，并让页内按新视口高重排。
+    ///
+    /// 键盘改变的是 WebView 高度（不是滚动位置），顶栏/底栏位置由页内布局决定；
+    /// 但 WebKit 聚焦输入框时会自作主张 scrollIntoView，把整页顶上去且**不回弹** ——
+    /// 那正是老总看到的「弹键盘一个位置、收键盘又一个位置、还能上下滑」。
+    /// 这里在动画结束的瞬间清一次偏移，双保险再延迟 120ms 清一次（WebKit 的
+    /// scrollIntoView 有时比动画更晚落地）。
+    private func settleScrollAfterKeyboard() {
+        guard pageScrollLocked else { return }
+        webView?.scrollView.contentOffset = .zero
+        webView?.evaluateJavaScript("try{window.__dshLayoutFix&&window.__dshLayoutFix();}catch(e){}") { _, _ in }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            guard let self, self.pageScrollLocked else { return }
+            self.webView?.scrollView.contentOffset = .zero
         }
     }
 
@@ -5455,6 +5575,39 @@ function applySidebarInset() {
         guard webViewTopConstraint.constant != target else { return }
         webViewTopConstraint.constant = target
         UIView.animate(withDuration: 0.2) { self.view.layoutIfNeeded() }
+    }
+
+    /// 整页滚动锁（v1.0.129）—— 只对 DSH 主控页生效。
+    ///
+    /// 老总真机实锤：顶栏、底栏（含会话框）会跟着整页一起上下滑。
+    /// 正确行为：顶栏/底栏钉死，只有中间会话内容区自己滚；键盘弹出与收起
+    /// 各自停在一个固定位置，整页绝不许再动。
+    ///
+    /// 判据**只认页内探针的 DOM 回报**（#root + DSH 移动框架特征），
+    /// 绝不按 host/端口猜 —— 9009 自建仪表盘、公网大模型网页可能与 DSH 同域，
+    /// 按 host 猜必然误锁（老总的仪表盘必须能自由滚）。
+    ///
+    /// 双通道保证：
+    /// ① 页内 CSS 通道：html/body 固定 + overflow hidden，frame 高度跟随视口，
+    ///    键盘压缩视口时整页自动收高，不会靠滚动去够输入框；
+    /// ② 原生通道（这里）：把 WKScrollView 偏移恒定钉回 0 + 关掉橡皮筋，
+    ///    即使页内 JS 全死、CSS 没生效，整页也拖不动。
+    private func updatePageScrollLock(domIsDSH: Bool? = nil) {
+        if let flag = domIsDSH { domConfirmsDSHPage = flag }
+        let shouldLock = domConfirmsDSHPage
+        guard let sv = webView?.scrollView else { return }
+        let changed = (shouldLock != pageScrollLocked)
+        pageScrollLocked = shouldLock
+        sv.bounces = !shouldLock
+        sv.alwaysBounceVertical = !shouldLock
+        sv.alwaysBounceHorizontal = false
+        if changed {
+            sv.showsVerticalScrollIndicator = !shouldLock
+            if shouldLock { sv.contentOffset = .zero }
+        } else if shouldLock && (sv.contentOffset.y != 0 || sv.contentOffset.x != 0) {
+            // 新页面首帧 / 键盘动画过程中可能带进偏移，锁定期一律清零
+            sv.contentOffset = .zero
+        }
     }
 
     override func viewSafeAreaInsetsDidChange() {
@@ -5560,6 +5713,8 @@ function applySidebarInset() {
         webView.scrollView.maximumZoomScale = 1.0
         webView.scrollView.bouncesZoom = false
         config.userContentController.add(Self.makeErrorBridge(owner: self), name: "dshErrors")
+        // v1.0.129：页内探针回报「这是不是 DSH 主控页」，原生据此决定锁不锁整页滚动
+        config.userContentController.add(Self.makePageKindBridge(owner: self), name: "dshPage")
         config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")
         config.userContentController.add(Self.makeVoiceInputBridge(owner: self), name: "dshVoiceInput")
         config.userContentController.add(Self.makeAppUpdateBridge(owner: self), name: "dshAppUpdate")
@@ -6678,8 +6833,11 @@ function applySidebarInset() {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.128)】
-            1. 🥇 顶栏 CSS 直修通道上线（老总真机实锤：v1.0.127 装机后 tab 下划线仍是 172pt 原样，而 composer 修复生效 —— JS 几何 shim 在真机某环境会整体死亡，CSS 注入是唯一被真机证实存活的通道）：顶栏三件事全部 CSS 化 —— ① html 前缀高特异性清 env padding（压过缓存里旧代理层规则）；② 列顶 = 原生专属状态栏变量 --dsh-sb-native - 20（DSH 自己写的 --dsh-statusbar=75 带偏不了它）；③ 36px 占位行压 0 且保开关可点。JS 活着时内联样式优先级更高自然接管，JS 死了 CSS 兜底，真机无论哪条通道活着顶栏都在 39pt；
+            【最新特性 (v1.0.129)】
+            1. 🥇 整页滚动锁上线（老总真机实锤：顶栏、底栏跟着页面一起上下滑，键盘弹出/收起会话框还各换一个位置）—— 正确行为：顶栏/底栏钉死，只有中间会话内容区自己上下滚。本版双通道根治：① 页内探针（shim 数组第 1 位、不依赖任何后续脚本）识别 DSH 主控页后注入 html/body 固定 + 框架高度跟随视口，键盘压缩视口时整页自动收高、绝不靠滚动去够输入框；② 原生层把 WKScrollView 偏移恒定钳回 0 并关掉橡皮筋，即使页内 JS 全死整页也拖不动；WebKit 聚焦输入框的自作主张 scrollIntoView 在键盘动画结束瞬间被清零（双保险 120ms 再清一次）；
+            2. 🥇 锁定判据只认页内 DOM（#root + DSH 移动框架特征），绝不按 host/端口猜 —— 9009 自建仪表盘、公网大模型网页、WorkBuddy 等与 DSH 同域也零命中，100% 原生自由滚动；跳转外部网页时探针结论自动作废，绝不把 DSH 的锁带过去；
+            3. 🔍 回归闸门新增「整页滚动锁」场景：DSH 页塞 3000px 长内容后 window 必须滚不动、顶栏纹丝不动；外部页必须零锁样式、可正常自由滚 —— 锁误伤外部页面这类回归从此打包前现形（断言升至 58 条）；
+            4. 🥇 顶栏 CSS 直修通道上线（老总真机实锤：v1.0.127 装机后 tab 下划线仍是 172pt 原样，而 composer 修复生效 —— JS 几何 shim 在真机某环境会整体死亡，CSS 注入是唯一被真机证实存活的通道）：顶栏三件事全部 CSS 化 —— ① html 前缀高特异性清 env padding（压过缓存里旧代理层规则）；② 列顶 = 原生专属状态栏变量 --dsh-sb-native - 20（DSH 自己写的 --dsh-statusbar=75 带偏不了它）；③ 36px 占位行压 0 且保开关可点。JS 活着时内联样式优先级更高自然接管，JS 死了 CSS 兜底，真机无论哪条通道活着顶栏都在 39pt；
             2. 🥇 「顶栏高度越来越差距越大」根治：老 fixTop 的增量 margin 公式（margin += want - top）与 v1.0.126 的 fixTopChrome 绝对法构成同属性双写入者，React 重挂载 / 键盘 / sticky 吸顶瞬间的过渡偏差被增量法累加进 margin，越用越低永不回头（fixBottom 当年 46→92→138 同病）。本版增量公式退役，位移统一由绝对法负责；
             3. 🛡 页面隔离收紧（老总真机实锤：WorkBuddy 页「子任务显示重叠」）：#root 不再是充分判据 —— WorkBuddy 等 React 应用也有 #root，fixTop 把它们的 header 当主顶栏做手术（sticky/列高钉死/overflow hidden），子任务面板与标题叠在一起。本版要求「#root + DSH 特征（data-mobile-nav / composerStack / headerCorner）」同时成立，外部网页 / 自建仪表盘 / WorkBuddy 一律零接触；
             4. 🔍 回归闸门新增「CSS-only 兜底场景」：只注 CSS、绝不注 JS，模拟真机最坏情况，顶栏必须仍收敛 39pt —— JS 通道死亡这类回归从此打包前现形；
@@ -6929,6 +7087,9 @@ extension ViewController: WKNavigationDelegate {
         // v1.0.106：新导航开始——此刻 #root 仍属于上一个文档，先撤掉探测，
         // 待 didCommit 新文档接手后再重新武装，避免把旧页面误判成新页面首帧。
         stopEarlyRevealProbe()
+        // v1.0.129：新文档开始加载 → 上一条「这是 DSH 页」的探针结论作废，先解锁，
+        // 由新文档的探针重新回报。绝不能把 DSH 的锁带给外部网页 / 自建仪表盘。
+        updatePageScrollLock(domIsDSH: false)
     }
 
     /// v1.0.70：导航已提交（此时 webView.url 已是新页面）——
@@ -7243,6 +7404,15 @@ extension ViewController: UIScrollViewDelegate {
     /// 现在只在「整页被顶到屏幕上方」（contentOffset.y < 0，顶栏被顶出状态栏）时才钳回 0，
     /// 正向滚动一律放行，让输入框能滚到键盘正上方。
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        // v1.0.129：DSH 主控页整页锁死 —— 顶栏/底栏（含会话框）纹丝不动，
+        // 只有中间会话内容区自己滚。内容区滚动改的是元素自己的 scrollTop，
+        // 根本不经过外层 WKScrollView，所以列表照常跟手滚，不受这里影响。
+        if pageScrollLocked {
+            if scrollView.contentOffset.y != 0 || scrollView.contentOffset.x != 0 {
+                scrollView.contentOffset = .zero
+            }
+            return
+        }
         // 键盘可见期间防 WebKit 把整页顶出屏幕（仅在整页被顶出屏幕上方 contentOffset.y < 0 时钳回 0）
         // 正向滚动（contentOffset.y > 0）一律放行，无论是 9009 仪表盘、外部网页还是内部输入框均能自由滑动！
         guard isKeyboardVisible else { return }

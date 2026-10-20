@@ -971,7 +971,12 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.lineBreakMode = .byWordWrapping
 
         let logContent = """
-        🥇 1. 顶栏大空档 CSS 直修 + 「越来越低」漂移根治 + WorkBuddy 页不再被误手术（v1.0.128）：
+        🥇 1. 整页滚动锁：顶栏/底栏钉死，只有会话内容区滚（v1.0.129）：
+        • 真机实锤：顶栏、底栏（含会话框）跟着整页一起上下滑，键盘弹出/收起会话框还各换一个位置；本版双通道根治 —— 页内探针 shim（数组第 1 位、不依赖后续脚本）识别 DSH 主控页后注入 html/body 固定 + 框架高度跟随视口（键盘压缩视口时整页自动收高，绝不靠滚动去够输入框），原生层把 WKScrollView 偏移恒定钳回 0 并关橡皮筋（JS 全死整页也拖不动）；
+        • 键盘收尾双保险：WebKit 聚焦输入框自作主张 scrollIntoView 的偏移，在键盘动画结束瞬间清零、120ms 后再清一次 —— 弹键盘一个位置、收键盘一个位置，各自钉死不许再滑；
+        • 判据只认页内 DOM（#root + DSH 移动框架特征），绝不按 host/端口猜 —— 9009 仪表盘、公网大模型网页、WorkBuddy 同域也零命中照常自由滚；跳转外部页探针结论自动作废；
+        • 闸门新增「整页滚动锁」场景：DSH 页塞 3000px 长内容 window 必须滚不动、顶栏纹丝不动；外部页必须零锁样式、可正常自由滚（断言升至 58 条）。
+        🥈 2. 顶栏大空档 CSS 直修 + 「越来越低」漂移根治 + WorkBuddy 页不再被误手术（v1.0.128）：
         • 真机实锤：v1.0.127 装机后 tab 下划线仍是 172pt 原样（composer 修复却生效）—— JS 几何 shim 在真机某环境整体死亡，CSS 注入是唯一证实存活的通道；本版把顶栏三件事全部 CSS 化（高特异性清 env padding / 原生专属 --dsh-sb-native 变量钉列顶 / 36px 占位行压 0），JS 死了 CSS 兜底，顶栏恒在 39pt；
         • 「顶栏高度越来越差距越大」真凶：老 fixTop 增量 margin 公式与新 fixTopChrome 绝对法构成同属性双写入者，过渡偏差被增量法累加（fixBottom 当年 46→92→138 同病）；本版增量公式退役，位移只归绝对法；
         • 「子任务显示重叠」真凶：WorkBuddy 等 React 应用也有 #root，fixTop 把它们的 header 当主顶栏做手术，子任务面板与标题叠在一起；本版页面隔离收紧为「#root + DSH 特征」双判据，外部网页一律零接触；

@@ -122,7 +122,19 @@ const A_OVERFLOW = () => {
       if (q.left >= vw - 1) continue;          // 整体在屏外右（收起的右侧面板）
       if (q.right <= 1) continue;              // 整体在屏外左（收起的抽屉）
       if (q.width > vw) continue;              // 横向滚动容器
-      const over = q.right - vw;
+      /* v1.0.129 可见性裁剪：被祖先 overflow:hidden/clip 完全裁掉的元素屏幕上一个像素都没有，不算出血
+         （composer 里 triggerLabel 被官方 flex 压成 0 宽时，里面的模型名 span 几何上越界但全被裁掉）。 */
+      let visL = q.left, visR = q.right, anc = el.parentElement;
+      while (anc && anc !== document.body) {
+        const acs2 = getComputedStyle(anc);
+        if (acs2.overflowX === 'hidden' || acs2.overflowX === 'clip') {
+          const ar = anc.getBoundingClientRect();
+          visL = Math.max(visL, ar.left); visR = Math.min(visR, ar.right);
+        }
+        anc = anc.parentElement;
+      }
+      if (visR - visL < 1) continue;           // 完全被裁掉 = 不可见
+      const over = visR - vw;
       if (over > 0.5) hits.push((String(el.className || el.tagName).slice(0, 30)) + ' +' + Math.round(over * 10) / 10);
     }
     return hits;
@@ -577,6 +589,110 @@ const A_PLUGIN_PAGE = () => {
     chk(r2.colTop !== null && Math.abs(r2.colTop - 39) <= 3, '[CSS兜底] 列顶=39（--dsh-sb-native 兜底 59 生效）', 'colTop=' + r2.colTop);
     chk(r2.leadH === '0px', '[CSS兜底] 36px 占位行压 0', 'leadH=' + r2.leadH);
     await c2.close();
+  }
+
+  /* ================= 场景 F：整页滚动锁（v1.0.129）=================
+     🔴 老总真机实锤（2026-10-20 装机 v1.0.128）：顶栏、底栏（含会话框）跟着整页
+     一起上下滑，键盘弹出/收起还各换一个位置。v1.0.129 上了「DSH 页整页锁」：
+     ① 页内探针 shim（数组第 1 位，不依赖后续 shim）检测 #root + DSH 框架特征 →
+        注入 html/body 固定 + frame 跟随视口，并 postMessage 给原生锁 scrollView；
+     ② 原生 scrollViewDidScroll 钳零（本闸门测不到原生层，这里测页内通道）。
+     红线：DSH 页塞 3000px 长内容后 window 必须滚不动、顶栏纹丝不动；
+     外部页（伪造域名）必须零命中：不锁、能自由滚。 */
+  {
+    console.log('\n--- 场景 F：整页滚动锁（DSH 锁死 / 外部页放行）---');
+    /* 从 Swift 源码抽取探针 shim（与真机 .atDocumentStart 等价注入） */
+    const swiftLines = fs.readFileSync(path.join(DIR, '..', 'DSHios', 'ViewController.swift'), 'utf8').split(/\r?\n/);
+    /* 🔴 反转义必须逐字符：链式 replace 会把 '\\n' 先变真实换行再进字符串字面量，
+       产出 join('<真实换行>') 这种未闭合字符串 → shim 整体 SyntaxError 静默死亡
+       （129b 闸门「锁样式缺失」的真因）。 */
+    const unesc = (s) => {
+      let out = '', i = 0;
+      while (i < s.length) {
+        const c = s[i];
+        if (c === '\\') {
+          const n = s[i + 1];
+          if (n === '\\') { out += '\\'; i += 2; continue; }
+          if (n === '"') { out += '"'; i += 2; continue; }
+          if (n === 'n') { out += '\n'; i += 2; continue; }
+          if (n === 't') { out += '\t'; i += 2; continue; }
+        }
+        out += c; i++;
+      }
+      return out;
+    };
+    let probe = null;
+    for (let i = 0; i < swiftLines.length && !probe; i++) {
+      if (swiftLines[i].trim() !== '"""') continue;
+      if (!/v1\.0\.129 整页滚动锁/.test(swiftLines.slice(Math.max(0, i - 30), i).join('\n'))) continue;
+      const buf = [];
+      for (let j = i + 1; j < swiftLines.length; j++) {
+        const t = swiftLines[j].trim();
+        if (t === '""",') { probe = unesc(buf.join('\n')); break; }
+        buf.push(swiftLines[j]);
+      }
+    }
+    if (!probe) { chk(false, '[滚动锁] 从 Swift 源码抽取 v1.0.129 探针 shim', '没抽到，别打包'); }
+    else {
+      try { new Function(probe); } catch (e) { chk(false, '[滚动锁] 探针 shim 语法体检', e.message); }
+      const c3 = await b.newContext({ viewport: { width: 430, height: 932 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3, userAgent: UA, colorScheme: 'dark' });
+      await c3.addInitScript(probe);
+      const p3 = await c3.newPage();
+      await p3.goto('http://127.0.0.1:3083/', { waitUntil: 'load', timeout: 60000 });
+      await p3.waitForFunction(() => document.body && document.body.querySelectorAll('*').length > 60, null, { timeout: 60000 }).catch(() => {});
+      await p3.waitForTimeout(6500);
+      const dsh = await p3.evaluate(() => {
+        const de = document.documentElement;
+        const hdr = document.querySelector('[data-mobile-nav="frame"] header');
+        const col = document.querySelector('[class*="centerCol"]') || document.body;
+        const tall = document.createElement('div');
+        tall.style.cssText = 'height:3000px;width:1px;flex:0 0 auto;';
+        col.appendChild(tall);
+        const top0 = hdr ? Math.round(hdr.getBoundingClientRect().top) : null;
+        window.scrollTo(0, 400);
+        document.documentElement.scrollTop = 400;
+        document.body.scrollTop = 400;
+        const top1 = hdr ? Math.round(hdr.getBoundingClientRect().top) : null;
+        return {
+          lockStyle: !!document.getElementById('dsh-ios-scroll-lock'),
+          bodyPos: getComputedStyle(document.body).position,
+          bodyOy: getComputedStyle(document.body).overflowY,
+          winY: window.scrollY, top0, top1,
+          frameH: (() => { const f = document.querySelector('[data-mobile-nav="frame"]'); return f ? Math.round(f.getBoundingClientRect().height) : null; })()
+        };
+      });
+      chk(dsh.lockStyle, '[滚动锁] DSH 页：探针注入页面锁样式', dsh.lockStyle ? 'dsh-ios-scroll-lock 已挂' : '锁样式缺失');
+      chk(dsh.bodyPos === 'fixed' && dsh.bodyOy === 'hidden', '[滚动锁] DSH 页：body 固定 + overflow hidden', 'pos=' + dsh.bodyPos + ' oy=' + dsh.bodyOy);
+      chk(dsh.winY === 0, '[滚动锁] DSH 页：塞 3000px 长内容后 window 滚不动', 'winY=' + dsh.winY);
+      chk(dsh.top0 !== null && dsh.top0 === dsh.top1, '[滚动锁] DSH 页：顶栏纹丝不动', 'top ' + dsh.top0 + ' → ' + dsh.top1);
+      chk(dsh.frameH !== null && Math.abs(dsh.frameH - 932) <= 2, '[滚动锁] DSH 页：frame 高度跟随视口（键盘收高前提）', 'frameH=' + dsh.frameH);
+
+      /* 外部页：同一条探针必须零命中 */
+      const c4 = await b.newContext({ viewport: { width: 430, height: 932 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3, userAgent: UA });
+      await c4.addInitScript(probe);
+      await c4.route('**/*', (route) => route.fulfill({
+        status: 200, contentType: 'text/html; charset=utf-8',
+        body: '<html><head><meta name="viewport" content="width=device-width"></head><body style="margin:0"><div id="root" style="height:4000px;background:#eee"><h1>外部仪表盘</h1></div></body></html>'
+      }));
+      const p4 = await c4.newPage();
+      await p4.goto('http://external.test/', { waitUntil: 'load', timeout: 30000 }).catch(() => {});
+      await p4.waitForTimeout(2500);
+      const ext = await p4.evaluate(() => {
+        const se = document.scrollingElement || document.documentElement;
+        window.scrollTo(0, 500);
+        return {
+          lockStyle: !!document.getElementById('dsh-ios-scroll-lock'),
+          bodyPos: getComputedStyle(document.body).position,
+          winY: window.scrollY,
+          maxScroll: se.scrollHeight - se.clientHeight
+        };
+      });
+      chk(!ext.lockStyle, '[滚动锁] 外部页：零锁样式注入');
+      chk(ext.bodyPos !== 'fixed', '[滚动锁] 外部页：body 未被固定', 'pos=' + ext.bodyPos);
+      chk(ext.maxScroll > 100 && ext.winY > 0, '[滚动锁] 外部页：可正常自由滚（放行）', 'winY=' + ext.winY + ' maxScroll=' + ext.maxScroll);
+      await c4.close();
+      await c3.close();
+    }
   }
   await b.close();
 
