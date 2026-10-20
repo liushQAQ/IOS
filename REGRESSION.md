@@ -56,18 +56,44 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 
 ---
 
-### R16 顶栏离 iOS 状态栏一大截（v1.0.126 根治）
+### R16 顶栏离 iOS 状态栏一大截（v1.0.126 根治）——⚠️ 结论已被 v1.0.130 推翻，见 R18
 - 症状：真机会话页顶栏整体下坠，老总：「中间可以停一台航母」。
 - 取证：像素级对拍老总截图 vs 沙箱 —— tab 下划线真机 172pt vs 沙箱 113pt，差 58.6pt ≈ 恰好一个状态栏 59。
-- 真因：代理层 dsh-anywhere 给 `[data-mobile-nav="frame"]` 写 `padding-top: env(safe-area-inset-top)`（真机 59 / 沙箱 0）；App JS 清掉后 React 重挂载又把样式表 !important 刷回，拉锯不止。
-- 解法：① 代理层删除该规则（dsh-anywhere `1e4c83c`，备份 client.js.bak-20261020-125214）；② App fixTopChrome 遍历全部 frame 清 padding + margin 改「清-量-设绝对差」幂等算法。
+- 真因（v1.0.126 判定，**只对了一半**）：代理层 dsh-anywhere 给 `[data-mobile-nav="frame"]` 写 `padding-top: env(safe-area-inset-top)`（真机 59 / 沙箱 0）。
+- 解法（保留，是必要非充分）：① 代理层删除该规则（dsh-anywhere `1e4c83c`）；② App fixTopChrome 遍历全部 frame 清 padding + margin 改「清-量-设绝对差」幂等算法。
 - 校验：闸门 prep 永久注入同款 `padding-top:59px !important` 模拟真机；断言 `[主页]/[会话页] 顶栏顶=39`。
+- 🔴 **v1.0.130 复盘**：env padding 只是表象之一，**真正的本源在原生层**（见 R18）——修完 126~129 四版页面层问题依旧，因为谁也没去对拍「页内布局本身对不对」。
 
 ### R17 插件详情页「返回」按钮被 fab 压住（v1.0.126 根治）
 - 症状：老总：「打开插件按钮，侧边栏和返回按钮还是遮挡」。
 - 真因：详情页没有 `<header>` 也没有 pageHead（实测 hdrTop=null），fixTop/fixPageHeadFab 全部提前 return，整页零修复；返回行（x=24..406 y=67..83）被 `[data-mobile-nav="fab"]`（x=14..52 y=47..85）压住左端 28x16。
 - 解法：避让做进 fixFab（与 fixFabRows 抢 top 会互相刷掉）—— fab 与顶区全宽行按钮重叠时下移到该行下方 8px。实测 fabTop 47→91，零重叠；列表页布局不变。
 - 校验：闸门新增场景 D（进详情页）+ 断言 `[详情页] fab 不压顶区全宽行`。
+
+### R18 顶栏离状态栏「越来越宽」——真凶在原生层（v1.0.130 根治，老总 23:47 真机确认闭环）
+- 症状：v1.0.126~129 连修四版，顶栏离状态栏还是一大截，老总：「越来越宽了？？这个解决不了？？？」「不单单说记忆，要有文件支撑，切换了其他 AI 也知道如何处理」。
+- 🔴 **决定性取证方法（必学）**：把老总真机截图（1290×2796）与沙箱截图做**逐条带像素对拍**，找 ≥2 个独立基准条带解位移 —— 标题 +59.7 / Tab 文字 +59.3 / Tab 下划线 +61.0，三带位移一致且页内相对布局与沙箱分毫不差 → **整个 WKWebView 被原生层整体下移 59pt，页面层（CSS/JS/env）彻底无辜**。
+- 🔴 **教训：125~129 四版全在修页面层，全部打不中** —— 闸门跑在浏览器里，原生层（`webViewTopConstraint` / contentInset / scrollView 位移）**永远测不出**。凡「沙箱绿、真机错」且表现为「整页/整块平移」，第一步查原生约束与归属判据，绝不连改多版页面层碰运气。
+- 真凶：`isCurrentServiceDSH` 被写坏成 `false`。污染路径两条：
+  ① `retryTapped()` 重试按钮无条件 `loadURLString(current, markAsDSHService: false)` —— 冷启动 PC 未就绪 → 报错页 → 老总点重试 → **重试的对象明明就是 DSH 地址**，归属却被改成 false；
+  ② `clearWebCacheAndReload()` 清缓存重载同样写死 false（旧注释还谎称「重载不改变页面归属判定」）。
+  → `isOwnServicePage()` 返 false → `updateTopSafeAreaFor()` 把 `webViewTopConstraint.constant = view.safeAreaInsets.top(59)` → 整页下移。
+- 连坐：归属 false 期间 `startWhiteScreenDiagnostics()` 白屏诊断直接 return —— 这解释了历史上「sampleRoot 诊断时灵时不灵」。
+- 修复 4 处（commit `863930d`）：① retryTapped 继承归属（`isCurrentServiceDSH ?? true`）；② clearWebCacheAndReload 同修；③ `isOwnServicePage` 加 1.8 条：`host == dshServiceHost` 优先于生命周期标记并**自愈掰回 true**；④ `updatePageScrollLock` 收到页内探针 `dshPage=true` 时强制 constraint=0 + 掰正标记（与滚动锁共用「只认页内 DOM」判据，外部网页/9009 仪表盘零影响）。
+- 校验：真机截图对拍（方法如上）；闸门加不了原生断言（见「已知边界」），此问题靠**方法与铁律**防复发。
+- 🔴 **铁律：任何 `loadURLString` 调用绝不允许对 DSH 地址传 `markAsDSHService:false`**；新增加载入口必须继承归属（`isCurrentServiceDSH ?? true`）或先用 `isOwnServicePage` 判定。
+
+### R19 服务列表缺排序（v1.0.130 交付，commit `6b32de7`）
+- 症状：老总：「没有编辑，排序，上移下移最前末尾」。
+- 解法：`ServiceStore.move(from:to:)` 持久化；每行右侧 ⇅ 排序 + ✎ 编辑并排按钮；点 ⇅ 或**长按行 0.45s** 弹 actionSheet（上移/下移/移到最前/移到末尾/编辑，首行/末行自动收敛不可用项）。
+- 防崩：刷新一律 `reloadData`（与删除同哲学，**绝不增量 moveRow**，杜绝 invalid number of rows 崩溃）。
+- 校验：人工手点（原生 UI，闸门够不着）。
+
+### R20 下载网关 502（运维，2026-10-20 晚实锤）
+- 症状：`https://liu-gw.tail2a9309.ts.net:8443/dl/*` 全部 502，无 `Server: dshstat` 头。
+- 排障链：8443 是 **Tailscale Funnel**（tailscaled 自监听）→ `tailscale serve status` 查后端 → `https://...:8443 → http://127.0.0.1:9071` → `netstat -ano | findstr 9071` 无监听 = dshstat 统计网关死了。
+- 解法：`Start-ScheduledTask -TaskName "DSH-Stat-Server"` 拉起（2026-10-20 实测有效）。源码 `E:\desktop\所有skill\dsh-stat\stat_server.py`。
+- 🔴 **两个坑**：① 查网关前**必须清代理环境变量**（本地 curl 带代理 → 127.0.0.1/Tailscale 全变 502 假象，这次就中招）；② `DSH-Stat-Keepalive` 曾 9 分钟没自动拉活，原因未明 —— keepalive 失效时手动拉起，别干等。
 
 ## 三、校验 SOP（每个新版本出包前必做）
 
@@ -124,6 +150,12 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
    （R14 真因）。局部 `setPI` + 就地 `parseFloat`。
 10. 🔴 **z-index 出不了别人的 stacking context**：给深层元素抬 z 无效时，先查它挂在谁的
     stacking context 里（R14 第二真因），要么降对方、要么换宿主。
+11. 🔴 **页面归属标记是红线**：任何 `loadURLString` 对 DSH 地址传 `markAsDSHService:false` 一律禁止；
+    新增加载入口必须继承归属（R18 真凶）。
+12. 🔴 **改文件一律二进制读写或 AI 编辑工具，严禁脚本文本模式重写**：
+    `io.open(p).read()` + `write()`（newline 缺省）会把 CRLF 全转 LF（2026-10-20 踩过，AppDelegate/Info.plist 整文件 diff，靠 git checkout 抢救）；插入文本中的换行必须显式 `\r\n`。
+13. 🔴 **改完代码必须重跑闸门出新凭证**：CI 硬校验 `sourceHash == 现场 sha256`，凭证过期 = 打包直接被拒。
+14. 🔴 **「沙箱绿、真机错」先做真机截图逐条带像素对拍**（R18 方法论）：先归因页面层 vs 原生层，绝不连改多版页面层碰运气。
 
 ---
 
@@ -148,6 +180,8 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 1.0.124 | 67 | `39351887630` | 抽屉 252 收敛 + 齿轮 v1.0.9 + 会话框按钮居中 + 删除崩溃 + 费用计量浮层遮挡 + **回归闸门建立** |
 | 1.0.125 | 本次 | 本次 | 底部插件 dock 换行防重叠（R13）+ 插件页 fab 可点/不压标题（R14）+ 顶栏兜底硬钳制（R15）+ 闸门扩到 34 条 |
 | 1.0.126 | 本次 | 本次 | 顶栏 +59pt 根治（R16，真机 env=59 像素实锤，删代理层 env padding）+ 详情页 fab 避让（R17）+ 闸门常驻模拟真机 env=59，扩到 40 条 |
+| 1.0.129 | 73 | `39423199229` | 会话框底排防挤爆（撤回/重优出现时发送钮被挤出屏）+ 整页滚动锁 + 闸门防挂死三件套，65 断言 |
+| 1.0.130 | 74 | `39442915203` | **顶栏 +59 真凶在原生层根治（R18，归属标记写坏）** + 服务列表排序（R19）+ 闸门 65 绿/0 红；老总真机确认闭环 |
 
 ## 七、闸门自身踩过的坑（复用必读）
 
@@ -203,3 +237,6 @@ git commit + push（凭证随仓库提交）
 - 凭证是本地生成、随仓库提交的 JSON，理论上可手工伪造 —— 但伪造它需要**故意**绕过，
   与「防呆+防懒」的定位匹配；真要强对抗需 CI 内跑 Playwright + DSH 环境，macOS 免费算力跑不动。
 - 55/134 惰性锚点（提问卡/下拉/灯箱等）闸门够不着，只做健康度趋势记录。
+- 🔴 **闸门只测页面层（WKWebView 里的 DOM/CSS/JS），原生层（constraint/contentInset/scrollView 位移、
+  归属判定、导航流程）永远测不出** —— R18（125~129 四版白修）就是这个盲区造成的。
+  原生类问题只能靠：真机截图逐条带像素对拍 + 代码评审 + 老总真机验收。
