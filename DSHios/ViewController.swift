@@ -5612,6 +5612,16 @@ function applySidebarInset() {
         let path = url.path.lowercased()
         if path.contains("/dsh") { return true }
 
+        // 1.8 🔴 v1.0.130：动态 host 匹配**优先于**生命周期标记（自愈被污染的归属）。
+        //   isCurrentServiceDSH 会被「重试」「清缓存重载」两条路径写坏成 false（它们加载的
+        //   明明就是 DSH 地址，v1.0.130 之前却传 false），一旦写坏，DSH 页被当外部网页
+        //   整体下推一个状态栏（59pt）。外部公网大模型网页绝不可能与用户主控地址同 host
+        //   —— 同 host 即 DSH 页，这里顺手把标记掰回 true，永不复发。
+        if let svc = dshServiceHost?.lowercased(), !svc.isEmpty, host == svc {
+            isCurrentServiceDSH = true
+            return true
+        }
+
         // 2. 权威生命周期标记：由用户操作或入口显式指定的属性（切换到外部网页时明确为 false）
         if let isDSH = isCurrentServiceDSH {
             return isDSH
@@ -5655,6 +5665,16 @@ function applySidebarInset() {
     ///    即使页内 JS 全死、CSS 没生效，整页也拖不动。
     private func updatePageScrollLock(domIsDSH: Bool? = nil) {
         if let flag = domIsDSH { domConfirmsDSHPage = flag }
+        // 🔴 v1.0.130 双保险：页内探针（#root + DSH 移动框架特征）确认这是 DSH 页时，
+        //   页面归属**以 DOM 为准** —— 立刻把顶部约束收回 0 并掰正被写坏的归属标记。
+        //   就算 isCurrentServiceDSH 被某条未知路径污染成 false（DSH 页被当外部网页、
+        //   整页下推一个状态栏 59pt），这里也能自愈。与滚动锁共用同一条「只认页内
+        //   DOM、绝不按 host 猜」的判据，外部大模型网页 / 9009 仪表盘零影响。
+        if domConfirmsDSHPage, webViewTopConstraint != nil, webViewTopConstraint.constant != 0 {
+            isCurrentServiceDSH = true
+            webViewTopConstraint.constant = 0
+            UIView.animate(withDuration: 0.2) { self.view.layoutIfNeeded() }
+        }
         let shouldLock = domConfirmsDSHPage
         guard let sv = webView?.scrollView else { return }
         let changed = (shouldLock != pageScrollLocked)
@@ -6731,8 +6751,11 @@ function applySidebarInset() {
         dataStore.removeData(ofTypes: types, modifiedSince: .distantPast) { [weak self] in
             DispatchQueue.main.async {
                 guard let self else { return }
-                // cookie 也一并清了，重新走一遍 Pocket 握手（重载不改变页面归属判定）
-                self.loadURLString(target, markAsDSHService: false)
+                // 🔴 v1.0.130 顶栏根治：旧注释「重载不改变页面归属判定」是假的——
+                //   写死 markAsDSHService:false 恰恰**改变**了归属判定（isCurrentServiceDSH → false），
+                //   DSH 页随后被当外部网页整体下推 59pt（见 retryTapped 内注释）。
+                //   清缓存重载的目标就是当前页，归属必须继承，绝不重置。
+                self.loadURLString(target, markAsDSHService: self.isCurrentServiceDSH ?? true)
             }
         }
     }
@@ -6894,8 +6917,9 @@ function applySidebarInset() {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.129)】
-            1. 🥇 整页滚动锁上线（老总真机实锤：顶栏、底栏跟着页面一起上下滑，键盘弹出/收起会话框还各换一个位置）—— 正确行为：顶栏/底栏钉死，只有中间会话内容区自己上下滚。本版双通道根治：① 页内探针（shim 数组第 1 位、不依赖任何后续脚本）识别 DSH 主控页后注入 html/body 固定 + 框架高度跟随视口，键盘压缩视口时整页自动收高、绝不靠滚动去够输入框；② 原生层把 WKScrollView 偏移恒定钳回 0 并关掉橡皮筋，即使页内 JS 全死整页也拖不动；WebKit 聚焦输入框的自作主张 scrollIntoView 在键盘动画结束瞬间被清零（双保险 120ms 再清一次）；
+            【最新特性 (v1.0.130)】
+            1. 🥇 顶栏离状态栏「一大截、越来越宽」彻底根治：真机三张截图逐条带像素对拍实锤 —— 标题/Tab/下划线整体 +59pt ≈ 一个状态栏，页内布局与沙箱完全一致，整个 WebView 被原生层整体下移；真凶是「重试」与「清缓存重载」把页面归属标记写死成 false，DSH 页被当成外部网页、顶部约束被多推一个状态栏高度。本版四处根治：重试/清缓存继承归属、host 同域即 DSH 并自愈标记、页内探针确认 DSH 页时原生顶部约束强制归零（外部网页/仪表盘零影响）；
+            2. 🥇 整页滚动锁上线（老总真机实锤：顶栏、底栏跟着页面一起上下滑，键盘弹出/收起会话框还各换一个位置）—— 正确行为：顶栏/底栏钉死，只有中间会话内容区自己上下滚。本版双通道根治：① 页内探针（shim 数组第 1 位、不依赖任何后续脚本）识别 DSH 主控页后注入 html/body 固定 + 框架高度跟随视口，键盘压缩视口时整页自动收高、绝不靠滚动去够输入框；② 原生层把 WKScrollView 偏移恒定钳回 0 并关掉橡皮筋，即使页内 JS 全死整页也拖不动；WebKit 聚焦输入框的自作主张 scrollIntoView 在键盘动画结束瞬间被清零（双保险 120ms 再清一次）；
             2. 🥇 锁定判据只认页内 DOM（#root + DSH 移动框架特征），绝不按 host/端口猜 —— 9009 自建仪表盘、公网大模型网页、WorkBuddy 等与 DSH 同域也零命中，100% 原生自由滚动；跳转外部网页时探针结论自动作废，绝不把 DSH 的锁带过去；
             3. 🔍 回归闸门新增「整页滚动锁」场景：DSH 页塞 3000px 长内容后 window 必须滚不动、顶栏纹丝不动；外部页必须零锁样式、可正常自由滚 —— 锁误伤外部页面这类回归从此打包前现形（断言升至 58 条）；
             4. 🥇 顶栏 CSS 直修通道上线（老总真机实锤：v1.0.127 装机后 tab 下划线仍是 172pt 原样，而 composer 修复生效 —— JS 几何 shim 在真机某环境会整体死亡，CSS 注入是唯一被真机证实存活的通道）：顶栏三件事全部 CSS 化 —— ① html 前缀高特异性清 env padding（压过缓存里旧代理层规则）；② 列顶 = 原生专属状态栏变量 --dsh-sb-native - 20（DSH 自己写的 --dsh-statusbar=75 带偏不了它）；③ 36px 占位行压 0 且保开关可点。JS 活着时内联样式优先级更高自然接管，JS 死了 CSS 兜底，真机无论哪条通道活着顶栏都在 39pt；
@@ -6947,7 +6971,15 @@ function applySidebarInset() {
 
     @objc private func retryTapped() {
         if let current = webView.url?.absoluteString, !current.isEmpty {
-            loadURLString(current, markAsDSHService: false)
+            // 🔴 v1.0.130 顶栏根治：重试必须**继承当前页面的归属判定**，绝不能写死 false！
+            //   旧代码无条件 markAsDSHService:false —— 冷启动遇到 PC 未就绪 → 报错页 → 老总点「重试」
+            //   → 明明重试的就是 DSH 地址，isCurrentServiceDSH 却被改成 false →
+            //   updateTopSafeAreaFor 把 DSH 页当外部网页，webViewTopConstraint = 59pt，
+            //   整个 WebView 连同顶栏被原生层**整体下移一个状态栏高度**。
+            //   真机三张截图逐条带对拍实锤（2026-10-20 21:09）：标题 +59.7 / Tab +59.3 /
+            //   下划线 +61.0，页内布局与沙箱完全一致 —— 页面层无辜，原生层平移。
+            //   清缓存重载（clearWebCacheAndReload）是同一个病，一并修。
+            loadURLString(current, markAsDSHService: isCurrentServiceDSH ?? true)
         } else {
             loadInitialURL()
         }
