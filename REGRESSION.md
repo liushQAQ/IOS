@@ -103,8 +103,14 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 4. 🔴 **横向收口一律 `overflow-x: clip`，绝不用 `hidden`**：`hidden` 会创建滚动容器、破坏 `position:sticky` 顶栏。
 5. 🔴 **自动修复必须自带定时器兜底**：只靠 MutationObserver，页面静止时一次都不跑。
 6. 🔴 **每修一个问题，就往闸门加一条断言**。断言缺失 = 下次必然复发。
+   修的补丁用了哪个语义锚点，就把该锚点加进 `_diag/regression.js` 的 `CRITICAL_ANCHORS`。
 7. 🔴 **断言只能打不变量**。打哈希类名的断言本身就会随换版失效，等于没有闸门。
 8. Swift 多行字符串里 JS 的 `\(` 必须双写成 `\\(`，否则编译失败。
+9. 🔴 **新函数一律自包含**：注入 JS 被多个 IIFE 块分割，跨块调 `setP/num/sbHeight` 等
+   会 ReferenceError 且被 `try/catch` 静默吞掉 —— 表现为「每 3 秒都跑、却什么都没写进去」
+   （R14 真因）。局部 `setPI` + 就地 `parseFloat`。
+10. 🔴 **z-index 出不了别人的 stacking context**：给深层元素抬 z 无效时，先查它挂在谁的
+    stacking context 里（R14 第二真因），要么降对方、要么换宿主。
 
 ---
 
@@ -134,3 +140,52 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 1. **跨 IIFE 作用域调函数 = ReferenceError 被吞**：`num/setP/sbHeight` 定义在 4154 行边界之后的块里，`applySidebarInset` 所在块调不到 —— `fixPageHeadFab` 第一版因此「每 3 秒都跑、却什么都没写进去」。新函数一律**自包含**（局部 `setPI`、就地 parseFloat），并必须实测「内联样式真的写进去了」才算修完。
 2. **z-index 出不了别人的 stacking context**：fab z=1000 挂在 overlayLayer(z=20) 里，被根 context 的 pageHead(z=999) 压住 —— 抬 fab 自身没用，要么降对方、要么换宿主。
 3. **验证「没修好」先查「跑没跑」再查「对不对」**：先手工复算判定条件确认逻辑无误，再查作用域/调用链，两步定位。
+3. **验证「没修好」先查「跑没跑」再查「对不对」**：先手工复算判定条件确认逻辑无误，再查作用域/调用链，两步定位。
+4. **锚点断言不能拿「默认态 DOM 命中数」当判据**（v1.0.126 第一版实测误报 97/134）：`viewOptionsMenu`/`modal`/`questionDialog` 等惰性组件默认态本来就不在 DOM 里。正确判据是双层：关键锚点跨四态（主页/抽屉/会话/插件页）任一命中即活 + 硬断言；全量 134 锚点对「DSH 自有 CSS 规则文本」做子串体检、只记录趋势不拦截。
+5. **CSS 规则文本必须排除自家注入样式表**：我们注入的 `[class*=` 选择器包含所有锚点字符串，不排除就 100% 自证通过。识别铁证：含 `[class*=` / `[class^=` / `[class$=` 的样式表即注入层（DSH 自己从不用属性子串选择器）。实测 202 张样式表里 9 张是自家的，剩余 138 万字符才是权威语料。
+6. **一次性公告弹窗要按用户路径处理**：费用插件的 `dialog.cm-billion-notice`（居中 fixed 模态）会盖住抽屉上半部并干扰齿轮 `elementFromPoint`，制造两条假红。它是插件 UI，App 侧不动（改动只在 App 侧铁律），闸门模拟用户点「知道了」+ 抽屉扫描跳过 fixed 祖先链。
+
+## 八、闸门如何强制：发布凭证 + CI 卡口（v1.0.126 定版）
+
+> 老总原话驱动：「重复问题重复出现，如何根治」。前两条（锚点换不变量、补丁通用化）治「怎么修」，
+> 本节治「**不修能不能混过去**」—— 以前跑不跑闸门全靠自觉，CI 只要 commit 就打包，这才是流程层真漏洞。
+
+### 机制
+
+```
+node _diag/regression.js（本地，三尺寸 35 断言）
+   └─ 全绿 → 写 _diag/gate-result.json（发布凭证）
+        { ok, pass/fail, version, dshFingerprint, anchorCritical,
+          sourceHash: sha256(ViewController.swift), finishedAt }
+git commit + push（凭证随仓库提交）
+   └─ CI「Verify regression gate」步骤：python3 _diag/verify_gate.py
+        ├─ 凭证不存在            → exit 1（没跑闸门）
+        ├─ ok != true / fail != 0 → exit 1（跑了但红）
+        ├─ sourceHash ≠ 现场 sha256 → exit 1（跑完又改代码）
+        ├─ version ≠ 现场 VERSION  → exit 1（改版本没重跑）
+        └─ anchorCritical.dead 非空 → exit 1（关键锚点失效 = DSH 改版）
+```
+
+### 四条拒绝路径实测（2026-10-20）
+
+| 场景 | 结果 |
+|---|---|
+| 缺凭证 | exit 1 `缺少 _diag/gate-result.json` |
+| 闸门红（ok=false） | exit 1 `回归闸门未通过（fail=3）` |
+| 跑完闸门又改代码 | exit 1 `凭证 80a9625ac832 ≠ 现场 d82e16d09d3f` |
+| 版本不符 | exit 1 `凭证版本 9.9.9 ≠ 现场 VERSION 1.0.125` |
+| 正常全绿 | exit 0 放行 |
+
+### 日常动作（每次发版）
+
+1. 改完代码 → `python _diag/_extract_js.py && node --check _diag/app_inject.js`
+2. `node _diag/regression.js`（约 2 分钟，需 3083 在线 + 计划任务拉起 DSH Desktop）
+3. 全绿 → `git add` **逐个文件**（禁目录通配）→ commit + push → CI 自动校验凭证
+4. 凭证里的 `dshFingerprint` 是 DSH 换版哨兵：DSH 官方前端一换版指纹必变，
+   此时若关键锚点也死，闸门直接红 —— 这就是「换版即暴露」而非「用户先发现」。
+
+### 已知边界（如实声明）
+
+- 凭证是本地生成、随仓库提交的 JSON，理论上可手工伪造 —— 但伪造它需要**故意**绕过，
+  与「防呆+防懒」的定位匹配；真要强对抗需 CI 内跑 Playwright + DSH 环境，macOS 免费算力跑不动。
+- 55/134 惰性锚点（提问卡/下拉/灯箱等）闸门够不着，只做健康度趋势记录。

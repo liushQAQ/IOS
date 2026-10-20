@@ -1,0 +1,28 @@
+{
+  "version": "1.0.125",
+  "sizes": [
+    "430x932",
+    "393x852",
+    "375x812"
+  ],
+  "startedAt": "2026-10-20T04:26:47.202Z",
+  "dshFingerprint": "nnb4ks",
+  "dshAssets": 9,
+  "domClasses": 0,
+  "anchorTotal": 134,
+  "anchorDead": 0,
+  "anchorCssAlive": 79,
+  "anchorResidue": 55,
+  "dshSheets": 202,
+  "ownSheets": 9,
+  "anchorCritical": {
+    "total": 12,
+    "dead": []
+  },
+  "ok": true,
+  "pass": 35,
+  "fail": 0,
+  "failures": [],
+  "sourceHash": "80a9625ac832462e40ae5aa2c04bd07d94afa0ffce0cf1ea3ae4e9f4cb3ea152",
+  "finishedAt": "2026-10-20T04:28:58.157Z"
+}

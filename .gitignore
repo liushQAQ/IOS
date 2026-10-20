@@ -15,3 +15,13 @@ build/
 # macOS
 .DS_Store
 node_modules/*.bak_*
+
+# _diag 诊断目录：只提交闸门脚本与发布凭证，截图/临时产物/派生资产不入库
+_diag/*.png
+_diag/app_inject*.js
+_diag/app_inject*.css
+_diag/*.json
+!_diag/gate-result.json
+
+# Swift 备份
+*.bak_*
