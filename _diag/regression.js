@@ -536,6 +536,48 @@ const A_PLUGIN_PAGE = () => {
     }
     await c.close();
   }
+
+  /* ================= 场景 E：CSS-only 兜底（v1.0.128，JS 通道全死模拟）=================
+     🔴 真机取证（2026-10-20 装机 v1.0.127）：tab 下划线仍是 172pt 原样，而 composer 修复
+     生效 —— JS 几何 shim 在真机某环境会整体死亡，CSS 注入是唯一证实存活的通道。
+     本场景**只注入 CSS、绝不注入 JS**，模拟最坏情况：顶栏必须仍收敛到 39。
+     若这条红 = CSS 直修失效 = 真机又要看到「停航母」，打包前拦住。 */
+  {
+    console.log('\n--- 场景 E：CSS-only 兜底（模拟真机 JS 几何通道全死）---');
+    const APP_CSS = fs.readFileSync(path.join(DIR, 'app_inject.css'), 'utf8')
+      .split('\n').filter(l => !/^\/\* RAW: \*\//.test(l) && !/^\/\* RAW: .*\/\*$/.test(l)).join('\n');
+    const c2 = await b.newContext({ viewport: { width: 430, height: 932 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3, userAgent: UA, colorScheme: 'dark' });
+    const p2 = await c2.newPage();
+    await p2.goto('http://127.0.0.1:3083/', { waitUntil: 'load', timeout: 60000 });
+    await p2.waitForFunction(() => document.body && document.body.querySelectorAll('*').length > 60, null, { timeout: 60000 }).catch(() => {});
+    await p2.waitForTimeout(6500);
+    await p2.evaluate((css) => {
+      /* 与真机同款的 env=59 模拟（同特异性、同优先级，等价于缓存里旧代理层的规则） */
+      const fe = document.createElement('style');
+      fe.textContent = '@media (max-width: 1023px) { [data-mobile-nav="frame"] { padding-top: 59px !important; } }';
+      document.head.appendChild(fe);
+      const st = document.createElement('style');
+      st.textContent = css;
+      document.head.appendChild(st);
+    }, APP_CSS);
+    await p2.waitForTimeout(2500);
+    const r2 = await p2.evaluate(() => {
+      const f = document.querySelector('[data-mobile-nav="frame"]');
+      const col = document.querySelector('[class*="centerCol"]');
+      const lead = document.querySelector('[data-mobile-nav="frame"] header > [class*="headerLeading"]');
+      return {
+        jsDead: typeof window.__dshLayoutFix === 'undefined',
+        framePT: f ? getComputedStyle(f).paddingTop : null,
+        colTop: col ? Math.round(col.getBoundingClientRect().top * 10) / 10 : null,
+        leadH: lead ? getComputedStyle(lead).height : null,
+      };
+    });
+    chk(r2.jsDead, '[CSS兜底] 注入面确认无 JS（__dshLayoutFix 未定义）', r2.jsDead ? 'JS 确实不在' : 'JS 意外存在，场景无效');
+    chk(r2.framePT === '0px', '[CSS兜底] frame env padding 被高特异性清零', 'framePT=' + r2.framePT);
+    chk(r2.colTop !== null && Math.abs(r2.colTop - 39) <= 3, '[CSS兜底] 列顶=39（--dsh-sb-native 兜底 59 生效）', 'colTop=' + r2.colTop);
+    chk(r2.leadH === '0px', '[CSS兜底] 36px 占位行压 0', 'leadH=' + r2.leadH);
+    await c2.close();
+  }
   await b.close();
 
   console.log('\n' + '='.repeat(72));

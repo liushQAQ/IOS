@@ -1316,6 +1316,29 @@ final class ViewController: UIViewController {
             '[class*=\"composerStack\"] button[aria-label*=\"选择模型\"] svg {',
             '  flex: 0 0 auto !important;',
             '}',
+            '/* ===== v1.0.128 顶栏 CSS 直修（真机取证：v1.0.127 装机后 tab 下划线仍是 172pt 原样，',
+            '   而 composer 修复生效 —— 说明 JS 几何 shim 在真机某环境整体死亡，CSS 注入是唯一',
+            '   被真机证实存活的通道。顶栏三件事全部 CSS 化，JS 活着时内联样式优先级更高、自然接管，',
+            '   JS 死了 CSS 兜底，两条腿互不打架）：',
+            '   ① html 前缀拉高一档特异性：压过缓存里旧代理层 client.js 的 env padding 规则',
+            '     （同特异性 !important 时后加载者胜，我们无法保证顺序 → 直接特异性获胜）；',
+            '   ② 列顶 = 状态栏高 - 2 - 18（want 公式的 CSS 化）。变量用 --dsh-sb-native',
+            '     （原生专属，防 DSH 自己写的 --dsh-statusbar=75 把目标带偏），未下发时 59 兜底',
+            '     （主流灵动岛机型 59，14 Pro Max 实测值）；',
+            '   ③ 36px 占位行压 0（原 fixTop 的 leading collapse 等价物），overflow:visible',
+            '     保证绝对定位的左右抽屉开关照常可点。 */',
+            'html [data-mobile-nav=\"frame\"] {',
+            '  padding-top: 0px !important;',
+            '}',
+            '[data-mobile-nav=\"frame\"] [class*=\"centerCol\"] {',
+            '  margin-top: calc(var(--dsh-sb-native, 59px) - 20px) !important;',
+            '}',
+            '[data-mobile-nav=\"frame\"] header > [class*=\"headerLeading\"] {',
+            '  min-height: 0 !important;',
+            '  height: 0 !important;',
+            '  max-height: 0 !important;',
+            '  overflow: visible !important;',
+            '}',
             '.uWtHQG_add {',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
@@ -3337,6 +3360,9 @@ final class ViewController: UIViewController {
           window.__dshSetStatusBar = function (px) {
             var h = Math.max(0, px || 0);
             document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
+            // 🔴 v1.0.128：原生专属状态栏变量。DSH 自己也会写 --dsh-statusbar 且写得偏大（实测 75），
+            //   CSS 直修的列顶公式必须用原生下发的这份，绝不能被 DSH 的值带偏。
+            document.documentElement.style.setProperty('--dsh-sb-native', h + 'px');
             // v1.0.109：把整体上移量也广播成 CSS 变量，让样式表那几处 calc() 一起跟随。
             var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 0;
             document.documentElement.style.setProperty('--dsh-topshift', shift + 'px');
@@ -4059,10 +4085,19 @@ final class ViewController: UIViewController {
               }
               var col = document.querySelector('[class*="centerCol"]');
               if (!col) return;
+              /* 🔴 v1.0.128 页面隔离：centerCol 必须住在 DSH 移动框架里才动手。
+                 WorkBuddy 等其它 React 应用若恰好有同名语义类，绝不能被我们推移
+                 （真机实锤：fixTop 在 WorkBuddy 页做手术 → 子任务面板与标题重叠）。 */
+              var inFrame = null;
+              try { inFrame = col.closest ? col.closest('[data-mobile-nav="frame"]') : null; } catch (e6) {}
+              if (!inFrame) return;
               var sb = parseFloat(window.__dshNativeStatusBar);
               if (!(sb > 0)) {
-                var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar'));
-                sb = v > 0 ? v : 54;
+                /* 🔴 v1.0.128：优先读原生专属变量 --dsh-sb-native；DSH 自己会写
+                   --dsh-statusbar 且偏大（实测 75），直接用它会把目标带偏低估。 */
+                var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-sb-native'));
+                if (!(v > 0)) v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar'));
+                sb = v > 0 ? v : 59;
               }
               var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 18;
               var want = sb - 2 - shift;
@@ -4598,14 +4633,14 @@ function applySidebarInset() {
               col = col.parentElement;
             }
             if (!col) col = header;
-            var want = sbHeight() - 2 - TOP_SHIFT;
-            var delta = want - header.getBoundingClientRect().top;
-            if (Math.abs(delta) > 0.5 && Math.abs(delta) < 600) {
-              var mt = num(getComputedStyle(col).marginTop);
-              if (Math.abs(mt + delta) < 600) setP(col, 'margin-top', (mt + delta) + 'px');
-            }
-            // 钉死整列高度：列顶确定后，列高 = 视口高 - 列顶，
-            // 保证底栏（吸在列底）绝不越出屏幕，同时给底栏留白打好地基。
+            // 🔴 v1.0.128：增量 margin 公式退役（老总真机实锤「顶栏高度越来越差距越大」）。
+            //   旧公式 margin += (want - headerTop) 是**增量法**，与本 shim 之外 v1.0.126 新增的
+            //   fixTopChrome（绝对法，直接写 want）形成**同属性双写入者**：React 重挂载 / 键盘
+            //   resize / sticky 吸顶瞬间读到的都是过渡值，增量法把过渡偏差**累加进 margin**
+            //   （fixBottom 当年 46→92→138 是同一个病），越用越低、永不回头。
+            //   现在位移统一由 fixTopChrome 的绝对法负责（清-量-设，幂等），本函数只管结构：
+            //   sticky / z-index / padding / leading 压 0 / 列高钉死。CSS 直修（--dsh-sb-native
+            //   公式）是第三重兜底，JS 全死时顶栏位置也不丢。
             var vh = window.innerHeight || document.documentElement.clientHeight || 0;
             var colTop = col.getBoundingClientRect().top;
             if (vh > 0 && colTop >= 0 && colTop < vh) {
@@ -4729,6 +4764,14 @@ function applySidebarInset() {
             //      放顶端会把整个补丁一次性 return 掉，布局补丁在 DSH 上永不生效（已实测踩过这个坑）。
             //      passOnce 是每趟几何校正的汇总入口，此时 DOM 已就绪，判定才准确。
             if (!document.getElementById('root')) return;
+            // 🔴 v1.0.128：#root 不再是充分判据（老总真机实锤「子任务显示重叠」）。
+            //   WorkBuddy 等其它 React 应用同样有 #root —— fixTop 会把它们的 header 当主顶栏
+            //   做全套手术（sticky / padding / 列高钉死 / overflow:hidden），子任务弹出面板
+            //   与页面标题直接叠在一起。必须「#root + DSH 特征」同时成立才算 DSH 主控页：
+            //   DSH 特征 = 官方移动端布局标记 data-mobile-nav（dsh-anywhere 客户端注入）
+            //   或 DSH 专有组件锚点 composerStack / headerCorner（CSS Module 局部名稳定）。
+            //   外部大模型网页 / 自建仪表盘 / WorkBuddy 一律零命中 → 整段补丁完全不碰。
+            if (!document.querySelector('[data-mobile-nav=\"frame\"], [class*=\"composerStack\"], [class*=\"headerCorner\"]')) return;
             // v1.0.109：把「整体上移量」广播成 CSS 变量，供 shim_00 / shim_11 的抽屉、面板顶部留白一起跟随。
             // documentStart 阶段 documentElement 还是 null → 必须判空（§10.3 的老坑，漏判会被 catch 吞掉）。
             try { if (document.documentElement) document.documentElement.style.setProperty('--dsh-topshift', TOP_SHIFT + 'px'); } catch (e) {}
@@ -5449,6 +5492,7 @@ function applySidebarInset() {
         // （有 Home 键机型 bottom 合法值就是 0，不能当成缺省）。
         let js = "(function(){try{"
             + "if(window.__dshSetStatusBar)window.__dshSetStatusBar(\(px));"
+            + "document.documentElement.style.setProperty('--dsh-sb-native','\(px)px');"
             + "window.__dshSafeArea={top:\(px),bottom:\(bp),device:\"\(deviceId)\"};"
             + "window.__dshSafeAreaReady=1;"
             + "window.__dshSafeAreaDebug=\"\(summary)\";"
@@ -6634,12 +6678,16 @@ function applySidebarInset() {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.127)】
-            1. 🥇 会话框「模型选择器」的下箭头不再压住右侧发送按钮（老总：「还有会话框选着模型的下箭头，和右侧发送确定按钮重叠了」）：像素级取证 —— 模型按钮右缘 376 越出自己父容器右缘 358 整 18px（DSH 原生把容器收缩到 153px 却没给按钮钳宽），430 档压住发送按钮 6px、393 档压 26px、375 档压 36px。本版三管齐下：按钮 max-width:100% 钳回父宽（修后与发送按钮恒留 12px 间隙）、模型名收缩出省略号、下箭头 svg 锁 flex:0 0 auto 保证永不被挤掉（修后三档箭头都完整可点）；
-            2. 🛡 通用「composer 底排按钮越界钳制」兜底：除 CSS 精准修模型选择器外，新增 fixComposerClamp 按几何判据兜住未来变体 —— composer 里任何按钮右缘越过父容器 >1px 一律钳回父宽，横向滚动容器与滚动布局不动；回归闸门新增「底排按钮零横向重叠 + 不越出父容器」2 条断言，今后这类压按钮的复发在打包前就被拦下；
-            4. 🥇 顶栏离状态栏一大截（「可以停一台航母」）彻底根治：像素级对拍实锤真机会话页 tab 下划线在 172pt、沙箱 113pt，差 58.6pt ≈ 恰好一个状态栏（59）—— 唯一源头是代理层给 [data-mobile-nav=\"frame\"] 写的 padding-top: env(safe-area-inset-top)，真机 59px、桌面 0px，React 重挂载还会把已清掉的内联值反复刷回。本版三管齐下：代理层这条 env() 规则直接删除（状态栏让位收归 App 层统一管）；App 侧顶栏钳制改为遍历**所有** frame 清 padding + 先清自己上轮的 margin 再量自然位、写绝对差（无论 padding 被刷回多少次都能精确抵消，幂等）；回归闸门永久模拟真机 env=59 环境，这类「沙箱绿、真机崩」从此在打包前现形；
-            5. 🥇 插件**详情**页「返回」按钮被「打开目录」按钮压住点不到（老总：「侧边栏和返回按钮还是遮挡」）：实测详情页没有 <header> 也没有 pageHead，旧修复在这类页面全部提前 return、整页零修复；返回行（全宽 x=24..406）被 fab（x=14..52 y=47..85）压住左端 28x16。本版把避让直接做进 fixFab —— 与顶区全宽行按钮重叠时 fab 自动下移到该行下方 8px（实测 fabTop 47 → 91，零重叠，幂等），列表页与 pageHead 并排的布局完全不受影响；回归闸门新增场景 D（进详情页校验）；
-            6. 🥇 底部插件用量条不再互相压（费用明细 / CPU / 内存 / 会话费用 / 下载 / token 环）：插件 dock 是 flex+nowrap+center 的一行容器，部件总宽一超就互相盖（真机实拍 CPU 的 CP 被费用明细按钮盖住）。本版允许换行 + 行距 3px，实测 7 个部件零重叠；本版起每 1.5 秒全页扫描一次，凡是「左边在屏幕内、右边超出屏幕」的元素一律用 transform: translateX 精确推回；同时设六条安全线绝不误伤 —— left<0（抽屉收起态）不动、left≥屏宽（右侧面板收起态）不动、比屏还宽的横向滚动容器不动、祖先可横滑的区域不动、带缩放/旋转的元素不动、出血超过 120px 的飞出动画不动。实测 430×932 / 393×852 / 375×667 三尺寸：出血元素 2 → 0，第二轮再扫命中 0（幂等不抖），抽屉仍稳在 x=-150、右侧面板仍稳在屏外；
+            【最新特性 (v1.0.128)】
+            1. 🥇 顶栏 CSS 直修通道上线（老总真机实锤：v1.0.127 装机后 tab 下划线仍是 172pt 原样，而 composer 修复生效 —— JS 几何 shim 在真机某环境会整体死亡，CSS 注入是唯一被真机证实存活的通道）：顶栏三件事全部 CSS 化 —— ① html 前缀高特异性清 env padding（压过缓存里旧代理层规则）；② 列顶 = 原生专属状态栏变量 --dsh-sb-native - 20（DSH 自己写的 --dsh-statusbar=75 带偏不了它）；③ 36px 占位行压 0 且保开关可点。JS 活着时内联样式优先级更高自然接管，JS 死了 CSS 兜底，真机无论哪条通道活着顶栏都在 39pt；
+            2. 🥇 「顶栏高度越来越差距越大」根治：老 fixTop 的增量 margin 公式（margin += want - top）与 v1.0.126 的 fixTopChrome 绝对法构成同属性双写入者，React 重挂载 / 键盘 / sticky 吸顶瞬间的过渡偏差被增量法累加进 margin，越用越低永不回头（fixBottom 当年 46→92→138 同病）。本版增量公式退役，位移统一由绝对法负责；
+            3. 🛡 页面隔离收紧（老总真机实锤：WorkBuddy 页「子任务显示重叠」）：#root 不再是充分判据 —— WorkBuddy 等 React 应用也有 #root，fixTop 把它们的 header 当主顶栏做手术（sticky/列高钉死/overflow hidden），子任务面板与标题叠在一起。本版要求「#root + DSH 特征（data-mobile-nav / composerStack / headerCorner）」同时成立，外部网页 / 自建仪表盘 / WorkBuddy 一律零接触；
+            4. 🔍 回归闸门新增「CSS-only 兜底场景」：只注 CSS、绝不注 JS，模拟真机最坏情况，顶栏必须仍收敛 39pt —— JS 通道死亡这类回归从此打包前现形；
+            5. 🥇 会话框「模型选择器」的下箭头不再压住右侧发送按钮（老总：「还有会话框选着模型的下箭头，和右侧发送确定按钮重叠了」）：像素级取证 —— 模型按钮右缘 376 越出自己父容器右缘 358 整 18px（DSH 原生把容器收缩到 153px 却没给按钮钳宽），430 档压住发送按钮 6px、393 档压 26px、375 档压 36px。本版三管齐下：按钮 max-width:100% 钳回父宽（修后与发送按钮恒留 12px 间隙）、模型名收缩出省略号、下箭头 svg 锁 flex:0 0 auto 保证永不被挤掉（修后三档箭头都完整可点）；
+            6. 🛡 通用「composer 底排按钮越界钳制」兜底：除 CSS 精准修模型选择器外，新增 fixComposerClamp 按几何判据兜住未来变体 —— composer 里任何按钮右缘越过父容器 >1px 一律钳回父宽，横向滚动容器与滚动布局不动；回归闸门新增「底排按钮零横向重叠 + 不越出父容器」2 条断言，今后这类压按钮的复发在打包前就被拦下；
+            7. 🥇 顶栏离状态栏一大截（「可以停一台航母」）彻底根治：像素级对拍实锤真机会话页 tab 下划线在 172pt、沙箱 113pt，差 58.6pt ≈ 恰好一个状态栏（59）—— 唯一源头是代理层给 [data-mobile-nav=\"frame\"] 写的 padding-top: env(safe-area-inset-top)，真机 59px、桌面 0px，React 重挂载还会把已清掉的内联值反复刷回。本版三管齐下：代理层这条 env() 规则直接删除（状态栏让位收归 App 层统一管）；App 侧顶栏钳制改为遍历**所有** frame 清 padding + 先清自己上轮的 margin 再量自然位、写绝对差（无论 padding 被刷回多少次都能精确抵消，幂等）；回归闸门永久模拟真机 env=59 环境，这类「沙箱绿、真机崩」从此在打包前现形；
+            8. 🥇 插件**详情**页「返回」按钮被「打开目录」按钮压住点不到（老总：「侧边栏和返回按钮还是遮挡」）：实测详情页没有 <header> 也没有 pageHead，旧修复在这类页面全部提前 return、整页零修复；返回行（全宽 x=24..406）被 fab（x=14..52 y=47..85）压住左端 28x16。本版把避让直接做进 fixFab —— 与顶区全宽行按钮重叠时 fab 自动下移到该行下方 8px（实测 fabTop 47 → 91，零重叠，幂等），列表页与 pageHead 并排的布局完全不受影响；回归闸门新增场景 D（进详情页校验）；
+            9. 🥇 底部插件用量条不再互相压（费用明细 / CPU / 内存 / 会话费用 / 下载 / token 环）：插件 dock 是 flex+nowrap+center 的一行容器，部件总宽一超就互相盖（真机实拍 CPU 的 CP 被费用明细按钮盖住）。本版允许换行 + 行距 3px，实测 7 个部件零重叠；本版起每 1.5 秒全页扫描一次，凡是「左边在屏幕内、右边超出屏幕」的元素一律用 transform: translateX 精确推回；同时设六条安全线绝不误伤 —— left<0（抽屉收起态）不动、left≥屏宽（右侧面板收起态）不动、比屏还宽的横向滚动容器不动、祖先可横滑的区域不动、带缩放/旋转的元素不动、出血超过 120px 的飞出动画不动。实测 430×932 / 393×852 / 375×667 三尺寸：出血元素 2 → 0，第二轮再扫命中 0（幂等不抖），抽屉仍稳在 x=-150、右侧面板仍稳在屏外；
             2. 🎯 插件页等非会话页的左上角「打开目录」按钮恢复可点、不再压页面标题：按钮挂在 overlayLayer(z=20) 里被 pageHead(z=999) 盖住（elementFromPoint 命中页头而非按钮），还压住「插件」标题。本版把页头标题右移 56px 给按钮让位、页头降 z 到 19（官方桌面层序：浮层在页头之上）。实测 fab 中心命中自身、与标题零相交；关键在 clip 而不是 hidden —— clip 不创建滚动容器，所以不会破坏吸顶顶栏（实测加入后顶栏仍 sticky / top: 0，横向滚动量 0，页面总宽 = 屏宽）；
             3. 🪟 设置面板不再被顶栏压住：App 原先把顶栏钉在 z-index 1020，而设置面板的浮层宿主只有 1000，顶栏直接盖在面板上。本版改为「会话页 999 / 有浮层时自动取浮层宿主 z-index 减一」，实测面板顶部两处探测点由命中顶栏标题行（_727C8a_titleRow）恢复为命中面板自身导航（tklpSG_nav）；
             4. 🔍 根治「修过又复发」的老毛病，并建立发版前回归闸门：实测 App 里写死的 102 个 CSS Module 哈希类名，当前 DSH 版本有 62 个在前端资源里彻底消失 —— 六成补丁一直在空转，这才是「修过又复发」的真因。本版起：① 一律改用 [class*="xxx"] 属性包含选择器；② 新增 _diag/regression.js 闸门，三尺寸 30 条断言全绿才准打包，复发在打包前就被拦住，不再等人工发现；
