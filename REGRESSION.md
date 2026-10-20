@@ -47,6 +47,9 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 | R10 | iOS 16.3 白屏 | DSH vendor 含 RegExp lookbehind，需 iOS 16.4+ | 电脑端 `proxy.mjs` 通用 lookbehind 改写器（App 侧只探测不改写） | 暂未纳入（需在 16.3 真机） |
 | R11 | 9009 等自建网页不能上下滑 | DSH 专用「钉高」补丁越界命中仪表盘 | `fixTop()` 加 `#root` 页面类型守卫 | 暂未纳入 |
 | R12 | 顶栏被状态栏压住 | 状态栏高度下发给页面时误除 `UIScreen.scale`，59pt 被缩成 20px | CSS 像素在 `width=device-width` 下等于 pt，不再除 | 暂未纳入 |
+| R13 | 「底部模型用量那些重叠」（费用明细 / CPU / 内存 / 会话费用 / 下载 / token 环挤成一行互相盖，真机实拍 CPU 的 CP 被盖） | 插件 dock（`VERcba_dock`）是 `flex/row/nowrap/center` 一行容器，几个插件（cost-meter、系统监控）的部件总宽一超 396px 就互相压 | `[class*="composerStack"] [class*="dock"]` 允许 `flex-wrap:wrap` + 行距 3px | `[dock] 插件行可换行` + `[dock] 部件零重叠` |
+| R14 | 插件页左上角「打开目录」按钮压住页面标题、且点不动 | ① fab 挂在 `overlayLayer(z=20)` 里，自身 z 出不了该 context，被 `pageHead(z=999)` 盖住（elementFromPoint 命中页头而非 fab）；② fab(14..52) 与 h1(36..190) 相交 | 页头标题右移 `padding-left:56px` 让位 + 页头降 z 到 19（官方桌面层序：浮层在页头之上） | `[插件页] fab 中心可命中自身` + `[插件页] fab 不压页面标题` |
+| R15 | 顶栏离状态栏一大截（标题 y≈122，应 ≈47，差值正好 59） | `fixTop()` 只在找到 `<header>` 时才清 frame 的 `padding-top:env(safe-area-inset-top)`（59px）；一旦某类页面没有 header，59px 无人清，整页下坠 | 新增 `fixTopChrome()` 兜底硬钳制：有 frame 就清 padding、有 centerCol 就把列顶校到 `sbHeight-2-TOP_SHIFT`（幂等绝对值），挂 applySidebarInset + 3 秒定时器 | `[主页] 零横向出血` 间接覆盖；页面类型扩展后补专项断言 |
 
 > 说明：R08~R12 之所以「暂未纳入」，是因为闸门当前跑在 3083 单页面 + 无键盘/无真机低版本环境。
 > **下一步补齐方向**：设置面板开合、快捷链接增删改、键盘弹起三态。
@@ -123,4 +126,11 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 |---|---|---|---|
 | 1.0.122 | 61 | `39266712218` | 横向溢出第一轮（单点补丁，后会复发） |
 | 1.0.123 | 62 | `39275502511` | 通用出血钳制 + 3 秒兜底定时器 |
-| 1.0.124 | 63 | 本次 | 抽屉 252 收敛 + 齿轮 v1.0.9 + 会话框按钮居中 + 删除崩溃 + 费用计量浮层遮挡 + **回归闸门建立** |
+| 1.0.124 | 67 | `39351887630` | 抽屉 252 收敛 + 齿轮 v1.0.9 + 会话框按钮居中 + 删除崩溃 + 费用计量浮层遮挡 + **回归闸门建立** |
+| 1.0.125 | 本次 | 本次 | 底部插件 dock 换行防重叠（R13）+ 插件页 fab 可点/不压标题（R14）+ 顶栏兜底硬钳制（R15）+ 闸门扩到 34 条 |
+
+## 七、闸门自身踩过的坑（复用必读）
+
+1. **跨 IIFE 作用域调函数 = ReferenceError 被吞**：`num/setP/sbHeight` 定义在 4154 行边界之后的块里，`applySidebarInset` 所在块调不到 —— `fixPageHeadFab` 第一版因此「每 3 秒都跑、却什么都没写进去」。新函数一律**自包含**（局部 `setPI`、就地 parseFloat），并必须实测「内联样式真的写进去了」才算修完。
+2. **z-index 出不了别人的 stacking context**：fab z=1000 挂在 overlayLayer(z=20) 里，被根 context 的 pageHead(z=999) 压住 —— 抬 fab 自身没用，要么降对方、要么换宿主。
+3. **验证「没修好」先查「跑没跑」再查「对不对」**：先手工复算判定条件确认逻辑无误，再查作用域/调用链，两步定位。

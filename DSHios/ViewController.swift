@@ -1275,6 +1275,21 @@ final class ViewController: UIViewController {
             '[class*=\"composerStack\"] [class*=\"_stop\"] {',
             '  transform: none !important;',
             '}',
+            '/* ===== v1.0.125 底部插件小部件一行挤爆（老总 2026-10-20：「底部模型用量那些重叠。这是某个插件吧」）=====',
+            '   真凶：会话输入框下方的插件 dock（VERcba_dock，DSH 哈希类，用 [class*=\"dock\"] 语义锚）',
+            '   是 display:flex / flex-direction:row / flex-wrap:nowrap / justify-content:center，',
+            '   里面塞着好几个插件的部件：费用明细按钮（.cm-stat-entry）、系统监控 CPU/内存',
+            '   （.sm-dock-label/.sm-dock-value）、本会话费用（.cm-session-amount/.cm-bal-amt）、',
+            '   下载速率与 token 环。部件总宽一超过 396px，nowrap 就让它们互相压',
+            '   （真机实拍：CPU 的 CP 两个字被费用明细按钮盖住）。',
+            '   修法：允许换行 + 行间距 3px。部件多时自动折到第二行，绝不互相压。',
+            '   锚点用 [class*=\"composerStack\"] [class*=\"dock\"]，命中 dock 容器与 .cm-stat-dock 按钮',
+            '   （后者是 block，wrap 对它无副作用），不碰抽屉里的任何元素。 */',
+            '[class*=\"composerStack\"] [class*=\"dock\"] {',
+            '  flex-wrap: wrap !important;',
+            '  row-gap: 3px !important;',
+            '  max-width: 100% !important;',
+            '}',
             '.uWtHQG_add {',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
@@ -3909,12 +3924,94 @@ final class ViewController: UIViewController {
               }
             } catch (e) {}
           }
+          /* 🔴 v1.0.125：非会话页（插件页 / 设置页等）左上角 fixed「打开目录」按钮与页面自己的
+             页头（g9WTEG_pageHead，语义锚 [class*="pageHead"]）相撞 —— 实测（430x932 暗色，
+             抽屉关闭，triage6_1020.js）：
+               fab   = (14..52, 42..80) z=99 position:fixed
+               h1    = (36..190, 42..70)「插件」
+             两矩形在 x36..52 相交 → 按钮压住标题；更狠的是 elementFromPoint 在 fab 中心
+             命中的是 pageHead 本身（isFab=false）→ **按钮被页头盖住，点不动**。
+             官方桌面版没这个问题（侧栏常驻，标题跟在侧栏右边）。
+             修法与桌面版对齐：页头标题整体右移 56px 给 fab 让位（padding-left），
+             同时把 fab 的 z-index 抬到页头之上，保证可点。不相交时全部还原（幂等，不污染会话页）。 */
+          function fixPageHeadFab() {
+            try {
+              /* 🔴 作用域铁律：本函数与 setP/num/sbHeight 隔着一个 IIFE 边界（4154 行），
+                 绝不能直接调它们 —— ReferenceError 会被 try/catch 静默吞掉，
+                 实测表现为「函数每 3 秒都跑、却什么都没写进去」。全部自包含。 */
+              var setPI = function (el, prop, val) { try { el.style.setProperty(prop, val, 'important'); } catch (e) {} };
+              var ph = document.querySelector('[class*="pageHead"]');
+              if (!ph) return;
+              var fab = null;
+              var cands = document.querySelectorAll('button');
+              for (var i = 0; i < cands.length; i++) {
+                var b = cands[i];
+                var cs = getComputedStyle(b);
+                if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') continue;
+                var q = b.getBoundingClientRect();
+                if (q.width < 10 || q.height < 10 || q.x > 100 || q.y > 220) continue;
+                var lb = b.getAttribute('aria-label') || '';
+                if (lb.indexOf('目录') >= 0 || lb.indexOf('侧边栏') >= 0) { fab = b; break; }
+              }
+              if (!fab) { if (ph.style.paddingLeft) ph.style.removeProperty('padding-left'); return; }
+              var fq = fab.getBoundingClientRect(), pq = ph.getBoundingClientRect();
+              var overlap = !(fq.right < pq.x + 4 || fq.x > pq.right - 4 || fq.bottom < pq.y + 4 || fq.y > pq.bottom - 4);
+              if (overlap) {
+                setPI(ph, 'padding-left', '56px');
+                /* 🔴 fab 点不动的真凶（实测 diag_z.js）：fab 挂在 MnhYfG_overlayLayer（z=20）里，
+                   它自己的 z=1000 被关在这个 stacking context 内出不来；而 pageHead z=999
+                   直接参与根 context → 20 < 999，pageHead 永远盖住 fab。
+                   抬 fab 没用，必须把 pageHead 降到 overlayLayer(20) 之下。
+                   pageHead 只需要盖住滚动内容（z=auto），19 足够；overlayLayer 里的浮层
+                   （fab、弹出菜单）本来就设计在页头之上 —— 这正是官方桌面版的层序。 */
+                setPI(ph, 'z-index', '19');
+              } else {
+                if (ph.style.paddingLeft) ph.style.removeProperty('padding-left');
+                if (ph.style.zIndex) ph.style.removeProperty('z-index');
+              }
+            } catch (e) {}
+          }
+          /* 🔴 v1.0.125：顶栏兜底硬钳制。fixTop() 只在找到 <header> 时才清
+             [data-mobile-nav="frame"] 的 padding-top（DSH 官方塞的是 env(safe-area-inset-top)，
+             真机 59px）—— 一旦某类页面没有 header（DSH 换版随时可能出现），59px 就没人清，
+             整页内容连同左上角按钮一起下坠 59px，表现就是「顶栏离状态栏一大截、按钮压标题」
+             （老总 2026-10-20 截图实测：标题 y≈122，正常应 ≈47，差值正好 59）。
+             这里与 fixTop 解耦：只要有 frame 就清 padding，有 centerCol 就把列顶硬校到
+             want = 状态栏高 - 2 - TOP_SHIFT。公式是绝对值（幂等），谁来都不会越校越偏。 */
+          function fixTopChrome() {
+            try {
+              /* 🔴 同上：跨 IIFE 边界，setP/num/sbHeight 一律不可用，全自包含。 */
+              var setPI = function (el, prop, val) { try { el.style.setProperty(prop, val, 'important'); } catch (e) {} };
+              var frame = document.querySelector('[data-mobile-nav="frame"]');
+              if (!frame) return;
+              var pt = getComputedStyle(frame).paddingTop;
+              if (pt !== '0px') setPI(frame, 'padding-top', '0px');
+              var col = document.querySelector('[class*="centerCol"]');
+              if (!col) return;
+              var sb = parseFloat(window.__dshNativeStatusBar);
+              if (!(sb > 0)) {
+                var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar'));
+                sb = v > 0 ? v : 54;
+              }
+              var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 18;
+              var want = sb - 2 - shift;
+              var cur = col.getBoundingClientRect().top;
+              if (!(cur > -600 && cur < 1200)) return;
+              var d = want - cur;
+              if (Math.abs(d) > 0.5) {
+                var mt = parseFloat(getComputedStyle(col).marginTop) || 0;
+                setPI(col, 'margin-top', (mt + d) + 'px');
+              }
+            } catch (e) {}
+          }
           function applySidebarInset() {
             ensureSidebarOverlay();
             try { tightenRightPanelTop(); } catch (e) {}
             try { restorePageHeadHeight(); } catch (e) {}
             try { alignComposerButtons(); } catch (e) {}
             try { guardPeakAlert(); } catch (e) {}
+            try { fixPageHeadFab(); } catch (e) {}
+            try { fixTopChrome(); } catch (e) {}
             try { fixOverlayOverflow(); } catch (e) {}
             // 🔴 v1.0.123：出血钳制不能只靠 MutationObserver 驱动 —— 页面静止不变化时
             //   一次都不会再跑，刚进页面那一下的出血就一直留在屏幕上（老总看到的就是这个）。
@@ -3923,6 +4020,8 @@ final class ViewController: UIViewController {
               if (!window.__dshBleedT) {
                 window.__dshBleedT = setInterval(function () {
                   try { guardPeakAlert(); } catch (e) {}
+                  try { fixPageHeadFab(); } catch (e) {}
+                  try { fixTopChrome(); } catch (e) {}
                   try { fixOverlayOverflow(); } catch (e) {}
                 }, 3000);
               }
@@ -6400,9 +6499,9 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.124)】
-            1. 🥇 左侧抽屉内容彻底收进 252px：抽屉被压到 252px 后，DSH 内部仍按原生 280px 排布，时间戳「34 分」、余额「¥109.194」、今日「¥1.034」、「剩余 8 小时 54 分」「09:00 转峰」整列被硬裁，设置齿轮也被切掉右半边。本版逐层加 max-width:100% + min-width:0 + 单行省略号，齿轮改以「账号行右界」与「抽屉右界」中更靠内者为基准。实测抽屉内溢出 90 → 0，底栏吸底块右界 280 → 240，齿轮 right=230 稳在抽屉内；本版起每 1.5 秒全页扫描一次，凡是「左边在屏幕内、右边超出屏幕」的元素一律用 transform: translateX 精确推回；同时设六条安全线绝不误伤 —— left<0（抽屉收起态）不动、left≥屏宽（右侧面板收起态）不动、比屏还宽的横向滚动容器不动、祖先可横滑的区域不动、带缩放/旋转的元素不动、出血超过 120px 的飞出动画不动。实测 430×932 / 393×852 / 375×667 三尺寸：出血元素 2 → 0，第二轮再扫命中 0（幂等不抖），抽屉仍稳在 x=-150、右侧面板仍稳在屏外；
-            2. 🎯 会话框那排按钮（圆圈 / 方框 / + 号 / 发送大圆钮）重新对齐，并修掉「预设快捷链接一删就崩」：前者是旧代码写死哈希类名（uWtHQG_add / ank0OG_composerSeat）换版后命中数为 0，加上 DSH 原生给发送大圆钮加了 transform: translateY(-2px)；改用 [class*="composerStack"] 通用锚点 + 强制 transform:none + 运行期按中位数对齐，5 个按钮垂直中心离散度 2px → 0px。后者是删掉预设后 load() 又把它补回来，deleteRows 与数据条数不符直接抛 invalid number of rows，改为墓碑机制 + reloadData 兜底；关键在 clip 而不是 hidden —— clip 不创建滚动容器，所以不会破坏吸顶顶栏（实测加入后顶栏仍 sticky / top: 0，横向滚动量 0，页面总宽 = 屏宽）；
+            【最新特性 (v1.0.125)】
+            1. 🥇 底部插件用量条不再互相压（费用明细 / CPU / 内存 / 会话费用 / 下载 / token 环）：插件 dock 是 flex+nowrap+center 的一行容器，部件总宽一超就互相盖（真机实拍 CPU 的 CP 被费用明细按钮盖住）。本版允许换行 + 行距 3px，实测 7 个部件零重叠；本版起每 1.5 秒全页扫描一次，凡是「左边在屏幕内、右边超出屏幕」的元素一律用 transform: translateX 精确推回；同时设六条安全线绝不误伤 —— left<0（抽屉收起态）不动、left≥屏宽（右侧面板收起态）不动、比屏还宽的横向滚动容器不动、祖先可横滑的区域不动、带缩放/旋转的元素不动、出血超过 120px 的飞出动画不动。实测 430×932 / 393×852 / 375×667 三尺寸：出血元素 2 → 0，第二轮再扫命中 0（幂等不抖），抽屉仍稳在 x=-150、右侧面板仍稳在屏外；
+            2. 🎯 插件页等非会话页的左上角「打开目录」按钮恢复可点、不再压页面标题：按钮挂在 overlayLayer(z=20) 里被 pageHead(z=999) 盖住（elementFromPoint 命中页头而非按钮），还压住「插件」标题。本版把页头标题右移 56px 给按钮让位、页头降 z 到 19（官方桌面层序：浮层在页头之上）。实测 fab 中心命中自身、与标题零相交；关键在 clip 而不是 hidden —— clip 不创建滚动容器，所以不会破坏吸顶顶栏（实测加入后顶栏仍 sticky / top: 0，横向滚动量 0，页面总宽 = 屏宽）；
             3. 🪟 设置面板不再被顶栏压住：App 原先把顶栏钉在 z-index 1020，而设置面板的浮层宿主只有 1000，顶栏直接盖在面板上。本版改为「会话页 999 / 有浮层时自动取浮层宿主 z-index 减一」，实测面板顶部两处探测点由命中顶栏标题行（_727C8a_titleRow）恢复为命中面板自身导航（tklpSG_nav）；
             4. 🔍 根治「修过又复发」的老毛病，并建立发版前回归闸门：实测 App 里写死的 102 个 CSS Module 哈希类名，当前 DSH 版本有 62 个在前端资源里彻底消失 —— 六成补丁一直在空转，这才是「修过又复发」的真因。本版起：① 一律改用 [class*="xxx"] 属性包含选择器；② 新增 _diag/regression.js 闸门，三尺寸 30 条断言全绿才准打包，复发在打包前就被拦住，不再等人工发现；
             5. 🔌 低版本系统通用适配：iOS 14 / 15 / 16.x（含 16.3 及以下）全通吃，配套插件 dsh-anywhere 1.0.6 已改为对任意形态的 lookbehind 一律安全降级，不再只认某一份前端包；
