@@ -1,17 +1,17 @@
 {
-  "version": "1.0.126",
+  "version": "1.0.127",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-20T05:12:38.341Z",
-  "dshFingerprint": "6kdya9",
+  "startedAt": "2026-10-20T05:58:09.229Z",
+  "dshFingerprint": "sqf7kz",
   "dshAssets": 9,
   "domClasses": 0,
-  "anchorTotal": 134,
+  "anchorTotal": 135,
   "anchorDead": 0,
-  "anchorCssAlive": 79,
+  "anchorCssAlive": 80,
   "anchorResidue": 55,
   "dshSheets": 203,
   "ownSheets": 9,
@@ -20,9 +20,9 @@
     "dead": []
   },
   "ok": true,
-  "pass": 40,
+  "pass": 46,
   "fail": 0,
   "failures": [],
-  "sourceHash": "90f0bbdc69da238109eb30026c10422f1e702c3d86ab9bdd6e395c7d8dd1e615",
-  "finishedAt": "2026-10-20T05:14:54.909Z"
+  "sourceHash": "1d6eb8f9c7f7c2d6d37a27fd3783cf711ad9285804bd0e721b84c86f0b483ed0",
+  "finishedAt": "2026-10-20T06:00:58.379Z"
 }

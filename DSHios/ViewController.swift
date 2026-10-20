@@ -1290,6 +1290,32 @@ final class ViewController: UIViewController {
             '  row-gap: 3px !important;',
             '  max-width: 100% !important;',
             '}',
+            '/* ===== v1.0.127 会话框「模型选择器」下箭头压住发送按钮（老总 2026-10-20：',
+            '   「还有会话框选着模型的下箭头，和右侧发送确定按钮重叠了」）=====',
+            '   真因（430x932 实测；摘掉 App 注入 CSS 数值一模一样 → DSH 原生布局缺陷，非我们改坏）：',
+            '     VERcba_trailing(x110..404) = [standardControls(x110..358)] + [发送按钮(x370..404)]',
+            '     standardControls 里的 ofTiQG_root 被 flex 收缩到 153px，但它里面的 button.ofTiQG_trigger',
+            '     仍按内容固有宽度算 171px = 8 + label 124 + 4 + effort 13 + 4 + chevron 14 + 4，',
+            '     button 不吃父容器 153 → 右缘 376 越过 root 右缘 358 整 18px，压进发送按钮 6px。',
+            '     窄屏更狠：393 档压 26px、375 档压 36px（老总截图正是这种）。',
+            '   修法：按钮 max-width:100% 钳回父宽（修后右缘=root 右缘，与发送按钮留 12px），',
+            '     label 收缩出省略号，箭头 svg flex:0 0 auto 保证永不被挤掉（修后三档箭头都完整）。',
+            '   锚点用 [aria-label*=\"选择模型\"]（中文语义，换版不变）+ [class*=\"triggerLabel\"]',
+            '     （CSS Module 局部名稳定，只有哈希前缀会变），绝不写 ofTiQG_ 哈希前缀。 */',
+            '[class*=\"composerStack\"] button[aria-label*=\"选择模型\"] {',
+            '  max-width: 100% !important;',
+            '  min-width: 0 !important;',
+            '  box-sizing: border-box !important;',
+            '}',
+            '[class*=\"composerStack\"] button[aria-label*=\"选择模型\"] [class*=\"triggerLabel\"] {',
+            '  min-width: 0 !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '}',
+            '[class*=\"composerStack\"] button[aria-label*=\"选择模型\"] svg {',
+            '  flex: 0 0 auto !important;',
+            '}',
             '.uWtHQG_add {',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
@@ -3901,6 +3927,45 @@ final class ViewController: UIViewController {
               }
             } catch (e) {}
           }
+          /* 🔴 v1.0.127：composer 底排按钮「越界钳制」——通用兜底，不依赖任何哈希类名。
+             CSS 那条（button[aria-label*="选择模型"]）只管模型选择器这一种；
+             这里按几何判据兜住未来变体：composerStack 里任何 button 只要右缘越过
+             父容器右缘 >1px 且父容器不是横向滚动容器 → max-width:100% 钳回父宽。
+             与 fixOverlayOverflow 同一哲学：不做单点补丁，做通用钳制，DSH 换版不复发。 */
+          function fixComposerClamp() {
+            try {
+              var host = document.querySelector('[class*=\"composerStack\"]');
+              if (!host) return;
+              var bs = host.querySelectorAll('button, [role=\"button\"]');
+              for (var i = 0; i < bs.length; i++) {
+                var b = bs[i];
+                var par = b.parentElement;
+                if (!par || par === host) continue;
+                var pq = par.getBoundingClientRect();
+                var bq = b.getBoundingClientRect();
+                if (bq.width < 20 || pq.width < 20) continue;
+                if (bq.right <= pq.right + 1) continue;   // 没越界，不动（天然幂等）
+                var pcs = null;
+                try { pcs = getComputedStyle(par); } catch (e2) { continue; }
+                if (pcs.overflowX === 'auto' || pcs.overflowX === 'scroll') continue; // 滚动容器是设计意图
+                b.style.setProperty('max-width', '100%', 'important');
+                b.style.setProperty('min-width', '0', 'important');
+                b.style.setProperty('box-sizing', 'border-box', 'important');
+                var spans = b.querySelectorAll('span');
+                for (var k = 0; k < spans.length; k++) {
+                  var scs = null;
+                  try { scs = getComputedStyle(spans[k]); } catch (e3) { continue; }
+                  if (scs.display === 'none') continue;
+                  spans[k].style.setProperty('min-width', '0', 'important');
+                  spans[k].style.setProperty('overflow', 'hidden', 'important');
+                  spans[k].style.setProperty('text-overflow', 'ellipsis', 'important');
+                  spans[k].style.setProperty('white-space', 'nowrap', 'important');
+                }
+                var svgs = b.querySelectorAll('svg');
+                for (var m = 0; m < svgs.length; m++) svgs[m].style.setProperty('flex', '0 0 auto', 'important');
+              }
+            } catch (e) {}
+          }
           /* 🔴 v1.0.124：DSH 电脑端自带的「费用计量」浮层卡片 .cm-peak-alert 是间歇出现的
              （峰时 / 平价提醒）。它 position:fixed + z-index:9999 + 宽 406px 横跨整屏，
              一旦出现就把抽屉底部「余额 / 今日 / 平价 / 账号行」整片盖住，
@@ -4056,6 +4121,7 @@ function applySidebarInset() {
             try { tightenRightPanelTop(); } catch (e) {}
             try { restorePageHeadHeight(); } catch (e) {}
             try { alignComposerButtons(); } catch (e) {}
+            try { fixComposerClamp(); } catch (e) {}   // v1.0.127 底排按钮越界钳制
             try { guardPeakAlert(); } catch (e) {}
             try { fixPageHeadFab(); } catch (e) {}
             try { fixTopChrome(); } catch (e) {}
@@ -4071,6 +4137,7 @@ function applySidebarInset() {
                   try { fixPageHeadFab(); } catch (e) {}
                   try { fixTopChrome(); } catch (e) {}
                   try { fixFabRows(); } catch (e) {}
+                  try { fixComposerClamp(); } catch (e) {}
                   try { fixOverlayOverflow(); } catch (e) {}
                 }, 3000);
               }
@@ -6567,10 +6634,12 @@ function applySidebarInset() {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.126)】
-            1. 🥇 顶栏离状态栏一大截（「可以停一台航母」）彻底根治：像素级对拍实锤真机会话页 tab 下划线在 172pt、沙箱 113pt，差 58.6pt ≈ 恰好一个状态栏（59）—— 唯一源头是代理层给 [data-mobile-nav=\"frame\"] 写的 padding-top: env(safe-area-inset-top)，真机 59px、桌面 0px，React 重挂载还会把已清掉的内联值反复刷回。本版三管齐下：代理层这条 env() 规则直接删除（状态栏让位收归 App 层统一管）；App 侧顶栏钳制改为遍历**所有** frame 清 padding + 先清自己上轮的 margin 再量自然位、写绝对差（无论 padding 被刷回多少次都能精确抵消，幂等）；回归闸门永久模拟真机 env=59 环境，这类「沙箱绿、真机崩」从此在打包前现形；
-            2. 🥇 插件**详情**页「返回」按钮被「打开目录」按钮压住点不到（老总：「侧边栏和返回按钮还是遮挡」）：实测详情页没有 <header> 也没有 pageHead，旧修复在这类页面全部提前 return、整页零修复；返回行（全宽 x=24..406）被 fab（x=14..52 y=47..85）压住左端 28x16。本版把避让直接做进 fixFab —— 与顶区全宽行按钮重叠时 fab 自动下移到该行下方 8px（实测 fabTop 47 → 91，零重叠，幂等），列表页与 pageHead 并排的布局完全不受影响；回归闸门新增场景 D（进详情页校验）；
-            3. 🥇 底部插件用量条不再互相压（费用明细 / CPU / 内存 / 会话费用 / 下载 / token 环）：插件 dock 是 flex+nowrap+center 的一行容器，部件总宽一超就互相盖（真机实拍 CPU 的 CP 被费用明细按钮盖住）。本版允许换行 + 行距 3px，实测 7 个部件零重叠；本版起每 1.5 秒全页扫描一次，凡是「左边在屏幕内、右边超出屏幕」的元素一律用 transform: translateX 精确推回；同时设六条安全线绝不误伤 —— left<0（抽屉收起态）不动、left≥屏宽（右侧面板收起态）不动、比屏还宽的横向滚动容器不动、祖先可横滑的区域不动、带缩放/旋转的元素不动、出血超过 120px 的飞出动画不动。实测 430×932 / 393×852 / 375×667 三尺寸：出血元素 2 → 0，第二轮再扫命中 0（幂等不抖），抽屉仍稳在 x=-150、右侧面板仍稳在屏外；
+            【最新特性 (v1.0.127)】
+            1. 🥇 会话框「模型选择器」的下箭头不再压住右侧发送按钮（老总：「还有会话框选着模型的下箭头，和右侧发送确定按钮重叠了」）：像素级取证 —— 模型按钮右缘 376 越出自己父容器右缘 358 整 18px（DSH 原生把容器收缩到 153px 却没给按钮钳宽），430 档压住发送按钮 6px、393 档压 26px、375 档压 36px。本版三管齐下：按钮 max-width:100% 钳回父宽（修后与发送按钮恒留 12px 间隙）、模型名收缩出省略号、下箭头 svg 锁 flex:0 0 auto 保证永不被挤掉（修后三档箭头都完整可点）；
+            2. 🛡 通用「composer 底排按钮越界钳制」兜底：除 CSS 精准修模型选择器外，新增 fixComposerClamp 按几何判据兜住未来变体 —— composer 里任何按钮右缘越过父容器 >1px 一律钳回父宽，横向滚动容器与滚动布局不动；回归闸门新增「底排按钮零横向重叠 + 不越出父容器」2 条断言，今后这类压按钮的复发在打包前就被拦下；
+            4. 🥇 顶栏离状态栏一大截（「可以停一台航母」）彻底根治：像素级对拍实锤真机会话页 tab 下划线在 172pt、沙箱 113pt，差 58.6pt ≈ 恰好一个状态栏（59）—— 唯一源头是代理层给 [data-mobile-nav=\"frame\"] 写的 padding-top: env(safe-area-inset-top)，真机 59px、桌面 0px，React 重挂载还会把已清掉的内联值反复刷回。本版三管齐下：代理层这条 env() 规则直接删除（状态栏让位收归 App 层统一管）；App 侧顶栏钳制改为遍历**所有** frame 清 padding + 先清自己上轮的 margin 再量自然位、写绝对差（无论 padding 被刷回多少次都能精确抵消，幂等）；回归闸门永久模拟真机 env=59 环境，这类「沙箱绿、真机崩」从此在打包前现形；
+            5. 🥇 插件**详情**页「返回」按钮被「打开目录」按钮压住点不到（老总：「侧边栏和返回按钮还是遮挡」）：实测详情页没有 <header> 也没有 pageHead，旧修复在这类页面全部提前 return、整页零修复；返回行（全宽 x=24..406）被 fab（x=14..52 y=47..85）压住左端 28x16。本版把避让直接做进 fixFab —— 与顶区全宽行按钮重叠时 fab 自动下移到该行下方 8px（实测 fabTop 47 → 91，零重叠，幂等），列表页与 pageHead 并排的布局完全不受影响；回归闸门新增场景 D（进详情页校验）；
+            6. 🥇 底部插件用量条不再互相压（费用明细 / CPU / 内存 / 会话费用 / 下载 / token 环）：插件 dock 是 flex+nowrap+center 的一行容器，部件总宽一超就互相盖（真机实拍 CPU 的 CP 被费用明细按钮盖住）。本版允许换行 + 行距 3px，实测 7 个部件零重叠；本版起每 1.5 秒全页扫描一次，凡是「左边在屏幕内、右边超出屏幕」的元素一律用 transform: translateX 精确推回；同时设六条安全线绝不误伤 —— left<0（抽屉收起态）不动、left≥屏宽（右侧面板收起态）不动、比屏还宽的横向滚动容器不动、祖先可横滑的区域不动、带缩放/旋转的元素不动、出血超过 120px 的飞出动画不动。实测 430×932 / 393×852 / 375×667 三尺寸：出血元素 2 → 0，第二轮再扫命中 0（幂等不抖），抽屉仍稳在 x=-150、右侧面板仍稳在屏外；
             2. 🎯 插件页等非会话页的左上角「打开目录」按钮恢复可点、不再压页面标题：按钮挂在 overlayLayer(z=20) 里被 pageHead(z=999) 盖住（elementFromPoint 命中页头而非按钮），还压住「插件」标题。本版把页头标题右移 56px 给按钮让位、页头降 z 到 19（官方桌面层序：浮层在页头之上）。实测 fab 中心命中自身、与标题零相交；关键在 clip 而不是 hidden —— clip 不创建滚动容器，所以不会破坏吸顶顶栏（实测加入后顶栏仍 sticky / top: 0，横向滚动量 0，页面总宽 = 屏宽）；
             3. 🪟 设置面板不再被顶栏压住：App 原先把顶栏钉在 z-index 1020，而设置面板的浮层宿主只有 1000，顶栏直接盖在面板上。本版改为「会话页 999 / 有浮层时自动取浮层宿主 z-index 减一」，实测面板顶部两处探测点由命中顶栏标题行（_727C8a_titleRow）恢复为命中面板自身导航（tklpSG_nav）；
             4. 🔍 根治「修过又复发」的老毛病，并建立发版前回归闸门：实测 App 里写死的 102 个 CSS Module 哈希类名，当前 DSH 版本有 62 个在前端资源里彻底消失 —— 六成补丁一直在空转，这才是「修过又复发」的真因。本版起：① 一律改用 [class*="xxx"] 属性包含选择器；② 新增 _diag/regression.js 闸门，三尺寸 30 条断言全绿才准打包，复发在打包前就被拦住，不再等人工发现；

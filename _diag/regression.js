@@ -183,15 +183,40 @@ const A_COMPOSER = () => {
   const host = document.querySelector('[class*="composerStack"]');
   if (!host) return { found: false };
   const out = [];
-  host.querySelectorAll('button').forEach(b => {
+  const boxes = [];
+  host.querySelectorAll('button, [role="button"]').forEach(b => {
     const cs = getComputedStyle(b);
     if (cs.display === 'none' || cs.visibility === 'hidden') return;
     const q = b.getBoundingClientRect();
-    if (q.width < 14 || q.width > 80 || q.height < 14 || q.height > 80) return;
-    out.push(Math.round((q.y + q.height / 2) * 10) / 10);
+    if (q.width < 14 || q.height < 8) return;
+    boxes.push({ b, q, label: (b.getAttribute('aria-label') || (b.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 14)).slice(0, 20) });
+    if (q.width <= 80 && q.height <= 80) out.push(Math.round((q.y + q.height / 2) * 10) / 10);
   });
-  if (out.length < 2) return { found: true, n: out.length, spread: 0 };
-  return { found: true, n: out.length, spread: Math.round((Math.max(...out) - Math.min(...out)) * 10) / 10 };
+  /* 🔴 v1.0.127（老总：「会话框选着模型的下箭头，和右侧发送确定按钮重叠了」）：
+     旧断言只查按钮中心 y 离散度，横向重叠查不出来（模型选择器右缘压发送按钮
+     6px/26px/36px 三档全部漏网）。补：任意两按钮矩形相交 > 2px 即红。
+     父子包含关系跳过（嵌套按钮合法）。 */
+  const overlaps = [];
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const a = boxes[i], b = boxes[j];
+    if (a.b.contains(b.b) || b.b.contains(a.b)) continue;
+    const ox = Math.min(a.q.right, b.q.right) - Math.max(a.q.x, b.q.x);
+    const oy = Math.min(a.q.bottom, b.q.bottom) - Math.max(a.q.y, b.q.y);
+    if (ox > 2 && oy > 2) overlaps.push((a.label || 'btn') + ' × ' + (b.label || 'btn') + ' ' + Math.round(ox) + 'x' + Math.round(oy));
+  }
+  // 按钮越出父容器右缘 >2px 也算红（ofTiQG_trigger 形态：自身 171 > 父 153）
+  const spills = [];
+  boxes.forEach(({ b, q, label }) => {
+    const par = b.parentElement;
+    if (!par || par === host) return;
+    const pq = par.getBoundingClientRect();
+    if (pq.width < 20) return;
+    const pcs = getComputedStyle(par);
+    if (pcs.overflowX === 'auto' || pcs.overflowX === 'scroll') return;
+    if (q.right > pq.right + 2) spills.push((label || 'btn') + ' 越父 ' + Math.round(q.right - pq.right) + 'px');
+  });
+  if (out.length < 2) return { found: true, n: out.length, spread: 0, overlaps: overlaps.slice(0, 4), spills: spills.slice(0, 4) };
+  return { found: true, n: out.length, spread: Math.round((Math.max(...out) - Math.min(...out)) * 10) / 10, overlaps: overlaps.slice(0, 4), spills: spills.slice(0, 4) };
 };
 
 const A_GEAR = () => {
@@ -417,7 +442,11 @@ const A_PLUGIN_PAGE = () => {
 
       const comp = await p.evaluate(A_COMPOSER);
       if (!comp.found) bad('[会话框] 找不到 composerStack（锚点失效）');
-      else chk(comp.spread <= 0.6, '[会话框] ' + comp.n + ' 个按钮中心齐平', '离散 ' + comp.spread + 'px');
+      else {
+        chk(comp.spread <= 0.6, '[会话框] ' + comp.n + ' 个按钮中心齐平', '离散 ' + comp.spread + 'px');
+        chk(comp.overlaps.length === 0, '[会话框] 底排按钮零横向重叠（v1.0.127）', comp.overlaps.length ? comp.overlaps.join(' | ') : '两两扫描 ' + comp.n + ' 个');
+        chk(comp.spills.length === 0, '[会话框] 底排按钮不越出父容器', comp.spills.length ? comp.spills.join(' | ') : '');
+      }
 
       await openDrawer(p);
       r = await p.evaluate(A_OVERFLOW);
