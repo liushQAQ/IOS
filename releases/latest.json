@@ -1,11 +1,11 @@
 {
-  "version": "1.0.127",
-  "build": 69,
-  "updated_at": "2026-10-20 14:22:00",
-  "title": "v1.0.127 顶栏大空档根治 + 模型选择器不再压发送按钮（两版合并发布）",
-  "changelog": "1. 🥇 顶栏离状态栏一大截（「可以停一台航母」）彻底根治：像素级对拍实锤真机会话页 tab 下划线在 172pt、沙箱 113pt，差 58.6pt ≈ 恰好一个状态栏（59）—— 唯一源头是代理层给 [data-mobile-nav=\"frame\"] 写的 padding-top: env(safe-area-inset-top)，真机 59px、桌面 0px，React 重挂载还会把已清掉的内联值反复刷回。本版三管齐下：代理层这条 env() 规则直接删除（状态栏让位收归 App 层统一管）；App 侧顶栏钳制改为遍历所有 frame 清 padding + 先清自己上轮的 margin 再量自然位、写绝对差（无论被刷回多少次都能精确抵消，幂等）；实测修后顶栏顶收敛到 39pt、tab 下划线 172pt → 75pt；\n2. 🥇 会话框「模型选择器」的下箭头不再压住右侧发送按钮：模型按钮右缘越出自己父容器整 18px（DSH 原生把容器收缩到 153px 却没给按钮钳宽），430 档压发送钮 6px、393 档 26px、375 档 36px。本版按钮 max-width 钳回父宽（与发送钮恒留 12px 间隙）、模型名收缩出省略号、下箭头锁 flex 不被挤掉，另加通用越界钳制兜底；\n3. 🥇 插件详情页「返回」按钮不再被「打开目录」按钮压住：详情页没有 header 也没有 pageHead，旧修复在这类页面全部提前 return、整页零修复，返回行被悬浮按钮压住左端 28x16 点不到。本版把避让做进悬浮按钮本体 —— 与顶区全宽行重叠时自动下移到该行下方 8px，列表页布局不受影响；\n4. 🛡 底部插件用量条不再互相压（费用明细 / CPU / 内存 / 本会话费用 / 下载 / token 环）：插件 dock 是 flex+nowrap+center 的一行容器，部件总宽一超就互相盖。本版允许换行 + 行距 3px，实测 7 个部件零重叠；插件页左上角「打开目录」按钮恢复可点、不再压住页面标题；\n5. 🔍 根治「修过又复发」：发版前回归闸门升级到 46 条断言（含顶栏收敛 / 详情页避让 / 底排按钮零重叠 / 底排按钮不越父容器），三尺寸 430/393/375 全绿才准打包；每版必须留下发布凭证（含源码指纹），跑完闸门又改代码一律拒绝打包；\n6. 🧱 前六版全部保留：抽屉 252 内容收敛、齿轮回位、会话框按钮居中、快捷链接删除崩溃、费用计量浮层遮挡、9009 自建网页锁屏解锁；\n7. 🔌 iOS 14 / 15 / 16.x 全通吃；公网大模型网页保持 100% 原生 Safari WebKit；全网单一公开版，巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.127-69.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.127-69.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.127/DSHios-public-1.0.127-69.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.127"
+  "version": "1.0.128",
+  "build": 70,
+  "updated_at": "2026-10-20 15:57:00",
+  "title": "v1.0.128 顶栏「越来越低」漂移根治 + WorkBuddy 页不再被误动手术",
+  "changelog": "1. 🥇 顶栏越用越低、差距越来越大（老总真机实锤）彻底根治 —— 真因是同一个 margin-top 有两个写入者打架：老增量公式「当前值 + 差值」把 React 重挂载 / 键盘 resize / sticky 吸顶瞬间读到的过渡值累加进 margin（当年底栏 46→92→138 是同一个病），与新的绝对法同写一列，越用越低永不回头。本版增量公式直接退役，位移只归绝对法（清-量-设，幂等），怎么刷都不会累加；\n2. 🥇 顶栏位置上第三重保险（CSS 直修）—— 真机取证发现「CSS 注入活着、JS 几何 shim 却整体死亡」（同一版里模型选择器修复生效、顶栏纹丝不动）。本版把顶栏三件事全部 CSS 化：html 前缀拉高特异性压过缓存里旧代理层的 env padding、用原生专属变量 --dsh-sb-native 把列顶钉在 39pt、36px 占位行压 0。实测（真机最坏条件：缓存旧规则 + 一个 JS 都不注）frame padding 59px→0px、列顶 59→39、占位行 36px→0px，主页与会话页完全一致 —— JS 全死顶栏也不丢；\n3. 🥇 子任务面板不再和页面标题叠在一起 —— 真因是页面隔离判据只看 #root，而 WorkBuddy 等 React 应用同样有 #root，被当成 DSH 主控页做了全套顶栏手术（sticky / 列高钉死 / overflow:hidden）。本版改「#root + DSH 特征（data-mobile-nav / composerStack / headerCorner）」双判据，非 DSH 页面零命中、完全不碰；\n4. 🔍 发版闸门升到 50 条断言，新增「CSS-only 兜底」场景：只注入 CSS、绝不注入 JS，模拟真机 JS 几何通道整体死亡的最坏情况，顶栏必须仍收敛到 39、占位行必须为 0；三尺寸 430/393/375 全绿才准打包，发布凭证带源码指纹，跑完闸门又改代码一律拒绝打包；\n5. 🧱 前七版全部保留：顶栏大空档、模型选择器压发送按钮、插件详情页返回钮被压、底部用量条互相压、抽屉 252 收敛、齿轮回位、会话框按钮居中、9009 自建网页锁屏解锁；\n6. 🔌 iOS 14 / 15 / 16.x 全通吃；公网大模型网页保持 100% 原生 Safari WebKit；全网单一公开版，巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.128-70.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.128-70.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.128/DSHios-public-1.0.128-70.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.128"
 }
