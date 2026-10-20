@@ -1548,7 +1548,25 @@ final class ViewController: UIViewController {
             '  width: 14px !important;',
             '  height: 14px !important;',
             '  flex-shrink: 0 !important;',
-            '}'
+            '}',
+            '/* ===== v1.0.129 会话框底排防挤爆（老总真机 18:41 实锤：撤回/重优等状态按钮',
+            '   出现时胶囊被撑到 209px，而 standardControls 只有 120px —— 整行爆开，',
+            '   蓝色发送钮被推出屏幕右缘裁掉一半。F1 定案：胶囊与 standardControls 允许换行，',
+            '   胶囊变两行高、模型选择器落到下一行拿满宽度，发送钮钉在右下 x370..404 分毫不动。',
+            '   实测：注入 撤回/重优 两个 60px 假按钮 → 越界 0、全部可点、composer 高 224→282。',
+            '   静止态（无状态按钮）内容一行装得下，wrap 不触发，布局零变化。',
+            '   选择器走结构路径，绝不写 dsh-po-capsule 这类今天有明天没的哈希/动态类名。 */',
+            '[class*="composerStack"] [class*="VERcba_standardControls"] > div > div {',
+            '  flex-wrap: wrap !important;',
+            '  max-width: 100% !important;',
+            '  row-gap: 8px !important;',
+            '}',
+            '[class*="composerStack"] [class*="VERcba_standardControls"] {',
+            '  flex-wrap: wrap !important;',
+            '  row-gap: 8px !important;',
+            '  justify-content: flex-end !important;',
+            '}',
+
           ].join('\\n');
           function attach() {
             if (!document.head) { setTimeout(attach, 10); return; }
@@ -4029,24 +4047,59 @@ final class ViewController: UIViewController {
                   if (bcs.display === 'none' || bcs.visibility === 'hidden') continue;
                   var q = b.getBoundingClientRect();
                   if (q.width < 14 || q.width > 80 || q.height < 14 || q.height > 80) continue;
-                  list.push([b, q]);
+                  /* v1.0.129：扣掉已有 translateY，用「净几何」参与分组与对齐，否则已校准的
+                     按钮会带着旧位移参加下一轮中位数计算，越算越歪（幂等性被破坏） */
+                  var ty = 0;
+                  if (bcs.transform && bcs.transform.indexOf('matrix') === 0) {
+                    var mp = bcs.transform.match(/matrix\(([^)]+)\)/);
+                    if (mp) ty = parseFloat(mp[1].split(',')[5]) || 0;
+                  }
+                  list.push([b, { y: q.y - ty, height: q.height }]);
                 }
                 if (list.length < 2) continue;
-                var cys = [];
-                for (var j = 0; j < list.length; j++) cys.push(list[j][1].y + list[j][1].height / 2);
-                cys.sort(function (x, y) { return x - y; });
-                var target = cys[Math.floor(cys.length / 2)];
-                for (var k = 0; k < list.length; k++) {
-                  var el = list[k][0], eq = list[k][1];
-                  var d = Math.round((eq.y + eq.height / 2 - target) * 10) / 10;
-                  if (Math.abs(d) < 0.5) {
-                    if (el.style.getPropertyValue('transform') &&
-                        el.style.getPropertyValue('transform').indexOf('translateY') >= 0) {
-                      el.style.removeProperty('transform');
-                    }
-                    continue;
+                /* 🔴 v1.0.129（底排防挤爆定案）：换行放行后，一个 _row 容器里可能出现上下两行按钮。
+                   绝不能再整容器取中位数 —— 否则上行按钮会被 translateY 硬拽到下行中线，
+                   直接压到模型选择器上（实测 优化 被拽 +11px）。改为：
+                   ① 先用「未加 transform 的几何」按视觉行分组（纵向相交算同组）；
+                   ② 每组各自取中位数各自对齐；跨组互不干扰。
+                   ③ 分组/对齐一律用去 transform 几何，幂等不漂移。 */
+                /* 分组判据＝中心间距：同行按钮的中心差 ≤2px（v1.0.127 实测 0.6px），
+                   跨行至少差一个按钮高（≥22px）。按中心排序后遇到 >10px 的空档就切组。
+                   （早期用「纵向矩形相交」分组在行距 8px、按钮高 28px 时必然把两行串成一组，
+                   优化 被拽 +18px 直压模型选择器 —— 已废弃。） */
+                var groups = [];
+                var sorted = list.slice(0).sort(function (a, b) {
+                  return (a[1].y + a[1].height / 2) - (b[1].y + b[1].height / 2);
+                });
+                for (var gi = 0; gi < sorted.length; gi++) {
+                  var cy2 = sorted[gi][1].y + sorted[gi][1].height / 2;
+                  if (!groups.length || cy2 - groups[groups.length - 1].cy > 10) {
+                    groups.push({ cy: cy2, items: [] });
                   }
-                  el.style.setProperty('transform', 'translateY(' + (-d) + 'px)', 'important');
+                  groups[groups.length - 1].cy =
+                    (groups[groups.length - 1].cy * groups[groups.length - 1].items.length + cy2) /
+                    (groups[groups.length - 1].items.length + 1);
+                  groups[groups.length - 1].items.push(sorted[gi]);
+                }
+                for (var gk = 0; gk < groups.length; gk++) {
+                  var items = groups[gk].items;
+                  if (items.length < 2) continue;
+                  var cys = [];
+                  for (var j = 0; j < items.length; j++) cys.push(items[j][1].y + items[j][1].height / 2);
+                  cys.sort(function (x, y) { return x - y; });
+                  var target = cys[Math.floor(cys.length / 2)];
+                  for (var k = 0; k < items.length; k++) {
+                    var el = items[k][0], eq = items[k][1];
+                    var d = Math.round((eq.y + eq.height / 2 - target) * 10) / 10;
+                    if (Math.abs(d) < 0.5) {
+                      if (el.style.getPropertyValue('transform') &&
+                          el.style.getPropertyValue('transform').indexOf('translateY') >= 0) {
+                        el.style.removeProperty('transform');
+                      }
+                      continue;
+                    }
+                    el.style.setProperty('transform', 'translateY(' + (-d) + 'px)', 'important');
+                  }
                 }
               }
             } catch (e) {}
@@ -5151,9 +5204,13 @@ function applySidebarInset() {
               }
               // 让「胶囊」永不换行：真机反馈齿轮会掉到第二行，元凶是 opt→上溯某一层 flex-wrap:wrap，
               // 逐层压成 nowrap（限定 4 层，避免影响 composer 整体布局）
+              // v1.0.129 变更：这里原本逐层内联写死 flex-wrap:nowrap!important —— 这正是
+              // 「撤回/重优一出现整行爆开、发送钮被推出屏」的帮凶（内联 !important 永远压过
+              // 样式表，CSS 侧的换行修法因此完全失效）。现在换行交给主 CSS 数组的
+              // 「底排防挤爆」规则统一管（撑爆才实际换行，静止态零变化），本函数只负责
+              // 对齐与间距；齿轮万一掉行仍由下面的绝对定位兜底钉回「优化」右侧。
               var up = opt.parentElement;
               for (var k2 = 0; up && k2 < 4; k2++) {
-                S(up, 'flex-wrap', 'nowrap');
                 S(up, 'align-items', 'center');
                 if (up === gear.parentElement) S(up, 'column-gap', '6px');
                 up = up.parentElement;

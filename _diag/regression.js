@@ -25,6 +25,21 @@ const APP_JS = fs.readFileSync(path.join(DIR, 'app_inject.js'), 'utf8');
 const QUICK = process.argv.includes('--quick');
 const SIZES = QUICK ? [[430, 932]] : [[430, 932], [393, 852], [375, 812]];
 
+/* v1.0.129 全局看门狗：18 分钟无论如何强制收场（DSH 前端死循环时 waitForTimeout 之外的
+   一切都可能挂起）。收场前把当前 GATE 原样落盘，绝不无声挂死。 */
+const GATE_WATCHDOG = setTimeout(() => {
+  console.log('\n⏱️ 看门狗强制收场：18 分钟未跑完（DSH 前端疑似死循环），按有红处理。');
+  try {
+    const G = (typeof GATE !== 'undefined' && GATE) ? GATE : {};
+    G.ok = false; G.fail = (G.fail || 0) + 1;
+    G.failures = G.failures || [];
+    G.failures.push('[看门狗] 18 分钟未跑完，强制收场');
+    G.finishedAt = new Date().toISOString();
+    fs.writeFileSync(path.join(DIR, 'gate-result.json'), JSON.stringify(G, null, 2), 'utf8');
+  } catch (e) {}
+  process.exit(1);
+}, 18 * 60 * 1000).unref();
+
 /* 从注入的 CSS 文本里抽出所有语义锚点：[class*="xxx"] / [class^="xxx"] / [class$="xxx"] */
 function extractAnchors(cssText) {
   const set = new Set();
@@ -37,6 +52,9 @@ function extractAnchors(cssText) {
   return Array.from(set);
 }
 const ANCHORS = extractAnchors(APP_JS);
+/* v1.0.129：evaluate 护栏哨兵判定 —— DSH 前端死循环时 evaluate 会挂，30 秒后返回此哨兵。
+   任何断言拿到哨兵都必须记「无法校验」，绝不因为字段 undefined 而误判成绿。 */
+const TO = (r) => !!(r && r.__evalTimeout === true);
 
 let PASS = 0, FAIL = 0;
 const FAILS = [];
@@ -206,15 +224,37 @@ const A_COMPOSER = () => {
   });
   /* 🔴 v1.0.127（老总：「会话框选着模型的下箭头，和右侧发送确定按钮重叠了」）：
      旧断言只查按钮中心 y 离散度，横向重叠查不出来（模型选择器右缘压发送按钮
-     6px/26px/36px 三档全部漏网）。补：任意两按钮矩形相交 > 2px 即红。
-     父子包含关系跳过（嵌套按钮合法）。 */
+     6px/26px/36px 三档全部漏网）。补：矩形相交 > 2px 即红。父子包含跳过。
+     🔴 v1.0.129（底排防挤爆定案）：模型选择器允许换行到第二行（这是特性不是 bug），
+     断言改为「按行分组」——同一行内按钮中心必须齐平、同行按钮两两零相交；
+     跨行按钮（上下两行）只查「行间侵入 > 3px」（行间隙 4px，正常换行最多贴上，不会真压）。 */
+  const lines = [];
+  for (const bx of boxes) {
+    const cy = bx.q.y + bx.q.height / 2;
+    let line = lines.find(L => Math.abs(cy - L.cy) <= Math.max(Math.min(bx.q.height, L.h) / 2, 12));
+    if (!line) { line = { cy, h: bx.q.height, items: [] }; lines.push(line); }
+    line.items.push(bx);
+    line.cy = line.items.reduce((s2, it) => s2 + it.q.y + it.q.height / 2, 0) / line.items.length;
+    line.h = Math.max(line.h, bx.q.height);
+  }
   const overlaps = [];
-  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
-    const a = boxes[i], b = boxes[j];
-    if (a.b.contains(b.b) || b.b.contains(a.b)) continue;
-    const ox = Math.min(a.q.right, b.q.right) - Math.max(a.q.x, b.q.x);
-    const oy = Math.min(a.q.bottom, b.q.bottom) - Math.max(a.q.y, b.q.y);
-    if (ox > 2 && oy > 2) overlaps.push((a.label || 'btn') + ' × ' + (b.label || 'btn') + ' ' + Math.round(ox) + 'x' + Math.round(oy));
+  for (const L of lines) {
+    const its = L.items;
+    for (let i = 0; i < its.length; i++) for (let j = i + 1; j < its.length; j++) {
+      const a = its[i], b = its[j];
+      if (a.b.contains(b.b) || b.b.contains(a.b)) continue;
+      const ox = Math.min(a.q.right, b.q.right) - Math.max(a.q.x, b.q.x);
+      const oy = Math.min(a.q.bottom, b.q.bottom) - Math.max(a.q.y, b.q.y);
+      if (ox > 2 && oy > 2) overlaps.push((a.label || 'btn') + ' × ' + (b.label || 'btn') + ' ' + Math.round(ox) + 'x' + Math.round(oy));
+    }
+  }
+  for (let i = 0; i < lines.length; i++) for (let j = i + 1; j < lines.length; j++) {
+    for (const a of lines[i].items) for (const b of lines[j].items) {
+      if (a.b.contains(b.b) || b.b.contains(a.b)) continue;
+      const ox = Math.min(a.q.right, b.q.right) - Math.max(a.q.x, b.q.x);
+      const oy = Math.min(a.q.bottom, b.q.bottom) - Math.max(a.q.y, b.q.y);
+      if (ox > 2 && oy > 3) overlaps.push('跨行压 ' + (a.label || 'btn') + ' × ' + (b.label || 'btn') + ' ' + Math.round(ox) + 'x' + Math.round(oy));
+    }
   }
   // 按钮越出父容器右缘 >2px 也算红（ofTiQG_trigger 形态：自身 171 > 父 153）
   const spills = [];
@@ -227,8 +267,12 @@ const A_COMPOSER = () => {
     if (pcs.overflowX === 'auto' || pcs.overflowX === 'scroll') return;
     if (q.right > pq.right + 2) spills.push((label || 'btn') + ' 越父 ' + Math.round(q.right - pq.right) + 'px');
   });
-  if (out.length < 2) return { found: true, n: out.length, spread: 0, overlaps: overlaps.slice(0, 4), spills: spills.slice(0, 4) };
-  return { found: true, n: out.length, spread: Math.round((Math.max(...out) - Math.min(...out)) * 10) / 10, overlaps: overlaps.slice(0, 4), spills: spills.slice(0, 4) };
+  const spreads = lines.filter(L => L.items.length >= 2).map(L => {
+    const cs2 = L.items.map(it => Math.round((it.q.y + it.q.height / 2) * 10) / 10);
+    return Math.round((Math.max(...cs2) - Math.min(...cs2)) * 10) / 10;
+  });
+  const spread = spreads.length ? Math.max(...spreads) : 0;
+  return { found: true, n: boxes.length, spread, lines: lines.length, overlaps: overlaps.slice(0, 4), spills: spills.slice(0, 4) };
 };
 
 const A_GEAR = () => {
@@ -355,7 +399,7 @@ const noteAlive = (p) => p.evaluate((crit) => {
     if (cn) cn.split(/\s+/).forEach(x => { if (x) dom.add(x); });
   });
   return crit.filter(a => Array.from(dom).some(x => x.indexOf(a) >= 0));
-}, CRITICAL_ANCHORS).then(hit => hit.forEach(a => { ALIVE[a]++; }));
+}, CRITICAL_ANCHORS).then(hit => { if (Array.isArray(hit)) hit.forEach(a => { ALIVE[a]++; }); }).catch(() => {}); /* v1.0.129: evaluate 超时哨兵/页面卡死时静默跳过 */
 
 /* 全量健康度：DSH 自有 CSS 规则文本（排除含 [class*= 的自家注入样式表，防自证） */
 const A_CSS_HEALTH = () => {
@@ -423,6 +467,13 @@ const A_PLUGIN_PAGE = () => {
     console.log('\n■ ' + size[0] + '×' + size[1]);
     const c = await b.newContext({ viewport: { width: size[0], height: size[1] }, isMobile: true, hasTouch: true, deviceScaleFactor: 3, userAgent: UA, colorScheme: 'dark' });
     const p = await c.newPage();
+    // v1.0.129 防挂死护栏：DSH 前端偶发死循环烧满 WebKitWebProcess，evaluate 会永久挂起
+    // （2026-10-20 两轮闸门各卡 25 分钟的根因）。30 秒超时返回哨兵，让该步记红而不是卡死全程。
+    const rawEval = p.evaluate.bind(p);
+    p.evaluate = (fn, arg) => Promise.race([
+      rawEval(fn, arg),
+      new Promise(r => setTimeout(() => r({ __evalTimeout: true }), 30000))
+    ]);
     const errs = [];
     p.on('pageerror', e => errs.push(String(e).slice(0, 100)));
     try {
@@ -455,9 +506,52 @@ const A_PLUGIN_PAGE = () => {
       const comp = await p.evaluate(A_COMPOSER);
       if (!comp.found) bad('[会话框] 找不到 composerStack（锚点失效）');
       else {
-        chk(comp.spread <= 0.6, '[会话框] ' + comp.n + ' 个按钮中心齐平', '离散 ' + comp.spread + 'px');
+        chk(comp.spread <= 0.6, '[会话框] ' + comp.n + ' 个按钮按行中心齐平（' + (comp.lines || 1) + ' 行）', '行内最大离散 ' + comp.spread + 'px');
         chk(comp.overlaps.length === 0, '[会话框] 底排按钮零横向重叠（v1.0.127）', comp.overlaps.length ? comp.overlaps.join(' | ') : '两两扫描 ' + comp.n + ' 个');
         chk(comp.spills.length === 0, '[会话框] 底排按钮不越出父容器', comp.spills.length ? comp.spills.join(' | ') : '');
+      }
+
+      /* v1.0.129 底排防挤爆（老总真机 18:41：撤回/重优 出现时发送钮被推出屏幕）：
+         往优化胶囊里塞两个 60px 假按钮把行撑爆，断言修复后零越界、发送钮钉在屏内。 */
+      {
+        const pinch = await p.evaluate(() => {
+          const vw = window.innerWidth;
+          const comp2 = document.querySelector('[class*="composerStack"]');
+          const sc = document.querySelector('[class*="VERcba_standardControls"]');
+          const cap = sc ? sc.querySelector(':scope > div > div') : null;
+          if (!cap) return { skip: 'no-capsule' };
+          const box = document.createElement('div');
+          box.id = '__gateFakeCapsule';
+          box.style.cssText = 'display:flex;gap:6px;flex:0 0 auto;';
+          for (const t of ['撤回', '重优']) {
+            const btn = document.createElement('button');
+            btn.textContent = t;
+            btn.style.cssText = 'width:60px;height:30px;flex:0 0 auto;';
+            box.appendChild(btn);
+          }
+          cap.appendChild(box);
+          return { vw };
+        });
+        await p.waitForTimeout(600);
+        const pinch2 = await p.evaluate(() => {
+          const vw = window.innerWidth;
+          const comp2 = document.querySelector('[class*="composerStack"]');
+          let over = 0, overSample = [];
+          comp2.querySelectorAll('button').forEach(b => {
+            const r = b.getBoundingClientRect();
+            if (r.width < 4) return;
+            if (r.right > vw + 0.5) { over++; if (overSample.length < 3) overSample.push(((b.textContent || b.className || '').toString().slice(0, 10)) + ' +' + Math.round(r.right - vw)); }
+          });
+          const send = Array.from(comp2.querySelectorAll('button')).find(b => (b.className || '').toString().includes('VERcba_primary'));
+          const box = document.getElementById('__gateFakeCapsule');
+          if (box) box.remove();
+          return { over, overSample, sendRight: send ? Math.round(send.getBoundingClientRect().right) : null, vw };
+        });
+        if (pinch.skip) chk(false, '[底排防挤爆] 找不到优化胶囊（结构变了？）', pinch.skip);
+        else {
+          chk(pinch2.over === 0, '[底排防挤爆] 撬爆后零越界', pinch2.over ? pinch2.overSample.join(' | ') : '撤回/重优注入后全部在屏内');
+          chk(pinch2.sendRight !== null && pinch2.sendRight <= pinch.vw - 8, '[底排防挤爆] 发送钮钉在屏内', 'sendRight=' + pinch2.sendRight + ' vw=' + pinch2.vw);
+        }
       }
 
       await openDrawer(p);
@@ -466,14 +560,16 @@ const A_PLUGIN_PAGE = () => {
       chk(r.pageOverflow.length === 0, '[抽屉] 页面零出血', r.pageOverflow.length ? r.pageOverflow.slice(0, 4).join(' | ') : '');
 
       const f = await p.evaluate(A_FOOTER);
-      if (!f.found) bad('[底栏] 找不到吸底块（锚点失效）');
+      if (TO(f)) bad('[底栏] DSH 页面 30 秒无响应（前端死循环），无法校验');
+      else if (!f.found) bad('[底栏] 找不到吸底块（锚点失效）');
       else {
         chk(f.over <= 0.5, '[底栏] 不超抽屉右界', 'right=' + f.right + ' 抽屉=' + f.drawerRight);
         chk(f.pairs === 0, '[底栏] ' + f.kids + ' 个子块零重叠', '重叠 ' + f.pairs + ' 对');
       }
 
       const g = await p.evaluate(A_GEAR);
-      if (!g.found) bad('[齿轮] 未注入', 'shim 脚本=' + (g.shim ? '在' : '不在') + '（dsh-anywhere 未生效？）');
+      if (TO(g)) bad('[齿轮] DSH 页面 30 秒无响应（前端死循环），无法校验');
+      else if (!g.found) bad('[齿轮] 未注入', 'shim 脚本=' + (g.shim ? '在' : '不在') + '（dsh-anywhere 未生效？）');
       else if (g.noDrawer) bad('[齿轮] 找不到抽屉容器');
       else {
         chk(g.inside, '[齿轮] 位置在抽屉内', 'right=' + g.right + ' 抽屉=' + g.drawerRight);
@@ -499,14 +595,16 @@ const A_PLUGIN_PAGE = () => {
           if (await p.evaluate(() => !!document.querySelector('.cm-stat-entry'))) { dockSeen = true; break; } }
         if (dockSeen) {
           const dk = await p.evaluate(A_DOCK);
-          if (dk.none) bad('[dock] 插件费用部件未渲染（可能插件未装/会话无数据）');
+          if (TO(dk)) { bad('[dock] 会话页 30 秒无响应（DSH 前端死循环），无法校验'); }
+          else if (dk.none) bad('[dock] 插件费用部件未渲染（可能插件未装/会话无数据）');
           else if (dk.noDock) bad('[dock] 找不到 flex 行容器');
           else {
             chk(dk.wrap === 'wrap', '[dock] 插件行可换行', 'flex-wrap=' + dk.wrap + ' 部件 ' + dk.items + ' 个');
             chk(dk.overlapPairs === 0, '[dock] 部件零重叠', '重叠 ' + dk.overlapPairs + ' 对');
           }
           const ht2 = await p.evaluate(A_HEADER_TOP);
-          chk(ht2.hdrTop !== null && Math.abs(ht2.hdrTop - 39) <= 2, '[会话页] 顶栏顶=39（真机env=59下收敛）', 'hdrTop=' + ht2.hdrTop + ' framePT=' + ht2.framePT + ' want=39');
+          if (TO(ht2)) bad('[会话页] 30 秒无响应（DSH 前端死循环），顶栏无法校验');
+          else chk(ht2.hdrTop !== null && Math.abs(ht2.hdrTop - 39) <= 2, '[会话页] 顶栏顶=39（真机env=59下收敛）', 'hdrTop=' + ht2.hdrTop + ' framePT=' + ht2.framePT + ' want=39');
           await noteAlive(p); // 会话态关键锚点采样
         } else bad('[dock] 60 秒内费用部件未出现（无法校验）');
 
@@ -522,7 +620,8 @@ const A_PLUGIN_PAGE = () => {
         await p.evaluate(() => { try { if (window.__dshLayoutFix) window.__dshLayoutFix(); } catch (e) {} });
         await p.waitForTimeout(800);
         const pp = await p.evaluate(A_PLUGIN_PAGE);
-        if (pp.noPage) bad('[插件页] 找不到 pageHead（锚点失效）');
+        if (TO(pp)) bad('[插件页] 30 秒无响应（DSH 前端死循环），无法校验 fab');
+        else if (pp.noPage) bad('[插件页] 找不到 pageHead（锚点失效）');
         else if (pp.noFab) bad('[插件页] 左上角 fixed 按钮消失');
         else {
           chk(pp.clickable, '[插件页] fab 中心可命中自身', '命中=' + (pp.clickable ? 'fab' : '其它') + ' pageHead z=' + pp.phZ);
@@ -538,7 +637,8 @@ const A_PLUGIN_PAGE = () => {
         await p.evaluate(() => { try { if (window.__dshLayoutFix) window.__dshLayoutFix(); } catch (e) {} });
         await p.waitForTimeout(800);
         const fr = await p.evaluate(A_FAB_ROWS);
-        if (fr.noFab) bad('[详情页] 找不到 [data-mobile-nav="fab"]');
+        if (TO(fr)) bad('[详情页] 30 秒无响应（DSH 前端死循环），无法校验 fab');
+        else if (fr.noFab) bad('[详情页] 找不到 [data-mobile-nav="fab"]');
         else if (fr.hidden) bad('[详情页] fab 不可见');
         else chk(!fr.overlap, '[详情页] fab 不压顶区全宽行', fr.overlap ? ('仍压 [' + fr.overlap.label + '] 面积 ' + fr.overlap.area) : 'fabTop=' + fr.fabTop + ' 零重叠');
         await noteAlive(p); // 插件页态关键锚点采样
