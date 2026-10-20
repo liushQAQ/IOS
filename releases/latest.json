@@ -1,11 +1,11 @@
 {
-  "version": "1.0.129",
-  "build": 73,
-  "updated_at": "2026-10-20 20:46:00",
-  "title": "v1.0.129 会话框底排不再挤爆（发送钮钉死不动）+ DSH 页整页锁死",
-  "changelog": "1. 🥇 撤回/重优等状态按钮一出现、发送钮被挤出屏幕右缘裁一半（老总真机实锤）彻底根治 —— 真因有三层：① 胶囊被撑到 209px，而它所在的 standardControls 只有 120px、trailing 只有 166px，官方谁都不缩（min-width:auto）；② 我们自己的对齐逻辑逐层内联写死了 flex-wrap:nowrap!important，内联永远压过样式表，导致 CSS 侧任何换行修法都失效；③ 按钮垂直校准按整容器取中位数，换行后把上行的「优化」硬拽 +18px 直压模型选择器。本版三处一起改：内联 nowrap 退役、胶囊与 standardControls 允许换行（行距 8px）、校准改按视觉行分组（中心排序 >10px 切组 + 净几何、幂等不漂移）。三尺寸实测：撬爆后零越界、全部按钮可见可点、发送钮 x370..404 分毫不动，撤掉状态按钮自动还原；顺带把「模型名被挤扁」也治了（选择器换行后拿满宽度）；\n2. 🥇 整页滚动锁（老总：顶栏底栏跟着页面上下滑）—— 全新三层锁：页内探针判定 + CSS 锁样式 + 原生 scrollView 恒钳零偏移，键盘弹出/收起各一个固定位置，整页绝不许滑；判据只认页内 DOM（#root + DSH 特征），其它页面（9009 仪表盘、公网大模型）绝不锁、照常自由滚，跳转新页面立即解锁；\n3. 🔍 发版闸门升到 65 条断言，新增「编译级转义体检」：JS shim 里 \\( 在 Swift 多行字符串中会变成插值起点、导致 swiftc 直接编译失败（本版踩过），现在打包前必查；同时加防挂死护栏（单步 30 秒超时 + 18 分钟看门狗），DSH 前端偶发死循环再也不会把闸门卡死 25 分钟；\n4. 🧱 前八版全部保留：顶栏越来越低漂移根治、CSS 直修兜底（JS 全死顶栏也不丢）、WorkBuddy 页零手术、模型选择器压发送钮、插件详情页返回钮被压、底部用量条互压、抽屉 252 收敛、齿轮回位、9009 自建网页锁屏解锁；\n5. 🔌 iOS 14 / 15 / 16.x 全通吃；公网大模型网页保持 100% 原生 Safari WebKit；全网单一公开版，巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.129-73.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.129-73.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.129/DSHios-public-1.0.129-73.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.129"
+  "version": "1.0.130",
+  "build": 74,
+  "updated_at": "2026-10-20 22:57:00",
+  "title": "v1.0.130 顶栏离状态栏越来越宽 彻底根治 + 服务列表排序（上移/下移/最前/末尾）",
+  "changelog": "1. 🥇 顶栏离 iOS 状态栏一大截、还越来越宽，彻底根治（老总连催数版）—— 真机三张截图与沙箱逐条带像素对拍实锤：标题/Tab/下划线整体 +59pt ≈ 一个状态栏高度，页内布局与沙箱完全一致，是整个 WebView 被原生层整体下移，页面层（CSS/JS/env）彻底无辜，此前几版页面层修法全部打不中；\n2. 🔍 真凶：「重试」按钮与「清缓存重载」把页面归属标记写死成 false —— 它们加载的明明就是 DSH 地址，却被当成外部网页，顶部约束被多推一个状态栏高度（冷启动电脑未就绪 → 报错页 → 点重试，必踩）。本版四处根治：重试/清缓存一律继承当前归属绝不重置；归属判据新增「与主控地址同 host 即 DSH 页」并自愈掰正标记；页内探针确认 DSH 页时原生顶部约束强制归零（与滚动锁共用只认页内 DOM 的判据，外部网页/9009 仪表盘零影响）；顺带恢复归属误判期间被跳过的白屏诊断；\n3. 🥇 服务列表新增排序：每行右侧 ⇅ 按钮或长按行弹菜单 —— 上移、下移、移到最前、移到末尾（菜单内同时带编辑入口），与编辑笔并排更醒目；顺序持久化到本机，覆盖升级保留；\n4. 🧱 前九版全部保留：会话框底排防挤爆（发送钮钉死）、DSH 页整页锁死、顶栏 CSS 直修兜底、模型选择器压发送钮、插件详情页返回钮被压、底部用量条互压、抽屉 252 收敛、齿轮回位；\n5. 🔌 iOS 14 / 15 / 16.x 全通吃；公网大模型网页保持 100% 原生 Safari WebKit；全网单一公开版，巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.130-74.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.130-74.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.130/DSHios-public-1.0.130-74.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.130"
 }
