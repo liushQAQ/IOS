@@ -1,11 +1,11 @@
 {
-  "version": "1.0.124",
-  "build": 67,
-  "updated_at": "2026-10-20 09:10:00",
-  "title": "v1.0.124 抽屉内容收敛版：时间戳/金额不再被硬裁·设置齿轮回位·会话框按钮重新居中·快捷链接不再一删就崩·建立发版前回归闸门",
-  "changelog": "1. 🥇 左侧抽屉内容彻底收进 252px：抽屉被压到 252px 后，DSH 内部仍按原生 280px 排布，时间戳「34 分」、余额「¥109.194」、今日「¥1.034」、「剩余 8 小时 54 分」「09:00 转峰」整列被硬裁，设置齿轮也被切掉右半边。本版逐层加 max-width:100% + min-width:0 + 单行省略号，齿轮改以「账号行右界」与「抽屉右界」中更靠内者为基准。实测抽屉内溢出元素 90 → 0，底栏吸底块右界 280 → 240（留 12px 边距），齿轮 right=230 稳在抽屉内；\n2. 🎯 会话框那排按钮（圆圈 / 方框 / + 号 / 发送大圆钮）重新对齐：旧代码写死哈希类名（uWtHQG_add / ank0OG_composerSeat），换版后命中数为 0；且 DSH 原生给发送大圆钮加了 transform: translateY(-2px)。改用 [class*=\"composerStack\"] 通用锚点 + 强制 transform:none + 运行期按中位数对齐，5 个按钮垂直中心离散度 2px → 0px；\n3. 🐛 修掉「预设快捷链接一删就崩」：删掉预设后 load() 又把它补回来，deleteRows 与数据条数不符直接抛 invalid number of rows。改为墓碑机制（删掉的默认条目记进 UserDefaults，补齐时跳过）+ reloadData 兜底 + 空态提示；\n4. 🛡 修掉「抽屉打开时设置点不开」：DSH 自带的费用计量浮层 .cm-peak-alert（fixed / z-index 9999 / 宽 406px）间歇出现，会盖住齿轮和整个底栏，实测 elementFromPoint 命中的是浮层而非齿轮。现改为抽屉打开期间临时收起，抽屉关掉立刻还原；\n5. 🔍 根治「修过又复发」，并建立发版前回归闸门：实测 App 里写死的 102 个 CSS Module 哈希类名，当前 DSH 版本有 62 个在前端资源里彻底消失 —— 六成补丁一直在空转，这才是「修过又复发」的真因。本版起：① 一律改用 [class*=xxx] 属性包含选择器；② 新增 _diag/regression.js 闸门，430/393/375 三尺寸共 30 条断言全绿才准打包，复发在打包前就被拦住，不再等人工发现；\n6. 🧱 通用出血钳制继续生效：每 1.5 秒全页扫描，凡「左边在屏内、右边超出屏幕」的元素一律 translateX 精确推回，六条安全线绝不误伤（抽屉收起态 / 右面板收起态 / 横向滚动容器 / 可横滑祖先 / 带缩放旋转 / 飞出动画）；\n7. ⏱ 3 秒兜底定时器：页面静止时 MutationObserver 不会触发，靠定时器保证静态页面也会收敛；\n8. 🔌 低版本系统通用适配：iOS 14 / 15 / 16.x（含 16.3 及以下）全通吃，配套插件 dsh-anywhere 1.0.9 对任意形态的 lookbehind 一律安全降级；\n9. 🥇 9009 端口服务台等自建网页彻底解锁上下滑动；公网大模型网页保持 100% 原生 Safari WebKit；iOS 14/15/16 不再误弹「系统版本过低」；全网单一公开版，巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.124-67.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.124-67.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.124/DSHios-public-1.0.124-67.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.124"
+  "version": "1.0.125",
+  "build": 68,
+  "updated_at": "2026-10-20 11:35:00",
+  "title": "v1.0.125 插件用量条换行版：底部费用/CPU/内存不再互相压·插件页目录按钮恢复可点·顶栏兜底硬钳制",
+  "changelog": "1. 🥇 底部插件用量条不再互相压（费用明细 / CPU / 内存 / 本会话费用 / 下载 / token 环）：这排小部件是几个插件塞进 dock 的，容器是 flex+nowrap+center 的一行，总宽一超就互相盖（真机实拍 CPU 的 CP 两个字被费用明细按钮盖住）。本版允许换行 + 行距 3px，实测 7 个部件零重叠；\n2. 🎯 插件页左上角「打开目录」按钮恢复可点、不再压住页面标题：该按钮挂在 overlayLayer(z=20) 里，被页头(z=999) 盖住（elementFromPoint 命中的是页头而不是按钮），同时压住「插件」标题。本版让标题右移 56px 让位、页头降 z 到 19（官方桌面层序：浮层在页头之上）。实测按钮中心命中自身、与标题零相交；\n3. 📐 顶栏新增兜底硬钳制：以前只在找到 <header> 时才清 DSH 塞的 59px 状态栏内边距，一旦某类页面没有 header，整页就下坠 59px（顶栏离状态栏一大截）。本版与 header 解耦：有 frame 就清内边距、有内容列就把列顶硬校到目标位，公式是绝对值幂等，谁来都不会越校越偏；\n4. 🛡 回归闸门扩到 34 条断言：新增「dock 可换行 / 部件零重叠 / 插件页按钮可点 / 不压页面标题」四项，430/393/375 三尺寸全绿才准打包；\n5. 📋 问题清单（REGRESSION.md）补到 R15 条，每条都有「症状 / 真因 / 解法 / 校验断言」，以后每个版本照单校验，复发在打包前就被拦住；\n6. 🧱 前四版全部保留：抽屉 252 内容收敛、齿轮回位、会话框按钮居中、快捷链接删除崩溃、费用计量浮层遮挡；\n7. 🔌 iOS 14 / 15 / 16.x 全通吃；公网大模型网页保持 100% 原生 Safari WebKit；全网单一公开版，巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.125-68.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.125-68.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.125/DSHios-public-1.0.125-68.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.125"
 }
