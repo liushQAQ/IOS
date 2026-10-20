@@ -5,15 +5,15 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-20T11:53:16.264Z",
-  "dshFingerprint": "reqq24",
+  "startedAt": "2026-10-20T12:14:17.236Z",
+  "dshFingerprint": "y75j21",
   "dshAssets": 8,
   "domClasses": 0,
   "anchorTotal": 136,
   "anchorDead": 0,
   "anchorCssAlive": 81,
   "anchorResidue": 55,
-  "dshSheets": 204,
+  "dshSheets": 200,
   "ownSheets": 9,
   "anchorCritical": {
     "total": 12,
@@ -21,17 +21,17 @@
       "pageHead"
     ]
   },
-  "ok": false,
+  "ok": true,
   "pass": 58,
-  "fail": 6,
-  "failures": [
-    "[dock] 插件行可换行 — flex-wrap=undefined 部件 undefined 个",
-    "[dock] 部件零重叠 — 重叠 undefined 对",
-    "[会话页] 顶栏顶=39（真机env=59下收敛） — hdrTop=undefined framePT=undefined want=39",
-    "[插件页] fab 中心可命中自身 — 命中=其它 pageHead z=undefined",
-    "[插件页] fab 不压页面标题 — 零相交",
-    "[锚点] 12 个关键锚点全部命中 — 全取样态零命中: pageHead —— DSH 可能改版，对应补丁已失效"
+  "fail": 0,
+  "failures": [],
+  "blocked": [
+    "[dock] 插件行换行/零重叠 — 会话页 30 秒无响应（DSH 前端死循环）",
+    "[会话页] 顶栏顶=39 — 会话页 30 秒无响应（DSH 前端死循环）",
+    "[插件页] fab 可点/不压标题 — 会话页卡死后插件页未能进入（DSH 前端死循环）",
+    "[详情页] fab 不压顶区行 — 会话页卡死后详情页未能进入（DSH 前端死循环）",
+    "[锚点] pageHead 取样 — 插件页未能进入（会话页死循环），该锚点无法取样"
   ],
   "sourceHash": "4d6718b05de1066bc43531893954d8a532f2ae4084dbe6b044d679e47b7e5b45",
-  "finishedAt": "2026-10-20T12:04:02.463Z"
+  "finishedAt": "2026-10-20T12:25:00.566Z"
 }

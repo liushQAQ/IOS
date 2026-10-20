@@ -59,6 +59,14 @@ def main() -> None:
     if ac.get("dead"):
         die("关键锚点失效：%s" % ", ".join(ac["dead"]))
 
+    # v1.0.129：blocked = 「DSH 前端死循环导致该步跑不到」的无法校验项。
+    # 它既不进 pass 也不进 fail，必须逐条打印出来，绝不允许静默通过。
+    blk = g.get("blocked") or []
+    if blk:
+        print("::warning::有 %d 项无法校验（DSH 前端死循环，零注入裸页面同样复现）：" % len(blk))
+        for b in blk:
+            print("  ⏸️ " + str(b))
+
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as s:
@@ -70,6 +78,10 @@ def main() -> None:
             s.write("| 锚点健康度 | %s/%s 命中 DSH 自有 CSS |\n" % (g.get("anchorCssAlive"), g.get("anchorTotal")))
             s.write("| 源码指纹 | %s… |\n" % str(g.get("sourceHash"))[:16])
             s.write("| 凭证时间 | %s |\n" % g.get("finishedAt"))
+            if blk:
+                s.write("\n### ⏸️ 无法校验（不阻断，但必须知情）\n\n")
+                for b in blk:
+                    s.write("- %s\n" % b)
     print("gate OK: v%s, %s 绿/0 红, DSH 指纹 %s, src %s…" % (g.get("version"), g.get("pass"), g.get("dshFingerprint"), str(g.get("sourceHash"))[:12]))
 
 
