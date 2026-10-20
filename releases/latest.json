@@ -1,11 +1,11 @@
 {
-  "version": "1.0.128",
-  "build": 70,
-  "updated_at": "2026-10-20 15:57:00",
-  "title": "v1.0.128 顶栏「越来越低」漂移根治 + WorkBuddy 页不再被误动手术",
-  "changelog": "1. 🥇 顶栏越用越低、差距越来越大（老总真机实锤）彻底根治 —— 真因是同一个 margin-top 有两个写入者打架：老增量公式「当前值 + 差值」把 React 重挂载 / 键盘 resize / sticky 吸顶瞬间读到的过渡值累加进 margin（当年底栏 46→92→138 是同一个病），与新的绝对法同写一列，越用越低永不回头。本版增量公式直接退役，位移只归绝对法（清-量-设，幂等），怎么刷都不会累加；\n2. 🥇 顶栏位置上第三重保险（CSS 直修）—— 真机取证发现「CSS 注入活着、JS 几何 shim 却整体死亡」（同一版里模型选择器修复生效、顶栏纹丝不动）。本版把顶栏三件事全部 CSS 化：html 前缀拉高特异性压过缓存里旧代理层的 env padding、用原生专属变量 --dsh-sb-native 把列顶钉在 39pt、36px 占位行压 0。实测（真机最坏条件：缓存旧规则 + 一个 JS 都不注）frame padding 59px→0px、列顶 59→39、占位行 36px→0px，主页与会话页完全一致 —— JS 全死顶栏也不丢；\n3. 🥇 子任务面板不再和页面标题叠在一起 —— 真因是页面隔离判据只看 #root，而 WorkBuddy 等 React 应用同样有 #root，被当成 DSH 主控页做了全套顶栏手术（sticky / 列高钉死 / overflow:hidden）。本版改「#root + DSH 特征（data-mobile-nav / composerStack / headerCorner）」双判据，非 DSH 页面零命中、完全不碰；\n4. 🔍 发版闸门升到 50 条断言，新增「CSS-only 兜底」场景：只注入 CSS、绝不注入 JS，模拟真机 JS 几何通道整体死亡的最坏情况，顶栏必须仍收敛到 39、占位行必须为 0；三尺寸 430/393/375 全绿才准打包，发布凭证带源码指纹，跑完闸门又改代码一律拒绝打包；\n5. 🧱 前七版全部保留：顶栏大空档、模型选择器压发送按钮、插件详情页返回钮被压、底部用量条互相压、抽屉 252 收敛、齿轮回位、会话框按钮居中、9009 自建网页锁屏解锁；\n6. 🔌 iOS 14 / 15 / 16.x 全通吃；公网大模型网页保持 100% 原生 Safari WebKit；全网单一公开版，巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.128-70.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.128-70.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.128/DSHios-public-1.0.128-70.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.128"
+  "version": "1.0.129",
+  "build": 73,
+  "updated_at": "2026-10-20 20:46:00",
+  "title": "v1.0.129 会话框底排不再挤爆（发送钮钉死不动）+ DSH 页整页锁死",
+  "changelog": "1. 🥇 撤回/重优等状态按钮一出现、发送钮被挤出屏幕右缘裁一半（老总真机实锤）彻底根治 —— 真因有三层：① 胶囊被撑到 209px，而它所在的 standardControls 只有 120px、trailing 只有 166px，官方谁都不缩（min-width:auto）；② 我们自己的对齐逻辑逐层内联写死了 flex-wrap:nowrap!important，内联永远压过样式表，导致 CSS 侧任何换行修法都失效；③ 按钮垂直校准按整容器取中位数，换行后把上行的「优化」硬拽 +18px 直压模型选择器。本版三处一起改：内联 nowrap 退役、胶囊与 standardControls 允许换行（行距 8px）、校准改按视觉行分组（中心排序 >10px 切组 + 净几何、幂等不漂移）。三尺寸实测：撬爆后零越界、全部按钮可见可点、发送钮 x370..404 分毫不动，撤掉状态按钮自动还原；顺带把「模型名被挤扁」也治了（选择器换行后拿满宽度）；\n2. 🥇 整页滚动锁（老总：顶栏底栏跟着页面上下滑）—— 全新三层锁：页内探针判定 + CSS 锁样式 + 原生 scrollView 恒钳零偏移，键盘弹出/收起各一个固定位置，整页绝不许滑；判据只认页内 DOM（#root + DSH 特征），其它页面（9009 仪表盘、公网大模型）绝不锁、照常自由滚，跳转新页面立即解锁；\n3. 🔍 发版闸门升到 65 条断言，新增「编译级转义体检」：JS shim 里 \\( 在 Swift 多行字符串中会变成插值起点、导致 swiftc 直接编译失败（本版踩过），现在打包前必查；同时加防挂死护栏（单步 30 秒超时 + 18 分钟看门狗），DSH 前端偶发死循环再也不会把闸门卡死 25 分钟；\n4. 🧱 前八版全部保留：顶栏越来越低漂移根治、CSS 直修兜底（JS 全死顶栏也不丢）、WorkBuddy 页零手术、模型选择器压发送钮、插件详情页返回钮被压、底部用量条互压、抽屉 252 收敛、齿轮回位、9009 自建网页锁屏解锁；\n5. 🔌 iOS 14 / 15 / 16.x 全通吃；公网大模型网页保持 100% 原生 Safari WebKit；全网单一公开版，巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.129-73.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.129-73.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.129/DSHios-public-1.0.129-73.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.129"
 }
