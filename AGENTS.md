@@ -75,4 +75,6 @@
 
 ---
 
+> 🤝 本规程对 **DSH 侧 AI 同样生效**：DSH 有时也执行 iOS 打包（老总 2026-10-21 令），
+> 交接卡副本已放 DSH 工作区 E:\desktop\所有skill\deepseek-harness-desktop\AGENTS.md，双方必须遵守同一套禁令与流程。
 *最后更新：2026-10-20 · v1.0.130(74) · 老总真机验收通过*
