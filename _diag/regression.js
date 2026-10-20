@@ -53,6 +53,17 @@ async function prep(p) {
   await p.evaluate(({ js }) => {
     document.documentElement.style.setProperty('--dsh-statusbar', '59px');
     document.documentElement.style.setProperty('--dsh-topshift', '18px');
+    /* 🔴 v1.0.126 铁律：闸门必须模拟真机 env(safe-area-inset-top)=59。
+       桌面 WebKit 的 env() 恒为 0，而真机 iPhone 是 59 —— 这正是「沙箱绿、真机崩」
+       的根源（老总 2026-10-20：真机会话页顶栏比沙箱低 58.6pt ≈ 一个状态栏）。
+       这里用与真机同款选择器同款优先级（!important 样式表）把 frame padding 顶成 59，
+       任何「清不干净」的回归都会在这里被抓住，而不是等老总装包后看见。 */
+    if (!document.getElementById('__reg_fakeenv')) {
+      const fe = document.createElement('style');
+      fe.id = '__reg_fakeenv';
+      fe.textContent = '@media (max-width: 1023px) { [data-mobile-nav="frame"] { padding-top: 59px !important; } }';
+      document.head.appendChild(fe);
+    }
     try { (0, eval)(js); } catch (e) { }
     // App 侧把布局管线暴露为 __dshLayoutFix，闸门直接驱动它
     window.__regTick = function () {
@@ -199,6 +210,42 @@ const A_GEAR = () => {
     right: Math.round(gq.right), drawerRight: Math.round(sq.right),
     clickable: !!(hit && (g === hit || g.contains(hit) || hit.contains(g))),
   };
+};
+
+/* 断言 9：顶栏几何（v1.0.126，老总 2026-10-20「顶栏离状态栏可以停一台航母」）
+   真机条件（env=59，prep 已模拟）下 centerCol 顶必须收敛到 want = 59-2-18 = 39。
+   老版增量算法被 React 重挂载刷回时会拿脏值累加 —— 这条断言就是它的克星。 */
+const A_HEADER_TOP = () => {
+  const col = document.querySelector('[class*="centerCol"]');
+  const hdr = document.querySelector('header');
+  const frame = document.querySelector('[data-mobile-nav="frame"]');
+  return {
+    colTop: col ? Math.round(col.getBoundingClientRect().top) : null,
+    hdrTop: hdr ? Math.round(hdr.getBoundingClientRect().top) : null,
+    framePT: frame ? getComputedStyle(frame).paddingTop : null,
+  };
+};
+
+/* 断言 10：fixed fab 不得压住顶区全宽行按钮（v1.0.126，老总「侧边栏和返回按钮还是遮挡」）
+   实测铁证：插件详情页无 header/pageHead，返回行（x=24..406 y=67..83）被
+   [data-mobile-nav="fab"]（x=14..52 y=47..85）压住左端 28x16，返回箭头点不到。 */
+const A_FAB_ROWS = () => {
+  const fab = document.querySelector('[data-mobile-nav="fab"]');
+  if (!fab) return { noFab: true };
+  const cs = getComputedStyle(fab);
+  if (cs.display === 'none' || cs.visibility === 'hidden' || cs.position !== 'fixed') return { hidden: true };
+  const fq = fab.getBoundingClientRect();
+  let worst = null;
+  document.querySelectorAll('button, [role="button"], a').forEach(el => {
+    const ecs = getComputedStyle(el);
+    if (ecs.display === 'none' || ecs.visibility === 'hidden' || ecs.position === 'fixed') return;
+    const q = el.getBoundingClientRect();
+    if (q.width < 200 || q.left > 60 || q.y > 220 || q.height < 8) return;
+    const ox = Math.min(fq.right, q.right) - Math.max(fq.x, q.x);
+    const oy = Math.min(fq.bottom, q.bottom) - Math.max(fq.y, q.y);
+    if (ox > 6 && oy > 6 && (!worst || ox * oy > worst.area)) worst = { label: el.getAttribute('aria-label') || '', area: Math.round(ox * oy) };
+  });
+  return { fabTop: Math.round(fq.y), overlap: worst };
 };
 
 /* 断言 6：会话页底部插件 dock 必须可换行（v1.0.125，老总 2026-10-20「底部模型用量那些重叠」）
@@ -348,6 +395,9 @@ const A_PLUGIN_PAGE = () => {
       chk(r.pageOverflow.length === 0, '[主页] 零横向出血', r.pageOverflow.length ? r.pageOverflow.slice(0, 4).join(' | ') : 'docSW=' + r.docSW + ' vw=' + r.vw);
       chk(r.docSW <= r.vw + 1, '[主页] 无横向滚动', 'docSW=' + r.docSW + ' vw=' + r.vw);
 
+      const ht = await p.evaluate(A_HEADER_TOP);
+      chk(ht.hdrTop !== null && Math.abs(ht.hdrTop - 39) <= 2, '[主页] 顶栏顶=39（真机env=59下收敛）', 'hdrTop=' + ht.hdrTop + ' framePT=' + ht.framePT + ' want=39');
+
       // —— 锚点健康度 + DSH 换版指纹（只在 430 档做一次）——
       if (size[0] === 430) {
         await noteAlive(p); // 主页态关键锚点采样
@@ -414,6 +464,8 @@ const A_PLUGIN_PAGE = () => {
             chk(dk.wrap === 'wrap', '[dock] 插件行可换行', 'flex-wrap=' + dk.wrap + ' 部件 ' + dk.items + ' 个');
             chk(dk.overlapPairs === 0, '[dock] 部件零重叠', '重叠 ' + dk.overlapPairs + ' 对');
           }
+          const ht2 = await p.evaluate(A_HEADER_TOP);
+          chk(ht2.hdrTop !== null && Math.abs(ht2.hdrTop - 39) <= 2, '[会话页] 顶栏顶=39（真机env=59下收敛）', 'hdrTop=' + ht2.hdrTop + ' framePT=' + ht2.framePT + ' want=39');
           await noteAlive(p); // 会话态关键锚点采样
         } else bad('[dock] 60 秒内费用部件未出现（无法校验）');
 
@@ -435,6 +487,19 @@ const A_PLUGIN_PAGE = () => {
           chk(pp.clickable, '[插件页] fab 中心可命中自身', '命中=' + (pp.clickable ? 'fab' : '其它') + ' pageHead z=' + pp.phZ);
           chk(pp.overlapH1 === false, '[插件页] fab 不压页面标题', pp.overlapH1 === null ? '页面无 h1' : (pp.overlapH1 ? '仍相交' : '零相交'));
         }
+        await noteAlive(p); // 插件列表页态采样（pageHead 只在这类页面存在）
+
+        // —— 场景 D：插件详情页（无 header/pageHead 的页面族），校验 fab 不压返回行（v1.0.126）——
+        await p.evaluate(() => { const t = document.querySelector('[aria-label^="查看"]') || Array.from(document.querySelectorAll('[class*="cardTitle"]'))[0]; if (t) t.click(); });
+        await p.waitForTimeout(3500);
+        await p.evaluate(() => { try { if (window.__dshLayoutFix) window.__dshLayoutFix(); } catch (e) {} });
+        await p.waitForTimeout(3600);
+        await p.evaluate(() => { try { if (window.__dshLayoutFix) window.__dshLayoutFix(); } catch (e) {} });
+        await p.waitForTimeout(800);
+        const fr = await p.evaluate(A_FAB_ROWS);
+        if (fr.noFab) bad('[详情页] 找不到 [data-mobile-nav="fab"]');
+        else if (fr.hidden) bad('[详情页] fab 不可见');
+        else chk(!fr.overlap, '[详情页] fab 不压顶区全宽行', fr.overlap ? ('仍压 [' + fr.overlap.label + '] 面积 ' + fr.overlap.area) : 'fabTop=' + fr.fabTop + ' 零重叠');
         await noteAlive(p); // 插件页态关键锚点采样
       }
     } catch (e) {

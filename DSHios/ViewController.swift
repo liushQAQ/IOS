@@ -3982,10 +3982,16 @@ final class ViewController: UIViewController {
             try {
               /* 🔴 同上：跨 IIFE 边界，setP/num/sbHeight 一律不可用，全自包含。 */
               var setPI = function (el, prop, val) { try { el.style.setProperty(prop, val, 'important'); } catch (e) {} };
-              var frame = document.querySelector('[data-mobile-nav="frame"]');
-              if (!frame) return;
-              var pt = getComputedStyle(frame).paddingTop;
-              if (pt !== '0px') setPI(frame, 'padding-top', '0px');
+              /* 🔴 v1.0.126：遍历**所有** frame 清 padding——真机取证（老总 2026-10-20 会话页截图
+                 像素对拍：tab 下划线 172pt vs 沙箱 113pt，差 58.6pt ≈ 恰好一个状态栏 59）
+                 表明存在「清了又被 React 重挂载刷回」的拉锯，querySelector 只取第一个会漏。
+                 dsh-anywhere 代理层的 env() padding（唯一源头）已删，这里是 App 侧兜底。 */
+              var frames = document.querySelectorAll('[data-mobile-nav="frame"]');
+              for (var fi = 0; fi < frames.length; fi++) {
+                var fpt = '0px';
+                try { fpt = getComputedStyle(frames[fi]).paddingTop; } catch (e2) {}
+                if (fpt !== '0px') setPI(frames[fi], 'padding-top', '0px');
+              }
               var col = document.querySelector('[class*="centerCol"]');
               if (!col) return;
               var sb = parseFloat(window.__dshNativeStatusBar);
@@ -3995,16 +4001,57 @@ final class ViewController: UIViewController {
               }
               var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 18;
               var want = sb - 2 - shift;
+              /* 🔴 v1.0.126：先清掉我们上一轮写的 margin 再量自然位置，然后写绝对差。
+                 增量法在外部又加了 padding 时会拿脏值累加；清-量-设每次都从干净基线出发，
+                 无论 padding 被刷回多少次都能精确抵消，幂等。 */
+              if (col.dataset && col.dataset.dshMt === '1') { try { col.style.removeProperty('margin-top'); } catch (e3) {} }
               var cur = col.getBoundingClientRect().top;
               if (!(cur > -600 && cur < 1200)) return;
               var d = want - cur;
               if (Math.abs(d) > 0.5) {
-                var mt = parseFloat(getComputedStyle(col).marginTop) || 0;
-                setPI(col, 'margin-top', (mt + d) + 'px');
+                setPI(col, 'margin-top', d + 'px');
+              }
+              if (col.dataset) col.dataset.dshMt = '1';
+            } catch (e) {}
+          }
+          /* 🔴 v1.0.126（老总 2026-10-20：「打开插件按钮，侧边栏和返回按钮还是遮挡」）：
+             插件**详情**页没有 <header> 也没有 pageHead（实测 hdrTop=null），fixTop /
+             fixPageHeadFab 在这类页面全部提前 return → 整页零修复。
+             实测铁证（430x932 模拟 env=59）：返回行（aria-label="返回插件"，全宽
+             x=24..406, y=67..83）与 [data-mobile-nav="fab"]（fixed x=14..52, y=47..85）
+             重叠 28x16 —— fab 正好盖住返回箭头左半。
+             修法：fab 是浮动按钮，把它垂直下移到该行下方 8px（只动 fab 一个元素的内联
+             top，不碰 DSH 文档流）；列表页 fab 与 pageHead 标题并排、不与全宽行重叠，
+             完全不受影响。内联 !important 压过代理层样式表的 top: calc(env()+12px)。 */
+          function fixFabRows() {
+            try {
+              var setPI = function (el, prop, val) { try { el.style.setProperty(prop, val, 'important'); } catch (e) {} };
+              var fab = document.querySelector('[data-mobile-nav="fab"]');
+              if (!fab) return;
+              var cs = null;
+              try { cs = getComputedStyle(fab); } catch (e1) { return; }
+              if (cs.display === 'none' || cs.visibility === 'hidden' || cs.position !== 'fixed') return;
+              var fq = fab.getBoundingClientRect();
+              if (fq.width < 8 || fq.y > 220) return;
+              var rows = document.querySelectorAll('button, [role="button"], a');
+              for (var i = 0; i < rows.length; i++) {
+                var el = rows[i];
+                var ecs = null;
+                try { ecs = getComputedStyle(el); } catch (e4) { continue; }
+                if (ecs.display === 'none' || ecs.visibility === 'hidden' || ecs.position === 'fixed') continue;
+                var q = el.getBoundingClientRect();
+                if (q.width < 200 || q.left > 60 || q.y > 220) continue;
+                var ox = Math.min(fq.right, q.right) - Math.max(fq.x, q.x);
+                var oy = Math.min(fq.bottom, q.bottom) - Math.max(fq.y, q.y);
+                if (ox > 6 && oy > 6) {
+                  setPI(fab, 'top', (q.bottom + 8) + 'px');
+                  return;
+                }
               }
             } catch (e) {}
           }
-          function applySidebarInset() {
+          
+function applySidebarInset() {
             ensureSidebarOverlay();
             try { tightenRightPanelTop(); } catch (e) {}
             try { restorePageHeadHeight(); } catch (e) {}
@@ -4012,6 +4059,7 @@ final class ViewController: UIViewController {
             try { guardPeakAlert(); } catch (e) {}
             try { fixPageHeadFab(); } catch (e) {}
             try { fixTopChrome(); } catch (e) {}
+            try { fixFabRows(); } catch (e) {}
             try { fixOverlayOverflow(); } catch (e) {}
             // 🔴 v1.0.123：出血钳制不能只靠 MutationObserver 驱动 —— 页面静止不变化时
             //   一次都不会再跑，刚进页面那一下的出血就一直留在屏幕上（老总看到的就是这个）。
@@ -4022,6 +4070,7 @@ final class ViewController: UIViewController {
                   try { guardPeakAlert(); } catch (e) {}
                   try { fixPageHeadFab(); } catch (e) {}
                   try { fixTopChrome(); } catch (e) {}
+                  try { fixFabRows(); } catch (e) {}
                   try { fixOverlayOverflow(); } catch (e) {}
                 }, 3000);
               }
@@ -4574,6 +4623,25 @@ final class ViewController: UIViewController {
               setP(fabs[i], 'top', (sbHeight() + TOP_BREATH - TOP_SHIFT) + 'px');
               setP(fabs[i], 'border-radius', '8px');
               setP(fabs[i], 'background', 'var(--dsw-alias-interactive-bg-hover, rgba(125,125,125,0.16))');
+              /* 🔴 v1.0.126（老总 2026-10-20：「打开插件按钮，侧边栏和返回按钮还是遮挡」）：
+                 插件**详情**页没有 header/pageHead，返回行（aria-label="返回xxx"，全宽
+                 x=24..406 y=67..83）被本函数钉的 fab（x=14..52 y=47..85）压住左端 28x16，
+                 返回箭头点不到。避让直接做在这里（fixFabRows 与本函数抢 top 会互相刷掉）：
+                 与顶区全宽行按钮重叠时，fab 下移到该行下方 8px，幂等、目标值恒定。 */
+              try {
+                var fq = fabs[i].getBoundingClientRect();
+                var rows = document.querySelectorAll('button, [role=\"button\"], a');
+                for (var k = 0; k < rows.length; k++) {
+                  var el = rows[k];
+                  var ecs = null;
+                  try { ecs = getComputedStyle(el); } catch (e4) { continue; }
+                  var q = el.getBoundingClientRect();
+                  if (q.width < 200 || q.left > 60 || q.y > 220) continue;
+                  var ox = Math.min(fq.right, q.right) - Math.max(fq.x, q.x);
+                  var oy = Math.min(fq.bottom, q.bottom) - Math.max(fq.y, q.y);
+                  if (ox > 6 && oy > 6) { setP(fabs[i], 'top', (q.bottom + 8) + 'px'); break; }
+                }
+              } catch (e5) {}
             }
           }
           // 单趟：只跑一次，绝不循环。
@@ -6499,8 +6567,10 @@ final class ViewController: UIViewController {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.125)】
-            1. 🥇 底部插件用量条不再互相压（费用明细 / CPU / 内存 / 会话费用 / 下载 / token 环）：插件 dock 是 flex+nowrap+center 的一行容器，部件总宽一超就互相盖（真机实拍 CPU 的 CP 被费用明细按钮盖住）。本版允许换行 + 行距 3px，实测 7 个部件零重叠；本版起每 1.5 秒全页扫描一次，凡是「左边在屏幕内、右边超出屏幕」的元素一律用 transform: translateX 精确推回；同时设六条安全线绝不误伤 —— left<0（抽屉收起态）不动、left≥屏宽（右侧面板收起态）不动、比屏还宽的横向滚动容器不动、祖先可横滑的区域不动、带缩放/旋转的元素不动、出血超过 120px 的飞出动画不动。实测 430×932 / 393×852 / 375×667 三尺寸：出血元素 2 → 0，第二轮再扫命中 0（幂等不抖），抽屉仍稳在 x=-150、右侧面板仍稳在屏外；
+            【最新特性 (v1.0.126)】
+            1. 🥇 顶栏离状态栏一大截（「可以停一台航母」）彻底根治：像素级对拍实锤真机会话页 tab 下划线在 172pt、沙箱 113pt，差 58.6pt ≈ 恰好一个状态栏（59）—— 唯一源头是代理层给 [data-mobile-nav=\"frame\"] 写的 padding-top: env(safe-area-inset-top)，真机 59px、桌面 0px，React 重挂载还会把已清掉的内联值反复刷回。本版三管齐下：代理层这条 env() 规则直接删除（状态栏让位收归 App 层统一管）；App 侧顶栏钳制改为遍历**所有** frame 清 padding + 先清自己上轮的 margin 再量自然位、写绝对差（无论 padding 被刷回多少次都能精确抵消，幂等）；回归闸门永久模拟真机 env=59 环境，这类「沙箱绿、真机崩」从此在打包前现形；
+            2. 🥇 插件**详情**页「返回」按钮被「打开目录」按钮压住点不到（老总：「侧边栏和返回按钮还是遮挡」）：实测详情页没有 <header> 也没有 pageHead，旧修复在这类页面全部提前 return、整页零修复；返回行（全宽 x=24..406）被 fab（x=14..52 y=47..85）压住左端 28x16。本版把避让直接做进 fixFab —— 与顶区全宽行按钮重叠时 fab 自动下移到该行下方 8px（实测 fabTop 47 → 91，零重叠，幂等），列表页与 pageHead 并排的布局完全不受影响；回归闸门新增场景 D（进详情页校验）；
+            3. 🥇 底部插件用量条不再互相压（费用明细 / CPU / 内存 / 会话费用 / 下载 / token 环）：插件 dock 是 flex+nowrap+center 的一行容器，部件总宽一超就互相盖（真机实拍 CPU 的 CP 被费用明细按钮盖住）。本版允许换行 + 行距 3px，实测 7 个部件零重叠；本版起每 1.5 秒全页扫描一次，凡是「左边在屏幕内、右边超出屏幕」的元素一律用 transform: translateX 精确推回；同时设六条安全线绝不误伤 —— left<0（抽屉收起态）不动、left≥屏宽（右侧面板收起态）不动、比屏还宽的横向滚动容器不动、祖先可横滑的区域不动、带缩放/旋转的元素不动、出血超过 120px 的飞出动画不动。实测 430×932 / 393×852 / 375×667 三尺寸：出血元素 2 → 0，第二轮再扫命中 0（幂等不抖），抽屉仍稳在 x=-150、右侧面板仍稳在屏外；
             2. 🎯 插件页等非会话页的左上角「打开目录」按钮恢复可点、不再压页面标题：按钮挂在 overlayLayer(z=20) 里被 pageHead(z=999) 盖住（elementFromPoint 命中页头而非按钮），还压住「插件」标题。本版把页头标题右移 56px 给按钮让位、页头降 z 到 19（官方桌面层序：浮层在页头之上）。实测 fab 中心命中自身、与标题零相交；关键在 clip 而不是 hidden —— clip 不创建滚动容器，所以不会破坏吸顶顶栏（实测加入后顶栏仍 sticky / top: 0，横向滚动量 0，页面总宽 = 屏宽）；
             3. 🪟 设置面板不再被顶栏压住：App 原先把顶栏钉在 z-index 1020，而设置面板的浮层宿主只有 1000，顶栏直接盖在面板上。本版改为「会话页 999 / 有浮层时自动取浮层宿主 z-index 减一」，实测面板顶部两处探测点由命中顶栏标题行（_727C8a_titleRow）恢复为命中面板自身导航（tklpSG_nav）；
             4. 🔍 根治「修过又复发」的老毛病，并建立发版前回归闸门：实测 App 里写死的 102 个 CSS Module 哈希类名，当前 DSH 版本有 62 个在前端资源里彻底消失 —— 六成补丁一直在空转，这才是「修过又复发」的真因。本版起：① 一律改用 [class*="xxx"] 属性包含选择器；② 新增 _diag/regression.js 闸门，三尺寸 30 条断言全绿才准打包，复发在打包前就被拦住，不再等人工发现；
