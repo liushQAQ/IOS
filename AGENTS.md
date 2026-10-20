@@ -12,7 +12,10 @@
 | **本文** `AGENTS.md` | 铁律 + 强制流程 + 排障速查 | 动手前必读 |
 | **`REGRESSION.md`** | R01~R20 问题清单（症状/真因/解法/校验）+ 编码铁律 + 发版 SOP | 修复任何问题前，先查有没有重复案例 |
 | `交接_已知问题清单_2026-10-11.md` | 早期交接快照 | 仅考古；与 REGRESSION.md 冲突时以后者为准 |
+<<<<<<< HEAD
 | **`IOS_COMPATIBILITY.md`** | iOS 14/15/16+ 兼容矩阵 + C1~C8 兼容铁律 + 发版前 10 项自检 | 涉版本兼容/发版前必读 |
+=======
+>>>>>>> f848a67 (docs: AI 接手规程入仓 —— AGENTS.md 必读入口 + REGRESSION.md 补 R18/R19/R20)
 
 ---
 
@@ -64,7 +67,10 @@
 | CI exit 65 | Swift 多行字符串 JS `\(` 转义 | 双写 `\\(` 或不用正则（REGRESSION.md 铁律 8） |
 | CI 校验凭证被拒 | 凭证过期/sourceHash 不符 | 重跑闸门 |
 | 会话页 evaluate 挂死 | DSH 前端死循环（连坐，非 App 回归） | 闸门已有 30s 哨兵 + 18 分钟看门狗；重启 DSH（指纹会变） |
+<<<<<<< HEAD
 | git push SSL handshake 失败（curl/gh 却通） | 代理节点掐 git 的 TLS 特征（2026-10-20 晚实锤，8 连败） | 重试数轮；仍败改用 gh api Contents API 单文件推送（PUT repos/<o>/<r>/contents/<path>，带 sha + branch），推完记下远端 HEAD，网络恢复后 git fetch && git reset --hard origin/personal 对齐 |
+=======
+>>>>>>> f848a67 (docs: AI 接手规程入仓 —— AGENTS.md 必读入口 + REGRESSION.md 补 R18/R19/R20)
 
 ---
 
@@ -76,6 +82,9 @@
 
 ---
 
+<<<<<<< HEAD
 > 🤝 本规程对 **DSH 侧 AI 同样生效**：DSH 有时也执行 iOS 打包（老总 2026-10-21 令），
 > 交接卡副本已放 DSH 工作区 E:\desktop\所有skill\deepseek-harness-desktop\AGENTS.md，双方必须遵守同一套禁令与流程。
+=======
+>>>>>>> f848a67 (docs: AI 接手规程入仓 —— AGENTS.md 必读入口 + REGRESSION.md 补 R18/R19/R20)
 *最后更新：2026-10-20 · v1.0.130(74) · 老总真机验收通过*
