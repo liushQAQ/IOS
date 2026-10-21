@@ -5,16 +5,16 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-21T16:27:06.680Z",
-  "dshFingerprint": "guyyvo",
-  "dshAssets": 8,
+  "startedAt": "2026-10-21T18:08:42.520Z",
+  "dshFingerprint": "8tpnn6",
+  "dshAssets": 9,
   "domClasses": 0,
-  "anchorTotal": 148,
+  "anchorTotal": 149,
   "anchorDead": 0,
-  "anchorCssAlive": 93,
+  "anchorCssAlive": 94,
   "anchorResidue": 55,
-  "dshSheets": 206,
-  "ownSheets": 14,
+  "dshSheets": 208,
+  "ownSheets": 15,
   "anchorCritical": {
     "total": 12,
     "dead": []
@@ -24,6 +24,6 @@
   "fail": 0,
   "failures": [],
   "blocked": [],
-  "sourceHash": "d595fcc2a3a74507c1bf23a14604ae8424ae301f208f7ef89207b6f5c546577e",
-  "finishedAt": "2026-10-21T16:29:47.310Z"
+  "sourceHash": "8601dfa2b32c0bd55759fa7652ac14c637699a0d5632ed684845b1c1c7c0b8f5",
+  "finishedAt": "2026-10-21T18:11:13.439Z"
 }

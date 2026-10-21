@@ -6072,6 +6072,65 @@ function applySidebarInset() {
         })();
 
 
+""",
+"""
+        // ===== shim_25（v1.0.131 build 79）：会话框下方统计 dock 区 —— 主题面板化 + 防溢出 =====
+        // 老总 2026-10-22 01:27 实机截图：运行中/结束后，会话卡下方的统计 dock（ueqFMa 轮次/tok pill、
+        // sm-dock CPU/内存、cm-session-cost 本会话费用、cm-corner 网关 pill）直接悬在页面底色上，
+        // 暗黑下 CPU 数值是浅色主题的深蓝 --sm-accent(#2470d8) 几乎看不清；主题反复切换后同样出现。
+        // 实测（2026-10-22 01:40 Chromium 430×932 复现）：VERcba_dock 在卡片正下方 flex wrap，
+        //   子项 = ueqFMa_pill(轮次) + sm-root(CPU/内存) + cm-session-cost(本会话) + cm-corner(网关 pill)，
+        //   运行结束统计仍驻留；内容 4 行时 dock 高约 110px，底缘顶到屏幕。
+        // 定案三件事：
+        //   ① dock 容器挂 DSH 主题面板底（--dsw-alias-* 自动跟主题，切换即时生效，暗黑深色面板不再悬浮）；
+        //   ② sm 插件变量整体映射到 DSH 主题变量（不再赌 body[data-ds-dark-theme] 是否被前端正确设置）；
+        //   ③ max-height 收口 + 纵向可滚，极端多行时不再溢出屏幕。
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            '[class*="composerStack"] [class*="dock"]:not([class*="sm-"]) {',
+            '  background: var(--dsw-alias-bg-layer-1, rgba(127,127,127,0.14)) !important;',
+            '  border-radius: 12px !important;',
+            '  margin: 2px 10px 6px !important;',
+            '  padding: 3px 10px 5px !important;',
+            '  box-sizing: border-box !important;',
+            '  max-height: 126px !important;',
+            '  overflow-y: auto !important;',
+            '  -webkit-overflow-scrolling: touch !important;',
+            '  row-gap: 2px !important;',
+            '}',
+            '[class*="composerStack"] .sm-root {',
+            '  --sm-text-primary: var(--dsw-alias-label-primary, #e9effb) !important;',
+            '  --sm-text-secondary: var(--dsw-alias-label-secondary, #b5c3dc) !important;',
+            '  --sm-text-tertiary: var(--dsw-alias-label-tertiary, #8595b1) !important;',
+            '  --sm-accent: #5b9bff !important;',
+            '  --sm-hover: rgba(91,155,255,0.12) !important;',
+            '  --sm-active: rgba(91,155,255,0.2) !important;',
+            '  --sm-surface: var(--dsw-alias-bg-layer-1, #10151d) !important;',
+            '  --sm-card: var(--dsw-alias-bg-layer-2, #1a2130) !important;',
+            '  --sm-border: var(--dsw-alias-border-l1, #33456a) !important;',
+            '  --sm-border-strong: var(--dsw-alias-border-l1, #5a7099) !important;',
+            '}'
+          ].join('\\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (document.getElementById('dsh-ios-dock-theme')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-dock-theme';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 3000);
+        })();
 """
     ]
 

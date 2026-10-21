@@ -23,5 +23,5 @@ print('blocks:', len(blocks), 'chars:', sum(len(b) for b in blocks))
 out = '\n;\n'.join(blocks)
 # Swift 多行字符串转义逆运算
 out = out.replace('\\\\(', '\\(').replace('\\\\"', '\\"').replace('\\\\', '\\')
-open('app_inject.js', 'w', encoding='utf-8', newline='\n').write(out)
+open(r'E:/desktop/所有skill/deepseek-harness-ios/_diag/app_inject.js', 'w', encoding='utf-8', newline='\n').write(out)
 print('saved app_inject.js', len(out))

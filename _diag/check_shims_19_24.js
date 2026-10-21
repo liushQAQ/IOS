@@ -7,7 +7,7 @@ const lines = src.split(/\r?\n/);
 let blocks = [], cur = null;
 for (let i = 0; i < lines.length; i++) {
   const t = lines[i].trim();
-  if (t === '"""') {
+  if (t === '"""' || t === '""",') {
     if (cur === null) cur = { start: i + 1, body: [] };
     else { cur.end = i + 1; blocks.push(cur); cur = null; }
     continue;
