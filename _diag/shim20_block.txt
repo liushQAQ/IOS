@@ -1,0 +1,55 @@
+        // ===== shim_20（v1.0.131）：会话框周边第三方插件手机端布局收敛 =====
+        // 老总 2026-10-21 08:41 双截图报障：手机窄屏把插件全堆在会话框装不下——
+        //   ① 积分胶囊（dcc-btn）24px 高与行内控件不齐；
+        //   ② 优化/撤回/齿轮换行后第二行右端与发送按钮重叠（发送钮垂直居中于两行高的
+        //      trailing 容器，第二行右端正好进入其范围）；
+        //   ③ 费用明细按钮（cm-stat-entry）与网关/余额胶囊（cm-bbox）大灰边框
+        //      在底部统计行格格不入。
+        // 锚点全部为插件自有稳定类名/语义后缀（dcc- / cm- / standardControls），零构建哈希。
+        // 只做收敛不挪位：桌面端零影响（这些规则只随 App 注入）。
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            // ① 积分胶囊对齐行高（24 → 28，居中）
+            '.dcc-btn { height: 28px !important; align-self: center !important; border-radius: 8px !important; }',
+            // ② 换行后的第二行右侧让出发送按钮（≈48px），齿轮/重试不再压发送钮
+            '[class*="composerStack"] [class*="standardControls"] { padding-right: 48px !important; box-sizing: border-box !important; }',
+            // ③ 费用明细按钮融入统计行：去大灰框，降为小字轻按钮
+            '.cm-stat-entry {',
+            '  font-size: 11px !important;',
+            '  padding: 2px 8px !important;',
+            '  border: none !important;',
+            '  background: transparent !important;',
+            '  box-shadow: none !important;',
+            '  color: var(--dsw-alias-label-tertiary) !important;',
+            '}',
+            // ③ 网关/余额胶囊同步淡化：去边框去底色小字号，信息保留可点
+            '.cm-bbox {',
+            '  border: none !important;',
+            '  background: transparent !important;',
+            '  box-shadow: none !important;',
+            '  font-size: 11px !important;',
+            '  padding: 0 2px !important;',
+            '  gap: 4px !important;',
+            '}',
+            '.cm-bbox .cm-mm-title, .cm-bbox .cm-gw-sub { font-size: 11px !important; }'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (document.getElementById('dsh-ios-composer-fit')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-composer-fit';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 3000);
+        })();

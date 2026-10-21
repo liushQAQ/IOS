@@ -1,0 +1,93 @@
+        // ===== shim_23（v1.0.131）：插件条整体背景模块 + 一行水平对齐（含 prompt 插件胶囊）=====
+        // 老总 2026-10-21 14:18 反馈：插件条元素没有水平一致，要一行排过去 + 背景模块，包括 prompt 插件。
+        // 实测依据（2026-10-21 14:30 Chromium 430x932，注入 shim_21/22 后）：
+        //   dcc-root 高 24 顶 769（中心 781）、cm-stat-entry 高 36 顶 771（中心 789）→ 中心差 8px 不齐
+        //   dsh-po-capsule（prompt 优化+齿轮）在输入行 [110,852,85x26]，定位祖先 static 可 transform 1:1 平移
+        // 方案：
+        //   ① 卡片 padding-top 34→40，顶部放 36px 高浅灰圆角背景条（::before，z:1，插件元素 z:3）
+        //   ② dcc(积分)/po(prompt 插件)/cm(费用明细) 三元素中心统一、一行排过去、间距 8px 零重叠
+        //   ③ 坐标基准：dcc 祖先=_card(left16)；cm-* 祖先=composerSeat(left0) —— left 差 16 已校准
+        //   ④ 输入行只剩 +/盾牌/模型选择器/发送钮，sc y=851 与 primary y=846 逐像素不变
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            // ① 插件条背景模块（卡片顶 4px 起 36px 高浅灰圆角条）
+            '[class*="composerStack"] [class*="_card"] {',
+            '  position: relative !important;',
+            '  padding-top: 40px !important;',
+            '}',
+            '[class*="composerStack"] [class*="_card"]::before {',
+            '  content: " " !important;',
+            '  position: absolute !important;',
+            '  left: 6px !important;',
+            '  right: 6px !important;',
+            '  top: 4px !important;',
+            '  height: 36px !important;',
+            '  background: rgba(15, 23, 42, 0.05) !important;',
+            '  border-radius: 18px !important;',
+            '  z-index: 1 !important;',
+            '  pointer-events: none !important;',
+            '}',
+            // ② 积分胶囊：一行左起第 1（中心统一）
+            '.dcc-root {',
+            '  position: absolute !important;',
+            '  left: 14px !important;',
+            '  top: 9px !important;',
+            '  height: 26px !important;',
+            '  max-height: 26px !important;',
+            '  max-width: 96px !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  z-index: 3 !important;',
+            '}',
+            // ③ prompt 插件胶囊（优化+齿轮）：transform 1:1 平移进插件条，第 2 位
+            '[class*="composerStack"] .dsh-po-capsule {',
+            '  position: relative !important;',
+            '  transform: translate(24px, -85px) !important;',
+            '  height: 26px !important;',
+            '  z-index: 3 !important;',
+            '}',
+            // ④ 费用明细：第 3 位（保持原生 36 高，中心对齐）
+            '.cm-stat-entry {',
+            '  position: absolute !important;',
+            '  left: 227px !important;',
+            '  right: auto !important;',
+            '  top: 4px !important;',
+            '  height: 36px !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  white-space: nowrap !important;',
+            '  z-index: 3 !important;',
+            '}',
+            // ⑤ 网关/余额：第 4 位（出现时自动入列）
+            '.cm-bbox {',
+            '  position: absolute !important;',
+            '  left: 291px !important;',
+            '  right: auto !important;',
+            '  top: 9px !important;',
+            '  height: 26px !important;',
+            '  max-height: 26px !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  z-index: 3 !important;',
+            '}'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (document.getElementById('dsh-ios-plugin-strip-unified')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-plugin-strip-unified';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 3000);
+        })();

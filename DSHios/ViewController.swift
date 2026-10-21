@@ -1692,7 +1692,7 @@ final class ViewController: UIViewController {
               if (!target) return;
 
               // 如果用户点击的是 + 号按钮、命令弹窗菜单内部、或者模型快捷选择按钮/菜单，严禁唤起虚拟键盘
-              if (target.closest('.uWtHQG_add') || target.closest('[data-trigger-menu]') || target.closest('.bqwvaa_menu') || target.closest('.VYXhfG_trigger') || target.closest('.VYXhfG_root')) {
+              if (target.closest('.uWtHQG_add') || target.closest('[class*="_add"]') || target.closest('[data-trigger-menu]') || target.closest('.bqwvaa_menu') || target.closest('.VYXhfG_trigger') || target.closest('.VYXhfG_root')) {
                 // 特殊：只有真正直接点在模型搜索框 input 本身上才允许键盘，点外层/触发按钮绝对不准唤醒输入框
                 if (!target.classList.contains('VYXhfG_search') && target.getAttribute('role') !== 'searchbox') {
                   allowUserTouchFocus = false;
@@ -2075,7 +2075,8 @@ final class ViewController: UIViewController {
             window.__dshVoiceStateUpdate = function(active, text) {
               updateVoiceButtonState(active);
               if (text && text.length > 0) {
-                var inputEl = document.querySelector('.uWtHQG_input') ||
+                var inputEl = document.querySelector('[class*="composerStack"] [class*="_input"]') ||
+                              document.querySelector('.uWtHQG_input') ||
                               document.querySelector('[contenteditable="true"]') ||
                               document.querySelector('textarea');
                 if (inputEl) {
@@ -2095,7 +2096,11 @@ final class ViewController: UIViewController {
             };
 
             function ensureVoiceButton() {
-              var tools = document.querySelector('.uWtHQG_tools');
+              // v1.0.131：DSH 换版后 .uWtHQG_tools 永久命中 0（前缀已变 VERcba_），语音按钮因此消失。
+              // 语义后缀优先，旧哈希仅作向后兼容兜底。
+              var tools = document.querySelector('[class*="composerStack"] [class*="_tools"]') ||
+                          document.querySelector('[class*="_tools"]') ||
+                          document.querySelector('.uWtHQG_tools');
               if (!tools) return;
               if (tools.querySelector('.dsh-mobile-voice-btn')) return;
 
@@ -2113,7 +2118,7 @@ final class ViewController: UIViewController {
                 }
               });
 
-              var addBtn = tools.querySelector('.uWtHQG_add');
+              var addBtn = tools.querySelector('[class*="_add"], .uWtHQG_add, [aria-label*="添加文件"]');
               if (addBtn && addBtn.nextSibling) {
                 tools.insertBefore(voiceBtn, addBtn.nextSibling);
               } else {
@@ -2289,7 +2294,7 @@ final class ViewController: UIViewController {
               window.addEventListener('keydown', function(e) {
                 var target = e.target;
                 if (!target) return;
-                var input = target.closest ? target.closest('.uWtHQG_input') : null;
+                var input = target.closest ? (target.closest('.uWtHQG_input') || target.closest('[class*="composerStack"] [class*="_input"]')) : null;
                 if (input) {
                   if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
                     // 将纯 Enter 事件无缝转换为 Shift+Enter 语义，通知 Lexical 编辑器执行段落换行而非发送提交！
@@ -4379,6 +4384,15 @@ function applySidebarInset() {
               var els = document.querySelectorAll('[class*=\"sidebarCol\"], .CZPbNW_sidebarCol');
               for (var i = 0; i < els.length; i++) {
                 var el = els[i];
+                // v1.0.131 玩家兼容守卫：仅当抽屉是 overlay 定位（absolute/fixed）时才强制 252。
+                //   旧版 DSH 前端（如 172.16.0.74）抽屉是 push 布局参与者（static）—— 强制 252
+                //   会与原生宽打架，主内容被推出右屏裁 24pt（玩家截图实锤：侧栏 276=252+24
+                //   padding，发送钮切半；Safari 无注入 300 自然宽一切正常，与 iOS 版本无关）。
+                //   push 态一律跳过本轮保持原生宽；样式未加载时 position 暂为 static 同样跳过，
+                //   下轮复判。新版前端抽屉 absolute 照旧收敛 252，行为零变化。
+                var __dshDrawerPos = "";
+                try { __dshDrawerPos = getComputedStyle(el).position; } catch (e) {}
+                if (__dshDrawerPos !== "absolute" && __dshDrawerPos !== "fixed") continue;
                 if (el.style.getPropertyValue('width') === DRAWER_W + 'px' &&
                     el.style.getPropertyPriority('width') === 'important') continue;
                 el.style.setProperty('width', DRAWER_W + 'px', 'important');
@@ -5484,6 +5498,536 @@ function applySidebarInset() {
           setTimeout(run, 3500);
           window.__dshMobilePolishRun = full;
         })();
+        """
+        ,
+        """
+        // ===== shim_18（v1.0.131）：会话页时间线「多行文字互相重叠」根治 =====
+        // 老总 2026-10-21 02:06 截图报障：运行命令/思考行标题超过两行就重叠。
+        // 根因链（四证据闭环，详录 REGRESSION.md R22）：
+        //   ① 时间线行（思考/运行命令/工具调用）行盒被 contain:size 定死 24px；
+        //   ② 行内文字用 TextShimmer 渲染，running 时多渲染一层「装饰副本」
+        //      （span[inert]，浅灰 shimmer 色——与截图第二行颜色更浅吻合）；
+        //   ③ 副本文字经 [data-shimmer-text]::after 渲染，继承链上无 white-space:nowrap
+        //      → 长标题在副本里折成两行（真实内容链全程 nowrap+ellipsis 永不折）；
+        //   ④ 副本层靠 overflow:clip + mask-image + transform 动画裁剪，iOS WebKit
+        //      合成层上该组合会失效 → 折出来的第二行溢出 24px 行盒压到下一行。
+        // 修法：iOS 上整层禁用装饰副本（只损失扫光动画，反而减轻 WebKit 合成负担）；
+        //       并给副本文字与行内真实文字补 nowrap 兜底。
+        // 铁律合规：全用 React 稳定属性锚定（data-shimmer/data-shimmer-text/inert），
+        //       零 CSS Module 哈希类名；带 isDSH 判据 + 3s 定时器兜底。
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            // 1) 装饰副本层整层隐藏（含扫光动画），幽灵文字从此不存在
+            'span[data-shimmer] > span[inert] { display: none !important; }',
+            // 2) 副本文字（::after 继承 span 的 white-space）强制单行，双保险
+            'span[data-shimmer-text] { white-space: nowrap !important; }',
+            // 3) 行内真实文字兜底钳制（无论 DSH 哪套模块 CSS 是否到位都不许折行）
+            'span[data-shimmer] span[class*="_label"],',
+            'span[data-shimmer] span[class*="_summaryText"],',
+            'span[data-shimmer] span[class*="_summary"] {',
+            '  min-width: 0 !important;',
+            '  max-width: 100% !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '}'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (document.getElementById('dsh-ios-shimmer-fix')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-shimmer-fix';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 3000);
+        })();
+        """
+        ,
+        """
+        // ===== shim_19（v1.0.131）：插件 toast 弹窗整治（老总 2026-10-21 08:32 报障）=====
+        // 症状：Our Free Model 的「插件已热重载（第 N 次）」toast 全宽压在底部，
+        //       盖住费用明细与输入区，驻留 12 秒（holdMs:12000），且插件反复热重载反复弹。
+        // 结构（插件自有稳定类名，非 CSS Module 哈希，跨版本安全）：
+        //   .ofm_toasts（宿主，fixed right:18 bottom:18 z-index:1200 max-width:380px）
+        //   .ofm_toast / .ofm_toasttitle / .ofm_toastbody / .ofm_toastactions / .ofm_toastclose
+        // 整治：① 「插件已热重载」纯信息提示 2 秒自动收走（版本信息面板里本就有）；
+        //       ② 全部 toast 紧凑化：宽 ≤64vw、11px 字号、容器不挡点击（卡片自持）；
+        //       ③ 公告/升级/错误（warn/urgent）toast 内容与驻留不动，只压样式。
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            '.ofm_toasts { pointer-events: none !important; }',
+            '.ofm_toast {',
+            '  max-width: 64vw !important;',
+            '  font-size: 11px !important;',
+            '  line-height: 15px !important;',
+            '  padding: 8px 10px 8px 12px !important;',
+            '  pointer-events: auto !important;',
+            '}',
+            '.ofm_toast .ofm_toasttitle { font-size: 11px !important; }',
+            '.ofm_toast .ofm_toastbody { font-size: 11px !important; }',
+            '.ofm_toast .ofm_toastactions .ofm_btn { font-size: 11px !important; padding: 3px 8px !important; }'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (!document.getElementById('dsh-ios-ofm-toast-fix')) {
+              try {
+                var st = document.createElement('style');
+                st.id = 'dsh-ios-ofm-toast-fix';
+                st.textContent = CSS;
+                document.head.appendChild(st);
+              } catch (e) {}
+            }
+            // 「插件已热重载」提示 2 秒自动收走；记录已启动收走的卡片防重复定时
+            try {
+              var toasts = document.querySelectorAll('.ofm_toast');
+              for (var i = 0; i < toasts.length; i++) {
+                var card = toasts[i];
+                if (card.__dshSwept) { continue; }
+                var body = card.querySelector('.ofm_toastbody');
+                var txt = body ? (body.textContent || '') : '';
+                if (txt.indexOf('插件已热重载') !== -1) {
+                  card.__dshSwept = true;
+                  (function (c) { setTimeout(function () { try { c.remove(); } catch (e) {} }, 2000); })(card);
+                }
+              }
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 1000);
+        })();
+
+        """
+        ,
+        """
+        // ===== shim_20（v1.0.131）：会话框周边第三方插件手机端布局收敛 =====
+        // 老总 2026-10-21 08:41 双截图报障：手机窄屏把插件全堆在会话框装不下——
+        //   ① 积分胶囊（dcc-btn）24px 高与行内控件不齐；
+        //   ② 优化/撤回/齿轮换行后第二行右端与发送按钮重叠（发送钮垂直居中于两行高的
+        //      trailing 容器，第二行右端正好进入其范围）；
+        //   ③ 费用明细按钮（cm-stat-entry）与网关/余额胶囊（cm-bbox）大灰边框
+        //      在底部统计行格格不入。
+        // 锚点全部为插件自有稳定类名/语义后缀（dcc- / cm- / standardControls），零构建哈希。
+        // 只做收敛不挪位：桌面端零影响（这些规则只随 App 注入）。
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            // ① 积分胶囊对齐行高（24 → 28，居中）
+            '.dcc-btn { height: 28px !important; align-self: center !important; border-radius: 8px !important; }',
+            // ② 换行后的第二行右侧让出发送按钮（≈48px），齿轮/重试不再压发送钮
+            '[class*="composerStack"] [class*="standardControls"] { padding-right: 48px !important; box-sizing: border-box !important; }',
+            // ③ 费用明细按钮融入统计行：去大灰框，降为小字轻按钮
+            '.cm-stat-entry {',
+            '  font-size: 11px !important;',
+            '  padding: 3px 9px !important;',
+            '  border: none !important;',
+            '  background: transparent !important;',
+            '  box-shadow: none !important;',
+            '  color: var(--dsw-alias-label-tertiary) !important;',
+            '  flex: none !important;',
+            '  margin-right: 4px !important;',
+            '  white-space: nowrap !important;',
+            '}',
+            // ③ 网关/余额胶囊同步淡化：去边框去底色小字号，信息保留可点
+            '.cm-bbox {',
+            '  border: none !important;',
+            '  background: transparent !important;',
+            '  box-shadow: none !important;',
+            '  font-size: 11px !important;',
+            '  padding: 0 2px !important;',
+            '  gap: 4px !important;',
+            '}',
+            '.cm-bbox .cm-mm-title, .cm-bbox .cm-gw-sub { font-size: 11px !important; }'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (document.getElementById('dsh-ios-composer-fit')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-composer-fit';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 3000);
+        })();
+
+        """
+        ,
+        """
+        // ===== shim_21（v1.0.131）：插件条上移一行（老总 2026-10-21 11:09 定案方案）=====
+        // 老总要求：原会话框内容（输入框 / ＋ / 优化 / 齿轮 / 模型选择器 / 发送钮）一律不动，
+        // 第三方插件元素（积分胶囊 dcc-root、费用明细 cm-stat-entry、网关/余额 cm-bbox）
+        // 统一挪到输入卡【顶部新增的一行插件条】上，不再跟会话框控件挤同一行。
+        // 几何依据（2026-10-21 11:00 Chromium 实测 430×932）：
+        //   VERcba_card(16,790,396×98, position:relative)
+        //     ├ VERcba_row(846) → VERcba_tools(851, 189×28) 内含 dcc-root 胶囊
+        //     └ VERcba_dock(888, 396×40) 内含 cm-stat-entry / cm-bbox
+        //   锚点：dcc-root 的最近 positioned 祖先 = _card；cm-* 的 = composerSeat（顶部与 _card 同高）。
+        // 只用插件自有稳定类名（dcc-/cm-）+ 语义后缀 [class*="_card"]，零构建哈希。
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            // ① 输入卡顶部腾出 34px 插件条（卡片高度自适应增长，内部控件相对位置不变）
+            '[class*="composerStack"] [class*="_card"] { padding-top: 34px !important; }',
+            // ② 积分胶囊 → 插件条左侧
+            '.dcc-root {',
+            '  position: absolute !important;',
+            '  left: 12px !important;',
+            '  top: 5px !important;',
+            '  z-index: 3 !important;',
+            '}',
+            // ③ 费用明细 → 插件条右侧
+            '.cm-stat-entry {',
+            '  position: absolute !important;',
+            '  right: 12px !important;',
+            '  top: 7px !important;',
+            '  z-index: 3 !important;',
+            '}',
+            // ④ 网关/余额胶囊 → 插件条中右（限宽防撞胶囊）
+            '.cm-bbox {',
+            '  position: absolute !important;',
+            '  right: 92px !important;',
+            '  top: 7px !important;',
+            '  z-index: 3 !important;',
+            '  max-width: 150px !important;',
+            '}',
+            // ⑤ 插件条内元素禁止撑高输入卡
+            '.dcc-root, .cm-stat-entry, .cm-bbox { max-height: 24px !important; }'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (document.getElementById('dsh-ios-plugin-strip')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-plugin-strip';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 3000);
+        })();
+
+        """
+        ,
+        """
+        // ===== shim_22（v1.0.131）：插件条融合去底 + 模型选择器限宽防压发送钮 =====
+        // 老总 2026-10-21 12:18 反馈两点：
+        //   ① 插件和胶囊背景模块和会话框格格不入（费用明细白底浮块、积分胶囊白底描边）
+        //   ② 模型下箭头和发送确认按钮重叠
+        // 实测依据（2026-10-21 12:16 Chromium 430x932，注入 shim_21 后）：
+        //   .cm-stat-entry bg=rgb(255,255,255) border=rgba(0,0,0,0.04) 1px radius=8px → 白卡上白块
+        //   .dcc-root 本身透明但内层子元素带白底胶囊
+        //   ofm 模型选择器 trigger(ofTiQG_trigger) 右缘 378 > 发送钮 primary 左缘 370 → 重叠 8px
+        //     （trigger 溢出 standardControls 容器右缘 358，属 flex 溢出，必须直接限宽 trigger）
+        // 修复：插件条三元素全部透明融入；模型选择器 max-width:150px（右缘 357，与发送钮留 13px）。
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            // ① 费用明细：去白底/边框/阴影，淡化成次要文字融入插件条
+            '.cm-stat-entry {',
+            '  background: transparent !important;',
+            '  border: none !important;',
+            '  box-shadow: none !important;',
+            '  font-size: 11px !important;',
+            '  color: var(--dsw-alias-label-tertiary, #8a8f99) !important;',
+            '}',
+            // ② 网关/余额胶囊：同步透明
+            '.cm-bbox {',
+            '  background: transparent !important;',
+            '  border: none !important;',
+            '  box-shadow: none !important;',
+            '}',
+            // ③ 积分胶囊：容器与内层全部去底去描边（绿点图标是 svg fill 不受影响）
+            '.dcc-root, .dcc-root * {',
+            '  background: transparent !important;',
+            '  border: none !important;',
+            '  box-shadow: none !important;',
+            '}',
+            // ④ 模型选择器限宽 150px：右缘 207+150=357 < 发送钮 370，防压防重叠
+            '[class*="composerStack"] [class*="standardControls"] [class*="_trigger"] {',
+            '  max-width: 150px !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '}'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (document.getElementById('dsh-ios-plugin-strip-merge')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-plugin-strip-merge';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 3000);
+        })();
+
+        """
+        ,
+        """
+        // ===== shim_23（v1.0.131）：插件条整体背景模块 + 一行水平对齐（含 prompt 插件胶囊）=====
+        // 老总 2026-10-21 14:18 反馈：插件条元素没有水平一致，要一行排过去 + 背景模块，包括 prompt 插件。
+        // 实测依据（2026-10-21 14:30 Chromium 430x932，注入 shim_21/22 后）：
+        //   dcc-root 高 24 顶 769（中心 781）、cm-stat-entry 高 36 顶 771（中心 789）→ 中心差 8px 不齐
+        //   dsh-po-capsule（prompt 优化+齿轮）在输入行 [110,852,85x26]，定位祖先 static 可 transform 1:1 平移
+        // 方案：
+        //   ① 卡片 padding-top 34→40，顶部放 36px 高浅灰圆角背景条（::before，z:1，插件元素 z:3）
+        //   ② dcc(积分)/po(prompt 插件)/cm(费用明细) 三元素中心统一、一行排过去、间距 8px 零重叠
+        //   ③ 坐标基准：dcc 祖先=_card(left16)；cm-* 祖先=composerSeat(left0) —— left 差 16 已校准
+        //   ④ 输入行只剩 +/盾牌/模型选择器/发送钮，sc y=851 与 primary y=846 逐像素不变
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            // ① 插件条背景模块（卡片顶 4px 起 36px 高浅灰圆角条）
+            '[class*="composerStack"] [class*="_card"] {',
+            '  position: relative !important;',
+            '  padding-top: 40px !important;',
+            '}',
+            '[class*="composerStack"] [class*="_card"]::before {',
+            '  content: " " !important;',
+            '  position: absolute !important;',
+            '  left: 6px !important;',
+            '  right: 6px !important;',
+            '  top: 4px !important;',
+            '  height: 36px !important;',
+            '  background: rgba(15, 23, 42, 0.05) !important;',
+            '  border-radius: 18px !important;',
+            '  z-index: 1 !important;',
+            '  pointer-events: none !important;',
+            '}',
+            // ② 积分胶囊：一行左起第 1（中心统一）
+            '.dcc-root {',
+            '  position: absolute !important;',
+            '  left: 14px !important;',
+            '  top: 9px !important;',
+            '  height: 26px !important;',
+            '  max-height: 26px !important;',
+            '  max-width: 96px !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  z-index: 3 !important;',
+            '}',
+            // ③ prompt 插件胶囊（优化+齿轮）：transform 1:1 平移进插件条，第 2 位
+            '[class*="composerStack"] .dsh-po-capsule {',
+            '  position: relative !important;',
+            '  transform: translate(24px, -85px) !important;',
+            '  height: 26px !important;',
+            '  z-index: 3 !important;',
+            '}',
+            // ④ 费用明细：第 3 位（保持原生 36 高，中心对齐）
+            '.cm-stat-entry {',
+            '  position: absolute !important;',
+            '  left: 227px !important;',
+            '  right: auto !important;',
+            '  top: 4px !important;',
+            '  height: 36px !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  white-space: nowrap !important;',
+            '  z-index: 3 !important;',
+            '}',
+            // ⑤ 网关/余额：第 4 位（出现时自动入列）
+            '.cm-bbox {',
+            '  position: absolute !important;',
+            '  left: 291px !important;',
+            '  right: auto !important;',
+            '  top: 9px !important;',
+            '  height: 26px !important;',
+            '  max-height: 26px !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  z-index: 3 !important;',
+            '}'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (document.getElementById('dsh-ios-plugin-strip-unified')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-plugin-strip-unified';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 3000);
+        })();
+
+        """
+        ,
+        """
+        // ===== shim_24（v1.0.131）：插件条自动排队引擎 + 模型选择器自适应（通用摆放逻辑）=====
+        // 老总 2026-10-21 15:28 反馈：①模型选择器压发送钮 ②插件条内优化胶囊压费用明细
+        //   ③提问：其他玩家装别的插件怎么办，有没有摆放逻辑。
+        // 根因（2026-10-21 15:20 Chromium 实测）：
+        //   语音按钮插入 tools 后 sc 起点 110→150 右移 40px；而 dsh-po-capsule 在 shim_23 里用
+        //   transform 上移到插件条【但仍占 flex 布局 85px 宽】→ sc 内容宽溢出
+        //   → model 247..397 压 primary 370（重叠 27px）、poCapsule 174..259 压 cmStat 227（重叠 32px）。
+        // 通用摆放逻辑（不写死任何插件坐标，任意插件自适应）：
+        //   ① 插件元素一律脱流（absolute），不参与输入行 flex 布局 → 模型选择器自然左移、不压发送钮
+        //   ② 自动发现：输入卡顶部 40px 插件带内、非 DSH 原生前缀的元素全部纳入（不认具体插件类名）
+        //   ③ 从左到右按原有视觉顺序流式排布，间距 8px，垂直中心统一对齐插件条中线
+        //   ④ 超出卡片右边界自动压缩 max-width（保底 60px），绝不越界、绝不重叠
+        //   ⑤ 模型选择器 max-width:100% + flex:1 1 auto → 无论前面插件多宽都不越界
+        //   ⑥ 幂等：inline 值不变就不写；每 900ms 复算（插件热重载/会话切换后自动归位）
+        (function () {
+          if (window.top !== window) { return; }
+          // DSH 原生前缀：这些是框架自身构建产物，不是第三方插件，不纳入排队
+          var NATIVE = ['VERcba_', '_727C8a_', 'ank0OG_', 'CZPbNW_', 'WBG7Rq_', 'NwyCaq_', 'VYXhfG_', 'dMHGga_', 'ZiQlkq_', 'YdIzba_', 'PPCmka_', 'WYye1W_', 'bqwwaa_', 'bqwvaa_', 'z4IYsq_', 'tklpSG_', 'JZoinq_', '7aoaqW_', 'ZKHwIG_', 'dsh-mobile-', 'dsh-ios-'];
+          // 已知插件类名（优先纳入，保证插件未挂载时也不报错）
+          var KNOWN = ['.dcc-root', '.cm-stat-entry', '.cm-bbox', '.dsh-po-capsule'];
+          var GAP = 8, PAD_L = 14, PAD_R = 12, BAND = 40, MIN_W = 60;
+          var CSS = [
+            // 模型选择器自适应：永不越界压发送钮（老总 15:28 第一条）
+            '[class*="composerStack"] [class*="standardControls"] { min-width: 0 !important; }',
+            '[class*="composerStack"] [class*="standardControls"] [class*="_trigger"] {',
+            '  max-width: 100% !important;',
+            '  min-width: 0 !important;',
+            '  flex: 1 1 auto !important;',
+            '}'
+          ].join('\n');
+          function isNativeCls(c) {
+            for (var i = 0; i < NATIVE.length; i++) { if (c.indexOf(NATIVE[i]) === 0) { return true; } }
+            return false;
+          }
+          function visible(el) {
+            try {
+              var cs = getComputedStyle(el);
+              if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) { return false; }
+              var r = el.getBoundingClientRect();
+              return r.width > 8 && r.height > 8;
+            } catch (e) { return false; }
+          }
+          function setImp(el, prop, val) {
+            var cur = el.style.getPropertyValue(prop);
+            var prio = el.style.getPropertyPriority(prop);
+            if (cur !== val || prio !== 'important') { el.style.setProperty(prop, val, 'important'); }
+          }
+          function collect(card) {
+            var out = [], seen = [];
+            KNOWN.forEach(function (s) {
+              var el = document.querySelector(s);
+              if (el && visible(el)) { out.push(el); seen.push(el); }
+            });
+            // 自动发现：卡片内、插件带垂直范围内、非原生前缀、尺寸合理的独立控件
+            var cr = card.getBoundingClientRect();
+            var top = cr.top - 2, bot = cr.top + BAND + 2;
+            var all = card.querySelectorAll('*');
+            for (var i = 0; i < all.length && out.length < 10; i++) {
+              var el = all[i];
+              if (seen.indexOf(el) >= 0) { continue; }
+              var cn = (el.className || '').toString();
+              if (!cn || isNativeCls(cn)) { continue; }
+              var r = el.getBoundingClientRect();
+              if (r.width < 16 || r.width > 280 || r.height < 14 || r.height > 46) { continue; }
+              var cy2 = r.top + r.height / 2;
+              if (cy2 < top || cy2 > bot) { continue; }
+              var dup = false;
+              for (var k = 0; k < seen.length; k++) {
+                if (seen[k].contains(el) || el.contains(seen[k])) { dup = true; break; }
+              }
+              if (dup) { continue; }
+              out.push(el); seen.push(el);
+            }
+            return out;
+          }
+          function layout() {
+            var card = document.querySelector('[class*="composerStack"] [class*="_card"]');
+            if (!card) { return; }
+            var cr = card.getBoundingClientRect();
+            if (cr.width < 120) { return; }
+            var items = collect(card);
+            if (!items.length) { return; }
+            items.sort(function (a, b) { return a.getBoundingClientRect().left - b.getBoundingClientRect().left; });
+            var cy = cr.top + 22;          // 插件条垂直中心（背景条 top4 h36 → 中心 22）
+            var maxRight = cr.right - PAD_R;
+            var x = cr.left + PAD_L;
+            for (var i = 0; i < items.length; i++) {
+              var el = items[i];
+              setImp(el, 'position', 'absolute');
+              // 清掉 shim_23 遗留的 transform 位移（脱流后 left/top 全权接管，叠加会漂 85px）
+              setImp(el, 'transform', 'none');
+              var r = el.getBoundingClientRect();
+              var w = r.width, h = r.height;
+              if (x + w > maxRight) { w = Math.max(MIN_W, maxRight - x); setImp(el, 'max-width', w + 'px'); }
+              var anc = el.offsetParent || card;
+              var ar = anc.getBoundingClientRect();
+              setImp(el, 'left', Math.round(x - ar.left) + 'px');
+              setImp(el, 'top', Math.round(cy - h / 2 - ar.top) + 'px');
+              x += w + GAP;
+            }
+          }
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function injectCSS() {
+            if (document.getElementById('dsh-ios-composer-fit')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-composer-fit';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          function tick() {
+            if (!isDSH()) { return; }
+            injectCSS();
+            try { layout(); } catch (e) {}
+          }
+          tick();
+          setInterval(tick, 900);
+        })();
+
         """
     ]
 
@@ -6917,7 +7461,13 @@ function applySidebarInset() {
             【设备环境信息】
             \(deviceInfo)
 
-            【最新特性 (v1.0.130)】
+            【最新特性 (v1.0.131)】
+            0. 🥇 玩家通用性大升级 —— App 对 DSH 桌面端新旧版本全兼容（按行为判定，不认版本号）：
+               ① 抽屉收敛加环境守卫：仅浮层式布局（新版前端）收敛 252，推挤式（旧版 / Linux 版桌面端）零干预保持原生，根治「玩家一换服务器版本页面就错乱」（像素实锤：强制 252 与旧前端原生 300 打架，主内容被推出右屏裁 24pt、发送钮切半；Safari 正常而 App 错乱，iOS 15.3 / 27 同中招，与系统版本无关）；
+               ② 插件条自动排队引擎：积分胶囊 / 优化 / 费用明细 / 任意第三方插件在会话框顶部背景模块里自动一行排齐（垂直居中、间距 8px），占位元素自动脱流不再挤压布局，模型选择器自适应宽度永不压发送钮，每 0.9 秒自动重排 —— 不写死任何插件坐标，装任何插件都自动入列；
+               ③ 会话时间线叠行根治（思考 / 运行命令第二行浅色重影压到下一行）：iOS 上禁用 TextShimmer 装饰副本层 + 三重 nowrap 兜底；
+               ④ 插件热重载弹窗 2 秒自动收走 + 全面紧凑化，不再长时间糊在页面上；
+               ⑤ 🎤 语音按钮回归：DSH 换版后旧哈希类名失效导致按钮消失，已改语义化定位 —— 语音文字回填、Enter 换行优化一并修活；
             1. 🥇 顶栏离状态栏「一大截、越来越宽」彻底根治：真机三张截图逐条带像素对拍实锤 —— 标题/Tab/下划线整体 +59pt ≈ 一个状态栏，页内布局与沙箱完全一致，整个 WebView 被原生层整体下移；真凶是「重试」与「清缓存重载」把页面归属标记写死成 false，DSH 页被当成外部网页、顶部约束被多推一个状态栏高度。本版四处根治：重试/清缓存继承归属、host 同域即 DSH 并自愈标记、页内探针确认 DSH 页时原生顶部约束强制归零（外部网页/仪表盘零影响）。另服务列表新增排序：右侧 ⇅ 按钮或长按行弹菜单 —— 上移、下移、移到最前、移到末尾（含编辑/删除入口），顺序保存到本机；
             2. 🥇 整页滚动锁上线（老总真机实锤：顶栏、底栏跟着页面一起上下滑，键盘弹出/收起会话框还各换一个位置）—— 正确行为：顶栏/底栏钉死，只有中间会话内容区自己上下滚。本版双通道根治：① 页内探针（shim 数组第 1 位、不依赖任何后续脚本）识别 DSH 主控页后注入 html/body 固定 + 框架高度跟随视口，键盘压缩视口时整页自动收高、绝不靠滚动去够输入框；② 原生层把 WKScrollView 偏移恒定钳回 0 并关掉橡皮筋，即使页内 JS 全死整页也拖不动；WebKit 聚焦输入框的自作主张 scrollIntoView 在键盘动画结束瞬间被清零（双保险 120ms 再清一次）；
             2. 🥇 锁定判据只认页内 DOM（#root + DSH 移动框架特征），绝不按 host/端口猜 —— 9009 自建仪表盘、公网大模型网页、WorkBuddy 等与 DSH 同域也零命中，100% 原生自由滚动；跳转外部网页时探针结论自动作废，绝不把 DSH 的锁带过去；

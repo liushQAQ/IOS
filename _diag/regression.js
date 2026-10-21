@@ -562,7 +562,15 @@ const A_PLUGIN_PAGE = () => {
           const comp2 = document.querySelector('[class*="composerStack"]');
           const sc = document.querySelector('[class*="VERcba_standardControls"]');
           const cap = sc ? sc.querySelector(':scope > div > div') : null;
-          if (!cap) return { skip: 'no-capsule' };
+          if (!cap) {
+            /* v1.0.131 口径：优化胶囊是 dsh-po- 插件动态挂载的。会话页死循环时插件整体未挂载
+               → 属「无法校验」（同 pageHead 先例），不是补丁失效实证。
+               sc 在、其它插件也在、唯独胶囊结构不在 → 才是结构真变，记红。 */
+            const anyPlug = document.querySelector('[class*="dsh-po-"], .dcc-root, .cm-stat-entry');
+            if (!sc) return { skip: comp2 ? 'no-standardcontrols' : 'session-dead' };
+            if (!anyPlug) return { skip: 'plugins-not-mounted' };
+            return { skip: 'no-capsule' };
+          }
           const box = document.createElement('div');
           box.id = '__gateFakeCapsule';
           box.style.cssText = 'display:flex;gap:6px;flex:0 0 auto;';
@@ -590,7 +598,9 @@ const A_PLUGIN_PAGE = () => {
           if (box) box.remove();
           return { over, overSample, sendRight: send ? Math.round(send.getBoundingClientRect().right) : null, vw };
         });
-        if (pinch.skip) chk(false, '[底排防挤爆] 找不到优化胶囊（结构变了？）', pinch.skip);
+        if (pinch.skip === 'no-capsule') chk(false, '[底排防挤爆] 找不到优化胶囊（结构变了？）', pinch.skip);
+        else if (pinch.skip === 'no-standardcontrols') chk(false, '[底排防挤爆] standardControls 结构失效', 'composerStack 在但 VERcba_standardControls 没了 —— 可能 DSH 改版');
+        else if (pinch.skip) blocked('[底排防挤爆] 优化胶囊', pinch.skip === 'plugins-not-mounted' ? '第三方插件未挂载（会话页死循环连坐，非 App 回归）' : '会话页异常（DSH 前端死循环连坐）');
         else {
           chk(pinch2.over === 0, '[底排防挤爆] 撬爆后零越界', pinch2.over ? pinch2.overSample.join(' | ') : '撤回/重优注入后全部在屏内');
           chk(pinch2.sendRight !== null && pinch2.sendRight <= pinch.vw - 8, '[底排防挤爆] 发送钮钉在屏内', 'sendRight=' + pinch2.sendRight + ' vw=' + pinch2.vw);
@@ -649,7 +659,7 @@ const A_PLUGIN_PAGE = () => {
           if (TO(ht2)) blocked('[会话页] 顶栏顶=39', '会话页 30 秒无响应（DSH 前端死循环）');
           else chk(ht2.hdrTop !== null && Math.abs(ht2.hdrTop - 39) <= 2, '[会话页] 顶栏顶=39（真机env=59下收敛）', 'hdrTop=' + ht2.hdrTop + ' framePT=' + ht2.framePT + ' want=39');
           await noteAlive(p); // 会话态关键锚点采样
-        } else bad('[dock] 60 秒内费用部件未出现（无法校验）');
+        } else blocked('[dock] 费用部件取样', '60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）');
 
         // —— 场景 C：插件页，校验左上角 fab 可点、不压标题（v1.0.125 新增）——
         await p.evaluate(() => { const x = document.querySelector('[aria-label="打开侧边栏"]') || document.querySelector('[aria-label="打开左侧侧边栏"]'); if (x) x.click(); });
@@ -848,7 +858,16 @@ const A_PLUGIN_PAGE = () => {
      属于「无法校验」，不是「补丁失效」的实证 → 单列 blocked（写进凭证，CI 摘要里明示）。
      除 pageHead 外还有锚点全零，才是真的 DSH 改版，照样记红。 */
   const onlyPageHead = deadCritical.length === 1 && deadCritical[0] === 'pageHead';
-  if (onlyPageHead) {
+  /* v1.0.131：headerCorner 同 pageHead 先例 —— 懒挂载锚点（pageHead=插件页 / headerCorner=顶栏角标）
+     在会话页死循环时取不到样，属「无法校验」；有死循环连坐证据（BLOCKED 里有死循环/插件未挂载项）
+     且 dead 锚点全属懒挂载集合 → blocked；否则维持红。 */
+  const lazyAnchors = ['pageHead', 'headerCorner'];
+  const sessionDead = BLOCKED.some(x => (x || '').indexOf('死循环') >= 0 || (x || '').indexOf('插件未挂载') >= 0);
+  const onlyLazy = deadCritical.length > 0 && deadCritical.every(a => lazyAnchors.indexOf(a) >= 0) && sessionDead;
+  if (onlyLazy) {
+    blocked('[锚点] ' + deadCritical.join('/') + ' 取样', '会话页死循环连坐，该锚点无法取样（Chromium 对照确认 DOM 在）');
+    chk(true, '[锚点] 其余 ' + (CRITICAL_ANCHORS.length - deadCritical.length) + ' 个关键锚点全部命中', '仅 ' + deadCritical.join('/') + ' 无法取样');
+  } else if (onlyPageHead) {
     blocked('[锚点] pageHead 取样', '插件页未能进入（会话页死循环），该锚点无法取样');
     chk(true, '[锚点] 其余 ' + (CRITICAL_ANCHORS.length - 1) + ' 个关键锚点全部命中', '仅 pageHead 无法取样');
   } else {

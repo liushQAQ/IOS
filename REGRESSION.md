@@ -95,6 +95,24 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - 解法：`Start-ScheduledTask -TaskName "DSH-Stat-Server"` 拉起（2026-10-20 实测有效）。源码 `E:\desktop\所有skill\dsh-stat\stat_server.py`。
 - 🔴 **两个坑**：① 查网关前**必须清代理环境变量**（本地 curl 带代理 → 127.0.0.1/Tailscale 全变 502 假象，这次就中招）；② `DSH-Stat-Keepalive` 曾 9 分钟没自动拉活，原因未明 —— keepalive 失效时手动拉起，别干等。
 
+### R21 DSH「Failed to load plugins」假恢复模式（DSH 侧运维，2026-10-21 01:11 实锤闭环）
+- 症状：iOS App 内 DSH 页顶横幅 `Failed to load plugins`，报 `@local/dsh-our-free-model-composer-credits-live: import failed` + `two revs: c96d4e94… / 3d86ce78…`，提示 Open Recovery Mode —— **不是真恢复模式**。
+- 根因：当晚 01:13 把 composer-credits 从 A 方案（-live 私有目录热挂载）切换成公开版部署（删了 `profiles/desktop/dsh-our-free-model-composer-credits-live/`，cordis.patch.yml 只留公开版条目），但 **DSH Desktop 进程没重启**（20:11 启动，早于切换）→ 服务器仍按旧模块表发旧 rev bundle（import 已删除的 -live 文件）+ 新 rev bundle（公开版）同时执行 → `duplicate factory registration for "dsh-our-free-model-composer-credits" (bundle executed twice without invalidate?)` → boot 报 1 entry did not activate。
+- 定位链：`node --check` 插件源码（OK，排除源码坏）→ grep cordis.patch.yml 现行 vs `.bak-guard-*` 备份（发现 `-live` 注册只在备份里）→ Playwright 清代理实测 3083 抓到 duplicate factory 实锤 → 核对进程 StartTime（20:11）早于 patch 变更（01:13）。
+- 解法：杀 DSH Desktop 全部进程 → `Start-ScheduledTask -TaskName "DSHDesktop-Launch"` → 20 秒后 3083 重监听 → 复测 **0 错误、插件面板正常加载**。
+- 🔴 **铁律**：凡改动 `profiles/desktop` 下的插件注册（部署/回滚/切换方案/删目录），**必须重启 DSH Desktop**（只走计划任务）；热改 patch 文件不重启 = 新旧 rev 混跑，手机端必现「Failed to load plugins」假恢复模式。App 侧处置：等 DSH 侧重启完，刷新页面即可；若横幅残留用清缓存&重载（v1.0.130 起该入口已继承 DSH 归属，安全）。
+
+### R22 会话页时间线「标题超过两行就互相重叠」（v1.0.131 shim_18 根治）
+- 症状：老总 2026-10-21 02:06 截图——对话页时间线（思考/运行命令/工具调用行）标题文本折成两行后，第二行以更浅颜色溢出行盒、压到下一行；单行省略的行完全正常。
+- 根因链（四证据闭环）：
+  1. 时间线行行盒被 `contain:size layout; height:24px`（ReasoningRow.module.css）**定死高度**；
+  2. 行内文字用 TextShimmer 渲染，running 时额外渲染一层「装饰副本」（`span[inert]`，浅灰 `--dsw-alias-label-shimmer` 色——**与截图第二行颜色更浅吻合**）；
+  3. ReasoningRow 给 TextShimmer 传的是**字符串** → 副本文字经 `[data-shimmer-text]::after{content:attr(...)}` 渲染，**::after 的继承链（decoration→sweep→highlight→text）上无任何 white-space:nowrap → 副本折行**（真实内容链全程 nowrap+ellipsis 永不折；Playwright webkit 复刻实测副本折行 sweepScrollH 38>20 实锤）；
+  4. 副本层靠 `overflow:clip`（iOS<16 不支持）+ `mask-image` + transform 动画裁剪——iOS WebKit 合成层上该组合失效 → 折出来的第二行溢出 24px 行盒压到下一行。
+- 排查史（教训）：复刻件在最新 WebKit 不复现（引擎差异）→ 直连 3083 会话页 evaluate 永久挂起（WebKitWebProcess 冻死，R21 指纹仍在）→ 改用 addInitScript+sendBeacon「注入即外传」只抢到 1 帧 → 最终靠**静态逐层拆 DSH 前端 bundle**（dsh-client-ui-chat/primitives 的 module.css + JSX）定案。杀动画 CSS 救不了冻死；3081 有鉴权不能直连。
+- 修法（shim_18，进 `DSHios/ViewController.swift` iosCompatShims）：iOS 上整层禁用装饰副本 `span[data-shimmer] > span[inert]{display:none!important}`（只损失扫光动画，顺带减轻合成负担）+ 副本文字 `[data-shimmer-text]{white-space:nowrap!important}` 双保险 + `span[data-shimmer]` 内 `_label/_summaryText/_summary` 兜底钳制。**全用 React 稳定属性锚定，零 CSS Module 哈希类名（6.5 铁律）**；带 isDSH 判据 + 3s 定时器兜底。
+- 🔴 **方法论沉淀**：①「真机有、复刻无」时先怀疑**引擎版本差异**（overflow:clip/mask/contain 全是 iOS 版本敏感点）；②会话页 evaluate 冻死是常态，诊断要靠「页面内自采集+外传」或纯静态拆 bundle；③TextShimmer 类「装饰副本」组件是幽灵文字/叠行的高发源——凡见「第二行颜色更浅的重叠文本」先查装饰副本层。
+
 ## 三、校验 SOP（每个新版本出包前必做）
 
 ### 前置

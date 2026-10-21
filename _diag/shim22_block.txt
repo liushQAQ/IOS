@@ -1,0 +1,60 @@
+        // ===== shim_22（v1.0.131）：插件条融合去底 + 模型选择器限宽防压发送钮 =====
+        // 老总 2026-10-21 12:18 反馈两点：
+        //   ① 插件和胶囊背景模块和会话框格格不入（费用明细白底浮块、积分胶囊白底描边）
+        //   ② 模型下箭头和发送确认按钮重叠
+        // 实测依据（2026-10-21 12:16 Chromium 430x932，注入 shim_21 后）：
+        //   .cm-stat-entry bg=rgb(255,255,255) border=rgba(0,0,0,0.04) 1px radius=8px → 白卡上白块
+        //   .dcc-root 本身透明但内层子元素带白底胶囊
+        //   ofm 模型选择器 trigger(ofTiQG_trigger) 右缘 378 > 发送钮 primary 左缘 370 → 重叠 8px
+        //     （trigger 溢出 standardControls 容器右缘 358，属 flex 溢出，必须直接限宽 trigger）
+        // 修复：插件条三元素全部透明融入；模型选择器 max-width:150px（右缘 357，与发送钮留 13px）。
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            // ① 费用明细：去白底/边框/阴影，淡化成次要文字融入插件条
+            '.cm-stat-entry {',
+            '  background: transparent !important;',
+            '  border: none !important;',
+            '  box-shadow: none !important;',
+            '  font-size: 11px !important;',
+            '  color: var(--dsw-alias-label-tertiary, #8a8f99) !important;',
+            '}',
+            // ② 网关/余额胶囊：同步透明
+            '.cm-bbox {',
+            '  background: transparent !important;',
+            '  border: none !important;',
+            '  box-shadow: none !important;',
+            '}',
+            // ③ 积分胶囊：容器与内层全部去底去描边（绿点图标是 svg fill 不受影响）
+            '.dcc-root, .dcc-root * {',
+            '  background: transparent !important;',
+            '  border: none !important;',
+            '  box-shadow: none !important;',
+            '}',
+            // ④ 模型选择器限宽 150px：右缘 207+150=357 < 发送钮 370，防压防重叠
+            '[class*="composerStack"] [class*="standardControls"] [class*="_trigger"] {',
+            '  max-width: 150px !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '}'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (document.getElementById('dsh-ios-plugin-strip-merge')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-plugin-strip-merge';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 3000);
+        })();
