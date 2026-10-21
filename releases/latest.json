@@ -1,11 +1,11 @@
 {
   "version": "1.0.131",
-  "build": 78,
-  "updated_at": "2026-10-22 00:42:00",
-  "title": "v1.0.131(78) 致命修复：插件条 shim 真机全灭根因（\\n 转义）",
-  "changelog": "1. 🔴 致命修复：131(76)/(77) 插件条「零变化」根因实锤 —— shim_19~24 共 7 处 CSS 数组 join('\\n') 被 Swift 编译成真实换行 → JS 未闭合字符串 SyntaxError → 整个 shim 静默死亡，插件条在任何机型上都是死胎；全部改双写，真机终于生效；\n2. 🥇 会话框底排 wrap→nowrap：393/375 宽下模型选择器不再被压到第二 flex 行（同行 4px 离散清零）；\n3. 🛡 闸门断言 0 升级：拦截一切 Swift 内嵌 JS 单反斜杠转义（\\n \\t \\d 等），此类事故从此编译级拦截；\n4. 🥇 131(77) 全部能力保留：插件条主动抓取引擎 v2、新旧版 DSH 全兼容、费用明细融入、会话时间线叠行根治、语音按钮回归；\n5. 🧱 前十版修复全部保留；iOS 14 / 15 / 16.x 全通吃；巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-78.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-78.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-78.tipa",
+  "build": 79,
+  "updated_at": "2026-10-22 02:18:00",
+  "title": "v1.0.131(79) 暗黑模式修复：会话框下方统计区主题面板化 + 防溢出",
+  "changelog": "1. 🥇 暗黑模式修复：会话卡下方统计 dock（轮次/tok、CPU/内存、本会话费用、网关 pill）挂上主题面板底 —— 用 DSH 主题变量自动跟主题，暗黑深色面板不再悬浮在黑底上，主题反复切换即时跟随；\n2. 🥇 CPU 数值等插件配色修复：系统监控插件变量整体映射到 DSH 主题变量，暗黑下不再出现浅色主题深蓝 #2470d8 几乎看不清的问题（换可读亮蓝 #5b9bff）；\n3. 🥇 防溢出：统计区 max-height 126px 收口 + 纵向可滚，多行统计不再把网关 pill 顶出屏幕下缘；\n4. 🥇 131(78) 全部能力保留：插件条 shim 转义致命修复、引擎 v2、抽屉守卫 v3；\n5. 🧱 前十版修复全部保留；iOS 14 / 15 / 16.x 全通吃；巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-79.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-79.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-79.tipa",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.131"
 }
