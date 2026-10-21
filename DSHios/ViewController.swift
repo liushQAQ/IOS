@@ -1555,14 +1555,17 @@ final class ViewController: UIViewController {
             '   胶囊变两行高、模型选择器落到下一行拿满宽度，发送钮钉在右下 x370..404 分毫不动。',
             '   实测：注入 撤回/重优 两个 60px 假按钮 → 越界 0、全部可点、composer 高 224→282。',
             '   静止态（无状态按钮）内容一行装得下，wrap 不触发，布局零变化。',
+            '   v1.0.131(78)：shim_21 已把优化胶囊挪上插件条，standardControls 不再需要换行；',
+            '   393/375 宽下 wrap 反而把模型选择器压到第二 flex 行（+8px）造成同行 4px 离散。',
+            '   定案改回 nowrap（配合 overflow:hidden 收口，绝不用 margin 推回）。',
             '   选择器走结构路径，绝不写 dsh-po-capsule 这类今天有明天没的哈希/动态类名。 */',
             '[class*="composerStack"] [class*="VERcba_standardControls"] > div > div {',
-            '  flex-wrap: wrap !important;',
+            '  flex-wrap: nowrap !important;',
             '  max-width: 100% !important;',
             '  row-gap: 8px !important;',
             '}',
             '[class*="composerStack"] [class*="VERcba_standardControls"] {',
-            '  flex-wrap: wrap !important;',
+            '  flex-wrap: nowrap !important;',
             '  row-gap: 8px !important;',
             '  justify-content: flex-end !important;',
             '}',
@@ -5532,7 +5535,7 @@ function applySidebarInset() {
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
             '}'
-          ].join('\n');
+          ].join('\\n');
           function isDSH() {
             try {
               if (!document.getElementById('root')) { return false; }
@@ -5578,7 +5581,7 @@ function applySidebarInset() {
             '.ofm_toast .ofm_toasttitle { font-size: 11px !important; }',
             '.ofm_toast .ofm_toastbody { font-size: 11px !important; }',
             '.ofm_toast .ofm_toastactions .ofm_btn { font-size: 11px !important; padding: 3px 8px !important; }'
-          ].join('\n');
+          ].join('\\n');
           function isDSH() {
             try {
               if (!document.getElementById('root')) { return false; }
@@ -5655,7 +5658,7 @@ function applySidebarInset() {
             '  gap: 4px !important;',
             '}',
             '.cm-bbox .cm-mm-title, .cm-bbox .cm-gw-sub { font-size: 11px !important; }'
-          ].join('\n');
+          ].join('\\n');
           function isDSH() {
             try {
               if (!document.getElementById('root')) { return false; }
@@ -5718,7 +5721,7 @@ function applySidebarInset() {
             '}',
             // ⑤ 插件条内元素禁止撑高输入卡
             '.dcc-root, .cm-stat-entry, .cm-bbox { max-height: 24px !important; }'
-          ].join('\n');
+          ].join('\\n');
           function isDSH() {
             try {
               if (!document.getElementById('root')) { return false; }
@@ -5782,7 +5785,7 @@ function applySidebarInset() {
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
             '}'
-          ].join('\n');
+          ].join('\\n');
           function isDSH() {
             try {
               if (!document.getElementById('root')) { return false; }
@@ -5879,7 +5882,7 @@ function applySidebarInset() {
             '  align-items: center !important;',
             '  z-index: 3 !important;',
             '}'
-          ].join('\n');
+          ].join('\\n');
           function isDSH() {
             try {
               if (!document.getElementById('root')) { return false; }
@@ -5932,7 +5935,7 @@ function applySidebarInset() {
             '  min-width: 0 !important;',
             '  flex: 1 1 auto !important;',
             '}'
-          ].join('\n');
+          ].join('\\n');
           function isNativeCls(c) {
             for (var i = 0; i < NATIVE.length; i++) { if (c.indexOf(NATIVE[i]) === 0) { return true; } }
             return false;

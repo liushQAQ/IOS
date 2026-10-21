@@ -491,7 +491,13 @@ const A_PLUGIN_PAGE = () => {
         if (cnt % 2 === 1) {           // 块结束
           const text = buf.join('\n');
           if (JS_MARK.test(text)) {
-            buf.forEach((l, k) => { if (/(^|[^\\])\\\(/.test(l)) bad.push('L' + (startLine + 1 + k)); });
+            buf.forEach((l, k) => {
+              if (/(^|[^\\])\\\(/.test(l)) bad.push('L' + (startLine + 1 + k) + ' 非法\\(');
+              // 2026-10-21 131 事故：join('\n') 单反斜杠被 Swift 编译成真实换行
+              // → JS 未闭合字符串 SyntaxError → 整个 WKUserScript 静默死亡（插件条全灭真因）。
+              // JS shim 块内任何单反斜杠+小写字母（\n \t \d \w \s 等）都必死，注释行除外。
+              if (!l.trim().startsWith('//') && /(^|[^\\])\\[a-z]/.test(l)) bad.push('L' + (startLine + 1 + k) + ' 非法单反斜杠');
+            });
           }
           buf = null;
           continue;
@@ -501,7 +507,7 @@ const A_PLUGIN_PAGE = () => {
     } catch (e) {
       bad.push('读取失败:' + String(e).slice(0, 40));
     }
-    chk(bad.length === 0, '[源码] JS shim 块无非法转义（Swift 插值陷阱）', bad.length ? ('疑似非法 \\( : ' + bad.slice(0, 6).join(', ')) : '全部合法');
+    chk(bad.length === 0, '[源码] JS shim 块无非法转义（Swift 插值/\\n 陷阱）', bad.length ? ('疑似非法: ' + bad.slice(0, 6).join(', ')) : '全部合法');
   }
 
   const b = await webkit.launch({ headless: true });
