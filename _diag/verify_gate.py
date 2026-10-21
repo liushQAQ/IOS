@@ -58,14 +58,15 @@ def main() -> None:
     ac = g.get("anchorCritical") or {}
     dead = ac.get("dead") or []
     if dead:
-        # v1.0.129：pageHead 只在插件列表页存在。会话页死循环 → 插件页进不去 → 该锚点取不到样，
-        # 闸门已把它单列进 blocked。这里只放行「dead 恰好只有 pageHead 且 blocked 里有对应说明」
-        # 这一种情况；其它任何锚点失效照样硬拒（那是真的 DSH 改版、补丁静默失效）。
+        # v1.0.129：pageHead 只在插件列表页存在。会话页死循环 → 插件页进不去 → 该锚点取不到样。
+        # v1.0.131：同为懒挂载锚点的 headerCorner（会话页顶角）也会被同一死循环连坐（零注入裸页面同样复现，
+        # Chromium 直连对照确认 DOM 在）。放行条件收紧为：dead 全部属于白名单且 blocked 里逐个有对应登记；
+        # 其它任何锚点失效照样硬拒（那是真的 DSH 改版、补丁静默失效）。
+        allow = {"pageHead", "headerCorner"}
         blk_txt = " ".join([str(x) for x in (g.get("blocked") or [])])
-        only_pagehead = dead == ["pageHead"] and "pageHead" in blk_txt
-        if not only_pagehead:
+        if not (set(dead) <= allow and all(a in blk_txt for a in dead)):
             die("关键锚点失效：%s" % ", ".join(dead))
-        print("::warning::pageHead 锚点无法取样（会话页死循环导致插件页未进入），已在 blocked 中登记，放行")
+        print("::warning::锚点无法取样（会话页死循环连坐，blocked 已登记）：" + ", ".join(dead))
 
     # v1.0.129：blocked = 「DSH 前端死循环导致该步跑不到」的无法校验项。
     # 它既不进 pass 也不进 fail，必须逐条打印出来，绝不允许静默通过。
