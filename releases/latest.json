@@ -1,11 +1,11 @@
 {
   "version": "1.0.131",
-  "build": 76,
-  "updated_at": "2026-10-21 18:40:55",
-  "title": "v1.0.131 玩家通用性大升级：兼容任意新旧 DSH 桌面端 + 插件条自动排队引擎 + 语音按钮回归",
-  "changelog": "1. 🥇 App 对 DSH 桌面端新旧版本全兼容（按行为判定，不认版本号）：抽屉收敛加环境守卫 —— 仅浮层式布局（新版前端）收敛 252，推挤式（旧版 / Linux 版桌面端）零干预保持原生，彻底根治「玩家一换服务器版本页面就错乱」（像素实锤：强制 252 与旧前端原生 300 打架，主内容被推出右屏裁 24pt、发送钮切半；Safari 正常而 App 错乱，iOS 15.3 / 27 同中招，与系统版本无关）；\n2. 🥇 插件条自动排队引擎：积分胶囊 / 优化 / 费用明细 / 任意第三方插件在会话框顶部背景模块里自动一行排齐（垂直居中、间距 8px），占位元素自动脱流不再挤压布局，模型选择器自适应宽度永不压发送钮，每 0.9 秒自动重排 —— 不写死任何插件坐标，装任何插件都自动入列；\n3. 🥇 会话时间线叠行根治：思考 / 运行命令第二行浅色重影压到下一行（iOS TextShimmer 装饰副本层溢出），整层禁用 + 三重 nowrap 兜底；\n4. 🔇 插件热重载弹窗 2 秒自动收走 + 全面紧凑化，不再长时间糊在页面上；\n5. 🎤 语音按钮回归：DSH 换版后旧哈希类名失效导致按钮消失，已改语义化定位 —— 语音文字回填、Enter 换行优化一并修活；\n6. 🧱 前十版全部保留：顶栏根治、服务列表排序、整页滚动锁、底排防挤爆、顶栏 CSS 直修兜底、模型选择器压发送钮、插件详情页返回钮、底部用量条互压、抽屉 252 收敛、齿轮回位；\n7. 🔌 iOS 14 / 15 / 16.x 全通吃；公网大模型网页保持 100% 原生 Safari WebKit；全网单一公开版，巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-76.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-76.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-76.tipa",
+  "build": 77,
+  "updated_at": "2026-10-21 19:30:41",
+  "title": "v1.0.131(77) 玩家通用性大升级 + 插件条主动抓取引擎",
+  "changelog": "1. 🥇 App 对 DSH 桌面端新旧版本全兼容（按行为判定，不认版本号）：抽屉收敛加环境守卫 —— 仅浮层式布局（新版前端）且自然宽 >320 时收敛 252，旧版 / Linux 版桌面端零干预保持原生，根治「玩家一换服务器版本页面就错乱」；\n2. 🥇 插件条自动排队引擎 v2（主动抓取制）：积分胶囊 / 优化 / 费用明细 / 网关余额 / 任意第三方插件，无论挂在输入行还是 dock 里，一律自动抓取入列 —— 会话框顶部背景模块一行排齐（垂直居中、间距 8px），模型选择器自适应宽度永不压发送钮，每 0.9 秒自动重排；\n3. 🥇 费用明细 / 网关胶囊入列即去底融入（inline 兜底），不再白块压字；\n4. 🥇 会话时间线叠行根治（思考 / 运行命令第二行浅色重影压行）；\n5. 🔇 插件热重载弹窗 2 秒自动收走 + 全面紧凑化；\n6. 🎤 语音按钮回归：语义化定位，语音回填 / Enter 换行优化一并修活；\n7. 🧱 前十版修复全部保留；iOS 14 / 15 / 16.x 全通吃；巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-77.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-77.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-77.tipa",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.131"
 }
