@@ -5952,10 +5952,42 @@ function applySidebarInset() {
           }
           function collect(card) {
             var out = [], seen = [];
-            KNOWN.forEach(function (s) {
-              var el = document.querySelector(s);
-              if (el && visible(el)) { out.push(el); seen.push(el); }
-            });
+            function grab(el) {
+              if (!el || seen.indexOf(el) >= 0) { return; }
+              if (!visible(el)) { return; }
+              var dup = false;
+              for (var k = 0; k < seen.length; k++) {
+                if (seen[k].contains(el) || el.contains(seen[k])) { dup = true; break; }
+              }
+              if (dup) { return; }
+              out.push(el); seen.push(el);
+            }
+            // v1.0.131b 抓取 v2：通配根类（不写死完整类名，插件热重载/小版本改后缀也抓得到）
+            var dockEl = document.querySelector('[class*="composerStack"] [class*="_dock"]');
+            var sels = ['.dcc-root', '[class*="dcc-root"]', '.dsh-po-capsule', '[class*="dsh-po-capsule"]',
+                        '.cm-stat-entry', '[class*="cm-stat"]', '.cm-bbox', '[class*="cm-bbox"]'];
+            for (var s = 0; s < sels.length; s++) {
+              var cand = document.querySelectorAll(sels[s]);
+              for (var c = 0; c < cand.length; c++) {
+                var el = cand[c];
+                // 只收会话框卡片内 / dock 内的，侧栏余额部件（cm-foot 等）不碰
+                if (!(card.contains(el) || (dockEl && dockEl.contains(el)))) { continue; }
+                // 通配防重：祖先若也是插件根（父子双命中），只取最外层
+                var p2 = el.parentElement, skip = false;
+                while (p2 && p2 !== card && p2 !== dockEl && p2 !== document.body) {
+                  var pc = (p2.className || '').toString();
+                  if (pc.indexOf('cm-stat') >= 0 || pc.indexOf('cm-bbox') >= 0 || pc.indexOf('dcc-root') >= 0 || pc.indexOf('dsh-po-capsule') >= 0) { skip = true; break; }
+                  p2 = p2.parentElement;
+                }
+                if (skip) { continue; }
+                grab(el);
+              }
+            }
+            // v1.0.131b 抓取 v2：dock 全部直接子元素（费用明细 / 网关余额等挂载即入列）
+            if (dockEl) {
+              var kids = dockEl.children;
+              for (var k2 = 0; k2 < kids.length; k2++) { grab(kids[k2]); }
+            }
             // 自动发现：卡片内、插件带垂直范围内、非原生前缀、尺寸合理的独立控件
             var cr = card.getBoundingClientRect();
             var top = cr.top - 2, bot = cr.top + BAND + 2;
@@ -6001,6 +6033,14 @@ function applySidebarInset() {
               var ar = anc.getBoundingClientRect();
               setImp(el, 'left', Math.round(x - ar.left) + 'px');
               setImp(el, 'top', Math.round(cy - h / 2 - ar.top) + 'px');
+              // v1.0.131b：dock 类部件（费用明细/网关）入列时顺带 inline 去底融入
+              //   （真机 CSS 通道可能死亡，inline !important 优先级最高，双保险）
+              var cn3 = (el.className || '').toString();
+              if (cn3.indexOf('cm-stat') >= 0 || cn3.indexOf('cm-bbox') >= 0) {
+                setImp(el, 'background', 'transparent');
+                setImp(el, 'border', 'none');
+                setImp(el, 'box-shadow', 'none');
+              }
               x += w + GAP;
             }
           }
@@ -6028,7 +6068,8 @@ function applySidebarInset() {
           setInterval(tick, 900);
         })();
 
-        """
+
+"""
     ]
 
     override var prefersStatusBarHidden: Bool { false }

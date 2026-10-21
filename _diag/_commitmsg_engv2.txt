@@ -1,0 +1,7 @@
+v1.0.131 引擎 v2：插件条主动抓取制 —— 根治真机 dock 部件不入列
+
+1. 引擎发现逻辑升级：KNOWN 写死完整类名 → 通配根类（dcc-root/dsh-po-capsule/cm-stat/cm-bbox 变体全抓），父子双命中只取最外层，范围限 card/dock（侧栏余额部件不碰）
+2. dock 全部直接子元素挂载即入列（老总手机 dock 有内容但引擎抓不到的根因 = dock 部件不在旧发现范围）
+3. cm-stat/cm-bbox 入列时 inline 去底透明化（真机 CSS 通道可能死亡的双保险）
+4. 模拟 dock 部件实测：抓取/排队/透明化全过；Chromium 全量注入（真机等价）会话页插件条排齐、输入行零重叠
+闸门十七跑全绿 ok=true v1.0.131 src=07dc53c789ca
