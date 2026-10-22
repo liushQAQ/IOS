@@ -1,11 +1,11 @@
 {
   "version": "1.0.131",
-  "build": 80,
-  "updated_at": "2026-10-22 09:45:00",
-  "title": "v1.0.131(80) 会话框四条 UI 微调：插件条居中 + 模型选择器补位 + 统计区缩字",
-  "changelog": "1. 🥇 插件条水平居中：插件/胶囊在会话框顶部条带内整体居中（不再左对齐留大空），默认间距 8→14px 更透气；\n2. 🥇 模型选择器补位：自动量到发送钮左缘，向右填满空洞（只放不收、绝不压钮），底下不再空一截；\n3. 🥇 统计区缩字：dock 字号 16→11px、行距/内边距收紧，一行多放、长行不再截断；\n4. 🥇 费用明细不再失踪：队列改保底预留式摆放，插件再多末项也完整落在卡片右缘内（79 实机胶囊过宽把费用明细挤出屏幕的根治）；\n5. 🥇 79 全部能力保留：暗黑面板、插件条转义修复、引擎 v2；iOS 14 / 15 / 16.x 全通吃；巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-80.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-80.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-80.tipa",
+  "build": 83,
+  "updated_at": "2026-10-22 11:30:00",
+  "title": "v1.0.131(83) 会话时间线「多行文字叠印」根治：row 改 flex 单行截断 + shimmer 副本层禁用",
+  "changelog": "1. 🥇 会话步骤行（思考/读取/搜索文件内容等）长摘要/长命令真机叠印根治：row 改 flex 单行布局，长文本省略号截断，行高回到 24px 标准态，第二行不再溢出压到下一行；\n2. 🥇 shimmer 扫光装饰副本层整层禁用（幽灵文字层从根上铲掉，顺带减轻渲染负担）；\n3. 🥇 行高自愈兜底：会话流内任何「行距小于字号」的异常元素自动补回 1.5 倍行距，防换版复发；\n4. 🥇 80 全部能力保留：插件条居中/模型选择器补位/统计区缩字/费用明细防裁/暗黑面板；iOS 14 / 15 / 16.x 全通吃；巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-83.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-83.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-83.tipa",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.131"
 }
