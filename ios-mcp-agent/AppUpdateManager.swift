@@ -339,12 +339,7 @@ final class AppUpdateManager {
         guard let topVC = Self.topViewController else { return }
         let act = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
         // 🔴 iPad 关键修复：UIActivityViewController 在 iPad 上必须是 popover，
-        // 未设置 sourceView + sourceRect 会直接崩溃。
-        if let popover = act.popoverPresentationController {
-            popover.sourceView = topVC.view
-            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 1, height: 1)
-            popover.permittedArrowDirections = []
-        }
+        // 锚点（sourceView + sourceRect）由 presentAlertSafely 统一补齐。
         topVC.presentAlertSafely(act)
     }
 }

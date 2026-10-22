@@ -25,14 +25,16 @@ extension UIViewController {
         presentWhenReady(sheet, animated: animated)
     }
 
-    /// 安全呈现 alert：iPad 上 alert 不走 popover，但仍统一补锚点与呈现排队
-    func presentAlertSafely(_ alert: UIAlertController, animated: Bool = true) {
-        if let popover = alert.popoverPresentationController {
+    /// 安全呈现 alert / 分享面板等非 actionSheet 弹层：
+    /// 接收任意 UIViewController（alert 与 UIActivityViewController 都能传），
+    /// 统一补 popover 锚点与呈现排队。
+    func presentAlertSafely(_ vc: UIViewController, animated: Bool = true) {
+        if let popover = vc.popoverPresentationController {
             popover.sourceView = self.view
             popover.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.midY, width: 1, height: 1)
             popover.permittedArrowDirections = []
         }
-        presentWhenReady(alert, animated: animated)
+        presentWhenReady(vc, animated: animated)
     }
 
     /// 呈现排队：若当前有弹层正在呈现/正在消失，等它结束后再呈现，最多重试 20 次（约 1 秒）
