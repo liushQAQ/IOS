@@ -5040,7 +5040,10 @@ function applySidebarInset() {
             + '[class*="_desc"],[class*="_tips"],[class*="_hint"],[class*="_error"]{'
             + 'overflow-wrap:anywhere !important;word-break:break-word !important;'
             + 'min-width:0 !important;max-width:100% !important}'
-            + 'pre,[class*="_text_"],[class*="_summary"]{white-space:pre-wrap !important}'
+            // 🔴 v1.0.131 build 81 修正：此处原有 [class*="_summary"]，把时间线摘要（VmGLcq_summary/Os3hAG_summary）的 nowrap 干成 pre-wrap
+            //    → 长摘要折行，而官方未展开态行盒被 contain:size+height:24px 定死 → 第二行溢出压下行，
+            //    就是老总 2026-10-22 10:04 真机截图的「多行文字互相叠印」。
+            + 'pre,[class*="_text_"]{white-space:pre-wrap !important}'
             + '[class*="header"],[class*="Header"],[class*="row"],[class*="Row"],'
             + '[class*="body"],[class*="Body"],[class*="content"],[class*="Content"],'
             + '[class*="col"],[class*="Col"],[class*="_main"],[class*="_inner"]{min-width:0 !important}'
@@ -5527,10 +5530,41 @@ function applySidebarInset() {
             'span[data-shimmer-text] { white-space: nowrap !important; }',
             // 3) 行内真实文字兜底钳制（无论 DSH 哪套模块 CSS 是否到位都不许折行）
             'span[data-shimmer] span[class*="_label"],',
-            'span[data-shimmer] span[class*="_summaryText"],',
-            'span[data-shimmer] span[class*="_summary"] {',
+            // 🔴 build 81 修正：原选择器写成了 span[data-shimmer] span[class*="_summary"]，但 DOM 里 summary/summaryText 是
+            //   TextShimmer(span[data-shimmer]) 的【祖先】而不是后代 → 该条兜底从来命中 0 次，
+            //   这是 shim_18 当年修完仍然叠印的真正原因。现去掉祖先限定。
+            '[class*="_summaryText"],',
+            '[class*="_summary"] {',
             '  min-width: 0 !important;',
             '  max-width: 100% !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '}',
+            // 4) 🔴 build 81 新增：真机上真正折行的是 TextShimmer 内部层级：
+            //    .content 是 display:flex 且子项 min-width:0 允许收缩，.text 自身无 nowrap
+            //    → 窄屏下长摘要在组件内部折成 2 行，而官方未展开态行盒被 contain:size + height:24px 定死
+            //    → 第二行溢出 18px 压到下一行（真机截图多行叠印的实测根因）。
+            //    这里把 shimmer 组件内所有层级统一锁单行，恢复官方「单行截断」设计。
+            '[data-shimmer], [data-shimmer] span, [data-shimmer] span[class*="_text"] {',
+            '  white-space: nowrap !important;',
+            '}',
+            // 5) 🔴 build 81 根治（真机叠印的最后一环）：官方 .VmGLcq_row 只写了 overflow:hidden，没有 display:flex；
+            //    而 summary 带的 flex:auto 是给 flex 容器用的。结果 block row 里 summary 是 inline、
+            //    里面又是 display:block 的 summaryText → inline 裹 block 会被拆成两个行盒（实测摘要高 38px），
+            //    而未展开态行盒由 contain:size + height:24px 定死 → 第二行溢出 18px，
+            //    压到下一行，就是老总 2026-10-22 10:04 真机截图那团互相叠印的文字。
+            //    修法：row 改 flex（summary 成 flex item，flex:auto 生效，自动吸收余下宽）
+            //    + summary/summaryText 锁单行截断 → 实测行高回到 24px、summary 20px 单行、右缘卡边零溢出。
+            //    锚点全用 React 稳定属性 data-variant（think/others），零 CSS Module 哈希类名。
+            '[data-variant="think"] [class*="_row"], [data-variant="others"] [class*="_row"] {',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  overflow: hidden !important;',
+            '}',
+            '[data-variant="think"] [class*="_summary"], [data-variant="others"] [class*="_summary"],',
+            '[data-variant="think"] [class*="_summaryText"], [data-variant="others"] [class*="_summaryText"] {',
+            '  min-width: 0 !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
@@ -6181,7 +6215,83 @@ function applySidebarInset() {
           apply();
           setInterval(function () { apply(); }, 3000);
         })();
+""",
 """
+        // ===== shim_26（v1.0.131 build 81）：会话消息流「长文本行叠印」自愈 =====
+        // 老总 2026-10-22 10:04 真机截图：运行中会话的步骤行（思考/读取/搜索文件内容）长摘要 wrap
+        // 成多行后，行距塌到约 10px < 字号 13px，多行文字互相咬合叠印；短摘要单行不受影响。
+        // 已排除：①官方 CSS 本身设计为单行 nowrap（summary 类 white-space:nowrap + ellipsis）；
+        //        ②代理层实际下发的 JS/CSS 与磁盘原版逐字一致；③App 侧 25 个 shim 与 460 行 CSS
+        //        均不碰消息流；④沙箱静态复现（官方 17 块 CSS + 真 DOM 结构 + 430px + App CSS 注入）
+        //        行高 24px 全正常、不复现。
+        // 定案：只在真机运行态出现（会话页渲染进程过载 / 流式重绘），页面层无法稳定复现，
+        //      故改为通用自愈——扫描会话流内「含直接文本 且 computed line-height < 字号*1.12」的元素，
+        //      按 1.5 倍字号补回行高。正常行 20px/13px 零命中、零外观变化；只救被压塌的行。
+        //      幂等：命中后打 data-dsh-lh 标记，不再重复处理（前端换版重建 DOM 时自动重扫）。
+        // 附带两条无害兜底：
+        //   ① 关掉 TextShimmer 装饰副本层（[data-shimmer-text]::after 用 content:attr 复制全文，
+        //      真机上副本层定位一旦失效就与正文叠印；关掉只损失流式扫光动画，正文不受影响）；
+        //   ② 禁用 iOS 自动字号（text-size-adjust），防止 WebView 自行放大字体而 CSS 行高不跟。
+        (function () {
+          if (window.__dshLineFix) { return; }
+          window.__dshLineFix = 1;
+          var MAX_SCAN = 1500;
+          var MIN_RATIO = 1.12;
+          var TARGET_RATIO = 1.5;
+          function hasOwnText(el) {
+            var nodes = el.childNodes;
+            for (var i = 0; i < nodes.length; i++) {
+              var n = nodes[i];
+              if (n.nodeType === 3 && n.nodeValue && n.nodeValue.replace(/\\s+/g, '').length > 1) { return true; }
+            }
+            return false;
+          }
+          function fixOnce() {
+            var flow = document.querySelector('[data-slot="conversation.chat.flow"]');
+            if (!flow) { return; }
+            var els = flow.querySelectorAll('span, div, p, li, a, code, strong, em');
+            var hits = 0;
+            for (var i = 0; i < els.length && hits < MAX_SCAN; i++) {
+              var el = els[i];
+              if (el.getAttribute('data-dsh-lh') === '1') { continue; }
+              if (!hasOwnText(el)) { continue; }
+              var cs = null;
+              try { cs = getComputedStyle(el); } catch (e) { continue; }
+              if (!cs || cs.display === 'none' || cs.visibility === 'hidden') { continue; }
+              var fs = parseFloat(cs.fontSize);
+              var lh = parseFloat(cs.lineHeight);
+              if (!fs || !isFinite(fs) || fs < 10) { continue; }
+              if (!isFinite(lh) || lh <= 0) { continue; }
+              if (lh >= fs * MIN_RATIO) { continue; }
+              try {
+                el.style.setProperty('line-height', Math.round(fs * TARGET_RATIO) + 'px', 'important');
+                el.setAttribute('data-dsh-lh', '1');
+                hits++;
+              } catch (e) {}
+            }
+            if (hits > 0) { window.__dshLineFixHits = (window.__dshLineFixHits || 0) + hits; }
+          }
+          function installCss() {
+            if (document.getElementById('dsh-ios-linefix')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-linefix';
+              st.textContent = '[data-shimmer-text]::after { content: none !important; }'
+                + 'html, body { -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important; }';
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          function boot() {
+            installCss();
+            fixOnce();
+            setTimeout(fixOnce, 1200);
+            setTimeout(fixOnce, 4000);
+          }
+          if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', boot); } else { boot(); }
+          window.addEventListener('load', boot);
+          setInterval(function () { installCss(); fixOnce(); }, 3000);
+        })();
+""",
     ]
 
     override var prefersStatusBarHidden: Bool { false }
