@@ -907,6 +907,30 @@ const A_PLUGIN_PAGE = () => {
   }
   GATE.pluginStripQueueGuard = true;
 
+  /* ================= 断言 9b：模型选择器 dcc-root 永不入插件条 =================
+     🔴 v1.0.131(90) 真凶（老总真机 02:06：「模型选择按钮成了悬浮按钮、固定在会话框的按钮看不到」）：
+      2026-10-21 把 dcc-root 误判为「第三方积分胶囊」收入插件条（shim_21/23 静态 absolute +
+      shim_24 KNOWN/sels 抓取 + 引擎 layout() 写 inline absolute + data-dsh-pos）→ 模型选择器
+      被搬到卡片顶部悬浮。89 改 trigger 可收缩后 dcc-root 宽 96 落进自动发现抓取区间，形态恶化。
+      dcc-root 是官方模型选择器（ Lobster 1,504 那个胶囊），老总定调：固定在会话框。
+      四路并发防线，本断言逐条钉死代码特征，删任何一处即红禁打包。 */
+  {
+    const bundle = APP_JS;
+    chk(!/var KNOWN = \[[^\]]*dcc-root/.test(bundle),
+      '[模型选择器] KNOWN 抓取表不含 dcc-root',
+      /var KNOWN = \[[^\]]*dcc-root/.test(bundle) ? 'dcc-root 又在 KNOWN 里 → 会被引擎抓去插件条悬浮' : '已排除');
+    chk(!/var sels = \[[^\]]*dcc-root/.test(bundle),
+      '[模型选择器] sels 抓取表不含 dcc-root',
+      /var sels = \[[^\]]*dcc-root/.test(bundle) ? 'dcc-root 又在 sels 里 → 会被引擎抓去插件条悬浮' : '已排除');
+    chk(/cn\.indexOf\('dcc-'\) >= 0/.test(bundle),
+      '[模型选择器] 自动发现分支排除 dcc- 前缀',
+      /cn\.indexOf\('dcc-'\) >= 0/.test(bundle) ? '排除在' : '排除被删 → dcc 宽 96 会落进 16..280 抓取区间');
+    chk(/function releaseDccRoot\(\)/.test(bundle) && /releaseDccRoot\(\);/.test(bundle),
+      '[模型选择器] releaseDccRoot 清残留（旧装机 inline absolute）+ tick 调用',
+      /function releaseDccRoot\(\)/.test(bundle) ? '清理在' : '清理被删 → 旧装机真机残留 inline 压过样式表，悬浮复燃');
+  }
+  GATE.modelPickerGuard = true;
+
 
   console.log(' 结果: ' + PASS + ' 绿 / ' + FAIL + ' 红 / ' + BLOCKED.length + ' 项无法校验');
   if (BLOCKED.length) {

@@ -5812,13 +5812,9 @@ function applySidebarInset() {
           var CSS = [
             // ① 输入卡顶部腾出 34px 插件条（卡片高度自适应增长，内部控件相对位置不变）
             '[class*="composerStack"] [class*="_card"] { padding-top: 34px !important; }',
-            // ② 积分胶囊 → 插件条左侧
-            '.dcc-root {',
-            '  position: absolute !important;',
-            '  left: 12px !important;',
-            '  top: 5px !important;',
-            '  z-index: 3 !important;',
-            '}',
+            // ②（v1.0.131(90) 移除）dcc-root 实为官方「模型选择器」而非积分胶囊 —— 老总真机
+            //   02:06 报「模型选择按钮成了悬浮按钮、看不到」：它被引擎 absolute 搬到插件条位。
+            //   老总定调「这个按钮应该固定在会话框」→ dcc-root 全链退出插件条机制，回原生流。
             // ③ 费用明细 → 插件条右侧
             '.cm-stat-entry {',
             '  position: absolute !important;',
@@ -5834,8 +5830,8 @@ function applySidebarInset() {
             '  z-index: 3 !important;',
             '  max-width: 150px !important;',
             '}',
-            // ⑤ 插件条内元素禁止撑高输入卡
-            '.dcc-root, .cm-stat-entry, .cm-bbox { max-height: 24px !important; }'
+            // ⑤ 插件条内元素禁止撑高输入卡（v1.0.131(90)：dcc-root 已回原生流，不再限高）
+            '.cm-stat-entry, .cm-bbox { max-height: 24px !important; }'
           ].join('\\n');
           function isDSH() {
             try {
@@ -5887,12 +5883,7 @@ function applySidebarInset() {
             '  border: none !important;',
             '  box-shadow: none !important;',
             '}',
-            // ③ 积分胶囊：容器与内层全部去底去描边（绿点图标是 svg fill 不受影响）
-            '.dcc-root, .dcc-root * {',
-            '  background: transparent !important;',
-            '  border: none !important;',
-            '  box-shadow: none !important;',
-            '}',
+            // ③（v1.0.131(90) 移除）dcc-root=模型选择器，已回原生流，官方外观不再剥离
             // ④ 模型选择器限宽 150px：右缘 207+150=357 < 发送钮 370，防压防重叠
             '[class*="composerStack"] [class*="standardControls"] [class*="_trigger"] {',
             '  max-width: 150px !important;',
@@ -5954,18 +5945,7 @@ function applySidebarInset() {
             '  z-index: 1 !important;',
             '  pointer-events: none !important;',
             '}',
-            // ② 积分胶囊：一行左起第 1（中心统一）
-            '.dcc-root {',
-            '  position: absolute !important;',
-            '  left: 14px !important;',
-            '  top: 9px !important;',
-            '  height: 26px !important;',
-            '  max-height: 26px !important;',
-            '  max-width: 96px !important;',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '  z-index: 3 !important;',
-            '}',
+            // ②（v1.0.131(90) 移除）dcc-root=模型选择器，退出插件条回会话框原生位
             // ③ prompt 插件胶囊（优化+齿轮）：transform 1:1 平移进插件条，第 2 位
             '[class*="composerStack"] .dsh-po-capsule {',
             '  position: relative !important;',
@@ -5973,10 +5953,11 @@ function applySidebarInset() {
             '  height: 26px !important;',
             '  z-index: 3 !important;',
             '}',
-            // ④ 费用明细：第 3 位（保持原生 36 高，中心对齐）
+            // ④ 费用明细：第 2 位（v1.0.131(90) dcc 退出后左移补位 227→117：po 胶囊占 24..109，+8 间距；
+            //   引擎态会被 layout() inline 覆盖，此处仅为静态兜底）
             '.cm-stat-entry {',
             '  position: absolute !important;',
-            '  left: 227px !important;',
+            '  left: 117px !important;',
             '  right: auto !important;',
             '  top: 4px !important;',
             '  height: 36px !important;',
@@ -6040,7 +6021,11 @@ function applySidebarInset() {
           // DSH 原生前缀：这些是框架自身构建产物，不是第三方插件，不纳入排队
           var NATIVE = ['VERcba_', '_727C8a_', 'ank0OG_', 'CZPbNW_', 'WBG7Rq_', 'NwyCaq_', 'VYXhfG_', 'dMHGga_', 'ZiQlkq_', 'YdIzba_', 'PPCmka_', 'WYye1W_', 'bqwwaa_', 'bqwvaa_', 'z4IYsq_', 'tklpSG_', 'JZoinq_', '7aoaqW_', 'ZKHwIG_', 'dsh-mobile-', 'dsh-ios-'];
           // 已知插件类名（优先纳入，保证插件未挂载时也不报错）
-          var KNOWN = ['.dcc-root', '.cm-stat-entry', '.cm-bbox', '.dsh-po-capsule'];
+          // 🔴 v1.0.131(90)：移除 '.dcc-root' —— 它不是积分胶囊，是官方「模型选择器」！
+          //   老总真机 02:06：「模型选择按钮成了悬浮按钮、点击打开错位重叠、应该固定在会话框」。
+          //   根因：10-21 把它误判为第三方积分胶囊收入插件条，引擎 layout() 给它写
+          //   position:absolute + data-dsh-pos 搬到卡片顶部 = 悬浮。模型选择器退出插件条机制。
+          var KNOWN = ['.cm-stat-entry', '.cm-bbox', '.dsh-po-capsule'];
           var GAP = 14, PAD_L = 14, PAD_R = 12, BAND = 40, MIN_W = 60;
           var CSS = [
             // 模型选择器自适应：永不越界压发送钮（老总 15:28 第一条）
@@ -6058,7 +6043,10 @@ function applySidebarInset() {
             // 🔴 v1.0.131(88) 兜底：引擎还没标位（data-dsh-pos）的插件元素一律退回原生 dock 流，
             //   禁止 shim_23 的静态 left/top（祖先 composerSeat 顶部 = 官方排队条那一行）把它们
             //   甩到排队消息行上叠印。引擎写入的是 inline !important，优先级高于本表，已标位者不受影响。
-            '.dcc-root:not([data-dsh-pos]),',
+            // 🔴 v1.0.131(90)：dcc-root（模型选择器）改【无条件】static —— 旧装机真机上它已被
+            //   引擎标位+写 inline，:not([data-dsh-pos]) 选择器放不过它；无条件规则压新注入，
+            //   旧 inline 由 releaseDccRoot() 清（inline !important 优先级高于样式表，只能 JS 清）。
+            '.dcc-root {',
             '.cm-stat-entry:not([data-dsh-pos]),',
             '.cm-stat-dock:not([data-dsh-pos]),',
             '.cm-bbox:not([data-dsh-pos]),',
@@ -6121,7 +6109,8 @@ function applySidebarInset() {
             // 归集作用域：card 与 dock 的共同父级（VERcba_root）。费用明细/网关挂在 dock 里、
             //   dock 又是 card 的兄弟，旧判据 card.contains 恒 false，只能靠 dockEl —— 一并纳入 blockEl。
             var blockEl = card.parentElement;
-            var sels = ['.dcc-root', '[class*="dcc-root"]', '.dsh-po-capsule', '[class*="dsh-po-capsule"]',
+            // v1.0.131(90)：sels 移除 dcc-root —— 模型选择器不是插件，永不入列（见 KNOWN 注释）
+            var sels = ['.dsh-po-capsule', '[class*="dsh-po-capsule"]',
                         '.cm-stat-entry', '[class*="cm-stat"]', '.cm-bbox', '[class*="cm-bbox"]'];
             for (var s = 0; s < sels.length; s++) {
               var cand = document.querySelectorAll(sels[s]);
@@ -6162,6 +6151,10 @@ function applySidebarInset() {
               if (seen.indexOf(el) >= 0) { continue; }
               var cn = (el.className || '').toString();
               if (!cn || isNativeCls(cn)) { continue; }
+              // 🔴 v1.0.131(90)：dcc-* 是官方模型选择器（老总真机 02:06 悬浮根因之一）——
+              //   89 改 trigger 可收缩后 dcc-root 宽 96 正好落进 16..280 抓取区间被自动发现捞中。
+              //   模型选择器固定在会话框，任何形态都不入插件条。
+              if (cn.indexOf('dcc-') >= 0) { continue; }
               var r = el.getBoundingClientRect();
               if (r.width < 16 || r.width > 280 || r.height < 14 || r.height > 46) { continue; }
               var cy2 = r.top + r.height / 2;
@@ -6174,6 +6167,28 @@ function applySidebarInset() {
               out.push(el); seen.push(el);
             }
             return out;
+          }
+          // 🔴 v1.0.131(90)：dcc-root（模型选择器）幂等释放 —— 旧装机真机上它已被引擎
+          //   标位 + 写 inline（position:absolute/left/top/transform/max-width/height/z-index
+          //   + data-dsh-pos），inline !important 优先级高于样式表，必须 JS 清；
+          //   清完交回官方 VERcba_tools 流（老总 02:06：「这个按钮应该固定在会话框」）。
+          //   与 collect()/CSS 兜底三路并发：新装机不抓（源头）、旧装机清残留（本函数）、
+          //   CSS 无条件 static 兜底（防 JS 通道死亡时新注入漏网）。
+          function releaseDccRoot() {
+            try {
+              var ds = document.querySelectorAll('.dcc-root, [class*="dcc-root"]');
+              for (var i = 0; i < ds.length; i++) {
+                var el = ds[i];
+                if (!el.hasAttribute('data-dsh-pos') && !el.style.cssText) { continue; }
+                el.removeAttribute('data-dsh-pos');
+                var props = ['position', 'left', 'right', 'top', 'bottom', 'transform',
+                             'max-width', 'max-height', 'height', 'z-index', 'width',
+                             'display', 'align-items', 'background', 'border', 'box-shadow', 'margin'];
+                for (var p = 0; p < props.length; p++) {
+                  try { el.style.removeProperty(props[p]); } catch (e2) {}
+                }
+              }
+            } catch (e) {}
           }
           function layout() {
             var card = document.querySelector('[class*="composerStack"] [class*="_card"]');
@@ -6267,6 +6282,7 @@ function applySidebarInset() {
           function tick() {
             if (!isDSH()) { return; }
             injectCSS();
+            releaseDccRoot();
             try { layout(); layout(); } catch (e) {}
           }
           tick();
