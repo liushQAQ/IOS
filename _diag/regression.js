@@ -121,11 +121,38 @@ async function openDrawer(p) {
   });
   await p.waitForTimeout(600);
   await p.evaluate(() => window.__regTick());
+  await dismissModals(p); // v1.0.131(91)：通用插件模态兜底（cm-peak-intro 等）
   await p.waitForTimeout(1200);
   // 跨过 3 秒兜底定时器，确保间歇出现的浮层（DSH 费用计量卡）也被收敛
   await p.waitForTimeout(3400);
   await p.evaluate(() => window.__regTick());
   await p.waitForTimeout(800);
+}
+
+/* 🔴 v1.0.131(91)：第三方插件模态（费用计量的 cm-peak-intro / cm-billion-notice 等）
+   一旦弹出就是全屏 fixed 模态（实测 .cm-stat-dialog.cm-peak-intro z=10050，覆盖
+   x12..418 y56..932），它按设计盖住一切底层按钮 —— 此时 elementFromPoint 命中的
+   是模态自己的 header，不是布局错乱。这是「模态存在的正常态」，不是 App 侧回归。
+   闸门在这里模拟用户点掉它（与 cm-billion-notice 同源同理由），并把关闭记录
+   写进断言详情，绝不做「静默跳过」。 */
+async function dismissModals(p) {
+  return await p.evaluate(() => {
+    const log = [];
+    const cands = Array.from(document.querySelectorAll('dialog[open], dialog, [class*="cm-"][class*="dialog"]'));
+    for (const d of cands) {
+      let cs; try { cs = getComputedStyle(d); } catch (e) { continue; }
+      const q = d.getBoundingClientRect();
+      if (cs.display === 'none' || cs.visibility === 'hidden' || q.width < 100 || q.height < 100) continue;
+      const btn = Array.from(d.querySelectorAll('button')).find(b => {
+        const t = (b.textContent || '').trim();
+        return t && t.length <= 12 && /知道了|开始使用|开始|明白|确定|关闭|跳过|稍后|OK/i.test(t);
+      });
+      if (btn) { try { btn.click(); log.push('click:' + (btn.textContent || '').trim().slice(0, 8)); continue; } catch (e) {} }
+      if (typeof d.close === 'function') { try { d.close(); log.push('close'); continue; } catch (e) {} }
+      try { d.style.setProperty('display', 'none', 'important'); log.push('hide'); } catch (e) {}
+    }
+    return log;
+  }).catch(() => []);
 }
 
 /* 横向溢出：只算「左边缘在屏内、右边缘越界」的真出血。
@@ -458,6 +485,7 @@ const A_PLUGIN_PAGE = () => {
   }
   return {
     clickable: !!(hit && (hit === fab || fab.contains(hit))),
+    hitCls: hit ? ((hit.className || '').toString().slice(0, 40) || hit.tagName) : 'none',
     overlapH1, phZ: getComputedStyle(ph).zIndex, phPadLeft: getComputedStyle(ph).paddingLeft,
   };
 };
@@ -674,8 +702,10 @@ const A_PLUGIN_PAGE = () => {
         await p.waitForTimeout(3000);
         await p.evaluate(() => { const g = document.querySelector('[aria-label="收起侧边栏"]'); if (g) g.click(); });
         await p.waitForTimeout(2500);
+        const modalLog = (await dismissModals(p)) || [];
         await p.evaluate(() => { try { if (window.__dshLayoutFix) window.__dshLayoutFix(); } catch (e) {} });
         await p.waitForTimeout(3600); // 跨过 3 秒兜底定时器
+        modalLog.push(...((await dismissModals(p)) || []));
         await p.evaluate(() => { try { if (window.__dshLayoutFix) window.__dshLayoutFix(); } catch (e) {} });
         await p.waitForTimeout(800);
         const pp = await p.evaluate(A_PLUGIN_PAGE);
@@ -683,7 +713,7 @@ const A_PLUGIN_PAGE = () => {
         else if (pp.noPage) bad('[插件页] 找不到 pageHead（锚点失效）');
         else if (pp.noFab) bad('[插件页] 左上角 fixed 按钮消失');
         else {
-          chk(pp.clickable, '[插件页] fab 中心可命中自身', '命中=' + (pp.clickable ? 'fab' : '其它') + ' pageHead z=' + pp.phZ);
+          chk(pp.clickable, '[插件页] fab 中心可命中自身', '命中=' + (pp.clickable ? 'fab' : (pp.hitCls || '其它')) + ' pageHead z=' + pp.phZ + (modalLog.length ? ' ｜已关插件模态 ' + modalLog.join(',') : ''));
           chk(pp.overlapH1 === false, '[插件页] fab 不压页面标题', pp.overlapH1 === null ? '页面无 h1' : (pp.overlapH1 ? '仍相交' : '零相交'));
         }
         await noteAlive(p); // 插件列表页态采样（pageHead 只在这类页面存在）

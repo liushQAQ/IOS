@@ -1557,17 +1557,16 @@ final class ViewController: UIViewController {
             '   静止态（无状态按钮）内容一行装得下，wrap 不触发，布局零变化。',
             '   v1.0.131(78)：shim_21 已把优化胶囊挪上插件条，standardControls 不再需要换行；',
             '   393/375 宽下 wrap 反而把模型选择器压到第二 flex 行（+8px）造成同行 4px 离散。',
-            '   定案改回 nowrap（配合 overflow:hidden 收口，绝不用 margin 推回）。',
+            '   → 当时定案改回 nowrap。',
+            '   🔵 v1.0.131(91) 最终定案：**不加任何 flex-wrap 干预**。',
+            '   真机 03:47 的错乱全部来自「插件条搬位」（po 胶囊 transform 上移占位 + standardControls',
+            '   padding-right:48px + 引擎 absolute 抢位），这三处已在 91 拆除。搬位一旦拆掉，',
+            '   官方 nowrap 布局本身就是自洽的（实测 430 宽下 + 语音 盾 Lobster gemini 一行排开不重叠）。',
+            '   实测反证：91 中途给 standardControls/row/trailing 开 wrap → 发送钮被挤到第三行、',
+            '   行内离散 3px、元素纵向错位（比官方 nowrap 更差）。故此处一律交回官方原值。',
             '   选择器走结构路径，绝不写 dsh-po-capsule 这类今天有明天没的哈希/动态类名。 */',
             '[class*="composerStack"] [class*="VERcba_standardControls"] > div > div {',
-            '  flex-wrap: nowrap !important;',
             '  max-width: 100% !important;',
-            '  row-gap: 8px !important;',
-            '}',
-            '[class*="composerStack"] [class*="VERcba_standardControls"] {',
-            '  flex-wrap: nowrap !important;',
-            '  row-gap: 8px !important;',
-            '  justify-content: flex-end !important;',
             '}',
 
           ].join('\\n');
@@ -4153,7 +4152,13 @@ final class ViewController: UIViewController {
              CSS 那条（button[aria-label*="选择模型"]）只管模型选择器这一种；
              这里按几何判据兜住未来变体：composerStack 里任何 button 只要右缘越过
              父容器右缘 >1px 且父容器不是横向滚动容器 → max-width:100% 钳回父宽。
-             与 fixOverlayOverflow 同一哲学：不做单点补丁，做通用钳制，DSH 换版不复发。 */
+             与 fixOverlayOverflow 同一哲学：不做单点补丁，做通用钳制，DSH 换版不复发。
+
+             🔴 v1.0.131(91) 复核：曾一度停用（怀疑它是真机错乱元凶之一），实测证明它是
+               防挤爆的最后安全网 —— 375 窄屏撬爆用例（撤回/重优 两个 60px 硬宽按钮）靠它
+               把越界按钮 max-width 钳回才不顶出屏幕。它只在「已经越界」时动手（幂等），
+               不越界绝不碰元素，不是布局错乱的来源（真凶是 po 胶囊 transform 搬位 +
+               standardControls padding-right:48px + nowrap，三处已在(91)拆除）。→ 恢复。 */
           function fixComposerClamp() {
             try {
               var host = document.querySelector('[class*=\"composerStack\"]');
@@ -5749,9 +5754,10 @@ function applySidebarInset() {
           var CSS = [
             // ① 积分胶囊对齐行高（24 → 28，居中）
             '.dcc-btn { height: 28px !important; align-self: center !important; border-radius: 8px !important; }',
-            // ② 换行后的第二行右侧让出发送按钮（≈48px），齿轮/重试不再压发送钮
-            '[class*="composerStack"] [class*="standardControls"] { padding-right: 48px !important; box-sizing: border-box !important; }',
-            // ③ 费用明细按钮融入统计行：去大灰框，降为小字轻按钮
+            // ②（v1.0.131(91) 删除）原 `standardControls { padding-right: 48px }`：
+            //   这条硬给工具行右侧扣掉 48px —— 真机 430pt 下工具行本就紧张（+ 语音 盾 模型 优化 齿轮 发送），
+            //   再扣 48px 直接把元素挤成叠印（老总 03:47 截图 W@tON/模型按钮错乱）。布局交回官方。
+            // ③ 费用明细按钮融入统计行：去大灰框，降为小字轻按钮（纯视觉，不挪位）
             '.cm-stat-entry {',
             '  font-size: 11px !important;',
             '  padding: 3px 9px !important;',
@@ -5781,11 +5787,14 @@ function applySidebarInset() {
             } catch (e) { return false; }
           }
           function apply() {
+            // 🔴 v1.0.131(91)：style id 由 dsh-ios-composer-fit 改为独立 dsh-ios-visual-fit ——
+            //   旧 id 与 shim_24 撞车（shim_24 拆除器每 tick 删它、本块每 3s 插回来，互删互插）。
+            //   本块只剩纯视觉收敛（胶囊行高/费用明细淡化），不再影响布局。
             if (!isDSH()) { return; }
-            if (document.getElementById('dsh-ios-composer-fit')) { return; }
+            if (document.getElementById('dsh-ios-visual-fit')) { return; }
             try {
               var st = document.createElement('style');
-              st.id = 'dsh-ios-composer-fit';
+              st.id = 'dsh-ios-visual-fit';
               st.textContent = CSS;
               document.head.appendChild(st);
             } catch (e) {}
@@ -5840,14 +5849,18 @@ function applySidebarInset() {
             } catch (e) { return false; }
           }
           function apply() {
-            if (!isDSH()) { return; }
-            if (document.getElementById('dsh-ios-plugin-strip')) { return; }
+            // 🔴 v1.0.131(91) 停用（老总 2026-10-23 03:47：「会话框所有按钮位置和插件完全错乱重叠、
+            //   模型选择按钮都没了……可能悬浮会话框根本逻辑有问题，你自己修改新方案」）：
+            //   「插件条搬位」整套机制是在劫持官方布局 —— shim_21 撑 padding-top、shim_23 用
+            //   transform 把优化胶囊视觉上移 85px（但仍占工具行 85px 布局宽度）、shim_24 引擎再
+            //   absolute 抢位，三者叠加。真机装了 dsh-po-capsule 后工具行被挤爆 → W@tON/模型按钮叠印。
+            //   沙箱永远复现不出（沙箱没装该插件）—— 这正是「沙箱绿真机错」的老根。
+            //   新方案：不再搬任何元素，布局全权交回 DSH 官方；本块只负责拆掉自己过去的注入。
             try {
-              var st = document.createElement('style');
-              st.id = 'dsh-ios-plugin-strip';
-              st.textContent = CSS;
-              document.head.appendChild(st);
+              var old = document.getElementById('dsh-ios-plugin-strip');
+              if (old) { old.remove(); }
             } catch (e) {}
+            return;
           }
           apply();
           setInterval(function () { apply(); }, 3000);
@@ -5899,14 +5912,12 @@ function applySidebarInset() {
             } catch (e) { return false; }
           }
           function apply() {
-            if (!isDSH()) { return; }
-            if (document.getElementById('dsh-ios-plugin-strip-merge')) { return; }
+            // 🔴 v1.0.131(91) 停用（同 shim_21：布局劫持整套下线，交回官方原生布局）
             try {
-              var st = document.createElement('style');
-              st.id = 'dsh-ios-plugin-strip-merge';
-              st.textContent = CSS;
-              document.head.appendChild(st);
+              var old = document.getElementById('dsh-ios-plugin-strip-merge');
+              if (old) { old.remove(); }
             } catch (e) {}
+            return;
           }
           apply();
           setInterval(function () { apply(); }, 3000);
@@ -5986,14 +5997,15 @@ function applySidebarInset() {
             } catch (e) { return false; }
           }
           function apply() {
-            if (!isDSH()) { return; }
-            if (document.getElementById('dsh-ios-plugin-strip-unified')) { return; }
+            // 🔴 v1.0.131(91) 停用（关键一条）：本块把 dsh-po-capsule 用
+            //   transform:translate(24px,-85px) 视觉上移到插件条，**但仍占工具行 85px 布局宽度**
+            //   → 真机工具行被挤爆（老总 03:47 截图 W@tON/模型按钮叠印、hero 模型按钮被挤没）。
+            //   布局交回官方，本块只负责拆掉自己过去的注入。
             try {
-              var st = document.createElement('style');
-              st.id = 'dsh-ios-plugin-strip-unified';
-              st.textContent = CSS;
-              document.head.appendChild(st);
+              var old = document.getElementById('dsh-ios-plugin-strip-unified');
+              if (old) { old.remove(); }
             } catch (e) {}
+            return;
           }
           apply();
           setInterval(function () { apply(); }, 3000);
@@ -6271,19 +6283,117 @@ function applySidebarInset() {
             } catch (e) { return false; }
           }
           function injectCSS() {
-            if (document.getElementById('dsh-ios-composer-fit')) { return; }
+            // 🔴 v1.0.131(91) 停用：插件条排队引擎整体下线（老总 03:47「根本逻辑有问题」）。
+            //   引擎的核心是「把插件元素 absolute 搬进插件条 + 写 inline 抢位」，与官方工具行
+            //   的 flex 布局天然打架；真机装插件后元素增减即崩（沙箱无插件 → 永远测不出）。
+            //   本块改为「拆除器」：不再注入任何 CSS，只清掉自己历史上写过的注入与 inline。
             try {
-              var st = document.createElement('style');
-              st.id = 'dsh-ios-composer-fit';
-              st.textContent = CSS;
-              document.head.appendChild(st);
+              var old = document.getElementById('dsh-ios-composer-fit');
+              if (old) { old.remove(); }
+            } catch (e) {}
+            return;
+          }
+          // 🔴 v1.0.131(91) 全局拆除：清掉引擎/静态摆位在真机上留下的所有 inline 残留。
+          //   旧装机（≤90）真机元素身上带 inline !important（position:absolute / transform /
+          //   width / max-width / data-dsh-pos），inline 优先级高于任何样式表 —— 不停掉它们，
+          //   即使不再注入 CSS，元素也仍被钉在错位坐标上。这是「装新包装完还是错乱」的隐形元凶。
+          function releaseHijack() {
+            try {
+              var sels = ['[data-dsh-pos]', '.dcc-root', '[class*="dcc-root"]',
+                          '.cm-stat-entry', '[class*="cm-stat"]', '.cm-bbox', '[class*="cm-bbox"]',
+                          '.dsh-po-capsule', '[class*="dsh-po-capsule"]'];
+              var props = ['position', 'left', 'right', 'top', 'bottom', 'transform',
+                           'max-width', 'max-height', 'min-width', 'min-height', 'height', 'width',
+                           'z-index', 'display', 'align-items', 'justify-content', 'order', 'flex',
+                           'background', 'border', 'box-shadow', 'margin', 'padding',
+                           'overflow', 'overflow-x', 'overflow-y', 'text-overflow', 'white-space', 'box-sizing'];
+              var seenEl = [];
+              for (var s = 0; s < sels.length; s++) {
+                var list = document.querySelectorAll(sels[s]);
+                for (var i = 0; i < list.length; i++) {
+                  var el = list[i];
+                  if (seenEl.indexOf(el) >= 0) { continue; }
+                  seenEl.push(el);
+                  try { el.removeAttribute('data-dsh-pos'); } catch (e1) {}
+                  if (!el.getAttribute('style')) { continue; }
+                  for (var p = 0; p < props.length; p++) {
+                    try { el.style.removeProperty(props[p]); } catch (e2) {}
+                  }
+                  if (el.getAttribute('style') === '') { el.removeAttribute('style'); }
+                }
+              }
+            } catch (e) {}
+          }
+          // 卡片本体的 padding-top/position 也清（旧件 shim_23 曾撑着 40px 插件条高度；
+          // 若历史上被 inline 化，不清就永远留一条空白带）
+          function releaseCard() {
+            try {
+              var cards = document.querySelectorAll('[class*="composerStack"] [class*="_card"]');
+              for (var i = 0; i < cards.length; i++) {
+                var c = cards[i];
+                if (!c.getAttribute('style')) { continue; }
+                ['padding-top', 'position'].forEach(function (p) {
+                  try { c.style.removeProperty(p); } catch (e) {}
+                });
+                if (c.getAttribute('style') === '') { c.removeAttribute('style'); }
+              }
+            } catch (e) {}
+          }
+          // 🔴 v1.0.131(91) 极窄屏（≤380px）底排改两行：
+          //   375 实测（_tree375.js，2026-10-23 04:30）结构 = VERcba_row(flex nowrap space-between 341 宽)
+          //     ├ VERcba_tools(左半：添加 28 + 语音 0 + 模式 44 + Lobster 104，内容需 ≈192)
+          //     └ VERcba_trailing(右半：优化 83 + gemini 47 + 发送 34，内容需 ≈170)
+          //   官方 nowrap + space-between 在 341 宽里塞不下 362 的内容 → 两侧互相压缩，
+          //   tools 掉到 131 而内容仍要 192 → 模式胶囊(44)与 Lobster(104) 自身叠印 36x28，
+          //   Lobster 再压到优化胶囊 16x22（闸门 375 段红项实测就是这个）。
+          //   🔴 只给 trailing 写 flex-basis:100% 是**错的**：父行 nowrap 下它只是把 tools 压得更狠。
+          //   必须让父行真正换行：row flex-wrap:wrap + 两侧各占满一行。
+          //   阈值卡 380：393/430（老总真机）完全不触发，官方原布局分毫不动。幂等（值不变不写）。
+          function narrowTrailingRow() {
+            try {
+              var vw = window.innerWidth || 430;
+              var tr = document.querySelector('[class*="composerStack"] [class*="VERcba_trailing"]');
+              if (!tr) { return; }
+              var row = tr.parentElement;
+              var tools = document.querySelector('[class*="composerStack"] [class*="VERcba_tools"]');
+              var clear = function (el, props) {
+                if (!el) { return; }
+                for (var i = 0; i < props.length; i++) { try { el.style.removeProperty(props[i]); } catch (e) {} }
+                if (el.getAttribute('style') === '') { el.removeAttribute('style'); }
+              };
+              if (vw > 380) {
+                if (tr.getAttribute('data-dsh-narrow') === '1') {
+                  tr.removeAttribute('data-dsh-narrow');
+                  if (row) { row.removeAttribute('data-dsh-narrow'); }
+                  if (tools) { tools.removeAttribute('data-dsh-narrow'); }
+                  clear(tr, ['flex-basis', 'justify-content']);
+                  clear(row, ['flex-wrap', 'justify-content']);
+                  clear(tools, ['flex-basis']);
+                }
+                return;
+              }
+              tr.setAttribute('data-dsh-narrow', '1');
+              setImp(tr, 'flex-basis', '100%');
+              setImp(tr, 'justify-content', 'flex-end');
+              if (row) {
+                row.setAttribute('data-dsh-narrow', '1');
+                setImp(row, 'flex-wrap', 'wrap');
+                setImp(row, 'justify-content', 'flex-start');
+              }
+              if (tools) {
+                tools.setAttribute('data-dsh-narrow', '1');
+                setImp(tools, 'flex-basis', '100%');
+              }
             } catch (e) {}
           }
           function tick() {
             if (!isDSH()) { return; }
-            injectCSS();
-            releaseDccRoot();
-            try { layout(); layout(); } catch (e) {}
+            injectCSS();          // 已改为纯拆除（删旧 style 标签），不再注入
+            releaseDccRoot();     // 模型选择器残留（90 起）
+            releaseHijack();      // v1.0.131(91)：cm-*/po/dcc 全部 inline 残留
+            releaseCard();        // v1.0.131(91)：卡片 padding-top/position 回落
+            narrowTrailingRow();  // v1.0.131(91)：≤380px 极窄屏 trailing 独占一行
+            // 🔴 v1.0.131(91)：layout() 不再调用 —— 引擎搬位整体停用，布局交回 DSH 官方
           }
           tick();
           setInterval(tick, 900);
