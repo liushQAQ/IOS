@@ -5616,6 +5616,22 @@ function applySidebarInset() {
             '}',
             '[data-queue-dock] [class*="_preview"] {',
             '  flex: 1 1 auto !important;',
+            '}',
+            // ── 排队条叠印真凶：官方 panel:before 毛玻璃只写了无前缀 backdrop-filter，
+            // iOS<=16 WKWebView 只认 -webkit-backdrop-filter → 模糊失效 → 底层 GoalBar 透视。
+            // 补前缀恢复官方「叠层+毛玻璃」设计；panel 再兜底一层同色背景双保险。
+            '[data-queue-dock] {',
+            '  position: relative !important;',
+            '  z-index: 2 !important;',
+            '}',
+            '[data-queue-dock] [class*="_panel"]:before {',
+            '  -webkit-backdrop-filter: var(--dsw-menu-backdrop-filter, blur(20px)) !important;',
+            '  backdrop-filter: var(--dsw-menu-backdrop-filter, blur(20px)) !important;',
+            '}',
+            '[data-queue-dock] [class*="_panel"] {',
+            '  background: var(--dsw-specific-menu, #232326) !important;',
+            '  -webkit-backdrop-filter: var(--dsw-menu-backdrop-filter, blur(20px)) !important;',
+            '  backdrop-filter: var(--dsw-menu-backdrop-filter, blur(20px)) !important;',
             '}'
           ].join('\\n');
           function isDSH() {
@@ -6329,42 +6345,15 @@ function applySidebarInset() {
               document.head.appendChild(st);
             } catch (e) {}
           }
-          // 排队 dock 与相邻 dock（如目标进度条）叠印自愈：官方 QueueDock 的 dock 有
-          // 负 bottom margin（设计上贴住下一层），当后面还跟了别的 dock 时两层直接叠印，
-          // 检测到相邻可见 dock 就取消该负 margin（打 data-dsh-qfix 标记幂等）。
-          function fixQueueDock() {
-            var qd = document.querySelector('[data-queue-dock]');
-            if (!qd) { return; }
-            var nx = qd.nextElementSibling;
-            var nxDock = false;
-            while (nx) {
-              var r = null;
-              try { r = nx.getBoundingClientRect(); } catch (e) { break; }
-              if (r && r.height > 0) {
-                nxDock = /_dock/.test(nx.getAttribute('class') || '');
-                break;
-              }
-              nx = nx.nextElementSibling;
-            }
-            var cur = qd.getAttribute('data-dsh-qfix');
-            if (nxDock && cur !== '1') {
-              try { qd.style.setProperty('margin-bottom', '0px', 'important'); } catch (e) {}
-              qd.setAttribute('data-dsh-qfix', '1');
-            } else if (!nxDock && cur === '1') {
-              try { qd.style.removeProperty('margin-bottom'); } catch (e) {}
-              qd.setAttribute('data-dsh-qfix', '0');
-            }
-          }
           function boot() {
             installCss();
             fixOnce();
-            fixQueueDock();
             setTimeout(fixOnce, 1200);
             setTimeout(fixOnce, 4000);
           }
           if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', boot); } else { boot(); }
           window.addEventListener('load', boot);
-          setInterval(function () { installCss(); fixOnce(); fixQueueDock(); }, 3000);
+          setInterval(function () { installCss(); fixOnce(); }, 3000);
         })();
 """,
     ]
