@@ -1,9 +1,9 @@
 {
-  "version": "1.0.10",
-  "build": 38,
-  "title": "v1.0.10 全员标配检测更新与升级·彻底根治巨魔301报错·单一公开版",
-  "changelog": "1. 标配在线检测更新：主界面启动静默检测，关于页新增「🚀 检查新版本 (巨魔免代理直装)」一键升级；\n2. 彻底根治巨魔 301 报错：引入 App 内免代理极速下载通道 + 本地直调巨魔秒级安装，100% 消除网络重定向异常；\n3. 统一单一公开版：零凭据、纯净开源基线，本地沙盒数据 100% 自动继承。",
-  "tipa_url": "https://github.com/liushQAQ/IOS/releases/download/v1.0.10-mcp/ios-mcp-agent-public-1.0.10-38.tipa",
-  "public_tipa_url": "https://github.com/liushQAQ/IOS/releases/download/v1.0.10-mcp/ios-mcp-agent-public-1.0.10-38.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.10-mcp"
+  "version": "1.0.11",
+  "build": 82,
+  "title": "v1.0.11 iPad 闪退专项修复·actionSheet 锚点全收口·崩溃现场自诊断·通用设备族",
+  "changelog": "1. 修复 iPad 上很多按钮一点就闪退：iPad 会把 actionSheet 转成 popover，缺锚点即抛 NSInternalInconsistencyException 必崩（iPhone 不受影响），现已将全部 10 处 actionSheet 统一收口，自动补锚点并做呈现排队；\n2. 修复 iPad 上一打开就闪退：Documents 目录查询数组越界、3 处 URL 强制解包、通知监听改闭包式（明确主线程）、延迟步骤负值/NaN 运行时陷阱、表格与段选下标越界、定时引擎线程竞争与重复启动泄漏后台任务；\n3. 补齐 iPad 专用四方向并改为通用设备族，iPad 原生运行不再走兼容模式；\n4. 新增崩溃现场自诊断：未捕获异常自动落盘（含机型/iOS/界面类型/调用栈），启动标记残留即判闪退并自动进入安全模式保证 App 能打开，「关于」页可查看日志与退出安全模式。",
+  "tipa_url": "https://github.com/liushQAQ/IOS/releases/download/v1.0.11-mcp/ios-mcp-agent-public-1.0.11-82.tipa",
+  "public_tipa_url": "https://github.com/liushQAQ/IOS/releases/download/v1.0.11-mcp/ios-mcp-agent-public-1.0.11-82.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.11-mcp"
 }
