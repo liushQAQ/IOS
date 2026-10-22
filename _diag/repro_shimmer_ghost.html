@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  body { margin:0; background:#fff; font-family:-apple-system,"PingFang SC",sans-serif; }
+  .wrap { width: 398px; padding: 16px; box-sizing: border-box; }
+  .list > * { margin-bottom: 6px; }
+  /* ===== TextShimmer.module.css (real) ===== */
+  .tsroot { position: relative; display: inline-grid; width: max-content; max-width: 100%; min-width: 0; vertical-align: top; color: inherit; }
+  .tscontent { display: flex; align-items: center; min-width: 0; }
+  .tstext { color: inherit; }
+  .tstext[data-shimmer-text]::after { content: attr(data-shimmer-text); }
+  .tsdecoration { position: absolute; inset: 0; overflow: clip; pointer-events: none; user-select: none; }
+  .tssweep { position: absolute; inset: 0; overflow: hidden; color: #b0b4ba; }
+  .tshighlight { width: 100%; height: 100%; transform: translateX(100%); }
+  /* ===== ReasoningRow.module.css (real, VmGLcq) ===== */
+  .rroot { flex-direction: column; display: flex; }
+  .rroot:not([data-expanded]) { contain: size layout; height: calc(24px + 0px); }
+  .rrow { overflow: hidden; }
+  .rsummary { min-width: 0; font-size: 13px; line-height: 20px; white-space: nowrap; flex: auto; overflow: hidden; }
+  .rsummaryText { text-overflow: ellipsis; display: block; overflow: hidden; }
+  /* ===== ChatGroupSeat label ===== */
+  .glabel { text-overflow: ellipsis; white-space: nowrap; min-width: 0; overflow: hidden; }
+  /* ===== APP SHIM (candidate fix) — enabled via ?shim=1 ===== */
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="list">
+    <div class="rroot" data-expanded="false">
+      <div class="rrow">
+        <span class="tsroot" data-shimmer="">
+          <span class="tscontent"><span class="rsummary"><span class="rsummaryText">思考</span></span></span>
+        </span>
+      </div>
+    </div>
+    <div class="rroot" data-expanded="false">
+      <div class="rrow">
+        <span class="tsroot" data-shimmer="">
+          <span class="tscontent"><span class="rsummary"><span class="rsummaryText">运行命令 · Check scheduled tasks and services config for references to stale DSH restart helper</span></span></span>
+          <span class="tsdecoration" aria-hidden="true" inert="">
+            <span class="tssweep"><span class="tshighlight"><span class="tscontent"><span class="tstext" data-shimmer-text="运行命令 · Check scheduled tasks and services config for references to stale DSH restart helper"></span></span></span></span>
+          </span>
+        </span>
+      </div>
+    </div>
+    <div class="rroot" data-expanded="false">
+      <div class="rrow">
+        <span class="tsroot" data-shimmer="">
+          <span class="tscontent"><span class="rsummary"><span class="rsummaryText">思考</span></span></span>
+        </span>
+      </div>
+    </div>
+    <div class="rroot" data-expanded="false">
+      <div class="rrow">
+        <span class="tsroot" data-shimmer="">
+          <span class="tscontent"><span class="rsummary"><span class="rsummaryText">工具调用 · Read .dsh/AGENTS.md 已更新 新增 IOS 兼容铁律 C1 到 C8 与发版自检清单</span></span></span>
+          <span class="tsdecoration" aria-hidden="true" inert="">
+            <span class="tssweep"><span class="tshighlight"><span class="tscontent"><span class="tstext" data-shimmer-text="工具调用 · Read .dsh/AGENTS.md 已更新 新增 IOS 兼容铁律 C1 到 C8 与发版自检清单"></span></span></span></span>
+          </span>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+window.__measure = function () {
+  const out = {};
+  const rows = [...document.querySelectorAll('.rroot')];
+  out.rows = rows.map(r => { const b = r.getBoundingClientRect(); return { h: +b.height.toFixed(1) }; });
+  const decos = [...document.querySelectorAll('.tsdecoration')];
+  out.decos = decos.map(d => {
+    const sweep = d.querySelector('.tssweep');
+    const txt = d.querySelector('.tstext');
+    const sb = sweep.getBoundingClientRect();
+    const c = getComputedStyle(d);
+    const cs = getComputedStyle(sweep);
+    return { sweepH: +sb.height.toFixed(1), decoOverflow: c.overflow, sweepOverflow: cs.overflow,
+             sweepScrollH: sweep.scrollHeight, sweepClientH: sweep.clientHeight };
+  });
+  out.docScrollH = document.documentElement.scrollHeight;
+  return out;
+};
+// iOS<16 模拟：overflow:clip 不支持 → 退化 visible
+if (location.search.indexOf('oldios=1') >= 0) {
+  const st = document.createElement('style');
+  st.textContent = '.tsdecoration{overflow:visible !important}';
+  document.head.appendChild(st);
+}
+// 修复 shim：?shim=1
+if (location.search.indexOf('shim=1') >= 0) {
+  const st = document.createElement('style');
+  st.textContent = `
+    span[data-shimmer] > span[inert] { display: none !important; }
+    span[data-shimmer-text] { white-space: nowrap !important; }
+    span[data-shimmer] { max-width: 100% !important; }
+  `;
+  document.head.appendChild(st);
+}
+</script>
+</body></html>

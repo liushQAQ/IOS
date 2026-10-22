@@ -1,0 +1,3 @@
+RAW(不注入App, env=59) {"framePT":"59px","frameTop":0,"colTop":59,"hdrTop":59,"tabBottom":null}
+AFTER(注入App, sb=59)  {"framePT":"0px","frameTop":0,"colTop":39,"hdrTop":39,"tabBottom":75,"sb":59,"shift":18}
+CONV(会话页)           {"framePT":"0px","frameTop":0,"colTop":39,"hdrTop":39,"tabBottom":75,"sb":59,"shift":18}

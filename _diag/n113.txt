@@ -1,0 +1,2621 @@
+import UIKit
+import WebKit
+import Network
+import AudioToolbox
+import Speech
+import AVFoundation
+
+/// 主界面：全屏 WKWebView，与电脑桌面端 DSH 布局完全一致（无任何原生地址栏/工具栏遮挡）。
+/// 原生只在「连不上」时接管：错误浮层 + 重试；右下角一个半透明小按钮用于换地址/看版本。
+final class ViewController: UIViewController {
+
+    private var webView: WKWebView!
+    private var activityIndicator: UIActivityIndicatorView!
+    private var errorOverlay: UIView!
+    private var errorTitleLabel: UILabel!
+    private var errorDetailLabel: UILabel!
+    private var menuButton: UIButton!
+    /// 悬浮按钮的右缘约束：constant 越小越靠右，收起态为负值（把按钮推出屏幕外）。
+    private var menuTrailingConstraint: NSLayoutConstraint!
+    private var navigationTimer: Timer?
+    private var pathMonitor: NWPathMonitor?
+    private var hasLoadedOnce = false
+    /// 401 token 页自动换票重试的防重入标志（防止 didFinish→重载→didFinish 死循环）。
+    private var isTokenRetryInFlight = false
+    /// 3083 Pocket 握手自动重试防重入（503 握手页 → 清 cookie 重载一次）。
+    private var isPocketRetryInFlight = false
+    /// 白屏自诊断采样计时器（多次采样把 JS 崩溃画到浮层，而不是留一个纯白屏）。
+    private var diagnoseTimers: [Timer] = []
+
+    // MARK: 键盘避让与安全区（v1.0.70）
+    /// WebView 顶部约束：DSH 页面 = 0（顶栏自绘背景延伸到状态栏后），外部网页 = safeAreaInsets.top
+    private var webViewTopConstraint: NSLayoutConstraint!
+    /// WebView 底部约束：键盘弹出时 = 键盘高度（压缩视口让输入框始终可见，顶栏纹丝不动）
+    private var webViewBottomConstraint: NSLayoutConstraint!
+    /// DSH 服务的 host:port（用于区分 DSH 页面与外嵌免费网页对话等第三方页面）
+    private var dshServiceHost: String?
+    /// 键盘当前是否可见
+    private var isKeyboardVisible = false
+    /// 键盘遮挡高度（pt）。下发给页内脚本，让输入框滚到键盘正上方。
+    private var keyboardOverlap: CGFloat = 0
+
+    /// 语音听写识别器与音频引擎（调用 iOS 原生语音听写）
+    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private let audioEngine = AVAudioEngine()
+    private var isDictating = false
+    private var lastRecognizedText = ""
+
+    /// 悬浮菜单按钮：收起时只从右缘露出一条把手，展开后完整可见。
+    private var menuButtonExpanded = false
+    /// 展开后的自动收起计时器（「不用了自动隐藏」）。
+    private var menuAutoHideTimer: Timer?
+
+    /// 悬浮按钮边长（44pt 精致小巧圆形）。
+    private static let menuButtonSide: CGFloat = 44
+    /// 收起时从右缘露出的宽度。
+    /// v1.0.74：v1.0.73 改成整颗露出，用户反馈「悬浮按钮没有隐藏了」。
+    /// 收起态只留 14pt 一条细把手贴在右缘（不再是被裁掉的半个圆，也不再整颗占屏）。
+    private static let menuCollapsedPeek: CGFloat = 14
+    /// 展开态距右缘的间距。
+    private static let menuTrailingInset: CGFloat = 10
+    /// 展开后静置多久自动半隐藏（3 秒后自动隐藏一半）。
+    private static let menuAutoHideDelay: TimeInterval = 3.0
+
+    /// 收起态右缘约束值：正值把按钮推出屏幕，只留 `menuCollapsedPeek` 宽在屏内。
+    /// 约束语义是 `button.trailing = safeArea.trailing + constant`，
+    /// 所以正值 = 往屏幕右外侧推，负值 = 从右缘往内缩。
+    private static var menuCollapsedConstant: CGFloat {
+        menuButtonSide - menuCollapsedPeek
+    }
+    /// 展开态右缘约束值。
+    private static var menuExpandedConstant: CGFloat {
+        -menuTrailingInset
+    }
+
+    private static func makeErrorBridge(owner: ViewController) -> WKScriptMessageHandler {
+        return ErrorBridge { [weak owner] message in
+            owner?.recordWebError(message)
+        }
+    }
+
+    private final class ErrorBridge: NSObject, WKScriptMessageHandler {
+        let onMessage: (String) -> Void
+        init(onMessage: @escaping (String) -> Void) { self.onMessage = onMessage }
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            if let text = message.body as? String { onMessage(text) }
+        }
+    }
+
+    private static func makeFileTransferBridge(owner: ViewController) -> WKScriptMessageHandler {
+        return FileTransferBridge { [weak owner] info in
+            owner?.handleIncomingFile(info)
+        }
+    }
+
+    private final class FileTransferBridge: NSObject, WKScriptMessageHandler {
+        let onFile: ([String: Any]) -> Void
+        init(onFile: @escaping ([String: Any]) -> Void) { self.onFile = onFile }
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            if let dict = message.body as? [String: Any] {
+                onFile(dict)
+            }
+        }
+    }
+
+    /// 接收前端导出的文件并唤起系统级保存与分享（ShareSheet / 保存到文件）
+    private func handleIncomingFile(_ info: [String: Any]) {
+        guard let name = info["name"] as? String,
+              let base64 = info["base64"] as? String,
+              let data = Data(base64Encoded: base64) else { return }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let tempDir = FileManager.default.temporaryDirectory
+            let targetURL = tempDir.appendingPathComponent(name)
+            do {
+                try data.write(to: targetURL)
+                let activityVC = UIActivityViewController(activityItems: [targetURL], applicationActivities: nil)
+                if let popover = activityVC.popoverPresentationController {
+                    popover.sourceView = self.menuButton ?? self.view
+                    popover.sourceRect = self.menuButton?.bounds ?? CGRect(x: self.view.bounds.midX, y: self.view.bounds.midY, width: 0, height: 0)
+                }
+                self.present(activityVC, animated: true)
+            } catch {
+                let alert = UIAlertController(title: "保存失败", message: error.localizedDescription, preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "好", style: .default))
+                self.present(alert, animated: true)
+            }
+        }
+    }
+
+    private static func makeVoiceInputBridge(owner: ViewController) -> WKScriptMessageHandler {
+        VoiceInputBridge { [weak owner] dict in
+            guard let self = owner,
+                  let action = dict["action"] as? String else { return }
+            if action == "toggle" {
+                DispatchQueue.main.async {
+                    self.toggleVoiceDictation()
+                }
+            } else if action == "stop" {
+                DispatchQueue.main.async {
+                    self.stopVoiceDictation()
+                }
+            }
+        }
+    }
+
+    private final class VoiceInputBridge: NSObject, WKScriptMessageHandler {
+        let onAction: ([String: Any]) -> Void
+        init(onAction: @escaping ([String: Any]) -> Void) { self.onAction = onAction }
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            if let dict = message.body as? [String: Any] {
+                onAction(dict)
+            }
+        }
+    }
+
+    private static func makeAppUpdateBridge(owner: ViewController) -> WKScriptMessageHandler {
+        VoiceInputBridge { [weak owner] dict in
+            guard let self = owner else { return }
+            let action = dict["action"] as? String ?? "check"
+            DispatchQueue.main.async {
+                if action == "install", let urlStr = dict["url"] as? String, !urlStr.isEmpty {
+                    self.installViaTrollStore(remoteURLString: urlStr)
+                } else {
+                    self.checkForAppUpdates(manual: true)
+                }
+            }
+        }
+    }
+
+    /// 累积 Web 侧异常，最多保留最近 4 条，供自诊断浮层展示。
+    private func recordWebError(_ text: String) {
+        let line = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
+        guard !line.isEmpty else { return }
+        DispatchQueue.main.async {
+            if self.webErrors.count >= 8 { self.webErrors.removeFirst() }
+            if self.webErrors.last != line { self.webErrors.append(line) }
+        }
+    }
+
+    /// didFinish 后多次延时采样 #root。
+    /// 注意：didFinish 只代表 HTML 解析完，插件 bundle（约 14MB）还要再加载十几秒，
+    /// 因此前几次采样允许为空——只有最后一次（约 25 秒后）仍空才判定白屏，避免误报。
+    private func startWhiteScreenDiagnostics() {
+        diagnoseTimers.forEach { $0.invalidate() }
+        let delays: [TimeInterval] = [10.0, 18.0, 28.0]
+        diagnoseTimers = delays.enumerated().map { index, delay in
+            Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+                // 最后一次采样才允许报警；前几次只负责提前确认页面已渲染。
+                self?.sampleRoot(report: index == delays.count - 1)
+            }
+        }
+    }
+
+    private func stopWhiteScreenDiagnostics() {
+        diagnoseTimers.forEach { $0.invalidate() }
+        diagnoseTimers = []
+    }
+
+    private func sampleRoot(report: Bool) {
+        guard isViewLoaded, view.window != nil else { return }
+        let check = """
+        (function () {
+          var root = document.getElementById('root');
+          var len = root ? (root.innerText || '').trim().length : -1;
+          var kids = root ? root.children.length : -1;
+          var hasBR = typeof Promise.withResolvers === 'function';
+          var hasAt = typeof Array.prototype.at === 'function';
+          var hasOwn = typeof Object.hasOwn === 'function';
+          var hasTS = typeof Array.prototype.toSorted === 'function';
+          // v1.0.105：DSH 官方前端（vendor 包）内含 RegExp 后行断言 lookbehind 正则字面量，
+          // 而 lookbehind 需 Safari / iOS 16.4+ 才支持。必须用 new RegExp(字符串) 运行期探测——
+          // 若写成正则字面量，在旧 WebKit 上本段诊断脚本自身会解析失败，什么都探不到。
+          var hasLB = true;
+          try { new RegExp('(?<=a)b'); } catch (e) { hasLB = false; }
+          return JSON.stringify({ rootLen: len, rootKids: kids, withResolvers: hasBR, at: hasAt, hasOwn: hasOwn, toSorted: hasTS, lookbehind: hasLB });
+        })()
+        """
+        webView.evaluateJavaScript(check) { [weak self] result, error in
+            guard let self else { return }
+            if let json = result as? String,
+               let data = json.data(using: .utf8),
+               let info = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let rootLen = info["rootLen"] as? Int ?? -1
+                // 页面已经渲染出内容：撤掉诊断，正常显示。
+                if rootLen > 0 {
+                    self.stopWhiteScreenDiagnostics()
+                    self.hideError()
+                    self.hasLoadedOnce = true
+                    self.revealWebView()
+                    return
+                }
+                // 尚未到判定时刻：插件可能还在加载，不打扰。
+                guard report else { return }
+                // v1.0.105：白屏根因若是系统 WebKit 太旧（不支持 RegExp lookbehind），
+                // 不再甩一句"页面白屏"让人猜，直接给出版本门槛与可执行动作。
+                // 说明：DSH 官方前端自身就要求 iOS 16.4+，这不是 App 引入的限制，
+                // 所以正确做法是"把官方的能力边界讲清楚"，而不是去改 DSH 官方文件。
+                if (info["lookbehind"] as? Bool) == false {
+                    self.errorTitleLabel.text = "系统版本过低"
+                    self.showError(detail: """
+                    当前 iOS 版本过低，无法运行 DSH 网页端。
+
+                    DSH 官方前端使用了 RegExp 后行断言（lookbehind），
+                    该语法需要 iOS 16.4 或更高版本（Safari / WebKit 16.4+）。
+
+                    本机检测：lookbehind = 不支持
+                    解决办法：设置 → 通用 → 软件更新，升级到 iOS 16.4 及以上后再试。
+                    """)
+                    return
+                }
+                let details = [
+                    "#root 文本长度=\(info["rootLen"] ?? "?") 子节点数=\(info["rootKids"] ?? "?")",
+                    "API: withResolvers=\(info["withResolvers"] ?? "?") at=\(info["at"] ?? "?") hasOwn=\(info["hasOwn"] ?? "?") toSorted=\(info["toSorted"] ?? "?") lookbehind=\(info["lookbehind"] ?? "?")"
+                ]
+                var parts = details
+                if !self.webErrors.isEmpty { parts.append("JS 异常：" + self.webErrors.joined(separator: " ｜ ")) }
+                self.errorTitleLabel.text = "页面白屏"
+                self.showError(detail: "页面加载后未渲染（白屏）。\n" + parts.joined(separator: "\n"))
+            } else if let error {
+                self.showError(detail: "页面无响应，无法读取内容：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MARK: - 首屏提前显形（v1.0.106）
+
+    /// DSH 官方前端启动时要同步解析执行「已安装插件」的 client bundle。
+    /// 实测本机两个 bundle 分别约 5.87MB / 5.60MB（合计 11.5MB，装的插件越多越胖），
+    /// 全部下载只要 30ms（局域网），但**解析执行**在桌面 CPU 上约 3 秒，
+    /// 在 iPhone（尤其巨魔 TrollStore 冻结在 iOS 16.3 的老机型，单核约为桌面 1/6~1/10）
+    /// 上线性放大到 20~40 秒 —— 而 `window.load`（= didFinish）正好落在这之后。
+    ///
+    /// 实测时间线（10x CPU 降频，430x932 iPhone 视口）：
+    ///   +0.73s readyState=interactive → +1.59s DOMContentLoaded
+    ///   → 主线程连续阻塞 28s（就是那 11.5MB 插件的解析执行）
+    ///   → +37.5s readyState=complete / window.load
+    /// 也就是说页面早就画出来了，却被 `alpha=0` 遮住干等 didFinish。
+    ///
+    /// 这里改为「探测到 #root 有子节点（React 已挂载并出首帧）就立刻显形」，
+    /// 不再死等 didFinish。真正白屏（#root 空）时依旧不显形，由白屏诊断报错。
+    private var earlyRevealTimer: Timer?
+    private var earlyRevealTicks = 0
+    /// 探测在途标记：WebContent 进程被长任务占住时回包会延迟，期间不再重复下发，
+    /// 避免积压上百个跨进程调用。
+    private var earlyRevealInFlight = false
+
+    /// 每 250ms 轻量探测 #root 是否已有子节点；一旦有就立刻显形。
+    /// 探测脚本极短（单次 querySelector + children.length），不会和主线程长任务抢资源。
+    private func startEarlyRevealProbe() {
+        stopEarlyRevealProbe()
+        earlyRevealTicks = 0
+        earlyRevealTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            guard let self, self.isViewLoaded, self.view.window != nil else { return }
+            self.earlyRevealTicks += 1
+            // 硬上限 4 分钟：真正异常时由导航超时 / 白屏诊断负责报错，这里只负责"能显就早显"。
+            if self.earlyRevealTicks > 960 {
+                self.stopEarlyRevealProbe()
+                return
+            }
+            guard !self.earlyRevealInFlight else { return }
+            self.earlyRevealInFlight = true
+            self.webView.evaluateJavaScript(
+                "(function(){var r=document.getElementById('root');return r?r.children.length:-1;})()"
+            ) { [weak self] result, _ in
+                guard let self else { return }
+                self.earlyRevealInFlight = false
+                let kids: Int
+                if let n = result as? NSNumber { kids = n.intValue }
+                else if let i = result as? Int { kids = i }
+                else { kids = -1 }
+                if kids > 0 { self.finishEarlyReveal() }
+            }
+        }
+    }
+
+    /// 首次发现页面已出首帧：停探测、停转圈、显形。幂等，重复调用无副作用。
+    private func finishEarlyReveal() {
+        stopEarlyRevealProbe()
+        hideError()
+        hasLoadedOnce = true
+        activityIndicator.stopAnimating()
+        revealWebView()
+    }
+
+    private func stopEarlyRevealProbe() {
+        earlyRevealTimer?.invalidate()
+        earlyRevealTimer = nil
+        earlyRevealInFlight = false
+    }
+
+    private var webErrors: [String] = []
+    /// Web 内容进程被系统回收的次数（内存压力导致白屏的重要嫌疑指标）。
+    private var terminateCount = 0
+
+    /// 默认加载地址（纯净公开版占位示例，个人地址由用户在 App 内添加并持久化在本地沙盒）：
+    private let defaultURL = "http://192.168.1.100:3083/"
+
+    private struct Keys {
+        static let lastURL = "DSHios.lastURL"
+        static let urlVersion = "DSHios.urlVersion"
+        static let currentURLVersion = 4
+        static let layoutEdit = "DSHios.layoutEdit"
+    }
+
+    /// iOS 16 缺失的关键 Web API 兜底。页面构建目标定得比 16 高，
+    /// 缺失任一都会导致启动脚本抛错白屏。每条只在原生不存在时补齐。
+    // <<<SHIM ARRAY MASKED>>>
+
+    override var prefersStatusBarHidden: Bool { false }
+    override var preferredStatusBarStyle: UIStatusBarStyle { .default }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupUI()
+        loadInitialURL()
+        startNetworkWatch()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil)
+        // 键盘避让（v1.0.70）：压缩 WebView 高度而不是让 WebKit 把整页顶出屏幕。
+        // 效果：顶栏钉在原位不动，会话内容在剩余空间内滚动，输入框始终悬在键盘正上方。
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardFrameWillChange(_:)),
+            name: UIResponder.keyboardWillChangeFrameNotification,
+            object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardFrameWillChange(_:)),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil)
+
+        // 自动检查更新（v1.0.83）：启动 3 秒后静默检查仓库最新构建
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            self?.checkForAppUpdates(manual: false)
+        }
+    }
+
+    // MARK: - 键盘避让（v1.0.70）
+
+    /// 键盘弹出/收起/移动：把键盘与视图重叠的高度写进底部约束（同步键盘动画曲线）。
+    /// 收起键盘时采用 0.32s 弹簧阻尼平滑缓动下降，解决下降太快、太生硬、无过渡的问题！
+    @objc private func keyboardFrameWillChange(_ note: Notification) {
+        guard let endFrame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue else { return }
+        let kbInView = view.convert(endFrame, from: nil)
+        let isHide = note.name == UIResponder.keyboardWillHideNotification || kbInView.minY >= view.bounds.height - 1
+        let overlap: CGFloat = isHide ? 0 : max(0, view.bounds.height - kbInView.minY)
+        isKeyboardVisible = overlap > 0
+        keyboardOverlap = overlap
+
+        webViewBottomConstraint.constant = -overlap
+        view.setNeedsLayout()
+
+        let kbStatusJS = "document.body && document.body.setAttribute('data-keyboard-open', '\(!isHide)');"
+        webView.evaluateJavaScript(kbStatusJS) { _, _ in }
+
+        if isHide {
+            // 收起键盘：使用 0.32 秒高质感弹簧阻尼动画，优雅缓动下落，彻底消除骤降与生硬卡顿！
+            UIView.animate(
+                withDuration: 0.32,
+                delay: 0,
+                usingSpringWithDamping: 0.88,
+                initialSpringVelocity: 0.2,
+                options: [.curveEaseInOut, .allowUserInteraction, .beginFromCurrentState],
+                animations: {
+                    self.view.layoutIfNeeded()
+                })
+        } else {
+            let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
+            let curveRaw = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7
+            let options: UIView.AnimationOptions = [UIView.AnimationOptions(rawValue: curveRaw << 16), .beginFromCurrentState]
+            UIView.animate(withDuration: duration, delay: 0, options: options) {
+                self.view.layoutIfNeeded()
+            }
+        }
+    }
+
+    /// 判定当前页面是不是 DSH 自身页面：与最近一次「标记为 DSH 服务」的地址同主机即为自身页面。
+    /// `dshServiceHost` 尚未标记时（冷启动 / 重试 / 清缓存路径不会更新它）默认按自身页面处理，
+    /// 避免 DSH 页被当成外部网页、顶部被多推一个安全区（v1.0.70 的「顶部多一块空白」就是这么来的）。
+    private func isOwnServicePage(url: URL?) -> Bool {
+        guard let host = url?.host?.lowercased(), !host.isEmpty else { return true }
+        if let svc = dshServiceHost?.lowercased(), !svc.isEmpty { return host == svc }
+        // 尚未标记过服务地址：默认地址 + 最近地址 + 回环地址都算自身页面
+        var hosts = ["localhost", "127.0.0.1"]
+        for raw in [defaultURL, UserDefaults.standard.string(forKey: Keys.lastURL)] {
+            if let h = raw.flatMap({ URL(string: $0)?.host?.lowercased() }), !h.isEmpty { hosts.append(h) }
+        }
+        return hosts.contains(host)
+    }
+
+    /// 外部网页（免费网页对话等第三方站点）顶部避让 iOS 状态栏/灵动岛；
+    /// DSH 页面保持全屏，由页内顶栏 CSS 自行让出安全区。
+    private func updateTopSafeAreaFor(url: URL?) {
+        guard url?.host?.isEmpty == false else { return }
+        let target: CGFloat = isOwnServicePage(url: url) ? 0 : view.safeAreaInsets.top
+        guard webViewTopConstraint.constant != target else { return }
+        webViewTopConstraint.constant = target
+        UIView.animate(withDuration: 0.2) { self.view.layoutIfNeeded() }
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        // webView 可能尚未创建（viewDidLoad 之前系统就会回调一次）
+        guard webView != nil, webViewTopConstraint != nil else { return }
+        // 旋转/刘海变化时，外部网页页面的顶部避让量跟着刷新
+        updateTopSafeAreaFor(url: webView.url)
+        // 状态栏高度随机型变化（无刘海 20pt、刘海 47pt、灵动岛 59pt），
+        // 把系统给的真实值下发给页面，顶栏按它留白，不写死像素。
+        publishStatusBarHeight()
+    }
+
+    /// 把状态栏高度下发给页内脚本。
+    /// `env(safe-area-inset-top)` 在这个 WKWebView 里取到的是 0（viewport-fit=cover 不可靠），
+    /// 所以改用原生侧的 `safeAreaInsets.top`，它由系统按机型、横竖屏、刘海/灵动岛实时给出。
+    ///
+    /// v1.0.79 修正：之前除以了 `UIScreen.scale`，把 59pt 缩成约 20px 下发，
+    /// 侧栏内容只让出 20px，顶进了状态栏（用户截图：标志被电量图标压住）。
+    /// CSS 像素在 viewport width=device-width 下就等于 pt，不能再除。
+    private func publishStatusBarHeight() {
+        let insets = view.safeAreaInsets
+        // 竖屏判断：用视图自身宽高，不依赖已弃用的 statusBarOrientation
+        let isPortrait = view.bounds.height >= view.bounds.width
+        // v1.0.105：系统值优先；系统值异常为 0 且竖屏时，按「iOS 机型安全区标准值对照表」兜底。
+        // 这样即使早期视图未布局完读不到安全区，也能按机型给出正确留白（见文件末尾 iOSSafeArea）。
+        let topValue = iOSSafeArea.effectiveTop(systemTop: insets.top, isPortrait: isPortrait)
+        let bottomValue = iOSSafeArea.effectiveBottom(systemBottom: insets.bottom)
+        let px = Int(topValue.rounded())
+        let bp = Int(bottomValue.rounded())
+        let deviceId = iOSSafeArea.machineIdentifier
+        let summary = iOSSafeArea.debugSummary(systemTop: insets.top, systemBottom: insets.bottom, isPortrait: isPortrait)
+        // 保持 __dshSetStatusBar 既有语义不变（页内 shim 依赖它），额外挂 __dshSafeArea 供按需取用。
+        // __dshSafeAreaReady 表示"这一次下发是权威值"，页内据此区分「未下发」与「下发为 0」
+        // （有 Home 键机型 bottom 合法值就是 0，不能当成缺省）。
+        let js = "(function(){try{"
+            + "if(window.__dshSetStatusBar)window.__dshSetStatusBar(\(px));"
+            + "window.__dshSafeArea={top:\(px),bottom:\(bp),device:\"\(deviceId)\"};"
+            + "window.__dshSafeAreaReady=1;"
+            + "window.__dshSafeAreaDebug=\"\(summary)\";"
+            + "}catch(e){}})();"
+        webView.evaluateJavaScript(js) { _, _ in }
+    }
+
+    deinit {
+        navigationTimer?.invalidate()
+        menuAutoHideTimer?.invalidate()
+        pathMonitor?.cancel()
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    // MARK: - UI
+
+    private func setupUI() {
+        view.backgroundColor = .systemBackground
+
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        config.defaultWebpagePreferences.allowsContentJavaScript = true
+        // 兼容 iOS 14 / 15 低版本 WebKit 策略：
+        // 显式在 preferences 上允许 JavaScript 与跨域本地网络访问，避免 ITP 隐私策略拦截 http 局域网请求
+        config.preferences.javaScriptEnabled = true
+        config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
+        config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
+        // 绑定持久化数据存储，确保静态资源磁盘缓存生效
+        config.websiteDataStore = WKWebsiteDataStore.default()
+        // 电脑端一些老页面（如 8210 TTS）没写 <meta name="viewport">，
+        // WKWebView 会按 980px 桌面宽渲染再整体缩小 → UI/按钮比例怪。
+        // 在每个页面文档开头注入标准移动端 viewport 修正（仅当页面自己没写时生效）。
+        let viewportFix = WKUserScript(source: """
+            (function() {
+              var meta = document.querySelector('meta[name="viewport"]');
+              if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = 'viewport';
+                document.head.appendChild(meta);
+              }
+              // 彻底禁用全局双击放大与误触放大，锁定视口，确保移动端绝不出现全页面缩放失控
+              meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+            })();
+            """,
+            injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        config.userContentController.addUserScript(viewportFix)
+        // iOS 16 的 WebKit 缺少桌面端构建默认可用的一部分较新 Web API，
+        // 任一缺失都会让首个内联脚本抛错 → #root 永远空 = 白屏。
+        // 在文档开始前注入最小语义等价的 polyfill（仅在原生缺失时生效）。
+        for src in Self.iosCompatShims {
+            config.userContentController.addUserScript(
+                WKUserScript(source: src,
+                             injectionTime: .atDocumentStart,
+                             forMainFrameOnly: false))
+        }
+
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = self
+        webView.uiDelegate = self
+        webView.scrollView.delegate = self
+        // 彻底禁止 WKWebView 原生缩放手势与双击放大页面（除灯箱图片手势由 JS 专属接管）
+        webView.scrollView.minimumZoomScale = 1.0
+        webView.scrollView.maximumZoomScale = 1.0
+        webView.scrollView.bouncesZoom = false
+        config.userContentController.add(Self.makeErrorBridge(owner: self), name: "dshErrors")
+        config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")
+        config.userContentController.add(Self.makeVoiceInputBridge(owner: self), name: "dshVoiceInput")
+        config.userContentController.add(Self.makeAppUpdateBridge(owner: self), name: "dshAppUpdate")
+        // v1.0.74：禁止侧滑返回上一个 URL。页面内的返回（抽屉、会话切换）走页面自己的逻辑，
+        // WebView 的历史回退会跳出当前服务地址，用户明确不要。
+        webView.allowsBackForwardNavigationGestures = false
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // 丝滑滚动体验：启用原生惯性加速与回弹（同 Hermes Studio），消除粘滞感
+        webView.scrollView.decelerationRate = .fast
+        webView.scrollView.bounces = true
+        webView.scrollView.alwaysBounceVertical = false
+        webView.isOpaque = false
+        webView.backgroundColor = .systemBackground
+        webView.scrollView.backgroundColor = .systemBackground
+        // 首帧到达前保持透明：加载期间露出的是原生加载态，不会白屏闪一下。
+        webView.alpha = 0
+        view.addSubview(webView)
+        self.webView = webView
+
+        let activity = UIActivityIndicatorView(style: .large)
+        activity.hidesWhenStopped = true
+        activity.color = .secondaryLabel
+        activity.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(activity)
+        self.activityIndicator = activity
+
+        // 顶/底约束只创建一次并持有引用：键盘避让（压缩高度）与外部网页安全区都靠动态改它们实现
+        webViewTopConstraint = webView.topAnchor.constraint(equalTo: view.topAnchor)
+        webViewBottomConstraint = webView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        NSLayoutConstraint.activate([
+            webViewTopConstraint,
+            webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            webViewBottomConstraint,
+
+            activity.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            activity.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+
+        setupErrorOverlay()
+        setupMenuButton()
+    }
+
+    /// 加载失败时的错误浮层（白屏根因修复：以前 didFail 只是停转圈，界面空白无提示）。
+    private func setupErrorOverlay() {
+        let overlay = UIView()
+        overlay.backgroundColor = .systemBackground
+        overlay.isHidden = true
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(overlay)
+
+        let container = UIStackView()
+        container.axis = .vertical
+        container.spacing = 12
+        container.alignment = .center
+        container.translatesAutoresizingMaskIntoConstraints = false
+        overlay.addSubview(container)
+
+        let icon = UIImageView(image: UIImage(systemName: "wifi.exclamationmark"))
+        icon.tintColor = .systemRed
+        icon.contentMode = .scaleAspectFit
+        icon.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        icon.widthAnchor.constraint(equalToConstant: 44).isActive = true
+
+        let title = UILabel()
+        title.text = "无法连接到 DSH"
+        title.font = .preferredFont(forTextStyle: .title2)
+        title.textAlignment = .center
+
+        let detail = UILabel()
+        detail.numberOfLines = 0
+        detail.font = .preferredFont(forTextStyle: .footnote)
+        detail.textColor = .secondaryLabel
+        detail.textAlignment = .center
+        detail.lineBreakMode = .byWordWrapping
+
+        let hint = UILabel()
+        hint.numberOfLines = 0
+        hint.font = .preferredFont(forTextStyle: .footnote)
+        hint.textColor = .secondaryLabel
+        hint.textAlignment = .center
+        hint.text = """
+        请确认：
+        1. 电脑端 DSH 正在运行（支持官方原版）
+        2. 手机与电脑在同一局域网 WiFi
+        3. 电脑端已安装并启用协同插件（dsh-anywhere）
+        """
+
+        let retryButton = UIButton(type: .system)
+        retryButton.setTitle("重试", for: .normal)
+        retryButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+        retryButton.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
+
+        let changeButton = UIButton(type: .system)
+        changeButton.setTitle("换一个地址", for: .normal)
+        changeButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        changeButton.addTarget(self, action: #selector(openMenuDirectly), for: .touchUpInside)
+
+        // 连不上时直接扫码：扫电脑端显示的地址二维码，自动填地址并连接（v1.0.71）
+        let scanButton = UIButton(type: .system)
+        scanButton.setTitle("📷 扫码连接（无需手动输入）", for: .normal)
+        scanButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        scanButton.tintColor = .systemBlue
+        scanButton.addTarget(self, action: #selector(scanFromErrorOverlay), for: .touchUpInside)
+
+        let guideButton = UIButton(type: .system)
+        guideButton.setTitle("📖 查看官方 DSH 连接教程与说明", for: .normal)
+        guideButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        guideButton.setImage(UIImage(systemName: "book.pages"), for: .normal)
+        guideButton.tintColor = .systemBlue
+        guideButton.addTarget(self, action: #selector(openConnectionGuide), for: .touchUpInside)
+
+        container.addArrangedSubview(icon)
+        container.addArrangedSubview(title)
+        container.addArrangedSubview(detail)
+        container.addArrangedSubview(hint)
+        container.addArrangedSubview(retryButton)
+        container.addArrangedSubview(scanButton)
+        container.addArrangedSubview(changeButton)
+        container.addArrangedSubview(guideButton)
+
+        // v1.0.86：内容比屏幕高时，纯 centerY 会把整块顶出屏幕上方（真机上提示跑到天上）。
+        // 改成上下都挂约束、优先级让位给内容高度：内容少时居中，内容多时贴安全区、不再溢出。
+        container.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        let centerY = container.centerYAnchor.constraint(equalTo: overlay.centerYAnchor)
+        centerY.priority = .defaultHigh
+        let topLimit = container.topAnchor.constraint(greaterThanOrEqualTo: overlay.safeAreaLayoutGuide.topAnchor, constant: 16)
+        let bottomLimit = container.bottomAnchor.constraint(lessThanOrEqualTo: overlay.safeAreaLayoutGuide.bottomAnchor, constant: -16)
+
+        NSLayoutConstraint.activate([
+            overlay.topAnchor.constraint(equalTo: view.topAnchor),
+            overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            centerY,
+            topLimit,
+            bottomLimit,
+            container.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 32),
+            container.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -32)
+        ])
+
+        self.errorOverlay = overlay
+        self.errorTitleLabel = title
+        self.errorDetailLabel = detail
+    }
+
+    /// 加载 16 帧 DeepSeek Q萌小胖鲸动态循环图片（吐水泡泡+呼吸摇摆）
+    private static func createAnimatedFatWhaleFrames() -> [UIImage] {
+        var frames: [UIImage] = []
+        for i in 0..<16 {
+            if let img = UIImage(named: "WhaleAnim_\(i)")?.withRenderingMode(.alwaysOriginal) {
+                frames.append(img)
+            }
+        }
+        return frames
+    }
+
+    /// 优先使用 DeepSeek 萌系小胖鲸圆形切片，回退到原生绘制
+    private static func createCuteWhaleImage(size: CGSize, alpha: CGFloat = 1.0) -> UIImage {
+        if let firstAnim = UIImage(named: "WhaleAnim_0") {
+            return firstAnim.withRenderingMode(.alwaysOriginal)
+        }
+        if let mascot = UIImage(named: "WhaleMascot") {
+            let renderer = UIGraphicsImageRenderer(size: size)
+            return renderer.image { ctx in
+                let cgCtx = ctx.cgContext
+                cgCtx.setAlpha(alpha)
+                let rect = CGRect(origin: .zero, size: size)
+                // 绘制圆形裁剪
+                let circle = UIBezierPath(ovalIn: rect)
+                circle.addClip()
+                // 填充柔和浅海蓝微质感底色
+                UIColor(red: 0.92, green: 0.95, blue: 1.0, alpha: 1.0).setFill()
+                circle.fill()
+                mascot.draw(in: rect)
+                // 绘制细腻的半透明白微边框
+                let stroke = UIBezierPath(ovalIn: rect.insetBy(dx: 0.75, dy: 0.75))
+                stroke.lineWidth = 1.5
+                UIColor.white.withAlphaComponent(0.92).setStroke()
+                stroke.stroke()
+            }
+        }
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            let cgCtx = ctx.cgContext
+            cgCtx.setAlpha(alpha)
+
+            // 绘制底板与小鲸鱼：可爱圆润身体 + 呆萌小圆眼 + 微笑小嘴 + 翘起的小尾巴
+            // 采用 DeepSeek 经典品牌蓝 (#4D6BFE) 与海天蓝渐变
+            let w = size.width
+            let h = size.height
+
+            // 鲸鱼身体主轮廓
+            let bodyPath = UIBezierPath()
+            // 从尾巴上方开始
+            bodyPath.move(to: CGPoint(x: w * 0.88, y: h * 0.35))
+            // 尾巴凹槽
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.95, y: h * 0.22), controlPoint: CGPoint(x: w * 0.92, y: h * 0.26))
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.82, y: h * 0.48), controlPoint: CGPoint(x: w * 0.85, y: h * 0.38))
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.96, y: h * 0.62), controlPoint: CGPoint(x: w * 0.90, y: h * 0.58))
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.80, y: h * 0.55), controlPoint: CGPoint(x: w * 0.88, y: h * 0.64))
+            
+            // 下腹部（丰满可爱的圆弧肚皮）
+            bodyPath.addCurve(to: CGPoint(x: w * 0.16, y: h * 0.60),
+                              controlPoint1: CGPoint(x: w * 0.60, y: h * 0.78),
+                              controlPoint2: CGPoint(x: w * 0.30, y: h * 0.78))
+            
+            // 圆滚滚的头部
+            bodyPath.addCurve(to: CGPoint(x: w * 0.18, y: h * 0.28),
+                              controlPoint1: CGPoint(x: w * 0.04, y: h * 0.50),
+                              controlPoint2: CGPoint(x: w * 0.06, y: h * 0.30))
+            
+            // 萌萌的头顶与背鳍
+            bodyPath.addCurve(to: CGPoint(x: w * 0.55, y: h * 0.30),
+                              controlPoint1: CGPoint(x: w * 0.30, y: h * 0.24),
+                              controlPoint2: CGPoint(x: w * 0.45, y: h * 0.26))
+            // 背鳍
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.62, y: h * 0.16), controlPoint: CGPoint(x: w * 0.56, y: h * 0.20))
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.68, y: h * 0.36), controlPoint: CGPoint(x: w * 0.66, y: h * 0.25))
+            
+            // 连回尾柄
+            bodyPath.addQuadCurve(to: CGPoint(x: w * 0.88, y: h * 0.35), controlPoint: CGPoint(x: w * 0.78, y: h * 0.40))
+            bodyPath.close()
+
+            // 填充鲸鱼身体主色
+            UIColor(red: 0.25, green: 0.45, blue: 0.98, alpha: 1.0).setFill()
+            bodyPath.fill()
+
+            // 可爱腮红（粉萌腮红圈）
+            let blushPath = UIBezierPath(ovalIn: CGRect(x: w * 0.20, y: h * 0.48, width: w * 0.12, height: h * 0.08))
+            UIColor(red: 1.0, green: 0.48, blue: 0.65, alpha: 0.85).setFill()
+            blushPath.fill()
+
+            // 灵动大眼睛（黑圆珠 + 亮闪闪高光）
+            let eyePath = UIBezierPath(ovalIn: CGRect(x: w * 0.22, y: h * 0.34, width: w * 0.10, height: w * 0.10))
+            UIColor(red: 0.08, green: 0.10, blue: 0.18, alpha: 1.0).setFill()
+            eyePath.fill()
+
+            // 眼睛白色高光小点
+            let sparklePath = UIBezierPath(ovalIn: CGRect(x: w * 0.235, y: h * 0.35, width: w * 0.038, height: w * 0.038))
+            UIColor.white.setFill()
+            sparklePath.fill()
+
+            // 可爱小鱼鳍（侧胸鳍）
+            let finPath = UIBezierPath()
+            finPath.move(to: CGPoint(x: w * 0.38, y: h * 0.52))
+            finPath.addQuadCurve(to: CGPoint(x: w * 0.48, y: h * 0.68), controlPoint: CGPoint(x: w * 0.46, y: h * 0.56))
+            finPath.addQuadCurve(to: CGPoint(x: w * 0.38, y: h * 0.52), controlPoint: CGPoint(x: w * 0.40, y: h * 0.65))
+            finPath.close()
+            UIColor(red: 0.18, green: 0.36, blue: 0.88, alpha: 0.9).setFill()
+            finPath.fill()
+
+            // 喷出的小水花（头顶萌萌的三瓣小水滴）
+            let spout1 = UIBezierPath(ovalIn: CGRect(x: w * 0.34, y: h * 0.12, width: w * 0.05, height: h * 0.08))
+            let spout2 = UIBezierPath(ovalIn: CGRect(x: w * 0.41, y: h * 0.06, width: w * 0.06, height: h * 0.10))
+            let spout3 = UIBezierPath(ovalIn: CGRect(x: w * 0.49, y: h * 0.10, width: w * 0.05, height: h * 0.08))
+            UIColor(red: 0.45, green: 0.78, blue: 1.0, alpha: 0.9).setFill()
+            spout1.fill()
+            spout2.fill()
+            spout3.fill()
+        }.withRenderingMode(.alwaysOriginal)
+    }
+
+    /// 右缘悬浮菜单按钮（半透明、可滑动、不用自动隐藏）。
+    ///
+    /// 旧实现把它钉死在右下角 40×40，正好压在页面的输入框/发送键上，点不动（用户报障）。
+    /// 现在改成「从右缘滑出」：
+    /// - 收起态只露出 `menuCollapsedPeek` 宽的一条把手，几乎不占页面热区；
+    /// - 手指在按钮上左右拖动可跟手展开/收起（`UIPanGestureRecognizer`），点一下也能切换；
+    /// - 展开后静置 `menuAutoHideDelay` 秒自动收起，不遮挡页面；
+    /// - 选右缘是因为 iOS 的「侧滑返回」手势占用左缘，放左缘会和系统手势打架。
+    private func setupMenuButton() {
+        let button = UIButton(type: .custom)
+        // 彻底消除任何投影或多重图层错位：单体透明圆角容器，绝不产生双重圆
+        button.backgroundColor = .clear
+        button.layer.cornerRadius = Self.menuButtonSide / 2
+        button.clipsToBounds = true
+        button.layer.shadowOpacity = 0.0
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.addTarget(self, action: #selector(menuTapped), for: .touchUpInside)
+        button.accessibilityLabel = "DSH 菜单"
+        button.accessibilityHint = "向左滑出或点击打开菜单"
+
+        // 装载 16 帧 DeepSeek Q 萌小胖鲸高清循环动画
+        let animFrames = Self.createAnimatedFatWhaleFrames()
+        if !animFrames.isEmpty, let animImage = UIImage.animatedImage(with: animFrames, duration: 1.25) {
+            button.setImage(animImage, for: .normal)
+        } else {
+            let staticImage = Self.createCuteWhaleImage(size: CGSize(width: Self.menuButtonSide, height: Self.menuButtonSide))
+            button.setImage(staticImage, for: .normal)
+        }
+        button.imageView?.contentMode = .scaleAspectFit
+        button.contentHorizontalAlignment = .fill
+        button.contentVerticalAlignment = .fill
+
+        view.addSubview(button)
+
+        self.menuTrailingConstraint = button.trailingAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.trailingAnchor,
+            constant: Self.menuCollapsedConstant)
+        NSLayoutConstraint.activate([
+            button.widthAnchor.constraint(equalToConstant: Self.menuButtonSide),
+            button.heightAnchor.constraint(equalToConstant: Self.menuButtonSide),
+            self.menuTrailingConstraint,
+            // 竖直位置比正中略高：首启 hero 页的输入卡大约在 y=410 起，
+            // 上移 56pt 后把手完全落在它上方，不与输入框/发送键抢触点。
+            button.centerYAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.centerYAnchor, constant: -56)
+        ])
+
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(menuPanned(_:)))
+        button.addGestureRecognizer(pan)
+
+        // 添加右侧全屏幕边缘滑动手势：屏幕右边缘任何位置向左滑，均可呼出悬浮鲸鱼按钮
+        let edgePan = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(rightEdgePanned(_:)))
+        edgePan.edges = .right
+        edgePan.cancelsTouchesInView = false
+        view.addGestureRecognizer(edgePan)
+
+        self.menuButton = button
+        self.setMenuExpanded(false, animated: false)
+    }
+
+    /// 右屏幕边缘左滑唤醒手势：在屏幕右边缘任意高度向左滑，即可流畅拉出小鲸鱼悬浮按钮
+    @objc private func rightEdgePanned(_ gesture: UIScreenEdgePanGestureRecognizer) {
+        guard let button = menuButton, let constraint = menuTrailingConstraint else { return }
+        switch gesture.state {
+        case .began:
+            menuAutoHideTimer?.invalidate()
+            menuAutoHideTimer = nil
+            // 随着手指高度略微调整小鲸鱼按钮垂直位置，贴合用户手指，体验极佳
+            let touchY = gesture.location(in: view).y
+            let safeTop = view.safeAreaInsets.top + 60
+            let safeBottom = view.bounds.height - view.safeAreaInsets.bottom - 100
+            let clampedY = min(max(touchY, safeTop), safeBottom)
+            
+            // 找到 centerY 约束并动态更新
+            for c in view.constraints {
+                if (c.firstItem === button && c.firstAttribute == .centerY) ||
+                   (c.secondItem === button && c.secondAttribute == .centerY) {
+                    c.constant = clampedY - (view.bounds.height / 2)
+                    break
+                }
+            }
+            view.layoutIfNeeded()
+        case .changed:
+            let translationX = gesture.translation(in: view).x // 向左滑 translationX < 0
+            // 从收起态 (menuCollapsedConstant) 逐渐拉向展开态 (menuExpandedConstant)
+            let base = Self.menuCollapsedConstant
+            let targetConstant = max(Self.menuExpandedConstant, base + translationX)
+            constraint.constant = targetConstant
+            let progress = min(1.0, max(0.0, -translationX / (Self.menuButtonSide)))
+            button.alpha = 0.20 + (progress * 0.70)
+            view.layoutIfNeeded()
+        case .ended, .cancelled:
+            let translationX = gesture.translation(in: view).x
+            let velocityX = gesture.velocity(in: view).x
+            // 只要向左划过 12pt 或速度大于 200，就完全展开；否则弹回半隐藏态
+            if translationX < -12 || velocityX < -200 {
+                setMenuExpanded(true, animated: true)
+            } else {
+                setMenuExpanded(false, animated: true)
+            }
+        default:
+            break
+        }
+    }
+
+    /// 收起 / 展开悬浮按钮。收起态隐藏一半（22pt 在屏内），透明度 20%，3 秒后自动隐藏。
+    private func setMenuExpanded(_ expanded: Bool, animated: Bool) {
+        guard let button = menuButton, let constraint = menuTrailingConstraint else { return }
+        menuButtonExpanded = expanded
+        let constant = expanded
+            ? Self.menuExpandedConstant
+            : Self.menuCollapsedConstant
+        constraint.constant = constant
+        // 用户要求：收起态半屏隐藏一半，透明度 20%；展开态清晰可见 0.90
+        let targetAlpha: CGFloat = expanded ? 0.90 : 0.20
+
+        let apply = {
+            button.alpha = targetAlpha
+            self.view.layoutIfNeeded()
+        }
+
+        // 保持单体按钮与动画图像 100% 绝对同轴对齐，不再使用单独偏移引入错位
+        button.imageEdgeInsets = .zero
+
+        if animated {
+            UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.82, initialSpringVelocity: 0.5, options: [.curveEaseOut], animations: apply)
+        } else {
+            apply()
+        }
+
+        menuAutoHideTimer?.invalidate()
+        menuAutoHideTimer = nil
+        if expanded {
+            // 用户要求：展开后 3 秒自动隐藏一半
+            menuAutoHideTimer = Timer.scheduledTimer(
+                withTimeInterval: Self.menuAutoHideDelay, repeats: false) { [weak self] _ in
+                self?.setMenuExpanded(false, animated: true)
+            }
+        }
+    }
+
+    /// 在按钮上左右拖动：跟手移动，松手后按位置决定展开或收起。
+    ///
+    /// 注意方向：按钮贴右缘，**向左滑（dx < 0）才是把它拉出来**，向右滑是推回屏外。
+    @objc private func menuPanned(_ gesture: UIPanGestureRecognizer) {
+        guard let constraint = menuTrailingConstraint else { return }
+        let base = menuButtonExpanded
+            ? Self.menuExpandedConstant
+            : Self.menuCollapsedConstant
+        // 约束值的合法区间：[展开值(小), 收起值(大)]。
+        let lower = Self.menuExpandedConstant
+        let upper = Self.menuCollapsedConstant
+        switch gesture.state {
+        case .changed:
+            let dx = gesture.translation(in: view).x
+            constraint.constant = min(max(base + dx, lower), upper)
+            menuAutoHideTimer?.invalidate()
+            menuAutoHideTimer = nil
+            view.layoutIfNeeded()
+        case .ended, .cancelled, .failed:
+            let dx = gesture.translation(in: view).x
+            let velocity = gesture.velocity(in: view).x
+            // 左滑过半、或左滑速度够快 → 展开；否则收起。
+            let threshold = Self.menuButtonSide / 2
+            let expand = (dx < -threshold) || (velocity < -400)
+            setMenuExpanded(expand, animated: true)
+        default:
+            break
+        }
+    }
+
+    // MARK: - 扫码连接（v1.0.71）
+
+    /// 打开扫码界面：扫到地址二维码后自动填地址并连接，省掉手动输入。
+    private func presentQRScanner() {
+        let scanner = QRAddressScannerViewController()
+        scanner.onResult = { [weak self] address in
+            guard let self else { return }
+            // 局域网/本机地址：扫到即连（零点击）；公网地址再确认一次，防止误扫到微信等二维码跳到外站
+            if QRAddressParser.isTrustedLocalAddress(address) || self.isCurrentServiceAddress(address) {
+                self.hideError()
+                self.loadURLString(address)
+            } else {
+                self.confirmConnect(to: address)
+            }
+        }
+        scanner.modalPresentationStyle = .fullScreen
+        present(scanner, animated: true)
+    }
+
+    /// 扫到的地址与当前 DSH 服务同主机（换端口/换路径也算同一台机器）时视为可信。
+    private func isCurrentServiceAddress(_ address: String) -> Bool {
+        guard let scannedHost = URL(string: address)?.host?.lowercased() else { return false }
+        let known = [dshServiceHost,
+                     URL(string: defaultURL)?.host,
+                     URL(string: UserDefaults.standard.string(forKey: Keys.lastURL) ?? "")?.host]
+            .compactMap { $0?.lowercased() }
+            .filter { !$0.isEmpty }
+        return known.contains(scannedHost)
+    }
+
+    /// 公网地址扫到后的二次确认（防误扫）
+    private func confirmConnect(to address: String) {
+        let alert = UIAlertController(
+            title: "识别到连接地址",
+            message: "\(address)\n\n这不是局域网地址，确认连接吗？",
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "连接", style: .default) { [weak self] _ in
+            self?.hideError()
+            self?.loadURLString(address)
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    /// 错误浮层上的扫码入口：先收起浮层再扫码，扫到即连。
+    @objc private func scanFromErrorOverlay() {
+        presentQRScanner()
+    }
+
+    /// 展示当前连接地址的二维码，方便用另一台手机扫码自动填地址。
+    private func showCurrentAddressQRCode() {
+        let address = webView.url?.absoluteString
+            ?? UserDefaults.standard.string(forKey: Keys.lastURL)
+            ?? defaultURL
+        present(QRCodeDisplayViewController(address: address), animated: true)
+    }
+
+    /// 错误浮层上的「换一个地址」：不经过悬浮按钮的展开态，直接弹菜单。
+    @objc private func openMenuDirectly() {
+        presentMenuSheet()
+    }
+
+    /// 点一下：无论当前是展开还是收起，直接弹出菜单（避免用户误以为无响应）。
+    @objc private func menuTapped() {
+        // fisharchive.cc 果冻 Q 弹物理动效 (Jelly Spring Animation)
+        UIView.animate(withDuration: 0.12, delay: 0, options: [.curveEaseIn], animations: {
+            self.menuButton?.transform = CGAffineTransform(scaleX: 1.25, y: 0.78)
+        }) { _ in
+            UIView.animate(withDuration: 0.38, delay: 0, usingSpringWithDamping: 0.35, initialSpringVelocity: 1.5, options: [], animations: {
+                self.menuButton?.transform = .identity
+            })
+        }
+        if !menuButtonExpanded {
+            setMenuExpanded(true, animated: false)
+        }
+        presentMenuSheet()
+    }
+
+    private func presentMenuSheet() {
+        let sheet = UIAlertController(title: "DSH", message: nil, preferredStyle: .actionSheet)
+
+        // 1. 切换服务与连接通道（二级菜单）
+        sheet.addAction(UIAlertAction(title: "📡 切换服务与连接通道 ›", style: .default) { [weak self] _ in
+            self?.presentConnectionsSubmenu()
+        })
+
+        // 2. 立即刷新当前页面
+        sheet.addAction(UIAlertAction(title: "⚡ 立即刷新当前页面", style: .default) { [weak self] _ in
+            self?.webView.reloadFromOrigin()
+        })
+
+        // 3. 免费网页版（二级菜单）
+        sheet.addAction(UIAlertAction(title: "🌐 免费网页版（主流AI模型）›", style: .default) { [weak self] _ in
+            self?.presentFreeWebActionSheet()
+        })
+
+        // 4. 邮件反馈与建议（发送到开发者邮箱）
+        sheet.addAction(UIAlertAction(title: "✉️ 邮件反馈与建议 (发送到开发者邮箱)…", style: .default) { [weak self] _ in
+            self?.presentFeedbackSheet()
+        })
+
+        // 5. 维护与工具（二级菜单）
+        sheet.addAction(UIAlertAction(title: "⚙️ 维护与工具 (缓存清理/检查更新/教程) ›", style: .default) { [weak self] _ in
+            self?.presentToolsSubmenu()
+        })
+
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    /// 二级子菜单：切换服务与连接通道
+    private func presentConnectionsSubmenu() {
+        let sheet = UIAlertController(title: "选择服务与连接方式", message: nil, preferredStyle: .actionSheet)
+
+        let services = ServiceStore.load()
+        let activeURL = UserDefaults.standard.string(forKey: "DSHios.activeServiceURL") ?? ""
+        let currentURL = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? ""
+        let activeComps = URLComponents(string: activeURL)
+        let currentComps = URLComponents(string: currentURL)
+
+        for item in services.prefix(8) {
+            let isSelected: Bool = {
+                if !activeURL.isEmpty {
+                    if item.url == activeURL { return true }
+                    if let itemComps = URLComponents(string: item.url), let activeComps {
+                        if itemComps.host == activeComps.host && itemComps.port == activeComps.port && itemComps.path == activeComps.path {
+                            return true
+                        }
+                    }
+                }
+                if !currentURL.isEmpty {
+                    if item.url == currentURL { return true }
+                    if let itemComps = URLComponents(string: item.url), let currentComps {
+                        if itemComps.host == currentComps.host && itemComps.port == currentComps.port && itemComps.path == currentComps.path {
+                            return true
+                        }
+                    }
+                }
+                return false
+            }()
+
+            let title = isSelected ? "🔴 \(item.name) (当前·点击刷新)" : item.name
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
+                guard let self else { return }
+                UserDefaults.standard.set(item.url, forKey: "DSHios.activeServiceURL")
+                if isSelected {
+                    self.webView.reloadFromOrigin()
+                    return
+                }
+                ServiceResolver.resolve(item) { url in
+                    self.loadURLString(url, markAsDSHService: true)
+                }
+            }
+            if isSelected {
+                if action.responds(to: NSSelectorFromString("titleTextColor")) {
+                    action.setValue(UIColor.systemRed, forKey: "titleTextColor")
+                }
+            }
+            sheet.addAction(action)
+        }
+
+        sheet.addAction(UIAlertAction(title: "📷 扫码连接（扫二维码自动填地址）", style: .default) { [weak self] _ in
+            self?.presentQRScanner()
+        })
+        sheet.addAction(UIAlertAction(title: "🔳 当前地址二维码（给别人扫）", style: .default) { [weak self] _ in
+            self?.showCurrentAddressQRCode()
+        })
+        sheet.addAction(UIAlertAction(title: "手动输入地址…", style: .default) { [weak self] _ in
+            self?.promptForURL()
+        })
+        sheet.addAction(UIAlertAction(title: "全部服务管理…", style: .default) { [weak self] _ in
+            self?.openServiceList()
+        })
+        sheet.addAction(UIAlertAction(title: "‹ 返回主菜单", style: .cancel) { [weak self] _ in
+            self?.presentMenuSheet()
+        })
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    /// 二级子菜单：维护、教程与工具
+    private func presentToolsSubmenu() {
+        let sheet = UIAlertController(title: "系统维护与实用工具", message: nil, preferredStyle: .actionSheet)
+
+        sheet.addAction(UIAlertAction(title: "⚡ 立即回源刷新当前页面", style: .default) { [weak self] _ in
+            self?.webView.reloadFromOrigin()
+        })
+        sheet.addAction(UIAlertAction(title: "🧹 清除网页缓存并重载", style: .default) { [weak self] _ in
+            self?.clearWebCacheAndReload()
+        })
+        let currentAppVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.88"
+        sheet.addAction(UIAlertAction(title: "🚀 检查更新 (当前 v\(currentAppVer))…", style: .default) { [weak self] _ in
+            self?.checkForAppUpdates(manual: true)
+        })
+        sheet.addAction(UIAlertAction(title: "📖 连接说明与教程…", style: .default) { [weak self] _ in
+            self?.openConnectionGuide()
+        })
+        sheet.addAction(UIAlertAction(title: "ℹ️ 关于 DSHios", style: .default) { [weak self] _ in
+            self?.showAbout()
+        })
+        sheet.addAction(UIAlertAction(title: "‹ 返回主菜单", style: .cancel) { [weak self] _ in
+            self?.presentMenuSheet()
+        })
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    /// v1.0.83：布局编辑层。给每个按钮描边、标名字，按住拖动，松手记住位置。
+    /// 打开后注入到当前页面，刷新或换页时按开关重新注入。
+    private func applyLayoutEditMode() {
+        let on = UserDefaults.standard.bool(forKey: Keys.layoutEdit)
+        let js = on ? Self.layoutEditOnJS : Self.layoutEditOffJS
+        webView?.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    private static let layoutEditOffJS = "(function(){var e=document.getElementById('dsh-layout-edit');if(e)e.remove();document.querySelectorAll('[data-dsh-moved]').forEach(function(n){n.style.position='';n.style.left='';n.style.top='';n.style.zIndex='';n.removeAttribute('data-dsh-moved');});})();"
+
+    private static let layoutEditOnJS = """
+    (function () {
+      if (document.getElementById('dsh-layout-edit')) return;
+      var box = document.createElement('div');
+      box.id = 'dsh-layout-edit';
+      box.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;z-index:2147483000;';
+      document.documentElement.appendChild(box);
+
+      function labelOf(el) {
+        var t = el.getAttribute('aria-label') || (el.innerText || '').trim();
+        return t.replace(/\\s+/g, ' ').slice(0, 10) || el.tagName.toLowerCase();
+      }
+      function candidates() {
+        var sel = 'header, [class*="titleRow"], [class*="composerSeat"], [class*="composerStack"], [class*="uWtHQG_input"], [class*="sidebarCol"], button, [role="button"], a, input, textarea';
+        var list = Array.prototype.filter.call(document.querySelectorAll(sel), function (el) {
+          if (el.closest('#dsh-layout-edit') || el.closest('#dsh-layout-bar')) return false;
+          var r = el.getBoundingClientRect();
+          return r.width > 8 && r.height > 8 && r.width < window.innerWidth + 4 && r.bottom > 0 && r.right > 0 && r.top < window.innerHeight && r.left < window.innerWidth;
+        });
+        // 大块在前、小按钮在后：后画的框在上层，按钮不会被整块挡住拖不动。
+        list.sort(function (a, b) { return (b.getBoundingClientRect().width * b.getBoundingClientRect().height) - (a.getBoundingClientRect().width * a.getBoundingClientRect().height); });
+        return list;
+      }
+      function paint() {
+        box.innerHTML = '';
+        var idx = 0;
+        candidates().forEach(function (el) {
+          idx += 1;
+          var num = idx;
+          var r = el.getBoundingClientRect();
+          var f = document.createElement('div');
+          f.style.cssText = 'position:fixed;border:1px dashed #ff2d55;border-radius:6px;pointer-events:auto;background:rgba(255,45,85,0.06);';
+          f.style.left = r.left + 'px';
+          f.style.top = r.top + 'px';
+          f.style.width = r.width + 'px';
+          f.style.height = r.height + 'px';
+          var tag = document.createElement('span');
+          tag.textContent = num + ' ' + labelOf(el);
+          tag.style.cssText = 'position:absolute;left:0;top:-14px;font:10px sans-serif;color:#fff;background:#ff2d55;padding:0 3px;border-radius:3px;white-space:nowrap;';
+          f.appendChild(tag);
+          var sx = 0, sy = 0, sl = 0, st = 0, moved = false;
+          f.addEventListener('touchstart', function (e) {
+            var t = e.touches[0]; sx = t.clientX; sy = t.clientY;
+            var er = el.getBoundingClientRect(); sl = er.left; st = er.top; moved = false;
+          }, { passive: true });
+          f.addEventListener('touchmove', function (e) {
+            var t = e.touches[0];
+            var dx = t.clientX - sx, dy = t.clientY - sy;
+            if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+            if (!moved) return;
+            e.preventDefault();
+            el.style.setProperty('position', 'fixed', 'important');
+            el.style.setProperty('left', Math.round(sl + dx) + 'px', 'important');
+            el.style.setProperty('top', Math.round(st + dy) + 'px', 'important');
+            el.style.setProperty('margin', '0', 'important');
+            el.style.setProperty('z-index', '2147482000', 'important');
+            el.setAttribute('data-dsh-moved', '1');
+            f.style.left = Math.round(sl + dx) + 'px';
+            f.style.top = Math.round(st + dy) + 'px';
+          }, { passive: false });
+          f.addEventListener('touchend', function (e) {
+            if (moved) { e.preventDefault(); e.stopPropagation(); }
+          }, true);
+          box.appendChild(f);
+        });
+      }
+      paint();
+
+      var bar = document.createElement('div');
+      bar.id = 'dsh-layout-bar';
+      bar.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483646;display:flex;gap:6px;';
+      function btn(text, bg) {
+        var b = document.createElement('button');
+        b.textContent = text;
+        b.style.cssText = 'font:13px sans-serif;color:#fff;border:none;border-radius:8px;padding:6px 10px;';
+        b.style.background = bg;
+        return b;
+      }
+      var copy = btn('复制位置', '#ff2d55');
+      copy.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var lines = ['按钮 左 上 宽 高'];
+        candidates().forEach(function (el) {
+          var r = el.getBoundingClientRect();
+          lines.push(labelOf(el) + ' ' + Math.round(r.left) + ' ' + Math.round(r.top) + ' ' + Math.round(r.width) + ' ' + Math.round(r.height));
+        });
+        var text = lines.join('\\n');
+        if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {});
+        copy.textContent = '已复制';
+        setTimeout(function () { copy.textContent = '复制位置'; }, 1200);
+      }, true);
+      var refresh = btn('重标', '#444');
+      refresh.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); paint(); }, true);
+      bar.appendChild(copy); bar.appendChild(refresh);
+      document.documentElement.appendChild(bar);
+      box.__bar = bar;
+    })();
+    """
+
+    /// 一级菜单：免费网页版（主流 AI 模型）
+    /// 支持二级菜单查看国内主流模型与海外主流模型，用户登录自己账号后，Cookie 与登录态由 WKWebsiteDataStore 永久保持
+    private func presentFreeWebActionSheet() {
+        let sheet = UIAlertController(
+            title: "免费网页版（主流AI模型）",
+            message: "登录个人账号即可免费使用。登录态 Cookie 自动持久化保存，除非平台官方过期否则无需重复登录。",
+            preferredStyle: .actionSheet)
+
+        sheet.addAction(UIAlertAction(title: "🇨🇳 国内主流模型（手机号即可直接免费用）", style: .default) { [weak self] _ in
+            self?.presentDomesticWebActionSheet()
+        })
+
+        sheet.addAction(UIAlertAction(title: "🌐 国外主流模型（需海外网络环境+账号）", style: .default) { [weak self] _ in
+            self?.presentOverseasWebActionSheet()
+        })
+
+        sheet.addAction(UIAlertAction(title: "返回上级菜单", style: .default) { [weak self] _ in
+            self?.presentMenuSheet()
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    /// 二级菜单：国内主流免费模型
+    private func presentDomesticWebActionSheet() {
+        let sheet = UIAlertController(
+            title: "国内主流模型网页端",
+            message: "直接浏览器打开，手机号登录即可免费畅聊：",
+            preferredStyle: .actionSheet)
+
+        let items = FreeWebStore.domesticDefaults
+        let currentURL = webView.url?.absoluteString ?? ""
+
+        for item in items {
+            let isCurrent = currentURL.hasPrefix(item.url)
+            let title = isCurrent ? "🔴 \(item.name) (当前)" : item.name
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
+                self?.loadURLString(item.url, markAsDSHService: false)
+            }
+            if isCurrent, action.responds(to: NSSelectorFromString("titleTextColor")) {
+                action.setValue(UIColor.systemRed, forKey: "titleTextColor")
+            }
+            sheet.addAction(action)
+        }
+
+        sheet.addAction(UIAlertAction(title: "返回免费网页版目录", style: .default) { [weak self] _ in
+            self?.presentFreeWebActionSheet()
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    /// 二级菜单：国外主流免费模型
+    private func presentOverseasWebActionSheet() {
+        let sheet = UIAlertController(
+            title: "国外主流模型网页端",
+            message: "网页免费版，需海外网络环境 + 海外账号登录：",
+            preferredStyle: .actionSheet)
+
+        let items = FreeWebStore.overseasDefaults
+        let currentURL = webView.url?.absoluteString ?? ""
+
+        for item in items {
+            let isCurrent = currentURL.hasPrefix(item.url)
+            let title = isCurrent ? "🔴 \(item.name) (当前)" : item.name
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
+                self?.loadURLString(item.url, markAsDSHService: false)
+            }
+            if isCurrent, action.responds(to: NSSelectorFromString("titleTextColor")) {
+                action.setValue(UIColor.systemRed, forKey: "titleTextColor")
+            }
+            sheet.addAction(action)
+        }
+
+        sheet.addAction(UIAlertAction(title: "返回免费网页版目录", style: .default) { [weak self] _ in
+            self?.presentFreeWebActionSheet()
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = menuButton
+        present(sheet, animated: true)
+    }
+
+    @objc private func openConnectionGuide() {
+        let guide = ConnectionGuideViewController(onOpenInputURL: { [weak self] in
+            self?.promptForURL()
+        })
+        let nav = UINavigationController(rootViewController: guide)
+        nav.modalPresentationStyle = .pageSheet
+        present(nav, animated: true)
+    }
+
+    /// 清空 WKWebView 的磁盘/内存缓存后重新加载。
+    /// 用途：服务端已修好但客户端仍在用缓存里的旧入口包时，一键恢复。
+    private func clearWebCacheAndReload() {
+        let target = webView.url?.absoluteString
+            ?? UserDefaults.standard.string(forKey: Keys.lastURL)
+            ?? defaultURL
+        let dataStore = webView.configuration.websiteDataStore
+        let types = WKWebsiteDataStore.allWebsiteDataTypes()
+        dataStore.removeData(ofTypes: types, modifiedSince: .distantPast) { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                // cookie 也一并清了，重新走一遍 Pocket 握手（重载不改变页面归属判定）
+                self.loadURLString(target, markAsDSHService: false)
+            }
+        }
+    }
+
+    private func openServiceList() {
+        let currentURL = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? defaultURL
+        let settings = SettingsViewController(
+            currentURL: currentURL,
+            onSave: { _ in },
+            onSelect: { [weak self] newURL in
+                self?.loadURLString(newURL)
+            })
+        let nav = UINavigationController(rootViewController: settings)
+        nav.modalPresentationStyle = .pageSheet
+        present(nav, animated: true)
+    }
+
+    private func promptForURL() {
+        let alert = UIAlertController(title: "服务地址", message: nil, preferredStyle: .alert)
+        alert.addTextField { tf in
+            tf.placeholder = "http://192.168.1.100:3083/"
+            tf.text = UserDefaults.standard.string(forKey: Keys.lastURL) ?? self.defaultURL
+            tf.autocapitalizationType = .none
+            tf.autocorrectionType = .no
+            tf.keyboardType = .URL
+            tf.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "加载", style: .default) { [weak self] _ in
+            guard let text = alert.textFields?.first?.text, !text.isEmpty else { return }
+            self?.loadURLString(text)
+        })
+        present(alert, animated: true)
+    }
+
+    /// 精确解析 iOS 物理硬件标识符（如 iPhone15,3 -> iPhone 14 Pro Max，iPhone11,8 -> iPhone XR）
+    private static func getExactDeviceModel() -> String {
+        #if targetEnvironment(simulator)
+        let identifier = ProcessInfo().environment["SIMULATOR_MODEL_IDENTIFIER"] ?? "Simulator"
+        #else
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let machineMirror = Mirror(reflecting: systemInfo.machine)
+        let identifier = machineMirror.children.reduce("") { identifier, element in
+            guard let value = element.value as? Int8, value != 0 else { return identifier }
+            return identifier + String(UnicodeScalar(UInt8(value)))
+        }
+        #endif
+
+        let modelMap: [String: String] = [
+            // iPhone 系列
+            "iPhone10,1": "iPhone 8", "iPhone10,4": "iPhone 8",
+            "iPhone10,2": "iPhone 8 Plus", "iPhone10,5": "iPhone 8 Plus",
+            "iPhone10,3": "iPhone X", "iPhone10,6": "iPhone X",
+            "iPhone11,2": "iPhone XS",
+            "iPhone11,4": "iPhone XS Max", "iPhone11,6": "iPhone XS Max",
+            "iPhone11,8": "iPhone XR",
+            "iPhone12,1": "iPhone 11",
+            "iPhone12,3": "iPhone 11 Pro",
+            "iPhone12,5": "iPhone 11 Pro Max",
+            "iPhone12,8": "iPhone SE (2nd gen)",
+            "iPhone13,1": "iPhone 12 mini",
+            "iPhone13,2": "iPhone 12",
+            "iPhone13,3": "iPhone 12 Pro",
+            "iPhone13,4": "iPhone 12 Pro Max",
+            "iPhone14,4": "iPhone 13 mini",
+            "iPhone14,5": "iPhone 13",
+            "iPhone14,2": "iPhone 13 Pro",
+            "iPhone14,3": "iPhone 13 Pro Max",
+            "iPhone14,6": "iPhone SE (3rd gen)",
+            "iPhone14,7": "iPhone 14",
+            "iPhone14,8": "iPhone 14 Plus",
+            "iPhone15,2": "iPhone 14 Pro",
+            "iPhone15,3": "iPhone 14 Pro Max",
+            "iPhone15,4": "iPhone 15",
+            "iPhone15,5": "iPhone 15 Plus",
+            "iPhone16,1": "iPhone 15 Pro",
+            "iPhone16,2": "iPhone 15 Pro Max",
+            "iPhone17,1": "iPhone 16 Pro",
+            "iPhone17,2": "iPhone 16 Pro Max",
+            "iPhone17,3": "iPhone 16",
+            "iPhone17,4": "iPhone 16 Plus",
+            // iPad 系列
+            "iPad11,1": "iPad mini (5th gen)", "iPad11,2": "iPad mini (5th gen)",
+            "iPad14,1": "iPad mini (6th gen)", "iPad14,2": "iPad mini (6th gen)",
+            "iPad11,3": "iPad Air (3rd gen)", "iPad11,4": "iPad Air (3rd gen)",
+            "iPad13,1": "iPad Air (4th gen)", "iPad13,2": "iPad Air (4th gen)",
+            "iPad13,16": "iPad Air (5th gen)", "iPad13,17": "iPad Air (5th gen)",
+            "iPad14,8": "iPad Air 11-inch (M2)", "iPad14,9": "iPad Air 11-inch (M2)",
+            "iPad14,10": "iPad Air 13-inch (M2)", "iPad14,11": "iPad Air 13-inch (M2)",
+            "iPad8,1": "iPad Pro 11-inch (1st gen)", "iPad8,2": "iPad Pro 11-inch (1st gen)",
+            "iPad8,3": "iPad Pro 11-inch (1st gen)", "iPad8,4": "iPad Pro 11-inch (1st gen)",
+            "iPad8,9": "iPad Pro 11-inch (2nd gen)", "iPad8,10": "iPad Pro 11-inch (2nd gen)",
+            "iPad13,4": "iPad Pro 11-inch (3rd gen)", "iPad13,5": "iPad Pro 11-inch (3rd gen)",
+            "iPad13,6": "iPad Pro 11-inch (3rd gen)", "iPad13,7": "iPad Pro 11-inch (3rd gen)",
+            "iPad14,3": "iPad Pro 11-inch (4th gen)", "iPad14,4": "iPad Pro 11-inch (4th gen)",
+            "iPad16,3": "iPad Pro 11-inch (M4)", "iPad16,4": "iPad Pro 11-inch (M4)",
+            "iPad8,5": "iPad Pro 12.9-inch (3rd gen)", "iPad8,6": "iPad Pro 12.9-inch (3rd gen)",
+            "iPad8,7": "iPad Pro 12.9-inch (3rd gen)", "iPad8,8": "iPad Pro 12.9-inch (3rd gen)",
+            "iPad8,11": "iPad Pro 12.9-inch (4th gen)", "iPad8,12": "iPad Pro 12.9-inch (4th gen)",
+            "iPad13,8": "iPad Pro 12.9-inch (5th gen)", "iPad13,9": "iPad Pro 12.9-inch (5th gen)",
+            "iPad13,10": "iPad Pro 12.9-inch (5th gen)", "iPad13,11": "iPad Pro 12.9-inch (5th gen)",
+            "iPad14,5": "iPad Pro 12.9-inch (6th gen)", "iPad14,6": "iPad Pro 12.9-inch (6th gen)",
+            "iPad16,5": "iPad Pro 13-inch (M4)", "iPad16,6": "iPad Pro 13-inch (M4)"
+        ]
+
+        if let exactName = modelMap[identifier] {
+            return exactName
+        }
+        if identifier.starts(with: "iPhone") || identifier.starts(with: "iPad") {
+            return identifier
+        }
+        let fallback = UIDevice.current.model
+        return fallback.isEmpty ? "iOS 设备" : fallback
+    }
+
+    /// 原生设备运行环境信息检测（解决多系统版本诊断与 iOS 15 兼容排查）
+    private static func getDeviceInfoSummary() -> String {
+        let device = UIDevice.current
+        let systemVersion = device.systemVersion
+        let exactModel = getExactDeviceModel()
+        let name = device.name
+        
+        var freeDiskGB = "未知"
+        if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
+           let freeSize = attrs[.systemFreeSize] as? Int64 {
+            freeDiskGB = String(format: "%.1f GB", Double(freeSize) / 1024.0 / 1024.0 / 1024.0)
+        }
+        
+        let screen = UIScreen.main
+        let bounds = screen.bounds
+        let scale = screen.scale
+        let res = "\(Int(bounds.width * scale))×\(Int(bounds.height * scale)) (@\(Int(scale))x)"
+        
+        // 严格只显示精确硬件型号，彻底删除任何括号后缀（如 (iPhone) / (iPad)）
+        return "设备: \(exactModel)\n系统: iOS \(systemVersion)\n屏幕: \(res)\n可用存储: \(freeDiskGB)"
+    }
+
+    /// 反馈与建议页面入口（严禁收集或传递用户私密访问地址与密码凭据）
+    private func presentFeedbackSheet() {
+        let feedbackVC = FeedbackViewController()
+        let nav = UINavigationController(rootViewController: feedbackVC)
+        nav.modalPresentationStyle = .pageSheet
+        present(nav, animated: true)
+    }
+
+    /// 关于：版本号原生可见（读 Info.plist，回退到编译期常量）
+    private func showAbout() {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? AppDelegate.Version.marketing
+        let build = info?["CFBundleVersion"] as? String ?? AppDelegate.Version.build
+        let deviceInfo = Self.getDeviceInfoSummary()
+        let alert = UIAlertController(
+            title: "DeepSeek Harness iOS",
+            message: """
+            版本：\(version) (\(build))
+            开源仓库：https://github.com/liushQAQ/IOS
+
+            【设备环境信息】
+            \(deviceInfo)
+
+            【最新特性 (v1.0.113)】
+            1. ⚡ 首推插件 dsh-anywhere：支持多台手机、iPad、平板、电脑多设备同时在线访问，实时同屏收发与流式同步打印，无缝切换使用；内置毫秒级锁屏自愈（备选支持 dsh-pocket）；
+            2. 📐 顶栏档位定版微调，比上一版下移半格，与状态栏留 3pt 呼吸、零重叠；
+            3. 📑 右侧面板顶部多余的 45pt 留白已收起（官方重复的一段内边距），内容整体上提，打开即见正文；
+            4. 🖱️ 左上角「打开目录」按钮已实测可直接点开（首页悬浮键与会话页左上角按钮双通道），抽屉宽度保持 252pt；
+            5. ⌨️ 输入框只有键盘弹起 / 收起两个固定位置，不再随流式输出上下飘移；键盘弹起时「用量 / token / 上下文」统计条完整显示；
+            6. 🌙 暗色模式分层接缝修复；会话记录不再从聊天框底部露出；屏外隐藏的弹层不再被误拽进屏幕；
+            7. 🚀 悬浮按钮内置「检查更新」：支持从 GitHub 仓库自动下载并唤起巨魔 (TrollStore) 一键覆盖安装。
+            """,
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
+            self?.openConnectionGuide()
+        })
+        alert.addAction(UIAlertAction(title: "好", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    // MARK: - Loading
+
+    private func loadInitialURL() {
+        // 跨版本防覆盖铁律：优先读取本地持久化沙盒中用户已配置/正在使用的地址，绝不覆盖冲掉用户已有 URL！
+        let saved = DSHPersistenceCenter.loadLastURL() ?? UserDefaults.standard.string(forKey: Keys.lastURL)
+        let urlString = (saved?.isEmpty == false) ? saved! : defaultURL
+        loadURLString(urlString)
+    }
+
+    @objc private func retryTapped() {
+        if let current = webView.url?.absoluteString, !current.isEmpty {
+            loadURLString(current, markAsDSHService: false)
+        } else {
+            loadInitialURL()
+        }
+    }
+
+    @objc private func appDidEnterBackground() {
+        if isDictating {
+            stopVoiceDictation()
+        }
+    }
+
+    /// - Parameter markAsDSHService: 加载的是 DSH 服务地址时为 true（记录其 host 用于页面归属判定）；
+    ///   打开外嵌免费网页对话等第三方站点时必须传 false，避免把第三方 host 误认成 DSH。
+    private func loadURLString(_ raw: String, markAsDSHService: Bool = true) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        var finalString = trimmed
+        if !finalString.lowercased().hasPrefix("http://"),
+           !finalString.lowercased().hasPrefix("https://") {
+            finalString = "http://" + finalString
+        }
+        guard let url = URL(string: finalString) else {
+            showError(detail: "地址无效：\(finalString)")
+            return
+        }
+        if markAsDSHService {
+            dshServiceHost = url.host
+        }
+
+        // 双轨固化存储，跨版本覆盖安装升级永不丢失当前使用的 URL
+        UserDefaults.standard.set(trimmed, forKey: Keys.lastURL)
+        UserDefaults.standard.set(trimmed, forKey: "DSHios.activeServiceURL")
+        DSHPersistenceCenter.saveLastURL(trimmed)
+        hideError()
+        stopWhiteScreenDiagnostics()
+        stopEarlyRevealProbe()
+        webErrors = []
+        terminateCount = 0
+        hasLoadedOnce = false
+        isTokenRetryInFlight = false
+        if !trimmed.contains("dsh-pocket-retry=1") { isPocketRetryInFlight = false }
+
+        // 1.0.70 黄金逻辑：新地址开始加载先隐藏旧内容，由系统原生处理请求与超时
+        UIView.animate(withDuration: 0.12) {
+            self.webView.alpha = 0
+        }
+        webView.load(URLRequest(url: url))
+        // 注意：这里**不能**武装探测。webView.load 之后旧文档仍留在内存里（直到新响应提交），
+        // 此刻探测 #root 会立刻命中旧页面导致提前显形，等于改动了 URL 切换的观感。
+        // 正确时机是 didCommit（新文档已提交）——见 webView(_:didCommit:)。
+    }
+
+    // MARK: - 联网即加载 (1.0.70 零干扰黄金逻辑)
+
+    @objc private func appDidBecomeActive() {
+        if let btn = menuButton {
+            view.bringSubviewToFront(btn)
+            btn.isUserInteractionEnabled = true
+        }
+        setMenuExpanded(false, animated: false)
+
+        if !errorOverlay.isHidden || webView.url == nil || !hasLoadedOnce {
+            retryTapped()
+        }
+    }
+
+    /// 网络可达性监听：网络从无到有时自动加载，无需手动点刷新。
+    private func startNetworkWatch() {
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            guard let self else { return }
+            guard path.status == .satisfied else { return }
+            DispatchQueue.main.async {
+                // 只在「失败态」或「尚未加载」时自动重连，已经正常加载的不打断
+                if !self.errorOverlay.isHidden || self.webView.url == nil || !self.hasLoadedOnce {
+                    self.retryTapped()
+                }
+            }
+        }
+        monitor.start(queue: DispatchQueue.global(qos: .utility))
+        self.pathMonitor = monitor
+    }
+
+    // MARK: - Error overlay
+
+    /// webView 只在内容就绪后显形，加载中/失败时露出的是原生加载态或错误提示。
+    private func revealWebView() {
+        guard webView.alpha < 1 else { return }
+        UIView.animate(withDuration: 0.18) {
+            self.webView.alpha = 1
+        }
+    }
+
+    private func showError(detail: String) {
+        // v1.0.106：已经明确报错就不必再提前显形探测了。
+        stopEarlyRevealProbe()
+        // 白屏 / 系统版本诊断路径已显式设过标题，这里不要覆盖；其余一律回到默认标题。
+        let presetTitles: Set<String> = ["页面白屏", "系统版本过低"]
+        if !presetTitles.contains(errorTitleLabel.text ?? "") {
+            errorTitleLabel.text = "无法连接到 DSH"
+        }
+        errorDetailLabel.text = detail
+        errorOverlay.isHidden = false
+        errorOverlay.alpha = 0
+        UIView.animate(withDuration: 0.2) {
+            self.errorOverlay.alpha = 1
+        }
+    }
+
+    private func hideError() {
+        errorOverlay.isHidden = true
+        // 回到默认标题，避免下一次连接类错误沿用「页面白屏」。
+        errorTitleLabel.text = "无法连接到 DSH"
+    }
+
+    /// 把 WKWebView 的 NSError 翻译成用户可读的提示。
+    private func readableMessage(for error: Error) -> String {
+        let nsError = error as NSError
+        let code = nsError.code
+        let domain = nsError.domain
+        switch (domain, code) {
+        case (NSURLErrorDomain, NSURLErrorCannotFindHost):
+            return "找不到主机：地址中的 IP/域名无法解析"
+        case (NSURLErrorDomain, NSURLErrorCannotConnectToHost):
+            return "无法连接：电脑端服务未启动或端口不对（当前地址需电脑端 DSH 在线）"
+        case (NSURLErrorDomain, NSURLErrorNetworkConnectionLost):
+            return "网络连接中断"
+        case (NSURLErrorDomain, NSURLErrorNotConnectedToInternet):
+            return "设备未联网或不在同一局域网"
+        case (NSURLErrorDomain, NSURLErrorTimedOut):
+            return "连接超时：服务无响应"
+        case (NSURLErrorDomain, -1200):
+            return "TLS/证书错误（本地址为明文 HTTP，一般不会出现）"
+        default:
+            return "错误 [\(domain) \(code)]：\(nsError.localizedDescription)"
+        }
+    }
+
+    /// 导航超时保护：服务端无响应时 WKWebView 默认要等很久，这里兜底提示。
+    /// v1.0.106：只拦「服务器压根没响应」这一种情况。收到响应头 / 导航提交即取消（见
+    /// decidePolicyFor navigationResponse 与 didCommit），不再把慢机上的客户端 JS 解析耗时误判成超时。
+    /// 实测 DSH 已装插件 bundle 合计 11.5MB，慢机上解析执行要 20~40 秒，原 20 秒阈值必然误报。
+    private func startNavigationTimeout() {
+        navigationTimer?.invalidate()
+        navigationTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in
+            guard let self, self.errorOverlay.isHidden else { return }
+            self.activityIndicator.stopAnimating()
+            self.showError(detail: "连接超时：30 秒内未收到任何响应，请确认电脑端 DSH 在线、地址与端口正确")
+        }
+    }
+
+    private func stopNavigationTimeout() {
+        navigationTimer?.invalidate()
+        navigationTimer = nil
+    }
+}
+
+// MARK: - WKNavigationDelegate
+
+extension ViewController: WKNavigationDelegate {
+    func webView(_ webView: WKWebView,
+                 decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        // DSH Pocket（3083）在 Safari/WKWebView 的 http://纯IP 源上 cookie 存不进 cookie jar
+        // （dsh-pocket issue #91）→ 握手永远完不成 → 503 错误页/白屏。
+        // 绕过：手动截获响应的 Set-Cookie，直接塞进 WKHTTPCookieStore ——
+        // store 层写入不受 ITP 限制，后续请求会正常携带。
+        if let httpRes = navigationResponse.response as? HTTPURLResponse,
+           let url = navigationResponse.response.url,
+           let fields = httpRes.allHeaderFields as? [String: String] {
+            let cookies = HTTPCookie.cookies(withResponseHeaderFields: fields, for: url)
+            if !cookies.isEmpty {
+                let store = webView.configuration.websiteDataStore.httpCookieStore
+                for c in cookies { store.setCookie(c, completionHandler: nil) }
+            }
+            // 识别 Pocket 握手过渡页（200 + x-dsh-pocket-handshake: transition）：
+            // cookie 已手动入库，meta refresh 之前的下一次 GET / 就能带上，无需干预。
+            // v1.0.106：服务器已经回了响应头 = 网络这一腿通了，"连接超时"的使命到此结束。
+            // 若不在这里取消，慢机上「服务端 30ms 响应、客户端 JS 要跑 30 秒」会被误判成连接超时并弹假错误页。
+            stopNavigationTimeout()
+        }
+        decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        activityIndicator.startAnimating()
+        startNavigationTimeout()
+        // v1.0.106：新导航开始——此刻 #root 仍属于上一个文档，先撤掉探测，
+        // 待 didCommit 新文档接手后再重新武装，避免把旧页面误判成新页面首帧。
+        stopEarlyRevealProbe()
+    }
+
+    /// v1.0.70：导航已提交（此时 webView.url 已是新页面）——
+    /// 外部网页（免费网页对话等第三方站点）顶部避开 iOS 状态栏/灵动岛；DSH 页面保持全屏。
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        updateTopSafeAreaFor(url: webView.url)
+        // v1.0.106：导航已提交（首字节已到、新文档已接手）——网络腿完成，取消连接超时保护，
+        // 避免把后续纯客户端 JS 解析耗时（慢机上可达 30 秒）误报成"连接超时"。
+        stopNavigationTimeout()
+        // v1.0.106：此刻起 #root 一定属于新文档，武装首屏探测，出首帧即显形，不再死等 didFinish。
+        startEarlyRevealProbe()
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        activityIndicator.stopAnimating()
+        stopNavigationTimeout()
+        stopEarlyRevealProbe()
+        // 完成即隐藏错误层（meta-refresh 握手页二跳也会走到这里）
+        hideError()
+        hasLoadedOnce = true
+        // 首屏下发一次状态栏高度：safeAreaInsets 可能在页面脚本注入之前就定了，
+        // 不补这一次，顶栏会一直停在默认留白上。
+        publishStatusBarHeight()
+        // v1.0.105 双保险：首屏可能早于视图完成布局（此时 safeAreaInsets 还是 0），
+        // 延迟再补发一次，让页内 shim 无论何时接管都能拿到正确的顶/底安全区。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.publishStatusBarHeight()
+        }
+        // 布局编辑开着时，每次页面加载完成重新挂上编辑层。
+        if UserDefaults.standard.bool(forKey: Keys.layoutEdit) {
+            applyLayoutEditMode()
+        }
+        // 内容首帧就绪后才显形：加载过程只显示原生加载态，永不白屏
+        revealWebView()
+        detectStaleTokenPage()
+        detectPocketHandshakeBlocked()
+        startWhiteScreenDiagnostics()
+    }
+
+    /// 3083 Pocket 握手失败兜底：代理重试计数耗尽后回 503「无法完成登录握手」页。
+    /// 正常情况下 cookie 已由 decidePolicyFor 手动入库，不应走到这里；若走到
+    /// （如 cookie 被系统清理），清计数参数重载一次。官方入口：/?dsh-pocket-retry=1。
+    private func detectPocketHandshakeBlocked() {
+        guard !isPocketRetryInFlight else { return }
+        webView.evaluateJavaScript("document.body ? document.body.innerText.slice(0, 300) : ''") {
+            [weak self] result, _ in
+            guard let self,
+                  let text = result as? String,
+                  text.contains("无法完成登录握手") else { return }
+            self.isPocketRetryInFlight = true
+            if var comps = URLComponents(url: self.webView.url ?? URL(string: self.defaultURL)!, resolvingAgainstBaseURL: false) {
+                let items = (comps.queryItems ?? []).filter { $0.name != "dsh-pocket-retry" }
+                comps.queryItems = items + [URLQueryItem(name: "dsh-pocket-retry", value: "1")]
+                if let retryURL = comps.url { self.loadURLString(retryURL.absoluteString); return }
+            }
+            self.loadURLString(self.defaultURL)
+        }
+    }
+
+    /// 电脑端 DSH 重启后 token 会变：外网打开时 3081 直接回 401 文字页
+    /// （"dsh web authentication required…"），用户看到的就是白屏。
+    /// 这里在页面加载完成后读正文，命中特征就自动换最新 token 重试一次。
+    private func detectStaleTokenPage() {
+        guard !isTokenRetryInFlight else { return }
+        webView.evaluateJavaScript("document.body ? document.body.innerText.slice(0, 300) : ''") {
+            [weak self] result, _ in
+            guard let self,
+                  let text = result as? String,
+                  text.contains("dsh web authentication required") else { return }
+            self.retryWithFreshToken()
+        }
+    }
+
+    /// 找到当前地址对应的带 resolver 的服务条目（外网入口），重新换票后重载。
+    private func retryWithFreshToken() {
+        let current = webView.url?.absoluteString ?? UserDefaults.standard.string(forKey: Keys.lastURL) ?? ""
+        guard let item = ServiceStore.load().first(where: {
+            $0.resolverURL?.isEmpty == false && current.contains(hostOf($0.url))
+        }) else {
+            showError(detail: "DSH 已重启，token 失效。请回到局域网打开一次「DSH 外网」自动换票，或重启电脑端 DSH 后重试")
+            return
+        }
+        isTokenRetryInFlight = true
+        ServiceResolver.resolve(item) { [weak self] freshURL in
+            guard let self else { return }
+            self.isTokenRetryInFlight = false
+            // 只有换到的地址和当前不一样才值得重载，避免 401 页原地打转
+            if freshURL != current {
+                self.loadURLString(freshURL)
+            } else {
+                self.showError(detail: "token 已失效且暂换不到新票（需手机与电脑同一局域网）。回到局域网点开「DSH 外网」即可自动换票")
+            }
+        }
+    }
+
+    private func hostOf(_ urlString: String) -> String {
+        URL(string: urlString)?.host ?? urlString
+    }
+
+    /// Web 内容进程被系统回收（内存压力/后台）时自动重连，避免只剩空白页。
+    /// 插件 bundle 合计十几 MB，iOS 上内存压力大时很容易被回收：
+    /// 一旦发生，#root 永远渲染不完 = 白屏。这里计数并上报，便于定位。
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        terminateCount += 1
+        recordWebError("内容进程被系统回收（第 \(terminateCount) 次），已自动重载")
+        activityIndicator.startAnimating()
+        startNavigationTimeout()
+        webView.reloadFromOrigin()
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        activityIndicator.stopAnimating()
+        stopNavigationTimeout()
+        showError(detail: readableMessage(for: error))
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        activityIndicator.stopAnimating()
+        stopNavigationTimeout()
+        showError(detail: readableMessage(for: error))
+    }
+
+    // MARK: - 原生语音输入（SFSpeechRecognizer + AVAudioEngine）
+
+    private func toggleVoiceDictation() {
+        if isDictating {
+            stopVoiceDictation()
+            return
+        }
+
+        SFSpeechRecognizer.requestAuthorization { [weak self] authStatus in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                guard authStatus == .authorized else {
+                    self.notifyWebVoiceState(active: false, text: nil)
+                    let alert = UIAlertController(title: "未开启语音识别权限", message: "请在 iOS 系统「设置 → 隐私与安全性 → 语音识别」中允许本应用使用语音识别。", preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "好", style: .default))
+                    self.present(alert, animated: true)
+                    return
+                }
+
+                AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
+                    DispatchQueue.main.async {
+                        guard let self = self else { return }
+                        if granted {
+                            self.startVoiceDictation()
+                        } else {
+                            self.notifyWebVoiceState(active: false, text: nil)
+                            let alert = UIAlertController(title: "未开启麦克风权限", message: "请在 iOS 系统「设置 → 隐私与安全性 → 麦克风」中允许本应用访问麦克风。", preferredStyle: .alert)
+                            alert.addAction(UIAlertAction(title: "好", style: .default))
+                            self.present(alert, animated: true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func startVoiceDictation() {
+        if audioEngine.isRunning {
+            stopVoiceDictation()
+        }
+
+        guard let recognizer = speechRecognizer, recognizer.isAvailable else {
+            notifyWebVoiceState(active: false, text: nil)
+            return
+        }
+
+        do {
+            recognitionTask?.cancel()
+            recognitionTask = nil
+
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            request.shouldReportPartialResults = true
+            self.recognitionRequest = request
+
+            let inputNode = audioEngine.inputNode
+            lastRecognizedText = ""
+            isDictating = true
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            notifyWebVoiceState(active: true, text: nil)
+
+            recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+                guard let self = self else { return }
+                if let result = result {
+                    let fullText = result.bestTranscription.formattedString
+                    if fullText != self.lastRecognizedText {
+                        let delta: String
+                        if fullText.hasPrefix(self.lastRecognizedText) {
+                            delta = String(fullText.dropFirst(self.lastRecognizedText.count))
+                        } else {
+                            delta = fullText
+                        }
+                        self.lastRecognizedText = fullText
+                        if !delta.isEmpty {
+                            DispatchQueue.main.async {
+                                self.notifyWebVoiceState(active: self.isDictating, text: delta)
+                            }
+                        }
+                    }
+                }
+
+                if error != nil || (result?.isFinal ?? false) {
+                    DispatchQueue.main.async {
+                        if self.isDictating {
+                            self.stopVoiceDictation()
+                        }
+                    }
+                }
+            }
+
+            let recordingFormat = inputNode.outputFormat(forBus: 0)
+            inputNode.removeTap(onBus: 0)
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+                self?.recognitionRequest?.append(buffer)
+            }
+
+            audioEngine.prepare()
+            try audioEngine.start()
+        } catch {
+            stopVoiceDictation()
+        }
+    }
+
+    private func stopVoiceDictation() {
+        isDictating = false
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        notifyWebVoiceState(active: false, text: nil)
+    }
+
+    private func notifyWebVoiceState(active: Bool, text: String?) {
+        let activeStr = active ? "true" : "false"
+        if let text = text,
+           let data = try? JSONSerialization.data(withJSONObject: [text]),
+           let jsonArr = String(data: data, encoding: .utf8) {
+            let js = "if (window.__dshVoiceStateUpdate) { window.__dshVoiceStateUpdate(\(activeStr), \(jsonArr)[0]); }"
+            webView.evaluateJavaScript(js, completionHandler: nil)
+        } else {
+            let js = "if (window.__dshVoiceStateUpdate) { window.__dshVoiceStateUpdate(\(activeStr), null); }"
+            webView.evaluateJavaScript(js, completionHandler: nil)
+        }
+    }
+}
+
+// MARK: - WKUIDelegate
+
+extension ViewController: WKUIDelegate {
+    func webView(_ webView: WKWebView,
+                 createWebViewWith configuration: WKWebViewConfiguration,
+                 for navigationAction: WKNavigationAction,
+                 windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if navigationAction.targetFrame == nil {
+            webView.load(navigationAction.request)
+        }
+        return nil
+    }
+}
+
+// MARK: - UIScrollViewDelegate (彻底封死 WebView 原生页面缩放)
+
+extension ViewController: UIScrollViewDelegate {
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        return nil
+    }
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        if scrollView.zoomScale != 1.0 {
+            scrollView.setZoomScale(1.0, animated: false)
+        }
+    }
+    /// 键盘避让兜底（v1.0.73 重写）。
+    ///
+    /// v1.0.70 在键盘可见期间把 contentOffset 强制钉回 .zero，本意是防 WebKit 把整页顶出屏幕。
+    /// 实测副作用：WebKit 聚焦输入框时本来会自动把输入框滚进可视区，被这里锁死 →
+    /// 输入框停在键盘后面，用户看不到自己输入的内容（P1-1）。
+    ///
+    /// 现在只在「整页被顶到屏幕上方」（contentOffset.y < 0，顶栏被顶出状态栏）时才钳回 0，
+    /// 正向滚动一律放行，让输入框能滚到键盘正上方。
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if isOwnServicePage(url: webView?.url) {
+            if scrollView.contentOffset.y != 0 {
+                scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: 0)
+            }
+        } else {
+            guard isKeyboardVisible else { return }
+            guard !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else { return }
+            if scrollView.contentOffset.y < 0 {
+                scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: 0)
+            }
+        }
+    }
+}
+
+// MARK: - 远程仓库自动/手动检查更新与巨魔(TrollStore)自动安装 (v1.0.87 弹簧缓动与反馈建议版)
+
+extension ViewController: UIDocumentInteractionControllerDelegate {
+    func documentInteractionControllerViewControllerForPreview(_ controller: UIDocumentInteractionController) -> UIViewController {
+        return self
+    }
+
+    private struct AppReleaseInfo: Decodable {
+        let version: String
+        let build: Int?
+        let title: String?
+        let changelog: String?
+        let tipa_url: String?
+        let public_tipa_url: String?
+        let release_url: String?
+    }
+
+    /// 国内 4G / WiFi 免代理极速实时镜像列表（排除 jsDelivr 等强缓存 CDN，确保获取到最新构建）
+    private static let updateMetadataMirrorURLs: [String] = [
+        "https://ghfast.top/https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json",
+        "https://gh-proxy.com/https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json",
+        "https://raw.gitmirror.com/liushQAQ/IOS/personal/releases/latest.json",
+        "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json"
+    ]
+
+    /// 将 GitHub 原始 TIPA 下载地址转换为国内免代理高速镜像地址列表
+    private static func mirrorCandidates(for rawURL: String) -> [String] {
+        guard !rawURL.isEmpty else { return [] }
+        // 如果已经是代理地址，直接优先使用
+        if rawURL.contains("ghfast.top") || rawURL.contains("gh-proxy.com") {
+            return [rawURL]
+        }
+        let list: [String] = [
+            "https://ghfast.top/\(rawURL)",
+            "https://gh-proxy.com/\(rawURL)",
+            rawURL
+        ]
+        return list
+    }
+
+    func checkForAppUpdates(manual: Bool = false) {
+        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.87"
+        let currentBuildStr = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+        let currentBuild = Int(currentBuildStr) ?? 0
+
+        var loadingAlert: UIAlertController?
+        if manual {
+            let alert = UIAlertController(title: "正在检查更新", message: "正在通过国内加速节点检查仓库最新构建…", preferredStyle: .alert)
+            present(alert, animated: true)
+            loadingAlert = alert
+        }
+
+        let mirrorURLs = Self.updateMetadataMirrorURLs
+        let lock = NSLock()
+        var bestInfo: AppReleaseInfo?
+        var completedCount = 0
+        var hasDispatched = false
+        var lastError: Error?
+        let total = mirrorURLs.count
+        let ts = Int(Date().timeIntervalSince1970)
+
+        func finishWithResult(info: AppReleaseInfo?) {
+            lock.lock()
+            if hasDispatched {
+                lock.unlock()
+                return
+            }
+            hasDispatched = true
+            lock.unlock()
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                let done = {
+                    if let valid = info {
+                        self.handleFetchedReleaseInfo(valid, currentVer: currentVer, currentBuild: currentBuild, manual: manual)
+                    } else if manual {
+                        let msg = lastError?.localizedDescription ?? "所有加速节点均未响应，请检查网络连接。"
+                        let alert = UIAlertController(title: "检查更新失败", message: "无法连接更新源：\(msg)", preferredStyle: .alert)
+                        alert.addAction(UIAlertAction(title: "确定", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
+                if let loading = loadingAlert {
+                    loading.dismiss(animated: true, completion: done)
+                } else {
+                    done()
+                }
+            }
+        }
+
+        for urlStr in mirrorURLs {
+            let sep = urlStr.contains("?") ? "&" : "?"
+            guard let url = URL(string: "\(urlStr)\(sep)_t=\(ts)") else {
+                lock.lock()
+                completedCount += 1
+                if completedCount >= total && !hasDispatched {
+                    lock.unlock()
+                    finishWithResult(info: bestInfo)
+                } else {
+                    lock.unlock()
+                }
+                continue
+            }
+
+            var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 6)
+            req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+
+            URLSession.shared.dataTask(with: req) { data, resp, error in
+                var validInfo: AppReleaseInfo?
+                if error == nil,
+                   let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
+                   let data = data,
+                   let decoded = try? JSONDecoder().decode(AppReleaseInfo.self, from: data) {
+                    validInfo = decoded
+                }
+
+                lock.lock()
+                completedCount += 1
+                if let err = error { lastError = err }
+
+                if let info = validInfo {
+                    let incomingBuild = info.build ?? 0
+                    let currentBestBuild = bestInfo?.build ?? -1
+                    if incomingBuild > currentBestBuild {
+                        bestInfo = info
+                    }
+
+                    // 如果已经获取到确切高于当前版本的最新版本，立刻完成响应
+                    if incomingBuild > currentBuild {
+                        lock.unlock()
+                        finishWithResult(info: info)
+                        return
+                    }
+                }
+
+                if completedCount >= total {
+                    lock.unlock()
+                    finishWithResult(info: bestInfo)
+                } else {
+                    lock.unlock()
+                }
+            }.resume()
+        }
+    }
+
+    private func handleFetchedReleaseInfo(_ info: AppReleaseInfo, currentVer: String, currentBuild: Int, manual: Bool) {
+        let remoteVer = info.version
+        let remoteBuild = info.build ?? 0
+
+        let hasNewVersion: Bool = {
+            if remoteBuild > currentBuild { return true }
+            if remoteBuild == currentBuild && remoteVer.compare(currentVer, options: .numeric) == .orderedDescending {
+                return true
+            }
+            return remoteVer.compare(currentVer, options: .numeric) == .orderedDescending
+        }()
+
+        let tipaURL = info.tipa_url ?? info.public_tipa_url ?? ""
+
+        if hasNewVersion {
+            presentNewVersionPrompt(info: info, currentVer: currentVer, currentBuild: currentBuild, tipaURL: tipaURL)
+        } else if manual {
+            let alert = UIAlertController(
+                title: "✅ 当前已是最新版本",
+                message: "当前版本：v\(currentVer) (Build \(currentBuild))\n仓库最新：v\(remoteVer) (Build \(remoteBuild))\n\n如有强制重装需求，也可通过国内加速通道重装最新包。",
+                preferredStyle: .alert)
+            if !tipaURL.isEmpty {
+                alert.addAction(UIAlertAction(title: "🚀 重新下载并用巨魔安装 (免代理加速)", style: .default) { [weak self] _ in
+                    self?.downloadAndInstallTIPA(remoteURLString: tipaURL, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
+                })
+            }
+            alert.addAction(UIAlertAction(title: "好", style: .cancel))
+            present(alert, animated: true)
+        }
+    }
+
+    private func presentNewVersionPrompt(info: AppReleaseInfo, currentVer: String, currentBuild: Int, tipaURL: String) {
+        let remoteVer = info.version
+        let remoteBuild = info.build ?? 0
+        let notes = info.changelog ?? info.title ?? "包含最新的移动端布局优化与功能修复。"
+
+        let alert = UIAlertController(
+            title: "🎉 发现新版本 v\(remoteVer) (Build \(remoteBuild))",
+            message: "当前版本：v\(currentVer) (Build \(currentBuild))\n\n【更新说明】\n\(notes)\n\n推荐点击下方按钮，App 将通过免代理通道极速下载并自动调起巨魔安装（彻底避免 301 报错）。",
+            preferredStyle: .alert
+        )
+
+        if !tipaURL.isEmpty {
+            alert.addAction(UIAlertAction(title: "🚀 极速下载并用巨魔安装 (推荐·零报错)", style: .default) { [weak self] _ in
+                self?.downloadAndInstallTIPA(remoteURLString: tipaURL, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
+            })
+            alert.addAction(UIAlertAction(title: "⚡ 巨魔一键直连安装", style: .default) { [weak self] _ in
+                self?.installViaTrollStore(remoteURLString: tipaURL)
+            })
+        }
+
+        if let rel = info.release_url, let relURL = URL(string: rel) {
+            alert.addAction(UIAlertAction(title: "🌐 打开仓库页面", style: .default) { _ in
+                UIApplication.shared.open(relURL)
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: "稍后提醒", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    func installViaTrollStore(remoteURLString: String) {
+        let candidates = Self.mirrorCandidates(for: remoteURLString)
+        let acceleratedURL = candidates.first(where: { $0.contains("ghfast.top") || $0.contains("gh-proxy.com") }) ?? candidates.first ?? remoteURLString
+
+        // 巨魔直接打开 URL 遇到 301 重定向时会直接弹错 301；
+        // 这里先用 URLSession 做一次 HEAD 预解析，解析出跟随重定向后的真实 200 终点直链
+        guard let reqURL = URL(string: acceleratedURL) else {
+            downloadAndInstallTIPA(remoteURLString: remoteURLString, filename: "DSHios-public-latest.tipa")
+            return
+        }
+
+        var req = URLRequest(url: reqURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 4)
+        req.httpMethod = "HEAD"
+
+        URLSession.shared.dataTask(with: req) { [weak self] _, resp, error in
+            let finalTarget: String = {
+                if let http = resp as? HTTPURLResponse, let finalURL = http.url?.absoluteString, !finalURL.isEmpty {
+                    return finalURL
+                }
+                return acceleratedURL
+            }()
+
+            DispatchQueue.main.async {
+                guard let encoded = finalTarget.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+                    self?.downloadAndInstallTIPA(remoteURLString: remoteURLString, filename: "DSHios-public-latest.tipa")
+                    return
+                }
+
+                let schemes = [
+                    "apple-magnifier://install?url=\(encoded)",
+                    "trollstore://install?url=\(encoded)"
+                ]
+
+                var didOpen = false
+                let group = DispatchGroup()
+                for s in schemes {
+                    if let u = URL(string: s) {
+                        group.enter()
+                        UIApplication.shared.open(u, options: [:]) { success in
+                            if success { didOpen = true }
+                            group.leave()
+                        }
+                    }
+                }
+
+                group.notify(queue: .main) {
+                    if !didOpen {
+                        self?.downloadAndInstallTIPA(remoteURLString: remoteURLString, filename: "DSHios-public-latest.tipa")
+                    }
+                }
+            }
+        }.resume()
+    }
+
+    private func downloadAndInstallTIPA(remoteURLString: String, filename: String) {
+        let candidates = Self.mirrorCandidates(for: remoteURLString)
+        guard !candidates.isEmpty else { return }
+
+        let progressAlert = UIAlertController(title: "正在加速下载最新包", message: "正在通过国内镜像下载 \(filename)…\n进度：0%", preferredStyle: .alert)
+        present(progressAlert, animated: true)
+
+        let destURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        try? FileManager.default.removeItem(at: destURL)
+
+        func tryDownload(index: Int) {
+            guard index < candidates.count, let url = URL(string: candidates[index]) else {
+                DispatchQueue.main.async {
+                    progressAlert.dismiss(animated: true) { [weak self] in
+                        let alert = UIAlertController(title: "下载失败", message: "所有国内加速镜像节点均无法下载，请稍后重试。", preferredStyle: .alert)
+                        alert.addAction(UIAlertAction(title: "好", style: .default))
+                        self?.present(alert, animated: true)
+                    }
+                }
+                return
+            }
+
+            var observation: NSKeyValueObservation?
+            let task = URLSession.shared.downloadTask(with: url) { [weak self] localURL, resp, error in
+                observation?.invalidate()
+                let statusOK = (resp as? HTTPURLResponse).map { (200...299).contains($0.statusCode) } ?? false
+                if error != nil || !statusOK || localURL == nil {
+                    // 当前镜像失败，自动无缝切换到下一个备用加速镜像
+                    tryDownload(index: index + 1)
+                    return
+                }
+                guard let localURL = localURL else { return }
+                do {
+                    try? FileManager.default.removeItem(at: destURL)
+                    try FileManager.default.moveItem(at: localURL, to: destURL)
+                    DispatchQueue.main.async {
+                        progressAlert.dismiss(animated: true) {
+                            self?.openDownloadedTIPA(fileURL: destURL)
+                        }
+                    }
+                } catch {
+                    tryDownload(index: index + 1)
+                }
+            }
+
+            observation = task.progress.observe(\.fractionCompleted) { progress, _ in
+                DispatchQueue.main.async {
+                    let pct = Int(progress.fractionCompleted * 100)
+                    progressAlert.message = "正在通过国内免代理通道下载最新公开版…\n进度：\(pct)%"
+                }
+            }
+            task.resume()
+        }
+
+        tryDownload(index: 0)
+    }
+
+    private func openDownloadedTIPA(fileURL: URL) {
+        // 先尝试通过本地 URL Scheme 唤起巨魔直接安装
+        if let encoded = fileURL.absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let tsURL = URL(string: "apple-magnifier://install?url=\(encoded)") {
+            UIApplication.shared.open(tsURL, options: [:]) { [weak self] success in
+                if !success {
+                    self?.presentShareForFile(fileURL)
+                }
+            }
+        } else {
+            presentShareForFile(fileURL)
+        }
+    }
+
+    private func presentShareForFile(_ fileURL: URL) {
+        let docController = UIDocumentInteractionController(url: fileURL)
+        docController.delegate = self
+        if !docController.presentOpenInMenu(from: menuButton?.bounds ?? view.bounds, in: menuButton ?? view, animated: true) {
+            let act = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+            act.popoverPresentationController?.sourceView = menuButton ?? view
+            present(act, animated: true)
+        }
+    }
+}
+
+// MARK: - iOS 设备安全区标准值对照表（Apple 公开规范，v1.0.105）
+
+/// 机型 → 安全区标准值（竖屏，单位 pt）。
+///
+/// **为什么需要它**：`view.safeAreaInsets` 由系统实时给出、平时最准，但在这些场景会读到 0：
+///   ① 页面极早阶段视图尚未完成布局；② 部分 iPad 分屏 / 老旧系统上安全区上报滞后。
+/// 读到 0 就会把「顶栏应留 59pt」错算成 0 → 顶栏贴进状态栏（历史截图：标志被电量图标压住）。
+///
+/// **取值策略（重要，勿改）**：
+///   - **系统值 > 0 一律以系统值为准** —— 横屏、分屏、新机型、未来机型都能自动跟上，无需改代码；
+///   - **仅在系统值异常为 0 且处于竖屏时**，才按机型查本表兜底；
+///   - 横屏 iPhone 状态栏本就隐藏（系统值 0 是正确的），**不做兜底**，否则会凭空多出留白。
+///
+/// 数据来源：Apple Human Interface Guidelines 与各机型公开实测值。
+enum iOSSafeArea {
+
+    struct Inset {
+        /// 状态栏 / 刘海 / 灵动岛预留高度
+        let top: CGFloat
+        /// Home Indicator 预留高度
+        let bottom: CGFloat
+    }
+
+    /// 当前硬件标识符，如 "iPhone15,3"（iPhone 14 Pro Max）
+    static var machineIdentifier: String {
+        #if targetEnvironment(simulator)
+        return ProcessInfo().environment["SIMULATOR_MODEL_IDENTIFIER"] ?? "Simulator"
+        #else
+        var info = utsname()
+        uname(&info)
+        return Mirror(reflecting: info.machine).children.reduce("") { acc, el in
+            guard let v = el.value as? Int8, v != 0 else { return acc }
+            return acc + String(UnicodeScalar(UInt8(v)))
+        }
+        #endif
+    }
+
+    /// 机型对应的中文名（用于设置页/日志核对；未知机型返回标识符本身）
+    static var machineDisplayName: String {
+        let id = machineIdentifier
+        if let n = displayNames[id] { return n }
+        if id.hasPrefix("iPhone") { return "iPhone (未知机型 \(id))" }
+        if id.hasPrefix("iPad") { return "iPad (未知机型 \(id))" }
+        return id
+    }
+
+    /// iPhone 全系竖屏标准安全区
+    static let iPhone: [String: Inset] = [
+        // ── 有 Home 键：顶 20 / 底 0 ──
+        "iPhone8,1": Inset(top: 20, bottom: 0),   // 6s
+        "iPhone8,2": Inset(top: 20, bottom: 0),   // 6s Plus
+        "iPhone8,4": Inset(top: 20, bottom: 0),   // SE 1
+        "iPhone9,1": Inset(top: 20, bottom: 0),   // 7
+        "iPhone9,2": Inset(top: 20, bottom: 0),   // 7 Plus
+        "iPhone9,3": Inset(top: 20, bottom: 0),   // 7
+        "iPhone9,4": Inset(top: 20, bottom: 0),   // 7 Plus
+        "iPhone10,1": Inset(top: 20, bottom: 0),  // 8
+        "iPhone10,2": Inset(top: 20, bottom: 0),  // 8 Plus
+        "iPhone10,4": Inset(top: 20, bottom: 0),  // 8
+        "iPhone10,5": Inset(top: 20, bottom: 0),  // 8 Plus
+        "iPhone12,8": Inset(top: 20, bottom: 0),  // SE 2
+        "iPhone14,6": Inset(top: 20, bottom: 0),  // SE 3
+        // ── 刘海屏：底 34 ──
+        "iPhone10,3": Inset(top: 44, bottom: 34), // X
+        "iPhone10,6": Inset(top: 44, bottom: 34), // X
+        "iPhone11,2": Inset(top: 44, bottom: 34), // XS
+        "iPhone11,4": Inset(top: 44, bottom: 34), // XS Max
+        "iPhone11,6": Inset(top: 44, bottom: 34), // XS Max
+        "iPhone11,8": Inset(top: 48, bottom: 34), // XR
+        "iPhone12,1": Inset(top: 48, bottom: 34), // 11
+        "iPhone12,3": Inset(top: 44, bottom: 34), // 11 Pro
+        "iPhone12,5": Inset(top: 44, bottom: 34), // 11 Pro Max
+        "iPhone13,1": Inset(top: 50, bottom: 34), // 12 mini
+        "iPhone13,2": Inset(top: 47, bottom: 34), // 12
+        "iPhone13,3": Inset(top: 47, bottom: 34), // 12 Pro
+        "iPhone13,4": Inset(top: 47, bottom: 34), // 12 Pro Max
+        "iPhone14,2": Inset(top: 47, bottom: 34), // 13 Pro
+        "iPhone14,3": Inset(top: 47, bottom: 34), // 13 Pro Max
+        "iPhone14,4": Inset(top: 50, bottom: 34), // 13 mini
+        "iPhone14,5": Inset(top: 47, bottom: 34), // 13
+        "iPhone14,7": Inset(top: 47, bottom: 34), // 14
+        "iPhone14,8": Inset(top: 47, bottom: 34), // 14 Plus
+        // ── 灵动岛：顶 59（16 Pro 为 62）/ 底 34 ──
+        "iPhone15,2": Inset(top: 59, bottom: 34), // 14 Pro
+        "iPhone15,3": Inset(top: 59, bottom: 34), // 14 Pro Max
+        "iPhone15,4": Inset(top: 59, bottom: 34), // 15
+        "iPhone15,5": Inset(top: 59, bottom: 34), // 15 Plus
+        "iPhone16,1": Inset(top: 59, bottom: 34), // 15 Pro
+        "iPhone16,2": Inset(top: 59, bottom: 34), // 15 Pro Max
+        "iPhone17,1": Inset(top: 62, bottom: 34), // 16 Pro
+        "iPhone17,2": Inset(top: 62, bottom: 34), // 16 Pro Max
+        "iPhone17,3": Inset(top: 59, bottom: 34), // 16
+        "iPhone17,4": Inset(top: 59, bottom: 34), // 16 Plus
+        "iPhone17,5": Inset(top: 59, bottom: 34), // 16e
+    ]
+
+    /// 带 Home Indicator 的 iPad（2018 年 iPad Pro 及之后的全面屏款）
+    static let iPadWithIndicator: Set<String> = [
+        "iPad8,1", "iPad8,2", "iPad8,3", "iPad8,4", "iPad8,5", "iPad8,6", "iPad8,7", "iPad8,8",
+        "iPad8,9", "iPad8,10", "iPad8,11", "iPad8,12",
+        "iPad13,1", "iPad13,2", "iPad13,4", "iPad13,5", "iPad13,6", "iPad13,7",
+        "iPad13,8", "iPad13,9", "iPad13,10", "iPad13,11", "iPad13,16", "iPad13,17", "iPad13,18", "iPad13,19",
+        "iPad14,1", "iPad14,2", "iPad14,3", "iPad14,4", "iPad14,5", "iPad14,6",
+        "iPad14,8", "iPad14,9", "iPad14,10", "iPad14,11",
+        "iPad16,3", "iPad16,4", "iPad16,5", "iPad16,6",
+    ]
+
+    /// 机型标识 → 展示名（用于核对「检测到的是什么机器」）
+    static let displayNames: [String: String] = [
+        "iPhone14,6": "iPhone SE (3rd gen)",
+        "iPhone14,7": "iPhone 14", "iPhone14,8": "iPhone 14 Plus",
+        "iPhone15,2": "iPhone 14 Pro", "iPhone15,3": "iPhone 14 Pro Max",
+        "iPhone15,4": "iPhone 15", "iPhone15,5": "iPhone 15 Plus",
+        "iPhone16,1": "iPhone 15 Pro", "iPhone16,2": "iPhone 15 Pro Max",
+        "iPhone17,1": "iPhone 16 Pro", "iPhone17,2": "iPhone 16 Pro Max",
+        "iPhone17,3": "iPhone 16", "iPhone17,4": "iPhone 16 Plus", "iPhone17,5": "iPhone 16e",
+        "iPhone13,1": "iPhone 12 mini", "iPhone13,2": "iPhone 12",
+        "iPhone13,3": "iPhone 12 Pro", "iPhone13,4": "iPhone 12 Pro Max",
+        "iPhone14,2": "iPhone 13 Pro", "iPhone14,3": "iPhone 13 Pro Max",
+        "iPhone14,4": "iPhone 13 mini", "iPhone14,5": "iPhone 13",
+        "iPhone12,1": "iPhone 11", "iPhone12,3": "iPhone 11 Pro", "iPhone12,5": "iPhone 11 Pro Max",
+        "iPhone11,2": "iPhone XS", "iPhone11,4": "iPhone XS Max", "iPhone11,8": "iPhone XR",
+        "iPhone10,3": "iPhone X", "iPhone10,6": "iPhone X",
+        "iPhone12,8": "iPhone SE (2nd gen)",
+        "iPad14,1": "iPad mini (6th gen)", "iPad14,2": "iPad mini (6th gen)",
+        "iPad16,3": "iPad Pro 11-inch (M4)", "iPad16,4": "iPad Pro 11-inch (M4)",
+        "iPad16,5": "iPad Pro 13-inch (M4)", "iPad16,6": "iPad Pro 13-inch (M4)",
+        "iPad14,3": "iPad Pro 11-inch (4th gen)", "iPad14,4": "iPad Pro 11-inch (4th gen)",
+        "iPad14,5": "iPad Pro 12.9-inch (6th gen)", "iPad14,6": "iPad Pro 12.9-inch (6th gen)",
+        "iPad13,18": "iPad (10th gen)", "iPad13,19": "iPad (10th gen)",
+        "iPad14,8": "iPad Air 11-inch (M2)", "iPad14,9": "iPad Air 11-inch (M2)",
+        "iPad14,10": "iPad Air 13-inch (M2)", "iPad14,11": "iPad Air 13-inch (M2)",
+    ]
+
+    /// 按机型给出竖屏标准安全区；未知机型返回 nil
+    static func standard() -> Inset? {
+        let id = machineIdentifier
+        if id.hasPrefix("iPhone") { return iPhone[id] }
+        if id.hasPrefix("iPad") {
+            // 现代 iPad 竖屏：状态栏 24pt；全面屏款底部另有 20pt Home Indicator
+            return Inset(top: 24, bottom: iPadWithIndicator.contains(id) ? 20 : 0)
+        }
+        return nil
+    }
+
+    /// 实际生效的顶部预留：系统值优先，系统值异常为 0 且竖屏时用机型表兜底。
+    static func effectiveTop(systemTop: CGFloat, isPortrait: Bool) -> CGFloat {
+        if systemTop > 1 { return systemTop }
+        guard isPortrait else { return systemTop }
+        return standard()?.top ?? systemTop
+    }
+
+    /// 实际生效的底部预留：系统值优先，异常为 0 时用机型表兜底。
+    static func effectiveBottom(systemBottom: CGFloat) -> CGFloat {
+        if systemBottom > 1 { return systemBottom }
+        return standard()?.bottom ?? systemBottom
+    }
+
+    /// 一行摘要，便于在日志 / 设置页核对"检测到什么机型、取到什么值"
+    static func debugSummary(systemTop: CGFloat, systemBottom: CGFloat, isPortrait: Bool) -> String {
+        let id = machineIdentifier
+        let std = standard()
+        let effTop = effectiveTop(systemTop: systemTop, isPortrait: isPortrait)
+        let effBottom = effectiveBottom(systemBottom: systemBottom)
+        return "device=\(id)(\(machineDisplayName)) portrait=\(isPortrait) "
+            + "system=(\(Int(systemTop)),\(Int(systemBottom))) "
+            + "standard=\(std.map { "(\(Int($0.top)),\(Int($0.bottom)))" } ?? "nil") "
+            + "effective=(\(Int(effTop)),\(Int(effBottom)))"
+    }
+
+    /// 设置页自检摘要：只讲"检测到啥机型、标准值是多少"，不掺入运行时系统值
+    static func selfCheckSummary() -> String {
+        let id = machineIdentifier
+        guard let s = standard() else {
+            return "\(machineDisplayName)（\(id)）· 未知机型，按系统实时安全区自适应"
+        }
+        return "\(machineDisplayName)（\(id)）· 标准安全区 顶 \(Int(s.top))pt / 底 \(Int(s.bottom))pt"
+    }
+}
+

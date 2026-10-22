@@ -1,0 +1,56 @@
+/* shim_23 草案 v2：插件条整体背景模块 + 一行水平对齐（含 prompt 插件胶囊） */
+[class*="composerStack"] [class*="_card"] {
+  position: relative !important;
+  padding-top: 40px !important;
+}
+[class*="composerStack"] [class*="_card"]::before {
+  content: " " !important;
+  position: absolute !important;
+  left: 6px !important;
+  right: 6px !important;
+  top: 4px !important;
+  height: 36px !important;
+  background: rgba(15, 23, 42, 0.05) !important;
+  border-radius: 18px !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+}
+.dcc-root {
+  position: absolute !important;
+  left: 14px !important;
+  top: 9px !important;
+  height: 26px !important;
+  max-height: 26px !important;
+  max-width: 96px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  z-index: 3 !important;
+}
+.cm-stat-entry {
+  position: absolute !important;
+  left: 227px !important;
+  right: auto !important;
+  top: 4px !important;
+  height: 36px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+  z-index: 3 !important;
+}
+.cm-bbox {
+  position: absolute !important;
+  left: 291px !important;
+  right: auto !important;
+  top: 9px !important;
+  height: 26px !important;
+  max-height: 26px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  z-index: 3 !important;
+}
+[class*="composerStack"] .dsh-po-capsule {
+  position: relative !important;
+  transform: translate(24px, -85px) !important;
+  height: 26px !important;
+  z-index: 3 !important;
+}

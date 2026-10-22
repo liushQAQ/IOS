@@ -1,0 +1,38 @@
+========================================================================
+ DSH iOS 适配 · 发版前回归闸门   2026/10/20 19:03:44
+========================================================================
+
+■ 430×932
+  ✅ [主页] 零横向出血   docSW=430 vw=430
+  ✅ [主页] 无横向滚动   docSW=430 vw=430
+  ✅ [主页] 顶栏顶=39（真机env=59下收敛）   hdrTop=39 framePT=0px want=39
+  ℹ DSH 指纹 164rgq（9 个 js/css 资源，205 张样式表）
+  ℹ 锚点健康度 81/136 命中 DSH 自有 CSS（其余 55 个为惰性组件锚点，仅记录不拦截）
+  ✅ [会话框] 6 个按钮中心齐平   离散 0px
+  ✅ [会话框] 底排按钮零横向重叠（v1.0.127）   两两扫描 6 个
+  ✅ [会话框] 底排按钮不越出父容器
+  ❌ [底排防挤爆] 撬爆后零越界   gemini-3.8 +41
+  ✅ [底排防挤爆] 发送钮钉在屏内   sendRight=404 vw=430
+  ✅ [抽屉] 内部零出血   扫描 419 个元素, 右界 252
+  ✅ [抽屉] 页面零出血
+  ✅ [底栏] 不超抽屉右界   right=240 抽屉=252
+  ✅ [底栏] 2 个子块零重叠   重叠 0 对
+  ✅ [齿轮] 位置在抽屉内   right=230 抽屉=252
+  ✅ [齿轮] 中心点可命中自身
+  ✅ [脚本] 无致命 JS 错误   页面错误 0 条（非致命）
+  ❌ [执行] 用例崩溃   Error: page.evaluate: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Users\Administrator\AppData\Local\ms-playwright\webkit-2336\
+
+■ 393×852
+node:internal/process/promises:394
+    triggerUncaughtException(err, true /* fromPromise */);
+    ^
+
+browser.newContext: Target page, context or browser has been closed
+    at async E:\desktop\所有skill\deepseek-harness-ios\_diag\regression.js:424:15 {
+  log: []
+}
+
+Node.js v22.22.2

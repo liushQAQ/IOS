@@ -1,0 +1,11 @@
+HTTP/1.1 200 OK
+Set-Cookie: wb_dsh_auth=eyJpcCI6IjEyNy4wLjAuMSIsImV4cCI6MTc5MjQyMzg3NjMzMH0=.d57bRpCkTxsUFYEJyxQsUpO8wLXU/I3zD0Y1kh6IaAQ=; Path=/dsh; HttpOnly; SameSite=Lax; Max-Age=14400
+content-type: text/javascript; charset=utf-8
+date: Mon, 19 Oct 2026 11:31:17 GMT
+vary: Accept-Encoding
+etag: "pcf1-ed191b574ed7e6e9"
+content-length: 741525
+cache-control: no-cache, must-revalidate
+Connection: keep-alive
+Keep-Alive: timeout=10
+

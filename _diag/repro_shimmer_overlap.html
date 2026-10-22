@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  body { margin:0; background:#fff; font-family:-apple-system,"PingFang SC",sans-serif; }
+  .wrap { width: 430px; padding: 0 16px; }
+  .row { margin: 8px 0; }
+  /* ===== TextShimmer.module.css (real) ===== */
+  .tsroot { position: relative; display: inline-grid; width: max-content; max-width: 100%; min-width: 0; vertical-align: top; color: inherit; }
+  .tscontent { display: flex; align-items: center; min-width: 0; }
+  .tstext { color: inherit; }
+  .tsdecoration { position: absolute; inset: 0; overflow: clip; pointer-events: none; user-select: none; }
+  .tssweep { position: absolute; inset: 0; overflow: hidden; color: #888; mask-image: linear-gradient(105deg, transparent 0%, black 40% 60%, transparent 100%); transform: translateX(-100%); animation: dsh-row-shimmer-sweep 1.5s steps(48,end) .3s infinite; }
+  @keyframes dsh-row-shimmer-sweep { 0% { transform: translateX(-100%); } 66.6667%, 100% { transform: translateX(100%); } }
+  /* ===== ChatGroupSeat.module.css (real, hash lk5Nnq) ===== */
+  .gtitle { max-width: 100%; color: #666; font: inherit; font-size: 14px; text-align: left; cursor: pointer; background: 0 0; border: 0; align-items: center; gap: 6px; padding: 0; display: flex; }
+  .gleading { width: 16px; height: 16px; color: inherit; flex: none; justify-content: center; align-items: center; display: inline-flex; position: relative; }
+  .glabel { text-overflow: ellipsis; white-space: nowrap; min-width: 0; overflow: hidden; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row" id="case1">
+    <button type="button" class="gtitle" aria-expanded="false">
+      <span class="gleading" aria-hidden="true"><span data-step-process-icon>›</span></span>
+      <span class="tsroot" data-shimmer="">
+        <span class="tscontent"><span class="glabel">运行命令 · Check scheduled tasks and services config for references to stale DSH restart helper paths</span></span>
+        <span class="tsdecoration" aria-hidden="true" inert="">
+          <span class="tssweep"><span class="tscontent"><span class="glabel">运行命令 · Check scheduled tasks and services config for references to stale DSH restart helper paths</span></span></span>
+        </span>
+      </span>
+    </button>
+  </div>
+  <div class="row">思考 (next row)</div>
+</div>
+<script>
+window.__measure = function () {
+  const out = {};
+  const q = (s) => document.querySelector(s);
+  const r = (el) => { const b = el.getBoundingClientRect(); return { x: +b.x.toFixed(1), y: +b.y.toFixed(1), w: +b.width.toFixed(1), h: +b.height.toFixed(1) }; };
+  out.btn = r(q('.gtitle'));
+  out.root = r(q('.tsroot'));
+  out.label = r(q('.glabel'));
+  out.deco = r(q('.tsdecoration'));
+  const cs = (el, props) => { const c = getComputedStyle(el); const o = {}; props.forEach(p => o[p] = c[p]); return o; };
+  out.rootStyle = cs(q('.tsroot'), ['display','width','maxWidth','overflow']);
+  out.labelStyle = cs(q('.glabel'), ['whiteSpace','overflow','textOverflow','width']);
+  out.decoStyle = cs(q('.tsdecoration'), ['overflow','position','inset']);
+  out.docScrollW = document.documentElement.scrollWidth;
+  out.vw = window.innerWidth;
+  return out;
+};
+</script>
+</body></html>

@@ -1,0 +1,62 @@
+
+        // ===== shim_21（v1.0.131）：插件条上移一行（老总 2026-10-21 11:09 定案方案）=====
+        // 老总要求：原会话框内容（输入框 / ＋ / 优化 / 齿轮 / 模型选择器 / 发送钮）一律不动，
+        // 第三方插件元素（积分胶囊 dcc-root、费用明细 cm-stat-entry、网关/余额 cm-bbox）
+        // 统一挪到输入卡【顶部新增的一行插件条】上，不再跟会话框控件挤同一行。
+        // 几何依据（2026-10-21 11:00 Chromium 实测 430×932）：
+        //   VERcba_card(16,790,396×98, position:relative)
+        //     ├ VERcba_row(846) → VERcba_tools(851, 189×28) 内含 dcc-root 胶囊
+        //     └ VERcba_dock(888, 396×40) 内含 cm-stat-entry / cm-bbox
+        //   锚点：dcc-root 的最近 positioned 祖先 = _card；cm-* 的 = composerSeat（顶部与 _card 同高）。
+        // 只用插件自有稳定类名（dcc-/cm-）+ 语义后缀 [class*="_card"]，零构建哈希。
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            // ① 输入卡顶部腾出 34px 插件条（卡片高度自适应增长，内部控件相对位置不变）
+            '[class*="composerStack"] [class*="_card"] { padding-top: 34px !important; }',
+            // ② 积分胶囊 → 插件条左侧
+            '.dcc-root {',
+            '  position: absolute !important;',
+            '  left: 12px !important;',
+            '  top: 5px !important;',
+            '  z-index: 3 !important;',
+            '}',
+            // ③ 费用明细 → 插件条右侧
+            '.cm-stat-entry {',
+            '  position: absolute !important;',
+            '  right: 12px !important;',
+            '  top: 7px !important;',
+            '  z-index: 3 !important;',
+            '}',
+            // ④ 网关/余额胶囊 → 插件条中右（限宽防撞胶囊）
+            '.cm-bbox {',
+            '  position: absolute !important;',
+            '  right: 92px !important;',
+            '  top: 7px !important;',
+            '  z-index: 3 !important;',
+            '  max-width: 150px !important;',
+            '}',
+            // ⑤ 插件条内元素禁止撑高输入卡
+            '.dcc-root, .cm-stat-entry, .cm-bbox { max-height: 24px !important; }'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (document.getElementById('dsh-ios-plugin-strip')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-plugin-strip';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 3000);
+        })();
+
+        

@@ -1,0 +1,28 @@
+
+[class*="composerStack"] [class*="_add"],
+[class*="composerStack"] [class*="_primary"],
+[class*="composerStack"] [class*="_send"],
+[class*="composerStack"] [class*="_stop"],
+[class*="composerStack"] [class*="_attach"],
+[class*="composerStack"] [class*="_voice"],
+[class*="composerStack"] [class*="_mic"],
+[class*="composerStack"] .dsh-po-btn-gear,
+[class*="composerStack"] .dsh-po-btn-opt {
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  padding: 0 !important; box-sizing: border-box !important;
+}
+[class*="composerStack"] [class*="_add"] > svg,
+[class*="composerStack"] [class*="_primary"] > svg,
+[class*="composerStack"] [class*="_send"] > svg,
+[class*="composerStack"] [class*="_stop"] > svg,
+[class*="composerStack"] [class*="_attach"] > svg,
+[class*="composerStack"] [class*="_voice"] > svg,
+[class*="composerStack"] [class*="_mic"] > svg,
+[class*="composerStack"] .dsh-po-btn-gear > svg,
+[class*="composerStack"] .dsh-po-btn-opt > svg {
+  display: block !important; margin: auto !important; flex: 0 0 auto !important;
+}
+[class*="composerStack"] [class*="_row"] { align-items: center !important; }
+[class*="composerStack"] [class*="_primary"],
+[class*="composerStack"] [class*="_send"],
+[class*="composerStack"] [class*="_stop"] { transform: none !important; }

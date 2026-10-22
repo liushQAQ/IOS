@@ -5,25 +5,33 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-21T18:08:42.520Z",
-  "dshFingerprint": "8tpnn6",
-  "dshAssets": 9,
+  "startedAt": "2026-10-22T01:34:02.383Z",
+  "dshFingerprint": "e6tzzc",
+  "dshAssets": 8,
   "domClasses": 0,
   "anchorTotal": 149,
   "anchorDead": 0,
-  "anchorCssAlive": 94,
-  "anchorResidue": 55,
-  "dshSheets": 208,
+  "anchorCssAlive": 93,
+  "anchorResidue": 56,
+  "dshSheets": 206,
   "ownSheets": 15,
   "anchorCritical": {
     "total": 12,
-    "dead": []
+    "dead": [
+      "headerCorner"
+    ]
   },
   "ok": true,
-  "pass": 65,
+  "pass": 56,
   "fail": 0,
   "failures": [],
-  "blocked": [],
-  "sourceHash": "8601dfa2b32c0bd55759fa7652ac14c637699a0d5632ed684845b1c1c7c0b8f5",
-  "finishedAt": "2026-10-21T18:11:13.439Z"
+  "blocked": [
+    "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）",
+    "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）",
+    "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）",
+    "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）",
+    "[锚点] headerCorner 取样 — 会话页死循环连坐，该锚点无法取样（Chromium 对照确认 DOM 在）"
+  ],
+  "sourceHash": "e54b4c3d8e50d066f44b6f0095f7b3c2bc09fd0cc197bd5d7056dc8fbd3764af",
+  "finishedAt": "2026-10-22T01:37:02.184Z"
 }

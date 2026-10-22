@@ -1,0 +1,24 @@
+const { webkit } = require('playwright');
+const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Mobile/15E148 Safari/604.1';
+(async () => {
+  const b = await webkit.launch({ headless: true });
+  const c = await b.newContext({ viewport:{width:390,height:740}, isMobile:true, hasTouch:true, userAgent:UA });
+  const p = await c.newPage();
+  const errs=[], bad=[];
+  p.on('pageerror', e=>errs.push(String(e.message).slice(0,140)));
+  p.on('response', r=>{ if(r.status()>=400) bad.push(r.status()+' '+r.url().slice(0,80)); });
+  const t0=Date.now();
+  await p.goto('http://100.113.97.47:3083/', { waitUntil:'load', timeout:60000 });
+  await p.waitForFunction(()=>document.body.querySelectorAll('*').length>60, null, { timeout:60000 }).catch(()=>{});
+  console.log('首屏渲染耗时', ((Date.now()-t0)/1000).toFixed(1)+'s');
+  const s = await p.evaluate(()=>({ nodes: document.body.querySelectorAll('*').length, p16: typeof window.__p16Endpoint, gear: !!document.querySelector('button[aria-label="设置"]') }));
+  console.log('状态', JSON.stringify(s));
+  await p.evaluate(()=>{ const e=document.querySelector('[aria-label="打开侧边栏"]'); if(e) e.click(); });
+  await p.waitForTimeout(1500);
+  const g = await p.evaluate(()=>{ const el=document.querySelector('button[aria-label="设置"]'); if(!el) return null; const r=el.getBoundingClientRect(); return {x:Math.round(r.x),y:Math.round(r.y),d:getComputedStyle(el).display}; });
+  console.log('抽屉内齿轮', JSON.stringify(g));
+  await p.screenshot({ path:'final_740.png' });
+  console.log('4xx/5xx', bad.length, bad.slice(0,3));
+  console.log('pageerror', errs.length, errs.slice(0,2));
+  await b.close();
+})();

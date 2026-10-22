@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>端口服务仪表盘</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --border: #2a2d3a;
+    --text: #e1e4ed; --text-dim: #888c9e;
+    --green: #22c55e; --red: #ef4444; --blue: #3b82f6; --yellow: #eab308;
+    --hover: #252836;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding:24px; }
+  .container { max-width:1200px; margin:0 auto; }
+  h1 { font-size:22px; font-weight:700; }
+  h1 span { color:var(--text-dim); font-size:14px; font-weight:400; margin-left:8px; }
+  header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px; }
+  .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .last-update { color:var(--text-dim); font-size:12px; }
+  .btn { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer; font-size:13px; font-weight:500; transition:opacity .2s; user-select:none; }
+  .btn:hover { background:var(--hover); border-color:var(--blue); }
+  .btn:disabled { opacity:0.4; cursor:not-allowed; pointer-events:none; }
+  .btn-sm { padding:4px 10px; font-size:12px; }
+  .btn-green { color:var(--green); } .btn-green:hover { border-color:var(--green); }
+  .btn-red { color:var(--red); } .btn-red:hover { border-color:var(--red); }
+  .btn-yellow { color:var(--yellow); } .btn-yellow:hover { border-color:var(--yellow); }
+  .btn-blue { color:var(--blue); } .btn-blue:hover { border-color:var(--blue); }
+  .btn-ghost { border-color:transparent; background:transparent; color:var(--text-dim); }
+  .btn-ghost:hover { background:var(--card); border-color:var(--border); color:var(--text); }
+  .health-badge { font-size:11px; margin-left:6px; padding:1px 6px; border-radius:3px; font-weight:500; }
+  .health-badge.ok { color:var(--green); background:rgba(34,197,94,0.12); }
+  .health-badge.fail { color:var(--red); background:rgba(239,68,68,0.12); }
+  .health-badge.pending { color:var(--yellow); background:rgba(234,179,8,0.12); animation:pulse 0.8s ease-in-out infinite; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:8px; }
+  .card.running { border-left:3px solid var(--green); }
+  .card.unhealthy { border-left:3px solid var(--yellow); }
+  .card.stopped { border-left:3px solid var(--red); }
+  .card-body { display:flex; align-items:center; padding:14px 18px; gap:14px; }
+  .status-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .status-dot.running { background:var(--green); box-shadow:0 0 8px rgba(34,197,94,0.5); }
+  .status-dot.stopped { background:var(--red); box-shadow:0 0 8px rgba(239,68,68,0.3); }
+  .svc-info { flex:1; min-width:0; }
+  .svc-name { font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .svc-name .port-tag { font-size:15px; padding:2px 10px; border-radius:4px; font-weight:600; font-family:"SF Mono","Cascadia Code",monospace; }
+  .svc-desc { color:var(--text-dim); font-size:12px; margin-top:2px; }
+  .svc-meta { display:flex; gap:12px; margin-top:4px; font-size:11px; flex-wrap:wrap; }
+  .svc-meta span { color:var(--text-dim); }
+  .svc-meta .val { color:var(--text); }
+  .svc-actions { display:flex; gap:6px; flex-shrink:0; }
+  .loading { opacity:0.5; pointer-events:none; }
+  .pulse { animation:pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; }
+  .modal-overlay.active { display:flex; }
+  .modal { background:var(--card); border:1px solid var(--border); border-radius:12px; width:90%; max-width:900px; max-height:80vh; display:flex; flex-direction:column; }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--border); }
+  .modal-header h2 { font-size:16px; }
+  .modal-close { cursor:pointer; color:var(--text-dim); font-size:20px; padding:4px; }
+  .modal-close:hover { color:var(--text); }
+  .modal-body { padding:14px 18px; overflow:auto; flex:1; font-family:"SF Mono","Cascadia Code","Consolas",monospace; font-size:12px; line-height:1.6; white-space:pre-wrap; color:#a8b2c1; }
+ 
+  .dropdown-wrap { position:relative; display:inline-flex; }
+  .dropdown-menu { display:none; position:absolute; top:100%; right:0; z-index:100; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:4px 0; min-width:140px; margin-top:4px; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+  .dropdown-menu.active { display:block; }
+  .dropdown-item { display:block; width:100%; text-align:left; padding:8px 14px; border:none; background:none; color:var(--text); font-size:13px; cursor:pointer; white-space:nowrap; }
+  .dropdown-item:hover { background:var(--hover); }
+  .dropdown-item.green { color:var(--green); } .dropdown-item.red { color:var(--red); } .dropdown-item.yellow { color:var(--yellow); } .dropdown-item.dim { color:var(--text-dim); }
+  .notification { position:fixed; bottom:24px; right:24px; background:var(--card); border:1px solid var(--green); border-radius:8px; padding:10px 16px; font-size:13px; color:var(--text); z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; box-shadow:0 4px 16px rgba(0,0,0,0.3); }
+  .notification.show { opacity:1; pointer-events:auto; }
+  .svc-urls a:hover { opacity:0.7; }
+  .svc-urls code { word-break:break-all; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div>
+      <h1>端口服务仪表盘<span id="countBadge"></span></h1>
+      <div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap">
+        <span class="last-update" id="updateTime">-</span>
+        <span style="font-size:12px;color:var(--text-dim)">🔐 认证网关 9060 同进程</span>
+      </div>
+    </div>
+    <div class="toolbar" id="toolbar">
+      <button class="btn" onclick="refreshNow()">🔄 刷新</button>
+      <div class="dropdown-wrap" id="batchDropdown">
+        <button class="btn" onclick="toggleDropdown('batchDropdown')">批量操作 ▾</button>
+        <div class="dropdown-menu">
+          <button class="dropdown-item green" onclick="closeDropdown();startAll()">▶ 全部启动</button>
+          <button class="dropdown-item red" onclick="closeDropdown();stopAll()">⏹ 全部停止</button>
+          <button class="dropdown-item yellow" onclick="closeDropdown();restartAll()">🔄 重启全部</button>
+        </div>
+      </div>
+      <button class="btn" id="btnCheckResp" onclick="checkAllResponses()">🔍 检测</button>
+      <button class="btn btn-blue" onclick="showBackupPanel()">📋 备份</button>
+      <div class="dropdown-wrap" id="moreDropdown">
+        <button class="btn btn-ghost" onclick="toggleDropdown('moreDropdown')">⚙</button>
+        <div class="dropdown-menu">
+<button class="dropdown-item dim" onclick="closeDropdown();showOpLog()">📋 操作日志</button>
+          <button class="dropdown-item dim" onclick="closeDropdown();restartDashboard()">🔄 重启仪表盘</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="statusArea" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(15,17,23,0.75);align-items:center;justify-content:center"><div style="background:var(--card);border:1px solid var(--yellow);border-radius:12px;padding:24px 40px;font-size:16px;color:var(--yellow);font-weight:600;box-shadow:0 8px 32px rgba(0,0,0,0.5)">⏳ 操作中…</div></div>
+  <div id="cfEntryCard"></div>
+  <div id="serviceList"></div>
+</div>
+
+<div class="modal-overlay" id="logModal">
+  <div class="modal">
+    <div class="modal-header"><h2 id="logTitle">日志</h2><span class="modal-close" onclick="closeLog()">&times;</span></div>
+    <div class="modal-body" id="logContent"><div class="pulse">加载中...</div></div>
+  </div>
+</div>
+<div class="modal-overlay" id="oplogModal">
+  <div class="modal">
+    <div class="modal-header"><h2>操作日志</h2><span class="modal-close" onclick="closeOpLog()">&times;</span></div>
+    <div class="modal-body" id="oplogContent" style="padding:0"><div class="pulse" style="padding:14px 18px">加载中...</div></div>
+  </div>
+</div>
+
+<!-- ─── 备份面板 ────────────────────────────── -->
+<div class="modal-overlay" id="backupModal">
+  <div class="modal" style="max-width:1000px">
+    <div class="modal-header"><h2 id="backupModalTitle">📋 端口源码备份</h2><span class="modal-close" onclick="closeBackupPanel()">&times;</span></div>
+    <div class="modal-body" id="backupContent" style="padding:18px">
+      <div class="pulse">加载中...</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─── 备份面板 ────────────────────────────── -->
+<div class="modal-overlay" id="backupModal">
+  <div class="modal" style="max-width:1000px">
+    <div class="modal-header"><h2 id="backupModalTitle">📋 端口源码备份</h2><span class="modal-close" onclick="closeBackupPanel()">&times;</span></div>
+    <div class="modal-body" id="backupContent" style="padding:18px">
+      <div class="pulse">加载中...</div>
+    </div>
+  </div>
+</div>
+
+<div class="notification" id="notif"></div>
+
+<script>
+var PASS=(typeof PASS!=='undefined')?PASS:'';var QS=PASS?'?password='+encodeURIComponent(PASS):'';
+var autoRefreshTimer=null,BUSY=false,healthResults={},checkingHealth=false,healthCheckTimer=null;
+// Cloudflare 统一入口（由 /api/cf-tunnels 动态注入，地址每次重建自动跟随）
+var CF_GW='',CF_PW='Liu326766@',CF_UPDATED=0,CF_PROCS=0,CF_DIRECT={};
+var TS_HOST='100.113.97.47';
+// 局域网 IP 动态探测：跟随用户访问入口（避免 DHCP 变更后写死旧 IP 导致内网链接全失效）
+function detectLanHost(){
+  try{
+    var h=location.hostname||'';
+    // 公网域名（CF 隧道 / Tailscale / Workers）不能当内网主机用
+    var isPublic=/trycloudflare\.com$/i.test(h)||/\.ts\.net$/i.test(h)||/\.workers\.dev$/i.test(h);
+    if(h && h!=='localhost' && h!=='127.0.0.1' && h!=='::1' && !h.startsWith('0.') && !isPublic) return h;
+  }catch(e){}
+  return '192.168.215.218'; // 兜底：本机直访或经公网隧道访问时用当前实际局域网 IP
+}
+function esc(t){return t==null?'':String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function notify(msg,type){
+  var n=document.getElementById('notif');
+  n.textContent=msg;
+  n.style.borderColor=type==='error'?'var(--red)':type==='warn'?'var(--yellow)':'var(--green)';
+  n.classList.add('show');setTimeout(function(){n.classList.remove('show');},3000);
+}
+
+// 端口配置
+const portUrls = {
+  '8050': 'http://127.0.0.1:8050',
+  '8030': 'http://127.0.0.1:8030',
+  '8120': 'http://127.0.0.1:8120',
+  '8060': 'http://127.0.0.1:8060/v1/models',
+  '8040': 'http://127.0.0.1:8040/v1/models',
+  '8020': 'http://127.0.0.1:8020',
+  '8200': 'http://127.0.0.1:8200',
+  '9050': 'http://127.0.0.1:9050',
+  '9009': 'http://127.0.0.1:9009',
+  '9060': 'http://127.0.0.1:9060',
+  '8080': 'http://127.0.0.1:8080',
+  '3081': 'http://127.0.0.1:3081'
+};
+
+// ─── Dropdown ────────────────────────────────────────────────
+function toggleDropdown(id){
+  document.querySelectorAll('.dropdown-menu').forEach(function(m){if(m.closest('.dropdown-wrap').id!==id)m.classList.remove('active');});
+  document.querySelector('#'+id+' .dropdown-menu').classList.toggle('active');
+}
+function closeDropdown(){document.querySelectorAll('.dropdown-menu').forEach(function(m){m.classList.remove('active');});}
+document.addEventListener('click',function(e){if(!e.target.closest('.dropdown-wrap'))closeDropdown();});
+
+// ─── 操作状态 ────────────────────────────────────────────────
+function setOperationsEnabled(v){
+  BUSY=!v;
+  document.querySelectorAll('#toolbar button').forEach(function(b){b.disabled=!v;});
+  document.querySelectorAll('#serviceList button').forEach(function(b){b.disabled=!v;});
+  document.querySelectorAll('.card').forEach(function(c){c.classList.toggle('loading',!v);});
+  document.body.style.cursor=v?'':'wait';
+  document.getElementById('statusArea').style.display=v?'none':'flex';
+}
+
+// ─── 外网统一入口卡片（CF 固定地址 + 完整密码）─────────────
+function copyCf(t){
+  try{
+    navigator.clipboard.writeText(t).then(function(){notify('外网地址（含密码）已复制');})
+      .catch(function(){notify('复制失败，请手动选中','error');});
+  }catch(e){ notify('复制失败，请手动选中','error'); }
+}
+function renderCfEntry(){
+  var box=document.getElementById('cfEntryCard');
+  if(!box)return;
+  var tsFull='http://'+TS_HOST+':9009/';
+  var tsh='<div class="card" style="margin-bottom:14px;border:1px solid #8b5cf6;background:linear-gradient(135deg,rgba(139,92,246,0.1),rgba(15,17,23,0.4))"><div class="card-body"><div class="svc-info" style="width:100%">';
+  tsh+='<div class="svc-name"><span class="port-tag" style="background:#8b5cf622;color:#a855f7">TS</span> 🚀 Tailscale 虚拟专网直连（专属 IP: '+TS_HOST+'） <span style="color:var(--green);font-size:11px">● 毫秒级秒开 · 免密直连 · 移动端首选</span></div>';
+  tsh+='<div class="svc-desc">手机/移动设备加入 Tailscale 后直连本机，彻底告别海外中继延迟 · 已接入设备：liush14pm</div>';
+  tsh+='<div style="margin-top:6px;font-size:12px;line-height:2">';
+  tsh+='<a href="'+esc(tsFull)+'" target="_blank" style="color:#a855f7;text-decoration:underline;text-underline-offset:2px;font-weight:600">⧉ 打开仪表盘（Tailscale直连）</a> ';
+  tsh+='<button class="btn btn-sm" style="padding:1px 8px;font-size:10px" onclick="copyCf(\''+esc(tsFull)+'\')">📋 复制直连地址</button> ';
+  tsh+='<button class="btn btn-sm" style="padding:1px 8px;font-size:10px" onclick="copyCf(\''+TS_HOST+'\')">📋 复制专属IP</button>';
+  tsh+='<br><code style="font-size:11px;color:#a8b2c1;word-break:break-all">'+esc(tsFull)+'</code>';
+  tsh+='</div></div></div></div>';
+
+  if(!CF_GW){
+    box.innerHTML=tsh+'<div class="card" style="margin-bottom:14px;border:1px solid var(--yellow)"><div class="card-body"><div class="svc-info"><div class="svc-name">🌐 外网统一入口</div><div class="svc-desc" style="color:var(--yellow)">隧道未就绪 — 计划任务 CloudflareQuickTunnels 尚未生成地址，稍后自动刷新</div></div></div></div>';
+    return;
+  }
+  var full=CF_GW+'/?password='+CF_PW;
+  var disp=CF_GW+'/?password=xxxxxxxx';
+  var age='';
+  if(CF_UPDATED){
+    var m=Math.round((Date.now()-CF_UPDATED)/60000);
+    age='地址更新于 '+(m<1?'刚刚':m+' 分钟前');
+  }
+  var h=tsh+'<div class="card" style="margin-bottom:14px;border:1px solid #3b82f6"><div class="card-body"><div class="svc-info" style="width:100%">';
+  h+='<div class="svc-name"><span class="port-tag" style="background:#3b82f622;color:#3b82f6">CF</span> 🌐 外网统一入口（9060 认证网关）</div>';
+  h+='<div class="svc-desc">一个地址走全部服务（路径前缀分发）· 密码位置见 xxxxxxxx，自行替换'
+    +(age?' · '+esc(age):'')+' · cloudflared 在线 '+CF_PROCS+'</div>';
+  h+='<div style="margin-top:6px;font-size:12px;line-height:2">';
+  h+='<a href="'+esc(full)+'" target="_blank" title="'+esc(disp)+'" style="color:var(--green);text-decoration:underline;text-underline-offset:2px">⧉ 打开仪表盘（外网）</a> ';
+  h+='<button class="btn btn-sm" style="padding:1px 8px;font-size:10px" onclick="copyCf(\''+esc(disp)+'\')">📋 复制地址</button>';
+  h+='<br><code style="font-size:11px;color:#8a8ea0;word-break:break-all">'+esc(disp)+'</code>';
+  h+='</div></div></div></div>';
+  box.innerHTML=h;
+}
+
+// ─── 渲染卡片 ────────────────────────────────────────────────
+function renderServices(data){
+  var EXT_BASE=(CF_GW||'').replace(/\/+$/,'');
+  function extReal(){return EXT_BASE?EXT_BASE+'/?password='+encodeURIComponent(CF_PW):'';}
+  function extDisp(){return EXT_BASE?EXT_BASE+'/?password='+CF_PW:'隧道未就绪';}
+  function extEntry(suffix) {
+    if(!EXT_BASE) return null;
+    // suffix格式: '/game/?name=玩家&message=签到'
+    var qIdx = suffix.indexOf('?');
+    var path = qIdx >= 0 ? suffix.substring(0, qIdx) : suffix;
+    var query = qIdx >= 0 ? suffix.substring(qIdx + 1) : '';
+
+    // 显示层一律遮蔽为 xxxxxxxx（老总手动替换）；href 仍带真实密码，点击即可用
+    var href = EXT_BASE + path + '?password=' + encodeURIComponent(CF_PW);
+    if (query) href += '&' + query;
+    var text = EXT_BASE + path + '?password=xxxxxxxx';
+    if (query) text += '&' + query;
+
+    return {href: href, text: text};
+  }
+  var LAN_HOST=detectLanHost();
+  var portUrls={
+    9009:{local:'http://'+LAN_HOST+':9009/',external:extEntry('/')},
+    8200:{local:'http://'+LAN_HOST+':8200/?name=歌名',external:extEntry('/music/?name=歌名')},
+    8070:{local:'http://'+LAN_HOST+':8070/?name=玩家&message=签到',external:extEntry('/game/?name=玩家&message=签到')},
+    8060:{local:'http://'+LAN_HOST+':8060/v1/models',external:extEntry('/wb/v1/models')},
+    8300:{local:'http://'+LAN_HOST+':8300/api?keyword=渣男语录',external:extEntry('/quote/api?keyword=渣男语录')},
+    8020:{local:'http://'+LAN_HOST+':8020/?q=关键词',external:extEntry('/search?q=关键词')},
+    8040:{local:'http://'+LAN_HOST+':8040/v1/models',external:extEntry('/agent/v1/models')},
+    8050:{local:'http://'+LAN_HOST+':8050/',external:''},
+    8030:{local:'http://'+LAN_HOST+':8030/',external:extEntry('/recap/')},
+    8011:{local:'http://'+LAN_HOST+':8011/duanshipin?url=...',external:extEntry('/video/duanshipin?url=视频网址')},
+    8120:{local:'http://'+LAN_HOST+':8120/=关键词',external:extEntry('/video-unified/=关键词')},
+    9050:{local:'http://'+LAN_HOST+':9050/',external:''},
+    8080:{local:'http://'+LAN_HOST+':8080/',external:''},
+    9060:{local:'http://'+LAN_HOST+':9060/',external:''},
+    3081:{local:'http://'+LAN_HOST+':3081/',external:extEntry('/dsh/')},
+    57890:{local:'http://127.0.0.1:57890/',external:''},
+    6066:{local:'http://'+LAN_HOST+':6066/',external:extEntry('/latest_shouban.png')},
+    8899:{local:'http://'+LAN_HOST+':8899/',external:extEntry('/meter/')},
+    8210:{local:'http://'+LAN_HOST+':8210/',external:extEntry('/tts/')}
+  };
+  var svcs=data.services||[];
+  // 排序：9009永远第一，其余按端口从小到大
+  svcs.sort(function(a,b){
+    if(a.port===9009)return -1;
+    if(b.port===9009)return 1;
+    return a.port-b.port;
+  });
+  var sts=data.statuses||{},n=0,healthy=0;
+  for(var k in sts){
+    if(sts[k].status==="running")n++;
+    if(sts[k].status==="running"&&sts[k].healthy!==false)healthy++;
+  }
+  var quota=data.volcQuota||{};
+  document.getElementById("countBadge").textContent=" "+healthy+" 健康 / "+n+" 在线 / "+svcs.length+" 服务";
+  var age=data.updatedAt?Date.now()-data.updatedAt:0;
+  document.getElementById("updateTime").textContent=age<3000?"刚刚更新":"更新于 "+new Date(data.updatedAt).toLocaleTimeString("zh-CN",{hour12:false})+" ("+Math.round(age/1000)+"s 前)";
+  var h="";
+  for(var i=0;i<svcs.length;i++){
+    var s=svcs[i],st=sts[s.port]||{status:"stopped"},r=st.status==="running",unhealthy=st.healthy===false,c=s.color||"#888";
+    var cls=unhealthy?"unhealthy":(r?"running":"stopped");
+    var disabledAttr=BUSY?' disabled':'';
+    h+='<div class="card '+cls+'"><div class="card-body">';
+    h+='<span class="status-dot '+(unhealthy?"stopped":(r?"running":"stopped"))+'"></span>';
+    h+='<div class="svc-info"><div class="svc-name">';
+    h+='<span class="port-tag" style="background:'+c+'22;color:'+c+'">'+s.port+'</span> '+esc(s.name);
+var hc=healthResults[s.port];
+    if(hc==='pending')h+=' <span class="health-badge pending">检测中...</span>';
+    else if(hc&&hc.ok)h+=' <span class="health-badge ok">✅ '+hc.ms+'ms</span>';
+    else if(hc&&!hc.ok)h+=' <span class="health-badge fail">❌ '+(hc.error||'失败')+'</span>';
+    h+=(r?(unhealthy?" <span style=\"color:var(--yellow);font-size:12px\">⚠️ 无响应</span>":" <span style=\"color:var(--green);font-size:11px\">● 运行中</span>"):" <span style=\"color:var(--red);font-size:11px\">● 已停止</span>");
+    h+='</div><div class="svc-desc">'+esc(s.desc)+'</div>';
+    // 8030 API 调用方式
+    if(s.port===8030){
+      h+='<div style="font-size:11px;color:var(--text-dim);margin-top:3px;line-height:1.6;background:var(--bg-secondary, rgba(255,255,255,0.04));border-radius:6px;padding:4px 6px">📋 <b>调用方式:</b>';
+      h+='<div style="margin-left:6px;display:flex;flex-direction:column;gap:2px">';
+      h+='<code style="font-size:10px">GET /screenshot → 桌面截图(PNG)</code>';
+      h+='<code style="font-size:10px">POST / → 群聊总结生成 (body:聊天文本)</code>';
+      h+='<code style="font-size:10px">GET /?keyword=聊天记录&amp;group=群名 → URL传参生成</code>';;
+      h+='<code style="font-size:10px">POST /v1/images/generations → AI生图代理</code>';
+      h+='<code style="font-size:10px">GET /latest → 最近一次总结图(PNG直出)</code>';
+      h+='<code style="font-size:10px">GET /images/{name}.png → 指定图片</code>';
+      h+='<code style="font-size:10px">GET / → 健康检查</code>';
+      h+='</div></div>';
+    }
+    // 8040 DSH 桥 — 2026-10-02 MiMo 退役，改接 DeepSeek Harness headless agent（旧 mimo* 别名自动映射）
+    if(s.port===8040){
+      h+='<div style="font-size:11px;color:var(--text-dim);margin-top:3px;line-height:1.6">🤖 模型(DSH agent 桥):';
+      h+='<div style="margin-left:10px;display:flex;gap:6px"><span style="color:'+c+'">#1</span> <code style="color:var(--text)">dsh</code> <span>— DSH agent：对话 + 工具执行</span></div>';
+      h+='<div style="margin-left:10px;display:flex;gap:6px"><span style="color:'+c+'">#2</span> <code style="color:var(--text)">dsh-6066 / -fix / -layout / -ai</code> <span>6066 体检/修复/布局/AI巡检</span></div>';
+      h+='<div style="margin-left:10px;font-size:10px;opacity:.85">model 填 <code>dsh</code>；旧别名 <code>mimo</code> / <code>mimo-6066*</code> 自动映射。Base URL → 8040/v1</div>';
+      h+='</div>';
+    }
+    // 8060 WorkBuddy 真会话桥（仿 8040）
+    if(s.port===8060){
+      h+='<div style="font-size:11px;color:var(--text-dim);margin-top:3px;line-height:1.6">🤖 模型(WorkBuddy 真会话桥):';
+      h+='<div style="margin-left:10px;display:flex;gap:6px"><span style="color:'+c+'">#1</span> <code style="color:var(--text)">wb</code> <span>— WorkBuddy 内置 CodeBuddy agent：对话 + 真执行</span></div>';
+      h+='<div style="margin-left:10px;font-size:10px;opacity:.85">model 填 <code>wb</code>；旧别名 workbuddy / wb-exec 自动映射。Base URL → 8060/v1</div>';
+      h+='</div>';
+    }
+    // 57890 wb-switch 账号切换 WebUI
+    if(s.port===57890){
+      h+='<div style="font-size:11px;color:var(--text-dim);margin-top:3px;line-height:1.6">🔄 WorkBuddy 账号切换工具：账号库 / 一键切换 / 到期监控';
+      h+='<div style="margin-left:10px;font-size:10px;opacity:.85">改写 workbuddy-desktop.info 供 DSH workbuddy 插件读取；DSH 侧「账号池→重新检测账号」即可入池。仅本机访问(127.0.0.1)。</div>';
+      h+='</div>';
+    }
+    var pu=portUrls[s.port];
+    if(pu){
+      var internalUrl=esc(pu.local);
+      var externalUrl=typeof pu.external==='object'?pu.external:null;
+      var extHtml='<span style="color:var(--text-dim)">-</span>';
+      if(s.port===3081){
+        extHtml='<button class="btn btn-sm btn-green" style="padding:1px 8px;font-size:10px" onclick="queryDshUrl()">🔗 一键复制外网DSH地址</button><br><span id="dshUrlResult" style="font-size:10px;color:var(--text-dim);word-break:break-all"></span>';
+      } else if(externalUrl){
+        extHtml='<a href="'+esc(externalUrl.href)+'" target="_blank" style="color:var(--blue);text-decoration:underline;text-underline-offset:2px" title="'+esc(externalUrl.text)+'">⧉ 打开</a> <code style="font-size:10px;color:#8a8ea0">'+esc(externalUrl.text)+'</code>';
+      } else if(!EXT_BASE){
+        extHtml='<span style="color:var(--yellow)">隧道未就绪</span>';
+      }
+      var tsHtml = '<span style="color:var(--text-dim)">-</span>';
+      if(internalUrl && !internalUrl.includes('127.0.0.1')){
+        var tsUrl = internalUrl.replace(LAN_HOST, TS_HOST);
+        tsHtml = '<a href="'+tsUrl+'" target="_blank" style="color:#a855f7;text-decoration:underline;text-underline-offset:2px" title="'+tsUrl+'">⧉ 直连</a> <button class="btn btn-sm" style="padding:0 5px;font-size:9px" onclick="copyCf(\''+tsUrl+'\')">📋 复制</button> <code style="font-size:10px;color:#8a8ea0">'+tsUrl+'</code>';
+      } else if (internalUrl && internalUrl.includes('127.0.0.1')) {
+        tsHtml = '<span style="color:var(--text-dim)">仅本机访问</span>';
+      }
+      h+='<div class="svc-urls" style="font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.8">📡 <span style="color:var(--green)">局域网</span> <a href="'+internalUrl+'" target="_blank" style="color:var(--green);text-decoration:underline;text-underline-offset:2px" title="'+internalUrl+'">⧉ 打开</a> <code style="font-size:10px;color:#8a8ea0">'+internalUrl+'</code><br>⚡ <span style="color:#a855f7">Tailscale</span> '+tsHtml+'<br>🌐 <span style="color:var(--blue)">外网</span> '+extHtml+'</div>';
+    }
+    if(r){h+='<div class="svc-meta"><span>PID <span class="val">'+(st.pid||"-")+'</span></span><span>内存 <span class="val">'+(st.mem||"?")+' MB</span></span><span>进程 <span class="val">'+(st.proc||"?")+'</span></span>'+(st.uptime?'<span>运行 <span class="val">'+st.uptime+'</span></span>':'')+(s.port===8050?'<span>🌋 火山 <span class="val">'+(quota.volc&&quota.volc.remaining>=0?quota.volc.remaining+'/'+quota.volc.limit:'-')+'</span></span><span>🌈 Any <span class="val">'+(quota.anysearch&&quota.anysearch.remaining>=0?quota.anysearch.remaining+'/'+quota.anysearch.limit:'-')+'</span></span>':'')+'</div>';}
+    h+='</div><div class="svc-actions">';
+    if(s.port===9009){
+      h+='<button class="btn btn-sm btn-yellow"'+disabledAttr+' onclick="gracefulRestartDashboard()">♻️ 重启</button>';
+    }else if(r){h+='<button class="btn btn-sm btn-red"'+disabledAttr+' onclick="stopSvc('+s.port+')">停止</button><button class="btn btn-sm btn-yellow"'+disabledAttr+' onclick="restartSvc('+s.port+')">重启</button>';}
+    else{h+='<button class="btn btn-sm btn-green"'+disabledAttr+' onclick="startSvc('+s.port+')">启动</button>';}
+    h+='<button class="btn btn-sm"'+disabledAttr+' data-log-port="'+s.port+'" data-log-name="'+esc(s.name).replace(/"/g,'&quot;')+'">日志</button>';
+    h+='</div></div></div>';
+  }
+  document.getElementById("serviceList").innerHTML=h;
+}
+
+// ─── 日志按钮事件委托 ─────────────────────────────
+document.addEventListener('click',function(e){
+  var btn=e.target.closest('[data-log-port]');
+  if(!btn)return;
+  if(btn.disabled||BUSY)return;
+  showLog(parseInt(btn.dataset.logPort,10),btn.dataset.logName);
+});
+
+// ─── 数据刷新 ────────────────────────────────────────────────
+async function refreshNow(){
+  if(BUSY)return;
+  var btn=document.querySelector('button[onclick="refreshNow()"]');
+  if(btn){var ot=btn.textContent;btn.disabled=true;btn.textContent='⏳ 刷新...';setTimeout(function(){btn.disabled=false;btn.textContent=ot;},800);}
+  try{
+    var _s=await Promise.all([fetch("/api/status"+QS),fetch("/api/list"+QS),fetch("/api/volc-quota"+QS),fetch("/api/cf-tunnels"+QS)]);
+    var d=await _s[0].json(),l2=await _s[1].json(),v2=await _s[2].json();
+    var cf=null;try{cf=await _s[3].json();}catch(e){}
+    if(cf&&cf.ok&&cf.gateway&&cf.gateway.url){
+      CF_GW=cf.gateway.url;CF_PW=cf.password||'Liu326766@';
+      CF_UPDATED=cf.updatedAt||0;CF_PROCS=cf.procs||0;CF_DIRECT=cf.direct||{};
+    }
+    d.services=l2.services||[];d.volcQuota=v2;
+    renderServices(d);renderCfEntry();
+  }catch(e){}
+  clearInterval(autoRefreshTimer);autoRefreshTimer=setInterval(refreshNow,300000); // 5分钟间隔，减少TIME_WAIT
+}
+
+// ─── DSH Web 外网一键地址（仅局域网接口；token 随 3081 重启变化，点击才取）────
+async function queryDshUrl(){
+  var box=document.getElementById('dshUrlResult');
+  if(!box)return;
+  box.innerHTML='<span style="color:var(--text-dim)">查询中...</span>';
+  try{
+    var r=await fetch('/api/dsh-url'+QS);
+    var j=await r.json();
+    if(r.status===403){box.innerHTML='<span style="color:var(--red)">仅局域网接口可查询</span>';return;}
+    if(j&&j.ok&&j.externalUrl){
+      var _dshDisp=String(j.externalUrl).replace(/password=[^&]*/,'password=xxxxxxxx');
+      box.innerHTML='<span style="color:var(--green)">✅ 3081 在线，外网地址(点右侧「复制」发手机):</span> <code style="font-size:10px;word-break:break-all">'+esc(_dshDisp)+'</code> '
+        +'<button class="btn btn-sm" style="padding:0px 6px;font-size:10px" onclick="navigator.clipboard.writeText(\''+esc(_dshDisp)+'\').then(function(){this.textContent=\'已复制\'}).catch(function(){var t=document.getElementById(\'dshUrlResult\');if(t)t.select&&t.select();})">复制</button> '
+        +'<span style="font-size:10px;color:var(--text-dim)">内网: '+esc(j.internalUrl||'-')+'</span>';
+    }else{
+      box.innerHTML='<span style="color:var(--yellow)">⚠️ '+(j&&j.note?esc(j.note):'未取到地址')+'</span>';
+    }
+  }catch(e){box.innerHTML='<span style="color:var(--red)">查询失败: '+esc(String(e))+'</span>';}
+}
+
+// ─── 单服务操作 ──────────────────────────────────────────────
+async function startSvc(p){
+  if(BUSY)return;setOperationsEnabled(false);
+  try{
+    var r=await fetch("/api/start/"+p+QS);
+    var j=await r.json();
+    if(j.ok){notify('端口 '+p+' 启动成功 (PID:'+j.result.pid+')');}
+    else{notify('启动失败: '+j.error, 'error');console.error("start",p,j);}
+  }catch(e){notify('启动异常: '+e.message, 'error');console.error(e)}
+  setOperationsEnabled(true);refreshNow();
+}
+async function stopSvc(p){
+  if(BUSY)return;setOperationsEnabled(false);
+  try{
+    var r=await fetch("/api/stop/"+p+QS);
+    var j=await r.json();
+    if(j.ok){notify('端口 '+p+' 已停止');}
+    else{notify('停止失败: '+j.error, 'error');console.error("stop",p,j);}
+  }catch(e){notify('停止异常: '+e.message, 'error');console.error(e)}
+  setOperationsEnabled(true);refreshNow();
+}
+async function restartSvc(p){
+  if(BUSY)return;setOperationsEnabled(false);
+  try{
+    var r=await fetch("/api/restart/"+p+QS);
+    var j=await r.json();
+    if(j.ok){notify('端口 '+p+' 重启成功 (PID:'+j.result.pid+')');}
+    else{notify('重启失败: '+j.error, 'error');console.error("restart",p,j);}
+  }catch(e){notify('重启异常: '+e.message, 'error');console.error(e)}
+  setOperationsEnabled(true);refreshNow();
+}
+
+// ─── 批量操作 ────────────────────────────────────────────────
+async function startAll(){
+  if(BUSY)return;setOperationsEnabled(false);notify('正在启动所有服务...');
+  try{
+    var sr=await fetch("/api/status"+QS),sd=await sr.json();
+    var lr=await fetch("/api/list"+QS),ld=await lr.json();
+    var svcs=ld.services||[],errs=[];
+    for(var i=0;i<svcs.length;i++){
+      var st=sd.statuses[svcs[i].port];
+      if(!st||st.status!=="running"){
+        try{var r2=await fetch("/api/start/"+svcs[i].port+QS);var j2=await r2.json();if(!j2.ok)errs.push(svcs[i].port);}catch(e){errs.push(svcs[i].port);}
+        await new Promise(function(r){setTimeout(r,500);});
+      }
+    }
+    if(errs.length)notify('完成，'+errs.length+' 个失败','warn');else notify('全部已启动');
+  }catch(e){notify('启动失败: '+e.message,'error')}
+  setOperationsEnabled(true);refreshNow();
+}
+async function stopAll(){
+  if(BUSY)return;setOperationsEnabled(false);notify('正在停止所有服务...');
+  try{
+    var sr=await fetch("/api/status"+QS),sd=await sr.json();
+    var lr=await fetch("/api/list"+QS),ld=await lr.json();
+    var svcs=ld.services||[];
+    for(var i=0;i<svcs.length;i++){if(svcs[i].port===9009)continue;var st=sd.statuses[svcs[i].port];if(st&&st.status==="running"){await fetch("/api/stop/"+svcs[i].port+QS);}}
+    notify('全部已停止');
+  }catch(e){notify('停止失败: '+e.message,'error')}
+  setOperationsEnabled(true);refreshNow();
+}
+async function restartAll(){
+  if(BUSY)return;
+  if(!confirm('确定重启全部服务？先停止所有运行中的服务，再依次启动'))return;
+  setOperationsEnabled(false);notify('正在重启全部服务...');
+  try{
+    var sr=await fetch("/api/status"+QS),sd=await sr.json();
+    var lr=await fetch("/api/list"+QS),ld=await lr.json();
+    var svcs=ld.services||[];
+    for(var i=0;i<svcs.length;i++){if(svcs[i].port===9009)continue;var st=sd.statuses[svcs[i].port];if(st&&st.status==="running"){await fetch("/api/stop/"+svcs[i].port+QS);}}
+    await new Promise(function(r){setTimeout(r,2000);});
+    await startAll();
+  }catch(e){notify('重启失败: '+e.message,'error')}
+  setOperationsEnabled(true);refreshNow();
+}
+async function gracefulRestartDashboard(){
+  if(!confirm('确定重启仪表盘？约5秒恢复'))return;
+  setOperationsEnabled(false);
+  notify('仪表盘重启中...');
+  try{
+    var r=await fetch('/api/restart/9009'+QS,{method:'POST'});
+    for(var i=0;i<15;i++){
+      await new Promise(function(r){setTimeout(r,2000);});
+      try{var c=await fetch('/api/status'+QS);if(c.ok){refreshNow();location.reload();return;}}catch(e){}
+    }
+    notify('重启超时，请手动刷新','warn');
+  }catch(e){notify('重启失败: '+e.message,'error')}
+  setOperationsEnabled(true);
+}
+async function restartDashboard(){
+  if(!confirm('确定重启仪表盘？约5秒恢复'))return;
+  var ghost=document.querySelector('#moreDropdown .btn-ghost');
+  if(ghost){ghost.disabled=true;ghost.textContent='⏳';}
+  notify('仪表盘重启中...');
+  try{
+    var r=await fetch('/api/restart'+QS,{method:'POST'});
+    await r.json();
+    for(var i=0;i<15;i++){
+      await new Promise(function(r){setTimeout(r,2000);});
+      try{var c=await fetch('/api/status'+QS);if(c.ok){refreshNow();location.reload();return;}}catch(e){}
+    }
+    notify('重启超时，请手动刷新','warn');
+  }catch(e){notify('重启失败: '+e.message,'error')}
+}
+
+// ─── 操作日志 ────────────────────────────────────────────────
+function showOpLog(){document.getElementById("oplogModal").classList.add("active");loadOpLog();}
+function closeOpLog(){document.getElementById("oplogModal").classList.remove("active");}
+function loadOpLog(){
+  fetch("/api/oplog"+QS).then(function(r){return r.json()}).then(function(d){
+    var logs=d.ops||[];
+    if(!logs.length){document.getElementById("oplogContent").innerHTML='<div style="padding:14px 18px;color:var(--text-dim)">暂无操作记录</div>';return;}
+    var h='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--bg);position:sticky;top:0">'+
+      '<th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);color:var(--text-dim);font-weight:500">时间</th>'+
+      '<th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);color:var(--text-dim);font-weight:500">操作</th>'+
+      '<th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);color:var(--text-dim);font-weight:500">端口</th>'+
+      '<th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);color:var(--text-dim);font-weight:500">服务</th>'+
+      '<th style="padding:10px 12px;text-align:center;border-bottom:1px solid var(--border);color:var(--text-dim);font-weight:500">结果</th></tr></thead><tbody>';
+    for(var i=0;i<logs.length;i++){
+      var l=logs[i],bg=i%2?'':'background:rgba(255,255,255,0.03)';
+      var st=(l.result||l.status)&&((l.result||l.status).startsWith('PID')||(l.result||l.status)==='ok'||(l.result||l.status)==='killed')?'✅':'❌';
+      var ac=l.action==='启动'||l.action==='start'||l.action==='重启'||l.action==='restart'?'var(--green)':l.action==='停止'||l.action==='stop'?'var(--red)':'var(--yellow)';
+      h+='<tr style="'+bg+'"><td style="padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text-dim)">'+esc(l.time)+'</td>'+
+        '<td style="padding:8px 12px;border-bottom:1px solid var(--border);color:'+ac+';font-weight:600">'+esc(l.action)+'</td>'+
+        '<td style="padding:8px 12px;border-bottom:1px solid var(--border);font-family:monospace">'+(l.port||'-')+'</td>'+
+        '<td style="padding:8px 12px;border-bottom:1px solid var(--border)">'+esc(l.name||l.service||'')+'</td>'+
+        '<td style="padding:8px 12px;border-bottom:1px solid var(--border);text-align:center">'+st+'</td></tr>';
+    }
+    h+='</tbody></table><div style="padding:8px 12px;color:var(--text-dim);font-size:11px;text-align:right">共 '+logs.length+' 条</div>';
+    document.getElementById("oplogContent").innerHTML=h;
+  }).catch(function(e){document.getElementById("oplogContent").innerHTML='<div style="padding:14px 18px;color:var(--red)">加载失败: '+e.message+'</div>';});
+}
+
+// ─── 服务日志 ────────────────────────────────────────────────
+async function showLog(p,n){
+  document.getElementById("logTitle").textContent=n+" (端口 "+p+")";
+  document.getElementById("logContent").innerHTML='<div class="pulse">加载中...</div>';
+  document.getElementById("logModal").classList.add("active");
+  try {
+    var r=await fetch("/api/log/"+p+QS);
+    var d=await r.json();
+    var txt=(Array.isArray(d.log)?d.log.join("\n"):(d.log??''))||'(empty)';
+    document.getElementById("logContent").textContent=txt;
+  }catch(e){console.error("loadLog error:",e);document.getElementById("logContent").textContent="加载日志失败: "+e.message;}
+}
+function closeLog(){document.getElementById("logModal").classList.remove("active");}
+
+// ─── 健康检测 ────────────────────────────────────────────────
+async function checkAllResponses(){
+  if(checkingHealth)return;
+  checkingHealth=true;healthResults={};
+  var btn=document.getElementById("btnCheckResp");
+  btn.disabled=true;btn.textContent='⏳ 检测...';
+  try{
+    var sr=await fetch("/api/status"+QS),sd=await sr.json();
+    var lr=await fetch("/api/list"+QS),ld=await lr.json();
+    var svcs=ld.services||[],runningPorts=[];
+    for(var i=0;i<svcs.length;i++){var st=sd.statuses[svcs[i].port];if(st&&st.status==="running"){healthResults[svcs[i].port]='pending';runningPorts.push(svcs[i].port);}}
+    if(!runningPorts.length){notify('没有运行中的服务','warn');btn.disabled=false;btn.textContent='🔍 检测';checkingHealth=false;return;}
+    renderServices({services:svcs,statuses:sd.statuses});
+    await Promise.all(runningPorts.map(checkOneService));
+    refreshNow();
+    var ok=runningPorts.filter(function(p){return healthResults[p]&&healthResults[p].ok}).length;
+    notify(ok+'/'+runningPorts.length+' 服务响应正常');
+  }catch(e){console.error(e)}
+  btn.disabled=false;btn.textContent='🔍 检测';checkingHealth=false;
+  if(healthCheckTimer)clearTimeout(healthCheckTimer);
+  healthCheckTimer=setTimeout(function(){healthResults={};},6000);
+}
+function checkOneService(port){return new Promise(function(resolve){
+  var xhr=new XMLHttpRequest();
+  xhr.open('GET','/api/check-response/'+port+QS,true);xhr.timeout=8000;
+  xhr.onload=function(){try{var j=JSON.parse(xhr.responseText);healthResults[port]=(j&&j.ok!==undefined)?j:{ok:false,error:'bad_resp'};}catch(e){healthResults[port]={ok:false,error:'parse_err'};}resolve();};
+  xhr.onerror=function(){healthResults[port]={ok:false,error:'net_err'};resolve();};
+  xhr.ontimeout=function(){healthResults[port]={ok:false,error:'TIMEOUT'};resolve();};
+  xhr.send();
+});}
+
+
+// ─── 备份管理 ────────────────────────────────────────────────
+async function showBackupPanel(){
+  document.getElementById("backupModal").classList.add("active");
+  document.getElementById("backupModalTitle").textContent = "📋 端口源码备份";
+  document.getElementById("backupContent").innerHTML = '<div class="pulse">⏳ 加载备份信息...</div>';
+  try{
+    var r=await fetch("/api/backup/last"+QS);
+    var d=await r.json();
+    var html = "";
+    if(d.ok && d.hasBackup){
+      var b = d.backup;
+      html += '<div style="margin-bottom:16px;padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">';
+      html += '<div><span style="font-size:14px;font-weight:600">📦 最近备份</span>';
+      html += '<div style="font-size:12px;color:var(--text-dim);margin-top:4px">' + b.time + ' · ' + b.dir + '</div></div>';
+      html += '<div style="display:flex;gap:16px;flex-wrap:wrap"><div style="text-align:center;padding:8px 16px;background:rgba(34,197,94,0.1);border-radius:8px"><div style="font-size:20px;font-weight:700;color:var(--green)">' + b.ok + '</div><div style="font-size:11px;color:var(--text-dim)">成功</div></div>';
+      html += '<div style="text-align:center;padding:8px 16px;background:' + (b.fail>0?'rgba(239,68,68,0.1)':'rgba(255,255,255,0.04)') + ';border-radius:8px"><div style="font-size:20px;font-weight:700;color:' + (b.fail>0?'var(--red)':'var(--text-dim)') + '">' + b.fail + '</div><div style="font-size:11px;color:var(--text-dim)">失败</div></div>';
+      html += '<div style="text-align:center;padding:8px 16px;background:rgba(255,255,255,0.04);border-radius:8px"><div style="font-size:20px;font-weight:700;color:var(--text)">' + b.totalPorts + '</div><div style="font-size:11px;color:var(--text-dim)">端口</div></div>';
+      html += '<div style="text-align:center;padding:8px 16px;background:rgba(255,255,255,0.04);border-radius:8px"><div style="font-size:20px;font-weight:700;color:var(--text)">' + b.sizeMB + '</div><div style="font-size:11px;color:var(--text-dim)">MB</div></div></div>';
+      html += '</div></div>';
+    } else {
+      html += '<div style="margin-bottom:16px;padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border)"><div style="font-size:14px;color:var(--text-dim)">⚠️ 暂无备份记录</div></div>';
+    }
+    // 备份目录列表
+    html += '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap">';
+    html += '<button class="btn btn-green" onclick="runBackup()">🔄 立即备份</button>';
+    html += '<button class="btn" onclick="loadBackupList()">📂 查看备份列表</button>';
+    html += '<button class="btn btn-ghost" onclick="closeBackupPanel()">关闭</button>';
+    html += '</div>';
+    html += '<div id="backupListArea"></div>';
+    document.getElementById("backupContent").innerHTML = html;
+  } catch(e){
+    document.getElementById("backupContent").innerHTML = '<div style="color:var(--red)">❌ 加载失败: ' + esc(e.message) + '</div>';
+  }
+}
+
+function closeBackupPanel(){
+  document.getElementById("backupModal").classList.remove("active");
+}
+
+async function runBackup(){
+  document.getElementById("backupContent").innerHTML = '<div style="text-align:center;padding:40px"><div style="font-size:18px;margin-bottom:8px">⏳ 正在备份...</div><div style="font-size:12px;color:var(--text-dim)">备份12端口源码，可能需要30~60秒</div></div>';
+  try{
+    var r=await fetch("/api/backup/run"+QS,{method:'POST'});
+    var d=await r.json();
+    if(d.ok){
+      notify("✅ 备份成功: " + d.backup.ok + "/" + d.backup.total + " 端口, 清理 " + d.backup.fail + " 个失败");
+      showBackupPanel(); // 刷新面板
+    } else {
+      document.getElementById("backupContent").innerHTML = '<div style="color:var(--red);padding:20px">❌ 备份失败: ' + esc(d.error) + '<br><pre style="margin-top:8px;font-size:11px;background:var(--bg);padding:12px;border-radius:6px;overflow:auto;max-height:200px">' + esc(d.stderr||'') + '</pre><button class="btn" style="margin-top:12px" onclick="showBackupPanel()">返回</button></div>';
+    }
+  } catch(e){
+    document.getElementById("backupContent").innerHTML = '<div style="color:var(--red);padding:20px">❌ 备份执行失败: ' + esc(e.message) + '<br><button class="btn" style="margin-top:12px" onclick="showBackupPanel()">返回</button></div>';
+  }
+}
+
+async function loadBackupList(){
+  var area = document.getElementById("backupListArea");
+  area.innerHTML = '<div class="pulse">⏳ 加载备份列表...</div>';
+  try{
+    // 从backupRoot目录读取
+    var r=await fetch("/api/backup/last"+QS);
+    var d=await r.json();
+    // 如果有备份就展示目录信息
+    if(d.ok) {
+      area.innerHTML = '<div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">';
+      area.innerHTML += '<div style="font-size:12px;font-weight:600;margin-bottom:8px">📂 备份位置</div>';
+      area.innerHTML += '<code style="font-size:11px;color:var(--green)">E:\desktop\port-backups\</code>';
+      area.innerHTML += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px">定时备份: 每天 04:45 (保留最近3天)</div>';
+      area.innerHTML += '<div style="font-size:11px;color:var(--text-dim)">每个端口独立目录, 附 README 说明。通过仪表盘或 9050 文件管理器可浏览和恢复。</div>';
+      area.innerHTML += '</div>';
+    } else {
+      area.innerHTML = '<div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);color:var(--text-dim);font-size:12px">暂无备份记录</div>';
+    }
+  } catch(e){
+    area.innerHTML = '<div style="color:var(--red);font-size:12px;margin-top:12px">❌ ' + esc(e.message) + '</div>';
+  }
+}
+
+
+// ─── 初始化 ──────────────────────────────────────────────────
+if(!PASS&&location.search){var sp=new URLSearchParams(location.search);PASS=sp.get("password")||"";QS=PASS?"?password="+encodeURIComponent(PASS):"";}
+refreshNow();
+</script>
+</body>
+</html>

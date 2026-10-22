@@ -1,0 +1,51 @@
+        // ===== shim_18（v1.0.131）：会话页时间线「多行文字互相重叠」根治 =====
+        // 老总 2026-10-21 02:06 截图报障：运行命令/思考行标题超过两行就重叠。
+        // 根因链（四证据闭环，详录 REGRESSION.md R22）：
+        //   ① 时间线行（思考/运行命令/工具调用）行盒被 contain:size 定死 24px；
+        //   ② 行内文字用 TextShimmer 渲染，running 时多渲染一层「装饰副本」
+        //      （span[inert]，浅灰 shimmer 色——与截图第二行颜色更浅吻合）；
+        //   ③ 副本文字经 [data-shimmer-text]::after 渲染，继承链上无 white-space:nowrap
+        //      → 长标题在副本里折成两行（真实内容链全程 nowrap+ellipsis 永不折）；
+        //   ④ 副本层靠 overflow:clip + mask-image + transform 动画裁剪，iOS WebKit
+        //      合成层上该组合会失效 → 折出来的第二行溢出 24px 行盒压到下一行。
+        // 修法：iOS 上整层禁用装饰副本（只损失扫光动画，反而减轻 WebKit 合成负担）；
+        //       并给副本文字与行内真实文字补 nowrap 兜底。
+        // 铁律合规：全用 React 稳定属性锚定（data-shimmer/data-shimmer-text/inert），
+        //       零 CSS Module 哈希类名；带 isDSH 判据 + 3s 定时器兜底。
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            // 1) 装饰副本层整层隐藏（含扫光动画），幽灵文字从此不存在
+            'span[data-shimmer] > span[inert] { display: none !important; }',
+            // 2) 副本文字（::after 继承 span 的 white-space）强制单行，双保险
+            'span[data-shimmer-text] { white-space: nowrap !important; }',
+            // 3) 行内真实文字兜底钳制（无论 DSH 哪套模块 CSS 是否到位都不许折行）
+            'span[data-shimmer] span[class*="_label"],',
+            'span[data-shimmer] span[class*="_summaryText"],',
+            'span[data-shimmer] span[class*="_summary"] {',
+            '  min-width: 0 !important;',
+            '  max-width: 100% !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '}'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (document.getElementById('dsh-ios-shimmer-fix')) { return; }
+            try {
+              var st = document.createElement('style');
+              st.id = 'dsh-ios-shimmer-fix';
+              st.textContent = CSS;
+              document.head.appendChild(st);
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 3000);
+        })();

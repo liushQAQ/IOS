@@ -1,0 +1,1288 @@
+--- shims113.txt	2026-10-19 16:35:35.380383200 +0800
++++ shims120.txt	2026-10-19 16:35:35.384372700 +0800
+@@ -167,15 +167,6 @@
+             '  -webkit-backdrop-filter: blur(10px) !important;',
+             '  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;',
+             '}',
+-            '/* 顶部导航栏：完全采用统一 Flex 居中流，并在虚拟键盘弹出或页面滚动时 Sticky 吸顶固定不动 */',
+-            'html, body {',
+-            '  overflow: hidden !important;',
+-            '  overscroll-behavior: none !important;',
+-            '  position: fixed !important;',
+-            '  inset: 0 !important;',
+-            '  width: 100% !important;',
+-            '  height: 100% !important;',
+-            '}',
+             '[data-phase] header,',
+             '.ank0OG_header {',
+             '  position: sticky !important;',
+@@ -947,6 +938,106 @@
+           }
+           attach();
+ 
++          // v1.0.120 页面类型自适应布局锁（彻底废除 :has() 选择器，iOS 14/15/16 全兼容）
++          // 1. DSH 主控页（DOM 内存在 #root 且加载 /assets/ 打包脚本）→ 锁定 html/body 为视口固定布局，
++          //    与 1.0.70 黄金基线逐字一致，保证 DSH 首屏布局绝不回退；
++          // 2. 自建仪表盘（9009 等）/外部网页 → 立刻注入解锁样式，恢复 100% 原生纵向滚动，绝不锁死；
++          // 3. 顺带补齐首屏底色：暗黑模式直接铺 #151517 深色底，绝不再出现刺眼白屏。
++          (function adaptPageLayoutLock() {
++            var LOCK_ID = 'dsh-ios-page-lock';
++            var UNLOCK_ID = 'dsh-ios-page-unlock';
++            var LOCK_CSS = 'html, body { overflow: hidden !important; overscroll-behavior: none !important; position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; }';
++            var UNLOCK_CSS = 'html, body { overflow: auto !important; overscroll-behavior: auto !important; position: static !important; inset: auto !important; width: auto !important; height: auto !important; min-height: 100% !important; }';
++            var decided = false;
++            var tries = 0;
++
++            function isPublicWebHost() {
++              var h = (location.hostname || '').toLowerCase();
++              var keys = ['aliyun.com', 'baidu.com', 'doubao.com', 'moonshot.cn', 'tencent.com',
++                          'openai.com', 'chatgpt.com', 'claude.ai', 'google.com', 'grok.com',
++                          'xfyun.cn', 'chatglm.cn', 'zhipuai.cn', 'minimax.chat', 'deepseek.com',
++                          'volces.com', 'bigmodel.cn', 'qianwen.com'];
++              for (var i = 0; i < keys.length; i++) { if (h.indexOf(keys[i]) !== -1) return true; }
++              return false;
++            }
++
++            function isOwnPage() {
++              // 公网大模型网页一律按外部网页处理，绝不锁定、绝不注入任何 DSH 布局补丁
++              if (isPublicWebHost()) return false;
++              // DSH 单页应用固定挂载在 #root 上；自建仪表盘（9009 等）与外部网页没有 #root
++              return !!document.getElementById('root');
++            }
++
++            function put(id, css) {
++              var head = document.head || document.documentElement;
++              if (!head) return;
++              var el = document.getElementById(id);
++              if (!el) {
++                el = document.createElement('style');
++                el.id = id;
++                el.textContent = css;
++                head.appendChild(el);
++              } else if (document.head && el.parentNode !== document.head) {
++                document.head.appendChild(el);
++              }
++            }
++
++            function apply() {
++              var own = isOwnPage();
++              var drop = document.getElementById(own ? UNLOCK_ID : LOCK_ID);
++              if (drop && drop.parentNode) drop.parentNode.removeChild(drop);
++              if (own) { put(LOCK_ID, LOCK_CSS); } else { put(UNLOCK_ID, UNLOCK_CSS); }
++              return own;
++            }
++
++            // 加载期底色统一：DSH 首屏在 React 挂载前是「无样式白底」，
++            // 暗黑模式下极为刺眼。这里在挂载前按系统深浅色铺 html/body 底色，
++            // 一旦 #root 真正挂载就立刻撤掉覆盖，完全交还给 DSH 自己的主题样式。
++            function paintPageBackground() {
++              var html = document.documentElement;
++              var body = document.body;
++              if (!html) return;
++              var rootEl = document.getElementById('root');
++              var mounted = !!(rootEl && rootEl.children && rootEl.children.length > 0);
++              if (mounted) {
++                try { html.style.removeProperty('background-color'); } catch (e0) {}
++                if (body) { try { body.style.removeProperty('background-color'); } catch (e1) {} }
++                return true;
++              }
++              var dark = false;
++              try {
++                dark = !!(body && body.hasAttribute && body.hasAttribute('data-ds-dark-theme'));
++              } catch (e2) { dark = false; }
++              if (!dark) {
++                try { dark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); } catch (e3) {}
++              }
++              var color = dark ? '#151517' : '#ffffff';
++              try { html.style.setProperty('background-color', color, 'important'); } catch (e4) {}
++              if (body) { try { body.style.setProperty('background-color', color, 'important'); } catch (e5) {} }
++              return false;
++            }
++
++            function watchTheme() {
++              var ticks = 0;
++              (function loop() {
++                var done = paintPageBackground();
++                if (done) return;                 // 已挂载：撤掉覆盖，停止轮询
++                if (++ticks > 480) return;        // 最长 4 分钟，之后交给页面自身
++                setTimeout(loop, 500);
++              })();
++            }
++
++            function tick() {
++              if (decided) return;
++              if (!document.documentElement) { setTimeout(tick, 20); return; }
++              if (apply()) { decided = true; watchTheme(); return; }
++              // 普通网页 / 仪表盘：已立刻解锁原生滚动；3 秒内若确认是 DSH 页面则自动切换为锁定态。
++              if (++tries > 120) { decided = true; return; }
++              setTimeout(tick, 25);
++            }
++            tick();
++          })();
++
+           // 修复 iOS 移动端输入框与搜索框自动聚焦导致键盘弹窗问题：
+           // 1. 切换会话时，Lexical 编辑器会自动调用 focusDraftEditor，导致切换会话直接弹出虚拟键盘；
+           // 2. 模型快捷选择面板打开时，搜索框会自动 focus，导致软键盘遮挡弹层并引发 blur 误关；
+@@ -2124,9 +2215,11 @@
+               alert(msg);
+             }
+ 
+-            // 1. 拦截前端发起的 /open-in-app/open 请求
++            // 1. 拦截前端发起的 /open-in-app/open 请求（公网大模型网页不拦截，保护原生 fetch 避免触发 WAF 安全盾）
++            var h = (location.hostname || '').toLowerCase();
++            var isPublic = (h.indexOf('aliyun.com') !== -1 || h.indexOf('baidu.com') !== -1 || h.indexOf('doubao.com') !== -1 || h.indexOf('moonshot.cn') !== -1 || h.indexOf('tencent.com') !== -1 || h.indexOf('openai.com') !== -1);
+             var origFetch = window.fetch;
+-            if (origFetch) {
++            if (origFetch && !isPublic) {
+               window.fetch = function(input, init) {
+                 var url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+                 if (url && (url.includes('/open-in-app/open') || url.includes('/open-in-terminal'))) {
+@@ -2191,7 +2284,7 @@
+             '  display: flex !important;',
+             '  flex-direction: column !important;',
+             '  /* v1.0.104：顶栏纵向位置绝不再用固定像素猜。DSH 自带移动端样式表里',
+-            '     [data-mobile-nav="frame"]{padding-top:env(safe-area-inset-top)} 之类的规则',
++            '     [data-mobile-nav=\"frame\"]{padding-top:env(safe-area-inset-top)} 之类的规则',
+             '     权重比注入样式高，且真机 env() 有值、本地为 0，猜像素必然出错。',
+             '     这里只保留结构，纵向位置统一交给运行时几何校正 __dshLayoutFix 实测修正。 */',
+             '  padding: 2px 8px 0 8px !important;',
+@@ -2215,13 +2308,13 @@
+             '',
+             '/* 确保 overlayLayer 挂载层本身透明，杜绝首页与主界面全局发灰变暗 */',
+             '.CZPbNW_overlayLayer,',
+-            '[class*="overlayLayer"] {',
++            '[class*=\"overlayLayer\"] {',
+             '  background: transparent !important;',
+             '  background-color: transparent !important;',
+             '}',
+             '',
+             '/* 新建会话首页目录按钮（问题 4 彻底修复）：精准位于状态栏下方安全区（54px + 8px = 62px，v1.0.109 起再上移 --dsh-topshift），饱满居中不被截断 */',
+-            '[data-mobile-nav="fab"] {',
++            '[data-mobile-nav=\"fab\"] {',
+             '  display: inline-flex !important;',
+             '  visibility: visible !important;',
+             '  opacity: 1 !important;',
+@@ -2242,18 +2335,18 @@
+             '}',
+             '',
+             '/* 会话页时隐藏 fallback 浮动按钮，把空间交给顶栏内置侧栏按钮 */',
+-            '[data-phase="active"] [data-mobile-nav="fab"] {',
++            '[data-phase=\"active\"] [data-mobile-nav=\"fab\"] {',
+             '  display: none !important;',
+             '}',
+             '',
+             '/* 侧栏收起时彻底隐藏抽屉内部残留的切换按钮，杜绝屏幕左边缘天上露出半个多余小按钮 */',
+-            '[data-sidebar-collapsed] [class*="WYye1W_toggle"],',
+-            '[data-sidebar-collapsed] button[aria-label="打开侧边栏"] {',
++            '[data-sidebar-collapsed] [class*=\"WYye1W_toggle\"],',
++            '[data-sidebar-collapsed] button[aria-label=\"打开侧边栏\"] {',
+             '  display: none !important;',
+             '  visibility: hidden !important;',
+             '}',
+             '',
+-            '[data-phase] header [class*="titleRow"],',
++            '[data-phase] header [class*=\"titleRow\"],',
+             '.ank0OG_titleRow {',
+             '  display: flex !important;',
+             '  align-items: center !important;',
+@@ -2269,11 +2362,11 @@
+             '}',
+             '',
+             '/* 左侧抽屉开关回到文档流：不再绝对定位，与标题同一行自然排列 */',
+-            'header button[aria-label="打开目录"],',
+-            'header button[aria-label="收起目录"],',
+-            'header button[aria-label="打开侧边栏"],',
+-            'header button[aria-label="收起侧边栏"],',
+-            '[data-mobile-nav="toggle"] {',
++            'header button[aria-label=\"打开目录\"],',
++            'header button[aria-label=\"收起目录\"],',
++            'header button[aria-label=\"打开侧边栏\"],',
++            'header button[aria-label=\"收起侧边栏\"],',
++            '[data-mobile-nav=\"toggle\"] {',
+             '  /* v1.0.83：页面在具体会话里把这颗按钮收成 28px，新建会话页是 38px，两个页面大小不一致。',
+             '     统一成页面自带的 38px。 */',
+             '  width: 38px !important;',
+@@ -2297,7 +2390,7 @@
+             '}',
+             '/* v1.0.85：侧栏收起后残留的开关按钮滑到屏幕左边外，还露一截。滑出屏幕的隐藏。 */',
+             '',
+-            'html body [data-phase] header [class*="titleCluster"],',
++            'html body [data-phase] header [class*=\"titleCluster\"],',
+             'html body .ank0OG_titleCluster {',
+             '  /* v1.0.75：原来 flex:1 把标题簇拉成 326px，标题只占左边 57px，右边空两百多像素。',
+             '     按内容收缩后，margin-left:auto 把空位吃到左边，',
+@@ -2316,7 +2409,7 @@
+             '  padding: 0 !important;',
+             '}',
+             '',
+-            '[data-phase] header [class*="headerUtilities"],',
++            '[data-phase] header [class*=\"headerUtilities\"],',
+             '.ank0OG_headerUtilities {',
+             '  min-height: 32px !important;',
+             '  display: flex !important;',
+@@ -2325,7 +2418,7 @@
+             '  flex: none !important;',
+             '  margin-left: 0 !important;',
+             '}',
+-            '[data-phase] header [class*="headerCorner"],',
++            '[data-phase] header [class*=\"headerCorner\"],',
+             '.ank0OG_headerCorner {',
+             '  min-height: 32px !important;',
+             '  display: flex !important;',
+@@ -2335,20 +2428,20 @@
+             '  margin-left: auto !important;',
+             '}',
+             '/* 新建会话首页无需打开右侧边栏，隐藏右上角无用占位按钮 */',
+-            'header.ank0OG_headerBlank [class*="headerCorner"],',
++            'header.ank0OG_headerBlank [class*=\"headerCorner\"],',
+             'header.ank0OG_headerBlank .ank0OG_headerCorner {',
+             '  display: none !important;',
+             '}',
+             '',
+             '/* v1.0.83：打开目录被挪进标题行后也命中了这条，被压成 32px，',
+             '   和页面自带的 38px 按钮叠在一起。把它排除，保留原始尺寸。 */',
+-            '[data-phase] header [class*="titleRow"] button:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]):not([aria-label*="智能体团队"]),',
+-            '[data-phase] header [class*="titleRow"] [role="button"]:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]):not([aria-label*="智能体团队"]),',
+-            'button[aria-label="更多操作"],',
+-            'button[aria-label="打开右侧边栏"],',
+-            'button[aria-label="收起右侧边栏"],',
+-            'button[aria-label="文件浏览"],',
+-            '.ank0OG_headerActions button:not([aria-label="打开目录"]):not([aria-label="收起目录"]):not([aria-label="打开侧边栏"]):not([aria-label="收起侧边栏"]):not([aria-label*="智能体团队"]),',
++            '[data-phase] header [class*=\"titleRow\"] button:not([aria-label=\"打开目录\"]):not([aria-label=\"收起目录\"]):not([aria-label=\"打开侧边栏\"]):not([aria-label=\"收起侧边栏\"]):not([aria-label*=\"智能体团队\"]),',
++            '[data-phase] header [class*=\"titleRow\"] [role=\"button\"]:not([aria-label=\"打开目录\"]):not([aria-label=\"收起目录\"]):not([aria-label=\"打开侧边栏\"]):not([aria-label=\"收起侧边栏\"]):not([aria-label*=\"智能体团队\"]),',
++            'button[aria-label=\"更多操作\"],',
++            'button[aria-label=\"打开右侧边栏\"],',
++            'button[aria-label=\"收起右侧边栏\"],',
++            'button[aria-label=\"文件浏览\"],',
++            '.ank0OG_headerActions button:not([aria-label=\"打开目录\"]):not([aria-label=\"收起目录\"]):not([aria-label=\"打开侧边栏\"]):not([aria-label=\"收起侧边栏\"]):not([aria-label*=\"智能体团队\"]),',
+             '.ank0OG_headerCorner button {',
+             '  width: 32px !important;',
+             '  height: 32px !important;',
+@@ -2363,16 +2456,16 @@
+             '}',
+             '',
+             '/* 彻底消灭与右侧抽屉开关重叠的文件夹图标（包括文件浏览、工作区文件） */',
+-            'button[aria-label="文件浏览"],',
+-            'button[title="文件浏览"],',
+-            'button[aria-label="工作区文件"],',
+-            'button[aria-label*="文件树"],',
+-            'button[aria-label*="浏览文件"],',
+-            '[data-mobile-nav="files"],',
+-            '.ank0OG_headerCorner button:has(svg path[d*="M20 20a2"]),',
+-            '.ank0OG_headerCorner button:has(svg path[d*="M4 4h16"]),',
+-            '.ank0OG_headerCorner button:has(svg [d*="M3 7v10"]),',
+-            '.ank0OG_headerCorner > button:not([data-sidebar-right-expand]):not([aria-label="打开右侧边栏"]):not([aria-label="收起右侧边栏"]) {',
++            'button[aria-label=\"文件浏览\"],',
++            'button[title=\"文件浏览\"],',
++            'button[aria-label=\"工作区文件\"],',
++            'button[aria-label*=\"文件树\"],',
++            'button[aria-label*=\"浏览文件\"],',
++            '[data-mobile-nav=\"files\"],',
++            '.ank0OG_headerCorner button:has(svg path[d*=\"M20 20a2\"]),',
++            '.ank0OG_headerCorner button:has(svg path[d*=\"M4 4h16\"]),',
++            '.ank0OG_headerCorner button:has(svg [d*=\"M3 7v10\"]),',
++            '.ank0OG_headerCorner > button:not([data-sidebar-right-expand]):not([aria-label=\"打开右侧边栏\"]):not([aria-label=\"收起右侧边栏\"]) {',
+             '  display: none !important;',
+             '  visibility: hidden !important;',
+             '  width: 0 !important;',
+@@ -2383,8 +2476,8 @@
+             '}',
+             '',
+             '/* 智能体团队：左侧留足间距，杜绝最左侧数字被手机屏幕边缘切断，单行水平并排（老总铁律） */',
+-            'button[aria-label="智能体团队"],',
+-            'button[aria-label*="智能体团队"] {',
++            'button[aria-label=\"智能体团队\"],',
++            'button[aria-label*=\"智能体团队\"] {',
+             '  margin-left: 6px !important;',
+             '  width: auto !important;',
+             '  min-width: max-content !important;',
+@@ -2401,15 +2494,15 @@
+             '  border-radius: 14px !important;',
+             '  word-break: keep-all !important;',
+             '}',
+-            'button[aria-label="智能体团队"] *,',
+-            'button[aria-label*="智能体团队"] * {',
++            'button[aria-label=\"智能体团队\"] *,',
++            'button[aria-label*=\"智能体团队\"] * {',
+             '  white-space: nowrap !important;',
+             '  overflow: visible !important;',
+             '  word-break: keep-all !important;',
+             '}',
+             '',
+             '/* 后台任务胶囊指示器：允许自适应宽度，确保完整显示数字（如 1）杜绝截断为省略号 */',
+-            'button[aria-label*="后台任务"],',
++            'button[aria-label*=\"后台任务\"],',
+             '[data-job-indicator] button {',
+             '  width: auto !important;',
+             '  min-width: 28px !important;',
+@@ -2417,7 +2510,7 @@
+             '  white-space: nowrap !important;',
+             '}',
+             '',
+-            '[data-phase] header [class*="crumbs"],',
++            '[data-phase] header [class*=\"crumbs\"],',
+             '.ank0OG_crumbs {',
+             '  flex: 0 1 auto !important;',
+             '  min-width: 0 !important;',
+@@ -2431,7 +2524,7 @@
+             '  white-space: nowrap !important;',
+             '}',
+             '',
+-            '[data-phase] header [class*="tabs"],',
++            '[data-phase] header [class*=\"tabs\"],',
+             '.ank0OG_tabs {',
+             '  margin-top: 4px !important;',
+             '  margin-bottom: 6px !important;',
+@@ -2443,7 +2536,7 @@
+             '   1. 顶部顶栏（图片 + deepseek HARNESS 字样 + 新会话 + 插件列表）固定内容；',
+             '   2. 底部（余额/今日/柱状图/导出日志 + 齿轮【设置】按钮）固定吸底；',
+             '   3. 中间会话列表内容区（regionArea）根据滑块纵向滚动！ */',
+-            '[class*="sidebarCol"],',
++            '[class*=\"sidebarCol\"],',
+             '.CZPbNW_sidebarCol {',
+             '  /* 🔴 v1.0.110：老总「左侧侧边栏打开页面太宽了，缩到现在宽度的70%」。',
+             '     真机实测自然宽 360.3pt（占屏 83.8%）× 0.70 = 252pt。',
+@@ -2466,14 +2559,14 @@
+             '  z-index: 1200 !important;',
+             '}',
+             '@media (prefers-color-scheme: dark) {',
+-            '  [class*="sidebarCol"],',
++            '  [class*=\"sidebarCol\"],',
+             '  .CZPbNW_sidebarCol,',
+-            '  [class*="WYye1W_root"],',
++            '  [class*=\"WYye1W_root\"],',
+             '  .WYye1W_root {',
+             '    background: #18181b !important;',
+             '  }',
+             '}',
+-            '[class*="WYye1W_root"],',
++            '[class*=\"WYye1W_root\"],',
+             '.WYye1W_root {',
+             '  width: 100% !important;',
+             '  height: 100% !important;',
+@@ -2484,24 +2577,24 @@
+             '  padding: 0 !important;',
+             '  box-sizing: border-box !important;',
+             '}',
+-            '[class*="WYye1W_logoRow"],',
++            '[class*=\"WYye1W_logoRow\"],',
+             '.WYye1W_logoRow {',
+             '  flex: none !important;',
+             '  margin: 0 !important;',
+             '  padding: 0 10px 10px 10px !important;',
+             '  position: static !important;',
+             '}',
+-            '[class*="WYye1W_newSession"],',
++            '[class*=\"WYye1W_newSession\"],',
+             '.WYye1W_newSession {',
+             '  flex: none !important;',
+             '  margin-bottom: 6px !important;',
+             '}',
+-            '[class*="WYye1W_panelList"],',
++            '[class*=\"WYye1W_panelList\"],',
+             '.WYye1W_panelList {',
+             '  flex: none !important;',
+             '}',
+             '/* 中间会话列表内容区：独立纵向惯性滑动 */',
+-            '[class*="WYye1W_regionArea"],',
++            '[class*=\"WYye1W_regionArea\"],',
+             '.WYye1W_regionArea {',
+             '  flex: 1 1 auto !important;',
+             '  min-height: 0 !important;',
+@@ -2510,7 +2603,7 @@
+             '  overscroll-behavior: contain !important;',
+             '}',
+             '/* 底部操作区与设置：固定吸底，绝不溢出屏幕外 */',
+-            '[class*="WYye1W_footArea"],',
++            '[class*=\"WYye1W_footArea\"],',
+             '.WYye1W_footArea {',
+             '  flex: none !important;',
+             '  margin: 0 !important;',
+@@ -2519,55 +2612,55 @@
+             '  position: static !important;',
+             '  background: inherit !important;',
+             '}',
+-            '[class*="WYye1W_newSession"],',
+-            '[class*="WYye1W_panelRow"] {',
++            '[class*=\"WYye1W_newSession\"],',
++            '[class*=\"WYye1W_panelRow\"] {',
+             '  padding-left: 10px !important;',
+             '  padding-right: 10px !important;',
+             '  font-size: 13px !important;',
+             '}',
+             '/* 移动端触摸屏隐藏电脑端键盘快捷键 Ctrl+Alt+N，彻底释放“新会话”按钮文字空间 */',
+-            '[class*="WYye1W_newSessionShortcut"] {',
++            '[class*=\"WYye1W_newSessionShortcut\"] {',
+             '  display: none !important;',
+             '}',
+-            '[class*="WYye1W_newSessionLabelMask"],',
+-            '[class*="WYye1W_newSessionContent"] {',
++            '[class*=\"WYye1W_newSessionLabelMask\"],',
++            '[class*=\"WYye1W_newSessionContent\"] {',
+             '  width: 100% !important;',
+             '  max-width: 100% !important;',
+             '  display: flex !important;',
+             '  align-items: center !important;',
+             '  gap: 8px !important;',
+             '}',
+-            '[class*="WYye1W_newSessionLabel"] {',
++            '[class*=\"WYye1W_newSessionLabel\"] {',
+             '  display: inline-block !important;',
+             '  opacity: 1 !important;',
+             '  font-size: 13px !important;',
+             '  font-weight: 500 !important;',
+             '}',
+-            '[class*="WYye1W_logoRow"] {',
++            '[class*=\"WYye1W_logoRow\"] {',
+             '  padding: 0 8px !important;',
+             '}',
+             '',
+             '/* 会话消息内容区 (viewArea) 底部常驻充足裕量，避免输入框遮挡 */',
+-            '[class*="viewArea"],',
++            '[class*=\"viewArea\"],',
+             '.ank0OG_viewArea {',
+             '  padding-bottom: 160px !important;',
+             '  box-sizing: border-box !important;',
+             '}',
+             '',
+             '/* 底部 dock 统计条与操作栏：UI 页面布局不改，保持原有自然结构，随整页上移自然完整呈现 */',
+-            '[data-slot="conversation.composer.dock"],',
++            '[data-slot=\"conversation.composer.dock\"],',
+             '.z4IYsq_root,',
+-            '[data-composer-stats="true"] {',
++            '[data-composer-stats=\"true\"] {',
+             '  margin-bottom: 8px !important;',
+             '}',
+             '',
+             '/* 输入框底栏容器：底栏紧随整体上移，下方保留充足舒适的两行呼吸空间 */',
+-            '[class*="ank0OG_footArea"],',
+-            '[class*="footArea"],',
++            '[class*=\"ank0OG_footArea\"],',
++            '[class*=\"footArea\"],',
+             '.ank0OG_footArea,',
+             '[data-conversation-footer],',
+-            '[class*="inputContainer"],',
+-            '[class*="promptInputArea"] {',
++            '[class*=\"inputContainer\"],',
++            '[class*=\"promptInputArea\"] {',
+             '  padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;',
+             '  box-sizing: border-box !important;',
+             '}',
+@@ -2575,27 +2668,27 @@
+             '/* ===== 🔴 v1.0.110 撤销「键盘弹起时隐藏统计/费用条」这条老规则 =====',
+             '   老总 2026-10-16：「键盘弹出会话框，下面的插件显示用量/token/上下文的插件不显示，为什么。宽度是够的，预留了」。',
+             '   真因（三态复现 _probe_kbattr.cjs）：原生侧 keyboardFrameWillChange 在键盘弹起时会给 body 打上',
+-            '   data-keyboard-open="true"（ViewController.swift 第 4138 行），而下面这几条规则一撞，',
++            '   data-keyboard-open=\"true\"（ViewController.swift 第 4138 行），而下面这几条规则一撞，',
+             '   就把整个 dock 槽位 display:none —— 而该槽位里装的正好是整排「用量/token/上下文」：',
+-            '     · [data-slot="conversation.composer.dock"] 的 innerText 实测 =',
++            '     · [data-slot=\"conversation.composer.dock\"] 的 innerText 实测 =',
+             '       「1 轮 32 步·303 tok/s | 2.2M tok·缓存命中 79% | 费用明细 | CPU 52.19% · 内存 48.70% |',
+             '        本会话 ¥3.3461 · 命中 78.6% · 输入 472K · 缓存 1.7M · 输出 4.2K | gemini-gateway:...」',
+             '   实测三态（430x932 dsf3，会话页 vh=592，v1.0.109 构建）：',
+             '     ① 未打标记 → .cm-stat-dock y468..490 / .cm-session-cost y493..513 / .cm-model-top y516..536，display 正常；',
+             '     ② 打上标记 → 三者全部 y=0 h=0（最近 display:none 祖先 = DIV），',
+-            '                  [data-slot="conversation.composer.dock"] 与 .z4IYsq_root 双双 display:none；',
++            '                  [data-slot=\"conversation.composer.dock\"] 与 .z4IYsq_root 双双 display:none；',
+             '     ③ 摘掉标记 → 三者原样恢复（y468..536）。',
+             '   这条规则的历史意图是「杜绝穿透键盘完成条」，而那个问题早已由 shim_16 的键盘两态 + 座位钉底解决，',
+             '   现在它只剩副作用。老总明确要求显示，故整块撤销。',
+             '   （保留下面两条不带键盘前缀的规则：它们只在「费用明细」细展浮层里命中，与键盘无关。） */',
+-            '[class*="costMeter"][class*="detail"],',
++            '[class*=\"costMeter\"][class*=\"detail\"],',
+             '.dsh-cost-meter-bar button {',
+             '  display: none !important;',
+             '}',
+             '/* 聊天主界面底栏（输入框外层容器）：适度紧凑上移，消除多余虚假空白 */',
+             '.ank0OG_inputRoot,',
+-            '[class*="ank0OG_inputRoot"],',
+-            '[class*="inputRoot"] {',
++            '[class*=\"ank0OG_inputRoot\"],',
++            '[class*=\"inputRoot\"] {',
+             '  margin-bottom: max(6px, calc(env(safe-area-inset-bottom) + 2px)) !important;',
+             '}',
+             '',
+@@ -2605,11 +2698,43 @@
+             '   亮/暗主题自动跟随），这里只留一条属性选择器做兜底：',
+             '   React 重渲染会把 seat 的内联样式整条抹掉，而 data-dsh-bed 属性 + CSS 变量不会 ——',
+             '   有这条规则，抹掉之后到下一趟校正（≤320ms）之间也不会突然漏光。 */',
+-            '[data-dsh-bed="1"] {',
++            '[data-dsh-bed=\"1\"] {',
+             '  bottom: 0 !important;',
+             '  padding-bottom: var(--dsh-bed, 46px) !important;',
+             '  background-color: var(--dsh-pagebg, transparent) !important;',
+             '}',
++            '',
++            '/* ===== v1.0.115 设置页开关被拉成「通栏白条」（老总 2026-10-18）=====',
++            '   老总原话：「显示代码工作视图，下面一长条白色。这里应该是按钮吧，暗黑模式下应该是灰色按钮开关？」',
++            '   🔴 这不是我们注入层引入的，是 **DSH 官方自己的移动端适配规则**把开关拉满了',
++            '     （_diag_switch_rule.cjs 全量扫命中清单，只有它带 !important）：',
++            '       @media (max-width:1023px){',
++            '         [aria-modal=\"true\"] [class$=\"_section\"] [class$=\"_row\"] > :last-child {',
++            '           width:100% !important; max-width:none !important; } }',
++            '     它本意是让「行内最后一个控件」在手机上通栏（对下拉/按钮是合理的），',
++            '     但 `:last-child` 把开关也一起吃了 ⇒ 36px 的开关撑成整行 390px 的白条。',
++            '   🔴 尺寸/配色 A/B 铁证（_cmp_switch.cjs，同一份 DSH）：',
++            '     桌面 1280 暗色（官方）：36x20，轨道 rgb(249,250,251)、滑块 rgb(15,17,21)',
++            '     桌面 1280 亮色（官方）：36x20，轨道 rgb(15,17,21)、滑块 rgb(255,255,255)',
++            '     手机 430  暗色（官方）：**390x20**（就是老总看到的那条），父行 flex/column/align:stretch',
++            '     ⇒ 颜色本来就是主题相关变量、暗色下官方就是白轨道，**颜色一个字都不许改**；',
++            '       真正错的只有宽度，而窄屏下桌面那套 flex/row 变成了 column+stretch。',
++            '   修法：把宽度锁回官方桌面口径 36x20。⚠️ 特异性必须压过官方那条 (0,4,0)：',
++            '     本组第一条照抄它的形状（4 属性 + 1 元素 = (0,4,1)）才能赢；',
++            '     只写 `button[role=\"switch\"]`（0,1,1）**打不过** —— 实测仍然 390px。',
++            '   效果：宽度锁死后 stretch 对它失效，自动左对齐，与上方「字号大小」输入框、',
++            '         「工作步骤展示」下拉按钮同一竖线。 */',
++            '[aria-modal=\"true\"] [class$=\"_section\"] [class$=\"_row\"] > button[role=\"switch\"],',
++            '[class$=\"_row\"] > button[role=\"switch\"],',
++            'button[role=\"switch\"] {',
++            '  flex: 0 0 auto !important;',
++            '  width: 36px !important;',
++            '  min-width: 36px !important;',
++            '  max-width: 36px !important;',
++            '  height: 20px !important;',
++            '  min-height: 20px !important;',
++            '  max-height: 20px !important;',
++            '}',
+           ].join('\\n');
+           function inject() {
+             var root = document.head || document.documentElement;
+@@ -2670,11 +2795,20 @@
+             // 而且真机多出来的那段空白根本不是 header 撑的，写死必然对不上）。
+             var headers = document.querySelectorAll('header');
+             for (var i = 0; i < headers.length; i++) {
++              // 🔴 v1.0.115：只把**主顶栏**清透明（治顶栏发灰）。住在滚动容器里的页面内
++              //   吸顶条（如插件页 pageHead）必须保留底色，否则滚上去的内容会从它下面透出来。
++              if (headers[i].dataset && headers[i].dataset.dshPageHead === '1') continue;
++              var hp = headers[i].parentElement;
++              if (hp) {
++                var hpcs = null;
++                try { hpcs = getComputedStyle(hp); } catch (e) {}
++                if (hpcs && (hpcs.overflowY === 'auto' || hpcs.overflowY === 'scroll')) continue;
++              }
+               headers[i].style.setProperty('background', 'transparent', 'important');
+             }
+             if (window.__dshLayoutFix) { try { window.__dshLayoutFix(); } catch (e) {} }
+             // 侧栏外层让出状态栏高度，内部子容器（.dMHGga_panel、.YdIzba_header 等）严禁重复叠加 padding-top，保持顶栏高度不变！
+-            var cols = document.querySelectorAll('[class*="sidebarCol"], .CZPbNW_sidebarCol, [class*="rightbarCol"], .CZPbNW_rightbarCol');
++            var cols = document.querySelectorAll('[class*=\"sidebarCol\"], .CZPbNW_sidebarCol, [class*=\"rightbarCol\"], .CZPbNW_rightbarCol');
+             for (var j = 0; j < cols.length; j++) {
+               cols[j].style.setProperty('padding-top', (h + 6 - shift) + 'px', 'important');
+             }
+@@ -2699,7 +2833,7 @@
+           };
+           // 确保 overlayLayer 挂载层全透明，杜绝首页全局暗淡发灰
+           function ensureSidebarOverlay() {
+-            var layers = document.querySelectorAll('[class*="overlayLayer"]');
++            var layers = document.querySelectorAll('[class*=\"overlayLayer\"]');
+             for (var i = 0; i < layers.length; i++) {
+               layers[i].style.setProperty('background', 'transparent', 'important');
+               layers[i].style.setProperty('background-color', 'transparent', 'important');
+@@ -2709,9 +2843,9 @@
+           //   老总 2026-10-17 09:20「留白问题也要修复」（承接上一轮「具体截图看看」，
+           //   说明图 v1.0.111_右侧面板顶部留白_具体说明.png）。
+           //   实测链（沙箱 430x932 dsf3 iPhone UA + __dshSetStatusBar(59)，进会话 → 开右侧面板；
+-          //   面板在手机上以**全屏浮层**呈现：width:100vw、data-sidebar-right-panel="fullscreen"）：
+-          //     [data-dockkit-surface="true"]             padding-top: 65px  ← 状态栏让位（59+6），**必须保留**
+-          //       └ [role="tablist"][data-dockkit-strip]  padding-top: 65px  ← 重复的一段，纯浪费
++          //   面板在手机上以**全屏浮层**呈现：width:100vw、data-sidebar-right-panel=\"fullscreen\"）：
++          //     [data-dockkit-surface=\"true\"]             padding-top: 65px  ← 状态栏让位（59+6），**必须保留**
++          //       └ [role=\"tablist\"][data-dockkit-strip]  padding-top: 65px  ← 重复的一段，纯浪费
+           //           └ [data-dockkit-strip-tabs]「开始」   y = 116pt
+           //   ⇒ 两段 65 叠在一起，状态栏（59pt）到「开始」那一行之间空了 57pt，这就是老总看到的那块空白。
+           //   A/B 矩阵实测（_probe_panel_matrix.cjs，1:1 线性）：
+@@ -2727,7 +2861,7 @@
+           var PANEL_STRIP_PT = 12;
+           function tightenRightPanelTop() {
+             try {
+-              var strips = document.querySelectorAll('[data-sidebar-right-panel] [role="tablist"][data-dockkit-strip]');
++              var strips = document.querySelectorAll('[data-sidebar-right-panel] [role=\"tablist\"][data-dockkit-strip]');
+               for (var i = 0; i < strips.length; i++) {
+                 var el = strips[i];
+                 if (el.style.getPropertyValue('padding-top') === PANEL_STRIP_PT + 'px' &&
+@@ -2736,9 +2870,384 @@
+               }
+             } catch (e) {}
+           }
++          // ===== 🔴 v1.0.115 一：弹层/面板内不许横向溢出（老总 2026-10-18）=====
++          //   老总原话：「打开设置，里面的页面还是可以左右滑动超出屏幕范围。需要固定。
++          //             任何弹出页面内容，滑动不许超出屏幕范围。」
++          //   实测根因（_probe_settings_overflow.cjs / _probe_settings_dom.cjs，430x932 dsf3 iPhone UA）：
++          //     设置面板 [class*=\"options\"] 的 scrollWidth=450 > clientWidth=414 → 出现横向滚动条，能左右滑。
++          //     450 是这么来的：每行 [class*=\"rowText\"] 计算宽 390px，但它是 **content-box**，
++          //     又带 padding-right:48px → 实际占位 390+48 = **438px**，比父级 row(390) 宽 48px，
++          //     7 行叠加把 section 撑到 438，再加面板左右 padding 就变成 450。
++          //   ⇒ 修法（_fix_probe_r1.cjs 实测）：只要把「content-box + 有横向 padding」改成 border-box，
++          //     横向滚动条**自然消失**（越界元素 7 → 0，可横滑容器 1 → 0），布局肉眼零变化
++          //     （收掉的只是那 48px 不可见的留白），不需要 overflow:hidden 强裁。
++          //   🔴 范围限定在「浮层根」内（position fixed/absolute 且宽≈视口），绝不碰主界面。
++          //   🔴 幂等：读回内联值才写；同一根 700ms 内不重扫（性能铁律：先收集、扫完统一写）。
++          var __dshOverlayScanAt = (typeof WeakMap === 'function') ? new WeakMap() : null;
++          var __dshOverlayLastRun = 0;
++          function fixOverlayOverflow() {
++            try {
++              // 🔴 性能铁律：本函数由 applySidebarInset 驱动，而后者在 MutationObserver
++              //   （流式输出时每 300ms 一次）里也会跑。候选池要上百次 getComputedStyle
++              //   → 必须整体节流，不能只节流单根，否则每 300ms 白扫一遍。
++              var now0 = Date.now();
++              if (now0 - __dshOverlayLastRun < 400) return;
++              __dshOverlayLastRun = now0;
++              var vw = window.innerWidth || 430;
++              var hosts = document.querySelectorAll('[class*=\"overlayLayer\"], body > div');
++              // 🔴 候选池必须**同时包含挂载层自身**：实测设置面板的根 [class*=\"overlay\"]
++              //   就是 body > div 的直接子级（position:fixed、430 宽、全屏），
++              //   只扫 children 会全部落到它的 static 子容器上，一个根都找不出来 → 修复静默失效。
++              var pool = [];
++              for (var hp = 0; hp < hosts.length; hp++) {
++                pool.push(hosts[hp]);
++                var hc = hosts[hp].children;
++                for (var hq = 0; hq < hc.length; hq++) pool.push(hc[hq]);
++              }
++              var roots = [];
++              for (var i = 0; i < pool.length; i++) {
++                var c = pool[i];
++                if (!c || c.nodeType !== 1) continue;
++                var cs;
++                try { cs = getComputedStyle(c); } catch (e) { continue; }
++                if (cs.display === 'none' || cs.visibility === 'hidden') continue;
++                if (cs.position !== 'fixed' && cs.position !== 'absolute') continue;
++                var cr = c.getBoundingClientRect();
++                if (cr.width >= vw - 2 && cr.height > 200) roots.push(c);
++              }
++              if (!roots.length) return;
++              var now = Date.now();
++              for (var k = 0; k < roots.length; k++) {
++                var root = roots[k];
++                if (__dshOverlayScanAt) {
++                  var last = __dshOverlayScanAt.get(root) || 0;
++                  if (now - last < 700) continue;
++                  __dshOverlayScanAt.set(root, now);
++                }
++                // 先收集（只读），再统一写 —— 避免 DOM 读写交错触发反复重排
++                var targets = [];
++                var all = root.querySelectorAll('*');
++                for (var m = 0; m < all.length; m++) {
++                  var el = all[m];
++                  if (el.dataset && el.dataset.dshBoxFixed === '1') continue;
++                  var s;
++                  try { s = getComputedStyle(el); } catch (e) { continue; }
++                  if (s.display === 'none') continue;
++                  var pl = parseFloat(s.paddingLeft) || 0;
++                  var pr = parseFloat(s.paddingRight) || 0;
++                  if (s.boxSizing !== 'content-box' || (pl + pr) <= 0) continue;
++                  targets.push(el);
++                }
++                for (var t = 0; t < targets.length; t++) {
++                  var e2 = targets[t];
++                  e2.style.setProperty('box-sizing', 'border-box', 'important');
++                  if (e2.dataset) e2.dataset.dshBoxFixed = '1';
++                }
++                // 兜底：改完还超宽的横向滚动容器（官方故意留的横滑区），一律禁横向滑
++                var scrollers = root.querySelectorAll('[class*=\"options\"], [class*=\"row\"], [class*=\"section\"]');
++                for (var sc = 0; sc < scrollers.length; sc++) {
++                  var se = scrollers[sc];
++                  if (se.scrollWidth <= se.clientWidth + 2) continue;
++                  var scs;
++                  try { scs = getComputedStyle(se); } catch (e) { continue; }
++                  if (scs.overflowX !== 'auto' && scs.overflowX !== 'scroll') continue;
++                  se.style.setProperty('overflow-x', 'hidden', 'important');
++                }
++              }
++            } catch (e) {}
++          }
++          // ===== 🔴 v1.0.115 二：页面内 header 被压扁，标题/按钮压住下面的卡片（老总 2026-10-18）=====
++          //   老总原话：「打开 插件 按钮。弹出页面和按钮选项重叠。」（配图 2/3张）
++          //   实测（_ab_plugins_head.cjs 官方 vs 注入 A/B）：
++          //     官方原版：插件页 <header class=\"u9Hv6q_pageHead\"> height=**60px**，min-height=auto → 正常
++          //     全量注入：同一个 header height=**8px**，min-height=**0px** → 塌成只剩 padding-top 8px
++          //     而它里面住着「插件」标题 + 说明 + 添加插件按钮（实测内容高 100px，52+16+32），
++          //     且 sticky + z=19 → 这 100px 全部浮在滚动列表上方 ⇒ 与「官方/已安装」卡片重叠。
++          //   机制：父级 [class*=\"page\"] 是 display:flex; flex-direction:column; overflow:auto，
++          //     内容 2012px 远超 893px → 所有 item 按 flex-shrink 压缩，pageHead 是 flex:0 1 auto；
++          //     官方靠 min-height:auto（=内容高，不可压），我们的 `min-height:0` 让它能被压到 0。
++          //   ⇒ 修法（_probe_head_mechanism.cjs 四个候选实测，1/2/3/4 全部把 8px → 108px，卡片顶 109 → 209，零重叠）：
++          //     min-height:fit-content + flex-shrink:0。
++          //   🔴 只救「住在滚动容器里的 header」，主顶栏不在滚动容器内 → 天然不受影响，绝不误伤。
++          function restorePageHeadHeight() {
++            try {
++              var heads = document.querySelectorAll('header');
++              for (var i = 0; i < heads.length; i++) {
++                var hd = heads[i];
++                var par = hd.parentElement;
++                if (!par) continue;
++                var pcs;
++                try { pcs = getComputedStyle(par); } catch (e) { continue; }
++                var scrollable = (pcs.overflowY === 'auto' || pcs.overflowY === 'scroll');
++                if (!scrollable) continue;               // 主顶栏：父级不可滚 → 跳过
++                if (hd.dataset) hd.dataset.dshPageHead = '1';   // 打标：__dshSetStatusBar 见标即跳过
++                if (hd.style.getPropertyValue('min-height') !== 'fit-content' ||
++                    hd.style.getPropertyPriority('min-height') !== 'important' ||
++                    hd.style.getPropertyValue('flex-shrink') !== '0') {
++                  hd.style.setProperty('min-height', 'fit-content', 'important');
++                  hd.style.setProperty('flex-shrink', '0', 'important');
++                }
++                // 🔴 v1.0.115 补：这类 header 是**吸顶条**，必须有底色。
++                //   实测（_cmp_scroll_115.cjs 三态滚动截图）：高度修好后往下滑，
++                //   卡片文字仍会从吸顶条区域**透上来**（「在本机使用 SenseVoice 转写录音…」
++                //   浮在「插件」标题行里）—— 因为 __dshSetStatusBar 里那条
++                //   `header { background: transparent }` 是为**主顶栏**写的（治顶栏发灰），
++                //   却把所有 <header> 都清了。主顶栏确实要透明，页面内吸顶条不行。
++                //   取页面底色（上溯第一个不透明祖先），让滚动内容被真正挡住。
++                var bgOk = hd.style.getPropertyPriority('background-color') === 'important' &&
++                           hd.style.getPropertyValue('background-color') !== '' &&
++                           hd.style.getPropertyValue('background-color') !== 'transparent';
++                if (!bgOk) {
++                  var bg = null;
++                  var n = par;
++                  while (n && n !== document.documentElement) {
++                    var ncs;
++                    try { ncs = getComputedStyle(n); } catch (e) { break; }
++                    var bc = ncs.backgroundColor;
++                    if (bc && bc !== 'transparent' && bc !== 'rgba(0, 0, 0, 0)') { bg = bc; break; }
++                    n = n.parentElement;
++                  }
++                  if (bg) hd.style.setProperty('background-color', bg, 'important');
++                }
++              }
++            } catch (e) {}
++          }
++          // ===== 🔴 v1.0.115 三（通用版）：官方「行尾控件通栏」规则成片误伤小控件 =====
++          //   老总 2026-10-18：「只能改 ios app 里面。不止这一个按钮这种情况。要通用性」
++          //   起因只是「显示代码工作视图」的开关被拉成 390x20 通栏白条，但深挖发现
++          //   **同一条官方规则一共误伤了 9 个控件**（_cmp_controls.cjs，430x932 dsf3）：
++          //     完全权限 110 / 中文 82 / 字号 14px 95 / 简洁 82 / 应用内侧边栏 138 /
++          //     排队发送 110 / 详细 82 / 开关 x2 = 36x20
++          //   —— 这 9 个宽度是**桌面 1280 官方原版实测值**，手机 430 下全部被拉成 390。
++          //   真凶（全量扫 CSSOM，唯一带 !important 的尺寸规则；MODE=official A/B 同样 390，
++          //   ⇒ 不是我们注入层引入的，是 DSH 自己的移动端适配缺陷）：
++          //     @media (max-width:1023px){
++          //       [aria-modal=\"true\"] [class$=\"_section\"] [class$=\"_row\"] > :last-child {
++          //         width:100% !important; max-width:none !important; } }
++          //   它本意对「文本框 / 长按钮」通栏是合理的，但 `:last-child` 把胶囊下拉、开关、
++          //   数字输入组一起吃了。
++          //
++          //   🔴 通用修法分两层，**主路径是运行时判定，不是 CSS 一刀切**：
++          //     ① `findFullWidthSelectors()` 运行时遍历 CSSOM，动态抓出「width:100% !important
++          //        + max-width:none」的规则并取其 selectorText —— 官方以后改哈希类名/改结构，
++          //        这里自动跟随，绝不写死 `_section` / `_row` 这些类名；
++          //     ② `fixStretchedControls()` 对命中元素逐个判：只有**可交互控件**才复位宽度，
++          //        纯文本块一律放过。
++          //   🔴 为什么不能用 CSS 一刀切（踩过的坑）：官方同一条规则对 `<row> > :first-child`
++          //     **也**写了 width:100%，而 first-child 是「标签 + 说明」的文本块，
++          //     给它 fit-content 会把「繁忙时的发送行为」的描述挤到两行（实测 44 → 62px 高）。
++          //     ⇒ 用 CSS 只会把文本块和控件一起改，必须按元素性质分流。
++          //   🔴 判据「可交互」（_classify_stretch.cjs 实测，9 行首 vs 9 行尾）：
++          //     行首文本块：自身**无任何属性**（无 role/tabindex/aria），子元素只有 DIV，固有宽 76~433；
++          //     行尾控件  ：自身或**内部**有 button/input（胶囊下拉内部是 BUTTON、数字框内部是 INPUT），
++          //                 固有宽 20~138（占行宽 5%~35%）。
++          //     ⇒ 「自身或内部存在可交互元素」是唯一能干净分开两者的判据（单看宽度会误判
++          //       「语言」那一行：它的文本块固有宽只有 76px，比任何控件都窄）。
++          //   🔴 值取 fit-content 实测像素：实测 9/9 精确等于桌面 1280 官方宽度。
++          //   🔴 幂等：dataset.dshCtl 打标 + 读回宽度判「已不通栏」即跳过。
++          //   🔴 性能：读写严格分离（统一写 → 统一读 → 统一裁决），全程只触发一次重排。
++          function findFullWidthSelectors() {
++            var out = [];
++            function scan(rules) {
++              for (var i = 0; i < rules.length; i++) {
++                var r = rules[i];
++                // 4 = @media，12 = @supports：都要钻进去找
++                if ((r.type === 4 || r.type === 12) && r.cssRules) { scan(r.cssRules); continue; }
++                if (!r.selectorText || !r.style) continue;
++                if (r.style.getPropertyValue('width') !== '100%') continue;
++                if (r.style.getPropertyPriority('width') !== 'important') continue;
++                if (r.style.getPropertyValue('max-width') !== 'none') continue;
++                if (out.indexOf(r.selectorText) < 0) out.push(r.selectorText);
++              }
++            }
++            var sheets = document.styleSheets || [];
++            for (var s = 0; s < sheets.length; s++) {
++              var rs = null;
++              try { rs = sheets[s].cssRules; } catch (e) { continue; }   // 跨域样式表直接跳过
++              if (rs) { try { scan(rs); } catch (e) {} }
++            }
++            return out;
++          }
++          // ── 🔴 v1.0.116：两条「坑」的根治（老总：不可能解决不了）─────────────────
++          //   坑 A「CSS 一刀切会连行首文本块一起改」
++          //     → 改用 **`:has()`** 精确分流：只在「内部真的有控件」时才命中。
++          //       行首文本块内部只有 DIV ⇒ `:has(button)` 天然不匹配 ⇒ 不再需要任何
++          //       JS 逐元素判定。「要通用性」= CSS 天生通用，不枚举任何控件类型。
++          //   坑 B「写死像素会量到偏小（108 而官方 110）」
++          //     → **根本不量**。值固定 `fit-content`，由浏览器按当时字体/字号/语言实时算。
++          //       桌面 1280 官方就是 flex row + align-items:center 的 shrink-to-fit，
++          //       与 `fit-content` 数学等价（_cmp_controls.cjs 实测 9/9 精确相等）。
++          //       既然不测量，就永远不受「字体还没加载完」影响，也不会过时。
++          //   🔴 为什么这套比 JS 逐元素判定更强：
++          //     ① 零 JS、零重排（不动任何 el.style，只插一个 <style>）；
++          //     ② 零时机依赖 —— 官方 CSS 晚 append 也自动落进同一条 cascade；
++          //     ③ 纯 CSS 生效，MutationObserver 反复触发也不抖（内容未变即不重建）。
++          //   🔴 特异性：`html body` 前缀 + `:has()` 参数 → 实测压过官方 (0,4,0)；
++          //     `:has()` 不支持时整条规则被浏览器丢弃 ⇒ 自动退回官方原样，绝不更坏，
++          //     此时由 fallback（老 JS 判定）接管，两条路径互不干扰。
++          //   🔴 兼容：`:has()` 需 Safari/iOS 15.4+；本项目最低 iOS 16.4。
++          var __dshHasOk = false;
++          try { __dshHasOk = !!(window.CSS && CSS.supports && CSS.supports('selector(:has(*))')); } catch (e) {}
++          var __dshStretchCssAt = 0;
++          // 「行尾到底该不该通栏」的唯一判据：**里面有真控件**，或者自身就是控件。
++          var __dshCtlHas = [':has(button)', ':has(input)', ':has(select)', ':has(textarea)',
++                             ':has(a[href])', ':has([role])', ':has([tabindex])', ':has([aria-haspopup])'];
++          var __dshCtlSelf = ':is(button,input,select,textarea,a[href],[role],[tabindex],[aria-haspopup])';
++          function buildStretchFixCss() {
++            var sels = findFullWidthSelectors();
++            if (!sels.length) return null;          // 官方 CSS 还没注入 → 不写任何兜底规则
++            var out = [];
++            for (var i = 0; i < sels.length; i++) {
++              var parts = String(sels[i]).split(',');
++              for (var j = 0; j < parts.length; j++) {
++                var p = parts[j].replace(/\\s+/g, ' ').trim();
++                if (!p) continue;
++                for (var h = 0; h < __dshCtlHas.length; h++) out.push('html body ' + p + __dshCtlHas[h]);
++                // 自身即控件（行尾直接放 button/input 的情况）：剥掉末尾 child 伪类再套 :is()
++                var q = p.replace(/:(last|first)-child$/, '');
++                if (q && /[a-zA-Z\\]\\)]/.test(q)) out.push('html body ' + q + __dshCtlSelf);
++              }
++            }
++            if (!out.length) return null;
++            return '@media (max-width: 1023px) {\\n' + out.join(',\\n') + ' {\\n' +
++                   '  width: -webkit-fit-content !important;\\n' +
++                   '  width: fit-content !important;\\n' +
++                   '  max-width: none !important;\\n' +
++                   '} }';
++          }
++          function refreshStretchFixCss() {
++            try {
++              var now = Date.now();
++              if (now - __dshStretchCssAt < 600) return;
++              __dshStretchCssAt = now;
++              var text = buildStretchFixCss();
++              if (!text) return;
++              var id = 'dsh-ios-stretch-fix';
++              var old = document.getElementById(id);
++              if (old && old.textContent === text) return;        // 幂等：内容一致不重建
++              if (old && old.parentNode) old.parentNode.removeChild(old);
++              var st = document.createElement('style');
++              st.id = id;
++              st.textContent = text;
++              (document.head || document.documentElement).appendChild(st);
++            } catch (e) {}
++          }
++          var __dshStretchAt = 0;
++          // 🔴 fallback：仅当浏览器不支持 `:has()` 时才走（本项目不会触发，纯保险）
++          function fixStretchedControlsFallback() {
++            try {
++              // 节流与宽屏判定已由主入口 fixStretchedControls 统一处理
++              var sels = findFullWidthSelectors();
++              if (!sels.length) return;                  // 官方 CSS 还没注入，下一轮再来
++              // ── ① 收集（纯只读）──────────────────────────────────────────
++              var seen = [];
++              for (var s = 0; s < sels.length; s++) {
++                var list;
++                try { list = document.querySelectorAll(sels[s]); } catch (e) { continue; }
++                for (var i = 0; i < list.length; i++) {
++                  if (seen.indexOf(list[i]) < 0) seen.push(list[i]);
++                }
++              }
++              var todo = [];
++              for (var k = 0; k < seen.length; k++) {
++                var el = seen[k];
++                if (!el || el.nodeType !== 1) continue;
++                var tag = el.tagName;
++                // 排除「通栏是官方本意」的文本输入类
++                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') continue;
++                var role = el.getAttribute('role');
++                if (role === 'textbox' || role === 'searchbox') continue;
++                if (role === 'switch') continue;         // switch 走上面那条专用 36x20 规则
++                if (el.hasAttribute('contenteditable')) continue;
++                // 🔴 核心判据：可交互控件才复位；纯文本块（行首标签）绝不动
++                var interactive = false;
++                try {
++                  interactive = el.matches('button,input,select,textarea,a[href],[role],[tabindex],[aria-haspopup]') ||
++                    !!el.querySelector('button,input,select,textarea,a[href],[role],[tabindex],[aria-haspopup]');
++                } catch (e) { continue; }
++                if (!interactive) continue;
++                var par = el.parentElement;
++                if (!par) continue;
++                var pw = par.getBoundingClientRect().width;
++                if (!(pw > 40)) continue;
++                var w = el.getBoundingClientRect().width;
++                if (w < pw - 8) continue;                // 已经不通栏 → 幂等跳过
++                if (el.dataset && el.dataset.dshCtl === '1') continue;
++                todo.push({ el: el, pw: pw });
++              }
++              if (!todo.length) return;
++              // ── ② 统一写 fit-content（写）─────────────────────────────────
++              for (var a = 0; a < todo.length; a++) {
++                var e1 = todo[a].el;
++                e1.style.setProperty('width', '-webkit-fit-content', 'important');
++                e1.style.setProperty('width', 'fit-content', 'important');
++                e1.style.setProperty('max-width', 'none', 'important');
++              }
++              // ── ③ 统一读回固有宽度（读，一次重排）────────────────────────
++              //   这一步只用于「裁决」，不作为最终值。
++              for (var b = 0; b < todo.length; b++) {
++                todo[b].fw = Math.round(todo[b].el.getBoundingClientRect().width);
++              }
++              // ── ④ 统一裁决（写）────────────────────────────────────────────
++              for (var c = 0; c < todo.length; c++) {
++                var it = todo[c];
++                var rat = it.fw / it.pw;
++                // 固有宽度本来就接近满宽（≥85%）或测不出 → 说明它确实该占满，交还官方 100%
++                if (!(it.fw >= 12) || rat > 0.85) {
++                  it.el.style.removeProperty('width');
++                  it.el.style.removeProperty('max-width');
++                  continue;
++                }
++                // 🔴 终值**必须保持 fit-content，绝不写死像素**：实测写死会在字体加载完成前
++                //   量到偏小的值（108 而官方 110 / 80 而 82 / 135 而 138），
++                //   一旦写死就再也回不来；fit-content 由浏览器按当时内容算，字体/字号/语言
++                //   变化都会自动跟随，且实测精确等于桌面 1280 官方宽度。
++                if (it.el.dataset) it.el.dataset.dshCtl = '1';
++              }
++            } catch (e) {}
++          }
++          // 主入口：统一节流 + 宽屏判定，再按能力分流（CSS `:has()` 优先，JS 兜底）
++          function fixStretchedControls() {
++            try {
++              var now = Date.now();
++              if (now - __dshStretchAt < 600) return;
++              __dshStretchAt = now;
++              // 官方那条规则住在 @media (max-width:1023px) 里，宽屏下不生效 → 宽屏直接跳过，
++              // 绝不在宽屏上写任何宽度（那会把官方本来正确的布局改坏）；顺手撤掉我们的样式表。
++              if ((window.innerWidth || 0) > 1023) {
++                var oldW = document.getElementById('dsh-ios-stretch-fix');
++                if (oldW && oldW.parentNode) oldW.parentNode.removeChild(oldW);
++                return;
++              }
++              if (__dshHasOk) { refreshStretchFixCss(); return; }   // 主路径：纯 CSS
++              fixStretchedControlsFallback();                        // 兜底：老 JS 判定
++            } catch (e) {}
++          }
++          function scheduleStretchFix() {
++            // 官方 CSS 可能晚于 documentStart 注入（hydration 后才 append），
++            // 故 DOMContentLoaded 后补几拍；稳态由 applySidebarInset（MutationObserver 驱动）兜底。
++            var step = function (i) {
++              if (i > 3) return;
++              setTimeout(function () {
++                try { fixStretchedControls(); } catch (e) {}
++                step(i + 1);
++              }, i === 0 ? 120 : (i === 1 ? 600 : 1400));
++            };
++            step(0);
++          }
++          try {
++            if (document.readyState === 'loading') {
++              document.addEventListener('DOMContentLoaded', scheduleStretchFix);
++            } else {
++              scheduleStretchFix();
++            }
++          } catch (e) {}
+           function applySidebarInset() {
+             ensureSidebarOverlay();
+             try { tightenRightPanelTop(); } catch (e) {}
++            try { restorePageHeadHeight(); } catch (e) {}
++            try { fixOverlayOverflow(); } catch (e) {}
++            try { fixStretchedControls(); } catch (e) {}   // v1.0.115 通用：行内控件被通栏
+             // 🔴 v1.0.110 性能：优先读原生下发的缓存值 window.__dshNativeStatusBar，
+             //   避免在 MutationObserver 回调（流式输出时每 300ms 一次）里调 getComputedStyle
+             //   —— 那会强制样式重算，属老总明令禁止的「注入层拖慢页面」。
+@@ -2753,7 +3262,7 @@
+             //   React 复用元素只改 style 时 dataset 残留、dataset 判等会漏写，而读回不会）。
+             var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 0;
+             var padTop = (h + 6 - shift) + 'px';
+-            var cols = document.querySelectorAll('[class*="sidebarCol"], .CZPbNW_sidebarCol, [class*="rightbarCol"], .CZPbNW_rightbarCol');
++            var cols = document.querySelectorAll('[class*=\"sidebarCol\"], .CZPbNW_sidebarCol, [class*=\"rightbarCol\"], .CZPbNW_rightbarCol');
+             for (var i = 0; i < cols.length; i++) {
+               if (cols[i].style.getPropertyValue('padding-top') !== padTop ||
+                   cols[i].style.getPropertyPriority('padding-top') !== 'important') {
+@@ -2770,7 +3279,7 @@
+           //   「现在的宽度」量测（老总真机截图 clipboard-...0cd2aa15.jpg，横向扫描 _hscan.cjs，
+           //     y=1200px 与 y=1800px 两处一致）：右边界 x = 1081px = 360.3pt，占屏宽 430pt 的 83.8%。
+           //   ⚠️ 为什么必须走内联 !important：我们样式表里本来就写着
+-          //     `[class*="sidebarCol"] { width: 280px !important; }`，但实测**完全打不过 DSH**
++          //     `[class*=\"sidebarCol\"] { width: 280px !important; }`，但实测**完全打不过 DSH**
+           //     （沙箱 430x932 实测自然宽 374.5pt、max-width 395.6px=92%，命中规则只有我们那一条
+           //      却不见效）—— DSH 原生规则的权重/来源更高。唯一稳压的办法就是运行时写内联 !important
+           //     （和 shim_11 处理 fab 的 z-index 是同一套路）。
+@@ -2782,7 +3291,7 @@
+           var DRAWER_W = 252;   // = 360.3pt(实测自然宽) × 0.70
+           function applyDrawerWidth() {
+             try {
+-              var els = document.querySelectorAll('[class*="sidebarCol"], .CZPbNW_sidebarCol');
++              var els = document.querySelectorAll('[class*=\"sidebarCol\"], .CZPbNW_sidebarCol');
+               for (var i = 0; i < els.length; i++) {
+                 var el = els[i];
+                 if (el.style.getPropertyValue('width') === DRAWER_W + 'px' &&
+@@ -2798,13 +3307,13 @@
+             try { applySidebarInset(); } catch (e) {}
+             try { applyDrawerWidth(); } catch (e) {}
+             // v1.0.104：绝不能再隐藏顶部首行（leading）——左右两个抽屉开关就住在里面，
+-            // 隐藏它等于把"打开侧边栏/文件"的入口一起干掉。纵向压缩交给 __dshLayoutFix 的负 margin。
+-            var rows = document.querySelectorAll('[class*="titleRow"]');
++            // 隐藏它等于把\"打开侧边栏/文件\"的入口一起干掉。纵向压缩交给 __dshLayoutFix 的负 margin。
++            var rows = document.querySelectorAll('[class*=\"titleRow\"]');
+             for (var i = 0; i < rows.length; i++) {
+               var row = rows[i];
+-              var cluster = row.querySelector('[class*="titleCluster"]');
++              var cluster = row.querySelector('[class*=\"titleCluster\"]');
+               var header = row.closest('header') || row;
+-              var dir = header.querySelector('button[aria-label="打开目录"], button[aria-label="收起目录"], button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
++              var dir = header.querySelector('button[aria-label=\"打开目录\"], button[aria-label=\"收起目录\"], button[aria-label=\"打开侧边栏\"], button[aria-label=\"收起侧边栏\"]');
+               // 目录按钮保持在顶栏左侧最前，不插入到 cluster 内部挤压标题与智能体团队
+               if (dir && row && row.firstChild !== dir && dir.parentNode !== cluster) {
+                 row.insertBefore(dir, row.firstChild);
+@@ -2827,7 +3336,7 @@
+                 cluster.style.setProperty('gap', '6px', 'important');
+               }
+             }
+-            var stray = document.querySelectorAll('button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
++            var stray = document.querySelectorAll('button[aria-label=\"打开侧边栏\"], button[aria-label=\"收起侧边栏\"]');
+             for (var s = 0; s < stray.length; s++) {
+               var off = stray[s].getBoundingClientRect().right < 0;
+               var targetVis = off ? 'hidden' : '';
+@@ -2836,12 +3345,12 @@
+                 stray[s].style.setProperty('visibility', targetVis, 'important');
+               }
+             }
+-            var filesBtns = document.querySelectorAll('[data-mobile-nav="files"], button[aria-label="工作区文件"], button[aria-label="文件浏览"]');
++            var filesBtns = document.querySelectorAll('[data-mobile-nav=\"files\"], button[aria-label=\"工作区文件\"], button[aria-label=\"文件浏览\"]');
+             for (var f = 0; f < filesBtns.length; f++) {
+               if (filesBtns[f].parentNode) filesBtns[f].parentNode.removeChild(filesBtns[f]);
+             }
+             // 确保右上角区域内只有唯一右侧抽屉开关，移除其它重叠子节点
+-            var corners = document.querySelectorAll('.ank0OG_headerCorner, [class*="headerCorner"]');
++            var corners = document.querySelectorAll('.ank0OG_headerCorner, [class*=\"headerCorner\"]');
+             for (var c = 0; c < corners.length; c++) {
+               var btns = corners[c].querySelectorAll('button');
+               if (btns.length > 1) {
+@@ -2902,13 +3411,13 @@
+           if (window.__dshHeaderAgentFix) return;
+           window.__dshHeaderAgentFix = 1;
+ 
+-          // 「智能体」三个字隐藏：顶栏动作区里那个 "1 个子智能体" 徽标，容器只有 32px，
++          // 「智能体」三个字隐藏：顶栏动作区里那个 \"1 个子智能体\" 徽标，容器只有 32px，
+           // 文字却要 70px → 溢出到标题底下。藏掉文字（保留徽标与其中箭头，不影响点击）。
+           function hideAgentBadgeText() {
+             try {
+               var header = document.querySelector('header');
+               if (!header) return;
+-              var acts = header.querySelector('[class*="headerActions"]');
++              var acts = header.querySelector('[class*=\"headerActions\"]');
+               if (!acts) return;
+               var spans = acts.querySelectorAll('button > span');
+               for (var i = 0; i < spans.length; i++) {
+@@ -2928,7 +3437,7 @@
+             try {
+               var header = document.querySelector('header');
+               if (!header) return;
+-              var btns = header.querySelectorAll('button[aria-label*="智能体团队"]');
++              var btns = header.querySelectorAll('button[aria-label*=\"智能体团队\"]');
+               for (var j = 0; j < btns.length; j++) {
+             var wrap = btns[j].parentElement;
+               if (!wrap) continue;
+@@ -2987,80 +3496,6 @@
+           }, 1000);
+         })();
+ """,
+-        // v1.0.72 页面分流补丁（必须放在数组最后，优先级最高）：
+-        // A. DSH 自身页面：补上原来常驻的「全屏固定布局」CSS（html/body 固定 + 隐藏滚动）；
+-        // B. 内嵌第三方网页（豆包等）：把这些强干预全部撤掉，恢复浏览器原生滚动/聚焦行为，
+-        //    并补一个真实手势聚焦兜底 —— 解决第三方短信登录页「点输入框弹不出键盘」。
+-        """
+-        (function () {
+-          var OWN_CSS = 'html, body { overflow: hidden !important; overscroll-behavior: none !important; position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; }';
+-          var THIRD_CSS = 'html, body { position: static !important; inset: auto !important; overflow: visible !important; overscroll-behavior: auto !important; height: auto !important; width: auto !important; }';
+-          var appliedOwn = false;
+-          var appliedThird = false;
+-
+-          function isOwnPage() {
+-            try {
+-              if (typeof window.__dshIsOwnPage === 'function') return window.__dshIsOwnPage();
+-            } catch (e) {}
+-            return true;
+-          }
+-
+-          function attach(id, css) {
+-            var root = document.head || document.documentElement;
+-            if (!root) return false;
+-            if (document.getElementById(id)) return true;
+-            var style = document.createElement('style');
+-            style.id = id;
+-            style.textContent = css;
+-            root.appendChild(style);
+-            return !!document.getElementById(id);
+-          }
+-
+-          function relaxViewport() {
+-            var meta = document.querySelector('meta[name="viewport"]');
+-            if (meta) meta.content = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
+-          }
+-
+-          function installTouchFocusFallback() {
+-            if (window.__dshTouchFocusInstalled) return;
+-            window.__dshTouchFocusInstalled = true;
+-            // 页面自身在 touchstart 里 preventDefault 会导致输入框不聚焦、iOS 不弹键盘：
+-            // 在真实手指手势内补一次 focus（必须是同步调用，异步会失去用户手势上下文）。
+-            document.addEventListener('touchstart', function (e) {
+-              var t = e.target;
+-              if (!t || !t.closest) return;
+-              var el = t.closest('input, textarea, [contenteditable="true"]');
+-              if (!el || el.disabled) return;
+-              try { if (el.readOnly) return; } catch (err) {}
+-              if (document.activeElement === el) return;
+-              try { el.focus(); } catch (err) {}
+-            }, true);
+-          }
+-
+-          function apply() {
+-            if (isOwnPage()) {
+-              if (!appliedOwn) appliedOwn = attach('dsh-ios-v1072-ownpage-css', OWN_CSS);
+-            } else if (!appliedThird) {
+-              appliedThird = attach('dsh-ios-v1072-thirdparty-css', THIRD_CSS);
+-              if (appliedThird) {
+-                relaxViewport();
+-                installTouchFocusFallback();
+-              }
+-            }
+-          }
+-
+-          apply();
+-          if (document.readyState === 'loading') {
+-            document.addEventListener('DOMContentLoaded', apply, { once: true });
+-          }
+-          var tries = 0;
+-          var timer = setInterval(function () {
+-            tries++;
+-            apply();
+-            if (appliedOwn || appliedThird || tries > 100) clearInterval(timer);
+-          }, 100);
+-        })();
+-        """,
+         // 键盘避让统一由原生 webViewBottomConstraint 丝滑驱动，绝不在 JS 层面触发额外重排与跳动
+         """
+         (function () {
+@@ -3109,7 +3544,7 @@
+           // 其次读 CSS 变量，最后兜底 34（全面屏 iPhone 主流值）。
+           //   ⚠️ 必须用 __dshSafeAreaReady 区分「原生还没下发」和「原生下发的就是 0」——
+           //      有 Home 键机型（iPhone SE / 6s~8）底部安全区**就是 0**，
+-          //      若按 `b > 0` 判断会把 0 当成"没值"，错误套用全面屏的 34，SE 上凭空多出 34px 空白。
++          //      若按 `b > 0` 判断会把 0 当成\"没值\"，错误套用全面屏的 34，SE 上凭空多出 34px 空白。
+           function botBreath() {
+             try {
+               if (window.__dshSafeAreaReady === 1 && window.__dshSafeArea) {
+@@ -3136,7 +3571,7 @@
+           }
+           function pageBg() {
+             try {
+-              var n = document.querySelector('.ank0OG_composerSeat, [class*="composerSeat"]');
++              var n = document.querySelector('.ank0OG_composerSeat, [class*=\"composerSeat\"]');
+               for (var i = 0; n && i < 8; i++) {
+                 var bg = opaqueBg(n);
+                 if (bg) return bg;
+@@ -3145,19 +3580,53 @@
+             } catch (e) {}
+             return 'transparent';
+           }
++          // 🔴 v1.0.115：只认「DSH 主顶栏」，绝不碰页面内吸顶条。
++          //   老总 2026-10-18 报「打开插件按钮，弹出页面和按钮选项重叠」。
++          //   真凶就在本函数的**第三候选 `document.querySelector('header')`**：
++          //   插件页/设置页是**全屏浮层**，此时主顶栏（[data-phase] header / .ank0OG_header）
++          //   **根本不在 DOM 里**，于是第一个 header 命中的是页面内的
++          //   `<header class=\"u9Hv6q_pageHead\">`（插件标题行）→ 被当成主顶栏做全套装校：
++          //     min-height:0px（官方 auto）→ 被 flex 压成 8px；
++          //     background:transparent → 滚动时卡片文字从它下面透上来；
++          //     padding-top:8px / z-index / 甚至当成 col 写死 height=vh-colTop。
++          //   实测（_probe_bg_which.cjs）：触发一次 __dshSetStatusBar 后该 header
++          //   内联值由 `min-height:fit-content` + `rgb(21,21,23)` → `0px` + `transparent`。
++          //   判据：**住在「真能纵向滚动」的祖先里 ⇒ 页面内吸顶条，不是主顶栏**。
++          //   主顶栏的祖先链（centerCol overflow:hidden / frame / root）都不满足。
++          function isInnerHeader(hd) {
++            var n = hd.parentElement, d = 0;
++            while (n && d < 12) {
++              var c = null;
++              try { c = getComputedStyle(n); } catch (e) { break; }
++              if ((c.overflowY === 'auto' || c.overflowY === 'scroll') &&
++                  n.scrollHeight > n.clientHeight + 4) return true;
++              n = n.parentElement; d++;
++            }
++            return false;
++          }
+           function pickHeader() {
+-            return document.querySelector('[data-phase] header')
+-              || document.querySelector('header.ank0OG_header')
+-              || document.querySelector('header');
++            var list = [];
++            var a = document.querySelector('[data-phase] header');
++            if (a) list.push(a);
++            var b = document.querySelector('header.ank0OG_header');
++            if (b) list.push(b);
++            var all = document.querySelectorAll('header');
++            for (var i = 0; i < all.length; i++) {
++              if (list.indexOf(all[i]) < 0) list.push(all[i]);
++            }
++            for (var j = 0; j < list.length; j++) {
++              if (!isInnerHeader(list[j])) return list[j];
++            }
++            return null;   // 找不到真主顶栏就什么都不做（绝不把浮层里的 header 当主顶栏）
+           }
+           function fixTop() {
+             var header = pickHeader();
+             if (!header) return;
+-            // 真凶就在这：[data-mobile-nav="frame"] 被 DSH 塞了 padding-top: env(safe-area-inset-top)
++            // 真凶就在这：[data-mobile-nav=\"frame\"] 被 DSH 塞了 padding-top: env(safe-area-inset-top)
+             // （真机 59~75px）。它只把内容整体往下推，却不缩减自身高度，
+             // 于是整列比屏幕高出 75px —— 顶栏下方多一大段空白 + 输入框整块被顶出屏幕底部，
+             // 两个毛病是同一个原因。这里直接清零，状态栏高度改由我们自己按真实几何预留。
+-            var frame = header.closest('[data-mobile-nav="frame"]');
++            var frame = header.closest('[data-mobile-nav=\"frame\"]');
+             if (frame) {
+               setP(frame, 'padding-top', '0px');
+               setP(frame, 'box-sizing', 'border-box');
+@@ -3168,7 +3637,7 @@
+             // 🔴 v1.0.108：顶栏 z-index 是「新建会话左上角按钮点不动」的元凶，必须分页处置。
+             //    实测（2026-10-16，430x932 暗色，elementFromPoint + 真点实验）：
+             //      官方原版：顶栏 z-index 是 auto（不建层叠上下文）；fab 是 position:absolute + z-index:21，
+-            //                且 fab 住在 DSH 自己的 [class*="overlayLayer"] 里（该层 position:absolute + z-index:20）
++            //                且 fab 住在 DSH 自己的 [class*=\"overlayLayer\"] 里（该层 position:absolute + z-index:20）
+             //                → 官方层序 = overlayLayer(20) 在顶栏(auto)之上，**官方本来就要求 fab 压在顶栏之上**；
+             //                点 fab 中心 (31,49) 命中 svg/BUTTON，抽屉正常打开（实测 sbX -150 → 0）。
+             //      我们的构建：把顶栏钉成 sticky + z-index:1020，把 fab 那 38x38 整块罩住
+@@ -3180,10 +3649,10 @@
+             //          行为一字不变。目标值动态取「overlayLayer 的 z-index - 1」，DSH 改了我们也跟着走。
+             var zTarget = '1020';
+             try {
+-              var fabEl = document.querySelector('[data-mobile-nav="fab"]');
++              var fabEl = document.querySelector('[data-mobile-nav=\"fab\"]');
+               var fabVisible = !!fabEl && getComputedStyle(fabEl).display !== 'none' && getComputedStyle(fabEl).visibility !== 'hidden';
+               if (fabVisible) {
+-                var ol = document.querySelector('[class*="overlayLayer"]');
++                var ol = document.querySelector('[class*=\"overlayLayer\"]');
+                 var olZ = ol ? parseInt(getComputedStyle(ol).zIndex, 10) : NaN;
+                 zTarget = (isFinite(olZ) && olZ > 0) ? String(Math.max(1, olZ - 1)) : '10';
+               }
+@@ -3202,7 +3671,7 @@
+             // 直接把首行高度压成 0（内联 !important 能压过 DSH 样式表里的 min-height:36px），
+             // 标题行随即上提到「顶栏顶 + padding-top」，而两个开关是绝对定位挂在顶栏上的，
+             // 位置完全不受影响 —— 比用标题行负 margin 更确定、也不会被 React 重渲染冲掉。
+-            var leading = header.querySelector('.ank0OG_headerLeading, [data-conversation-header-leading], [class*="headerLeading"]');
++            var leading = header.querySelector('.ank0OG_headerLeading, [data-conversation-header-leading], [class*=\"headerLeading\"]');
+             if (leading) {
+               setP(leading, 'min-height', '0px');
+               setP(leading, 'height', '0px');
+@@ -3247,7 +3716,7 @@
+             }
+           }
+           function fixBottom() {
+-            var seat = document.querySelector('.ank0OG_composerSeat, [class*="composerSeat"]');
++            var seat = document.querySelector('.ank0OG_composerSeat, [class*=\"composerSeat\"]');
+             if (!seat) return;
+             var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+             if (!vh) return;
+@@ -3313,7 +3782,7 @@
+             // 首页左上角目录按钮：DSH 自带规则是 top: calc(var(--dsh-statusbar,54px) - 24px)，
+             // 正好压进状态栏里被切掉半截。改为状态栏下沿 + TOP_BREATH，饱满完整呈现。
+             // v1.0.109：必须与 fixTop 的 TOP_SHIFT 同步上移，否则顶栏上去了、目录按钮留在原地 → 错位。
+-            var fabs = document.querySelectorAll('[data-mobile-nav="fab"]');
++            var fabs = document.querySelectorAll('[data-mobile-nav=\"fab\"]');
+             for (var i = 0; i < fabs.length; i++) {
+               setP(fabs[i], 'top', (sbHeight() + TOP_BREATH - TOP_SHIFT) + 'px');
+               setP(fabs[i], 'border-radius', '8px');

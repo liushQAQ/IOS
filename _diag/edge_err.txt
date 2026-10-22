@@ -1,0 +1,4 @@
+[28732:27876:1019/152231.625:ERROR:chrome\browser\task_manager\providers\fallback_task_provider.cc:126] Every renderer should have at least one task provided by a primary task provider. If a "Renderer" fallback task is shown, it is a bug. If you have repro steps, please file a new bug and tag it as a dependency of crbug.com/40528867.
+[28732:27876:1019/152337.514:ERROR:components\headless\command_handler\headless_command_handler.cc:395] Abnormal renderer termination.
+[28732:27876:1019/152339.023:ERROR:content\browser\network_service_instance_impl.cc:735] Network service crashed or was terminated, restarting service.
+[28732:27876:1019/152339.854:ERROR:content\browser\gpu\gpu_process_host.cc:1063] GPU process exited unexpectedly: exit_code=-1073741819

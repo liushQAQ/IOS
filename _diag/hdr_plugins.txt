@@ -1,0 +1,9 @@
+HTTP/1.1 200 OK
+content-type: text/javascript; charset=utf-8
+cache-control: no-cache, must-revalidate
+date: Mon, 19 Oct 2026 10:02:19 GMT
+connection: close
+vary: Accept-Encoding
+etag: "pcf1-a50f77efe69d05bb"
+content-length: 9187894
+

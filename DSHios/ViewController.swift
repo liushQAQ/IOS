@@ -5926,14 +5926,14 @@ function applySidebarInset() {
           var NATIVE = ['VERcba_', '_727C8a_', 'ank0OG_', 'CZPbNW_', 'WBG7Rq_', 'NwyCaq_', 'VYXhfG_', 'dMHGga_', 'ZiQlkq_', 'YdIzba_', 'PPCmka_', 'WYye1W_', 'bqwwaa_', 'bqwvaa_', 'z4IYsq_', 'tklpSG_', 'JZoinq_', '7aoaqW_', 'ZKHwIG_', 'dsh-mobile-', 'dsh-ios-'];
           // 已知插件类名（优先纳入，保证插件未挂载时也不报错）
           var KNOWN = ['.dcc-root', '.cm-stat-entry', '.cm-bbox', '.dsh-po-capsule'];
-          var GAP = 8, PAD_L = 14, PAD_R = 12, BAND = 40, MIN_W = 60;
+          var GAP = 14, PAD_L = 14, PAD_R = 12, BAND = 40, MIN_W = 60;
           var CSS = [
             // 模型选择器自适应：永不越界压发送钮（老总 15:28 第一条）
             '[class*="composerStack"] [class*="standardControls"] { min-width: 0 !important; }',
             '[class*="composerStack"] [class*="standardControls"] [class*="_trigger"] {',
-            '  max-width: 100% !important;',
+            '  max-width: none !important;',
             '  min-width: 0 !important;',
-            '  flex: 1 1 auto !important;',
+            '  flex: 0 0 auto !important;',
             '}'
           ].join('\\n');
           function isNativeCls(c) {
@@ -5989,7 +5989,13 @@ function applySidebarInset() {
             // v1.0.131b 抓取 v2：dock 全部直接子元素（费用明细 / 网关余额等挂载即入列）
             if (dockEl) {
               var kids = dockEl.children;
-              for (var k2 = 0; k2 < kids.length; k2++) { grab(kids[k2]); }
+              for (var k2 = 0; k2 < kids.length; k2++) {
+                // 老总 2026-10-22 微调 #4 防线：宽面板（如系统监控 sm-root）/高面板绝不入列，
+                //   只允许 pill 级（<=280x46）统计件上带，防止 shim_25 dock 面板被拽散
+                var kr = kids[k2].getBoundingClientRect();
+                if (kr.width > 280 || kr.height > 46) { continue; }
+                grab(kids[k2]);
+              }
             }
             // 自动发现：卡片内、插件带垂直范围内、非原生前缀、尺寸合理的独立控件
             var cr = card.getBoundingClientRect();
@@ -6023,15 +6029,31 @@ function applySidebarInset() {
             items.sort(function (a, b) { return a.getBoundingClientRect().left - b.getBoundingClientRect().left; });
             var cy = cr.top + 22;          // 插件条垂直中心（背景条 top4 h36 → 中心 22）
             var maxRight = cr.right - PAD_R;
-            var x = cr.left + PAD_L;
+            // 老总 2026-10-22 四条微调 #1/#4：两段式布局——先全部脱流量宽，再整体水平居中；
+            //   总宽超限时间距从 14px 逐级收缩到 4px，末项右缘绝不越过卡片右缘（费用明细不再被裁掉）
+            var ws = [];
+            for (var i0 = 0; i0 < items.length; i0++) {
+              setImp(items[i0], 'position', 'absolute');
+              // 清掉 shim_23 遗留的 transform 位移（脱流后 left/top 全权接管，叠加会漂 85px）
+              setImp(items[i0], 'transform', 'none');
+              ws.push(items[i0].getBoundingClientRect().width);
+            }
+            var sumW = 0;
+            for (var i1 = 0; i1 < ws.length; i1++) { sumW += ws[i1]; }
+            var n = items.length, avail = cr.width - PAD_L - PAD_R, gap = GAP;
+            var total = sumW + GAP * (n - 1);
+            if (total > avail && n > 1) { gap = Math.max(4, (avail - sumW) / (n - 1)); total = sumW + gap * (n - 1); }
+            var x = cr.left + Math.max(PAD_L, (cr.width - total) / 2);
             for (var i = 0; i < items.length; i++) {
               var el = items[i];
-              setImp(el, 'position', 'absolute');
-              // 清掉 shim_23 遗留的 transform 位移（脱流后 left/top 全权接管，叠加会漂 85px）
-              setImp(el, 'transform', 'none');
               var r = el.getBoundingClientRect();
               var w = r.width, h = r.height;
-              if (x + w > maxRight) { w = Math.max(MIN_W, maxRight - x); setImp(el, 'max-width', w + 'px'); }
+              // 保底预留式钳制：给后续每项留 MIN_W+4，本项只用到「刚好够后面」的上限，
+              //   保证末项也完整落在卡片右缘内（费用明细绝不再被挤出去）
+              var reserve = (items.length - i - 1) * (MIN_W + 4);
+              var cap = maxRight - x - reserve;
+              if (cap < MIN_W) { cap = MIN_W; }
+              if (w > cap) { w = cap; setImp(el, 'max-width', w + 'px'); }
               var anc = el.offsetParent || card;
               var ar = anc.getBoundingClientRect();
               setImp(el, 'left', Math.round(x - ar.left) + 'px');
@@ -6044,8 +6066,30 @@ function applySidebarInset() {
                 setImp(el, 'border', 'none');
                 setImp(el, 'box-shadow', 'none');
               }
-              x += w + GAP;
+              x += w + gap;
             }
+            // 老总 2026-10-22 微调 #2：模型选择器向右补位填满空洞（量到发送钮左缘-10px，只放不收、绝不压钮）
+            //   必须同步加宽左侧对齐的非 button 祖先容器，否则 v1.0.127 fixComposerClamp
+            //   会按「trigger 越出父容器」把 max-width 钳回 100% 父宽，补位失效。
+            try {
+              var tg = document.querySelector('[class*="composerStack"] [class*="standardControls"] [class*="_trigger"]');
+              var prim = document.querySelector('[class*="composerStack"] [class*="_primary"]');
+              if (tg && prim && visible(tg) && visible(prim)) {
+                var tr = tg.getBoundingClientRect(), pr = prim.getBoundingClientRect();
+                var want = Math.round(Math.min(pr.left - tr.left - 10, cr.right - tr.left - 8));
+                if (want > tr.width + 2 && want > 120 && want < 340) {
+                  var el2 = tg, guard2 = 0;
+                  while (el2 && el2 !== card && guard2 < 6) {
+                    var r2 = el2.getBoundingClientRect();
+                    var btn2 = (el2.tagName === 'BUTTON' || el2.getAttribute('role') === 'button');
+                    if (!btn2 && r2.width < want && Math.abs(r2.left - tr.left) < 4) { setImp(el2, 'width', want + 'px'); }
+                    el2 = el2.parentElement; guard2++;
+                  }
+                  setImp(tg, 'width', want + 'px');
+                  setImp(tg, 'max-width', 'none');
+                }
+              }
+            } catch (e) {}
           }
           function isDSH() {
             try {
@@ -6092,12 +6136,18 @@ function applySidebarInset() {
             '  background: var(--dsw-alias-bg-layer-1, rgba(127,127,127,0.14)) !important;',
             '  border-radius: 12px !important;',
             '  margin: 2px 10px 6px !important;',
-            '  padding: 3px 10px 5px !important;',
+            '  padding: 2px 10px 4px !important;',
             '  box-sizing: border-box !important;',
             '  max-height: 126px !important;',
             '  overflow-y: auto !important;',
             '  -webkit-overflow-scrolling: touch !important;',
-            '  row-gap: 2px !important;',
+            '  row-gap: 1px !important;',
+            '  font-size: 11px !important;',
+            '  line-height: 1.35 !important;',
+            '}',
+            '[class*="composerStack"] [class*="dock"]:not([class*="sm-"]) * {',
+            '  font-size: 11px !important;',
+            '  line-height: 1.35 !important;',
             '}',
             '[class*="composerStack"] .sm-root {',
             '  --sm-text-primary: var(--dsw-alias-label-primary, #e9effb) !important;',

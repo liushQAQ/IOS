@@ -1,0 +1,69 @@
+已发送
+dark attr: false
+CHAIN: [{"cls":"VERcba_dock","y":810,"h":66,"disp":"flex","ov":"auto","maxH":"126px"},{"cls":"VERcba_root","y":678,"h":208,"disp":"flex","ov":"visible","maxH":"none"},{"cls":"","y":0,"h":0,"disp":"contents","ov":"visible","maxH":"none"},{"cls":"_727C8a_composerStack","y":678,"h":208,"disp":"flex","ov":"visible","maxH":"none"},{"cls":"","y":0,"h":0,"disp":"contents","ov":"visible","maxH":"none"}]
+DOCK: {"x":26,"y":810,"width":376,"height":66,"top":810,"right":402,"bottom":876,"left":26}
+== 子树 ==
+{"d":0,"tag":"DIV","cls":"","txt":"","y":0,"h":0,"color":"rgb(249, 250, 251)","bg":"rgba(0, 0, 0, 0)"}
+{"d":1,"tag":"BUTTON","cls":"cm-btn cm-stat-entry cm-stat-dock","txt":"费用明细","y":684,"h":36,"color":"rgb(173, 178, 184)","bg":"rgba(0, 0, 0, 0)"}
+{"d":1,"tag":"SPAN","cls":"sm-root sm-dock","txt":"","y":814,"h":18,"color":"rgb(249, 250, 251)","bg":"rgba(0, 0, 0, 0)"}
+{"d":2,"tag":"SPAN","cls":"sm-dock-item","txt":"","y":814,"h":18,"color":"rgb(249, 250, 251)","bg":"rgba(0, 0, 0, 0)"}
+{"d":3,"tag":"SPAN","cls":"sm-dock-label","txt":"CPU","y":814,"h":18,"color":"rgb(173, 178, 184)","bg":"rgba(0, 0, 0, 0)"}
+{"d":3,"tag":"SPAN","cls":"sm-dock-value","txt":"55.18%","y":814,"h":18,"color":"rgb(249, 250, 251)","bg":"rgba(0, 0, 0, 0)"}
+{"d":2,"tag":"SPAN","cls":"sm-dock-sep","txt":"·","y":814,"h":18,"color":"rgba(255, 255, 255, 0.06)","bg":"rgba(0, 0, 0, 0)"}
+{"d":2,"tag":"SPAN","cls":"sm-dock-item","txt":"","y":814,"h":18,"color":"rgb(249, 250, 251)","bg":"rgba(0, 0, 0, 0)"}
+{"d":3,"tag":"SPAN","cls":"sm-dock-label","txt":"内存","y":814,"h":18,"color":"rgb(173, 178, 184)","bg":"rgba(0, 0, 0, 0)"}
+{"d":3,"tag":"SPAN","cls":"sm-dock-value","txt":"45.23%","y":814,"h":18,"color":"rgb(249, 250, 251)","bg":"rgba(0, 0, 0, 0)"}
+{"d":1,"tag":"DIV","cls":"cm-root","txt":"正在读取本会话费用…","y":813,"h":20,"color":"rgb(173, 178, 184)","bg":"rgba(0, 0, 0, 0)"}
+{"d":1,"tag":"DIV","cls":"cm-corner","txt":"","y":835,"h":36,"color":"rgb(249, 250, 251)","bg":"rgba(0, 0, 0, 0)"}
+{"d":2,"tag":"SPAN","cls":"cm-corner-chip cm-model-top","txt":"","y":835,"h":36,"color":"rgb(207, 211, 214)","bg":"rgb(44, 44, 46)"}
+{"d":3,"tag":"SPAN","cls":"cm-bal-label","txt":"Gemini/Grok 网关 (pengdan):g","y":843,"h":20,"color":"rgb(207, 211, 214)","bg":"rgba(0, 0, 0, 0)"}
+{"d":3,"tag":"SPAN","cls":"cm-bal-amt","txt":"¥66.9335","y":843,"h":20,"color":"rgb(207, 211, 214)","bg":"rgba(0, 0, 0, 0)"}
+== 插件 CSS ==
+[class*="composerStack"] [class*="dock"]:not([class*="sm-"]) {
+  background: var(--dsw-alias-bg-layer-1, rgba(127,127,127,0.14)) !important;
+  border-radius: 12px !important;
+  margin: 2px 10px 6px !important;
+  padding: 3px 10px 5px !important;
+  box-sizing: border-box !important;
+  max-height: 126px !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  row-gap: 2px !important;
+}
+[class*="composerStack"] .sm-root {
+  --sm-text-primary: var(--dsw-alias-label-primary, #e9effb) !important;
+  --sm-text-secondary: var(--dsw-alias-label-secondary, #b5c3dc) !important;
+  --sm-text-tertiary: var(--dsw-alias-label-tertiary, #8595b1) !important;
+  --sm-accent: #5b9bff !important;
+  --sm-hover: rgba(91,155,255,0.12) !important;
+  --sm-active: rgba(91,155,255,0.2) !important;
+  --sm-surface: var(--dsw-alias-bg-layer-1, #10151d) !important;
+  --sm-card: var(--dsw-alias-bg-layer-2, #1a2130) !important;
+  --sm-border: var(--dsw-alias-border-l1, #33456a) !important;
+  --sm-border-strong: var(--dsw-alias-border-l1, #5a7099) !important;
+}
+
+.sm-root {
+  --sm-surface: #eef4fd; --sm-card: #ffffff; --sm-card-head: #e4eefc; --sm-track: #cfdff5;
+  --sm-border: #cdddf2; --sm-border-strong: #a9c3e6;
+  --sm-text-primary: #12233d; --sm-text-secondary: #45597a; --sm-text-tertiary: #6f83a3;
+  --sm-accent: #2470d8; --sm-hover: #2470d814; --sm-active: #2470d824;
+  --sm-ok: #16a34a; --sm-warn: #c2740c; --sm-warn-surface: #fff5e3; --sm-error: #d92d20;
+  --sm-idle: #dce8f9; --sm-empty: #12233d2e;
+}
+body[data-ds-dark-theme] .sm-root {
+  --sm-surface: #0d1524; --sm-card: #16223a; --sm-card-head: #2a3a58; --sm-track: #3d5178;
+  --sm-border: #33456a; --sm-border-strong: #5a7099;
+  --sm-text-primary: #e9effb; --sm-text-secondary: #b5c3dc; --sm-text-tertiary: #8595b1;
+  --sm-accent: #5b9bff; --sm-hover: #5b9bff1f; --sm-active: #5b9bff33;
+  --sm-ok: #3ecf72; --sm-warn: #e0a63c; --sm-warn-surface: #2a2314; --sm-error: #ff6b6b;
+  --sm-idle: #2a3a58; --sm-empty: #e9effb2e;
+}
+
+.sm-dock { display: inline-flex; align-items: center; gap: 4px; min-width: 0; flex: none; }
+.sm-dock-item { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.sm-dock-label { color: var(--sm-text-tertiary); }
+.sm-dock-value { color: var(--sm-text-primary); font-variant-numeric: tabular-nums; }
+.sm-dock-sep { color: var(--sm-border-strong); }
+
+切换后: {"gone":true}

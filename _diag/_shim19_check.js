@@ -1,0 +1,58 @@
+        // ===== shim_19（v1.0.131）：插件 toast 弹窗整治（老总 2026-10-21 08:32 报障）=====
+        // 症状：Our Free Model 的「插件已热重载（第 N 次）」toast 全宽压在底部，
+        //       盖住费用明细与输入区，驻留 12 秒（holdMs:12000），且插件反复热重载反复弹。
+        // 结构（插件自有稳定类名，非 CSS Module 哈希，跨版本安全）：
+        //   .ofm_toasts（宿主，fixed right:18 bottom:18 z-index:1200 max-width:380px）
+        //   .ofm_toast / .ofm_toasttitle / .ofm_toastbody / .ofm_toastactions / .ofm_toastclose
+        // 整治：① 「插件已热重载」纯信息提示 2 秒自动收走（版本信息面板里本就有）；
+        //       ② 全部 toast 紧凑化：宽 ≤64vw、11px 字号、容器不挡点击（卡片自持）；
+        //       ③ 公告/升级/错误（warn/urgent）toast 内容与驻留不动，只压样式。
+        (function () {
+          if (window.top !== window) { return; }
+          var CSS = [
+            '.ofm_toasts { pointer-events: none !important; }',
+            '.ofm_toast {',
+            '  max-width: 64vw !important;',
+            '  font-size: 11px !important;',
+            '  line-height: 15px !important;',
+            '  padding: 8px 10px 8px 12px !important;',
+            '  pointer-events: auto !important;',
+            '}',
+            '.ofm_toast .ofm_toasttitle { font-size: 11px !important; }',
+            '.ofm_toast .ofm_toastbody { font-size: 11px !important; }',
+            '.ofm_toast .ofm_toastactions .ofm_btn { font-size: 11px !important; padding: 3px 8px !important; }'
+          ].join('\n');
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function apply() {
+            if (!isDSH()) { return; }
+            if (!document.getElementById('dsh-ios-ofm-toast-fix')) {
+              try {
+                var st = document.createElement('style');
+                st.id = 'dsh-ios-ofm-toast-fix';
+                st.textContent = CSS;
+                document.head.appendChild(st);
+              } catch (e) {}
+            }
+            // 「插件已热重载」提示 2 秒自动收走；记录已启动收走的卡片防重复定时
+            try {
+              var toasts = document.querySelectorAll('.ofm_toast');
+              for (var i = 0; i < toasts.length; i++) {
+                var card = toasts[i];
+                if (card.__dshSwept) { continue; }
+                var body = card.querySelector('.ofm_toastbody');
+                var txt = body ? (body.textContent || '') : '';
+                if (txt.indexOf('插件已热重载') !== -1) {
+                  card.__dshSwept = true;
+                  (function (c) { setTimeout(function () { try { c.remove(); } catch (e) {} }, 2000); })(card);
+                }
+              }
+            } catch (e) {}
+          }
+          apply();
+          setInterval(function () { apply(); }, 1000);
+        })();
