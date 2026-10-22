@@ -1,11 +1,11 @@
 {
   "version": "1.0.131",
-  "build": 90,
-  "updated_at": "2026-10-23 03:16:00",
-  "title": "v1.0.131(90) 模型选择器回归会话框——dcc-root 全链退出插件条，根治悬浮/错位/重叠",
-  "changelog": "1. 🥇 真机回归根治：模型选择按钮（Lobster 1,504）飞离会话框成悬浮按钮、点击打开菜单错位重叠——dcc-root 被 10-21 误判为第三方积分胶囊收进插件条（静态 absolute + 引擎 inline 标位搬到卡片顶部），90 起四路并发全链退出：shim_21/22/23 规则全删回官方原生流、引擎 KNOWN/sels 移除 + 自动发现排除 dcc- 前缀、releaseDccRoot() 幂等清旧装机 inline 残留、CSS 无条件 static 兜底；\n2. 🥇 89 能力全部保留：运行命令长文本单行省略（data-disclosure-row 窄域 nowrap）、trigger 可收缩防裁剪、排队条免疫、布局重排二次收敛、排队条抬层实底毛玻璃、文件原生分享、时间线叠印根治；\n3. 回归闸门 63 绿 0 红，新增 4 条模型选择器防复发静态断言；巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-90.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-90.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-90.tipa",
+  "build": 91,
+  "updated_at": "2026-10-23 04:52:00",
+  "title": "v1.0.131(91) 拆除插件条搬位层——布局全权交回 DSH 官方，底排按钮/模型选择器彻底归位",
+  "changelog": "1. 🥇 真机错乱根治（重构级）：会话框所有按钮与插件位置错乱重叠、新建会话模型选择按钮消失——真凶是「插件条搬位」整套机制在劫持官方布局（优化胶囊 transform 上移却仍占 85px 布局宽度 + standardControls 被硬扣 48px padding + 引擎 absolute 抢位），真机装插件后工具行直接挤爆，沙箱没装该插件所以永远测不出；91 起三块 shim 全部停注入、引擎下线、新增 releaseHijack/releaseCard 幂等清掉旧装机内联残留，布局全权交回 DSH 官方原生 flex；\n2. 🥇 窄屏兜底：≤380px 极窄屏让底排真正换行（左半工具行 + 右半操作区各占一行），根治小屏「完全权限 × Lobster × 优化」横向叠印；393/430 完全不触发，真机原布局分毫不动；\n3. 🥇 89/90 能力全部保留：模型选择器固定在会话框工具行、运行命令长文本单行省略、排队条免疫与抬层毛玻璃、文件原生分享、时间线叠印根治；\n4. 回归闸门 72 绿 0 红（430/393/375 三档全量），修正插件模态误判；巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-91.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-91.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-91.tipa",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.131"
 }
