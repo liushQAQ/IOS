@@ -1,5 +1,58 @@
 # 更新日志 (Changelog)
 
+## [v1.0.11] - 2026-10-22
+
+### 🍎 iPad 兼容与闪退专项修复（巨魔环境）
+
+- **修复 iPad 上大量按钮一点就闪退（P0 根因）**：
+  - 根因：iPad 会把 `UIAlertController(preferredStyle: .actionSheet)` 自动转成 popover；
+    若未提供 `popoverPresentationController` 的锚点（`sourceView` / `sourceRect`），
+    UIKit 直接抛 `NSInternalInconsistencyException` 闪退。iPhone 上不转 popover 所以不会触发。
+  - 修复：新增 `AlertCompat.swift`，统一收口 `presentActionSheet(_:sourceView:)`，
+    自动补锚点并排队呈现；全项目 **10 处 actionSheet**（设置页服务商/模型选择、定时页 8 处）全部改造完毕。
+- **修复分享/导出弹层同类崩溃**：`UIActivityViewController` 在 iPad 上必须带 popover 锚点，已补齐。
+- **补齐 iPad 专用方向键**：`Info.plist` 增加 `UISupportedInterfaceOrientations~ipad`（四方向全开），
+  避免仅竖屏配置在 iPad 横屏/分屏下触发方向不匹配异常。
+- **工程改为通用设备族**：`TARGETED_DEVICE_FAMILY` 由 `1`（iPhone-only）改为 `"1,2"`，
+  在 iPad 上原生运行而非兼容模式，从根上消除适配层差异。
+- **修复启动期数组越界（P0 潜在闪退）**：`DataPersistenceManager` 中
+  `urls(for: .documentDirectory, in: .userDomainMask)[0]` 在异常沙盒下会越界闪退，改为安全兜底。
+- **修复非法 URL 强制解包闪退**：`MCPClient` / `AgentRunner` 中 `URL(string:)!` 三处，
+  用户手填地址非法时会崩溃，改为抛错由上层提示。
+- **iPad 分屏尺寸修正**：`CronEngine` 解锁按键坐标由 `UIScreen.main.bounds` 改为窗口 bounds 优先。
+
+### 🛠️ 第二轮加固（独立审计交叉验证后补修）
+
+- **通知监听改为闭包式**：`CronEngine` 是纯 Swift 类，原用 `addObserver(self, selector:)` 注册
+  音频路由/电池状态/电量三类通知；改为 `addObserver(forName:object:queue:.main)` 闭包形式，
+  彻底消除 `unrecognized selector` 风险，并明确回调在主线程。
+- **修复延迟步骤运行时陷阱**：`UInt64(sec * 1e9)` 在 `param` 为负值或 `nan` 时直接 trap 崩溃
+  （可通过「从剪贴板还原备份配置」导入恶意 JSON 精确触达），已加有限性校验与上限保护。
+- **修复表格下标越界**：`tasks[indexPath.row]` / `quickActions[indexPath.row]` 在
+  `viewWillAppear` 整体替换数组后可能越界，关键两处加 `guard`。
+- **修复定时引擎线程竞争**：`executeWorkflow` 的 `Task {}` 改为 `Task { @MainActor in ... }`，
+  使 `isExecuting` 与 `checkSchedules` 的读写统一在主线程。
+- **修复段选下标越界**：`BuiltInModels.options[selectedSegmentIndex]` 在未选中（`-1`）时越界，
+  加范围守卫（自用版注入预设后可达）。
+- **定时引擎改为幂等**：`start()` 加 `guard timer == nil`，避免反复进出页面重建 Timer
+  并泄漏 background task 名额。
+- **消除侥幸短路求值**：`rep == nil || !rep!.isJailbroken` 改为 `guard let` 形式。
+- **安全模式误判修正**：启动标记清除延时由 4 秒延长到 8 秒，
+  避免冷启动期间手动划掉被误判为闪退而误进安全模式（表现为「能开但定时全失效」）。
+- **版本号统一**：`project.pbxproj` 的 `MARKETING_VERSION` 由 `1.0.0` 同步为 `1.0.11`，
+  避免本地 Archive 产出错误版本号。
+
+### 🩺 崩溃现场自诊断（新增）
+
+- **CrashGuard 崩溃守卫**：
+  - `NSSetUncaughtExceptionHandler` 捕获未捕获异常，落盘到 `Documents/ios_mcp_data/last_crash.log`
+    （含异常名、原因、机型、系统版本、界面类型、调用栈）；
+  - 启动打「启动中」标记，4 秒仍存活才清除；若标记残留 = 上次闪退，
+    本次启动自动进入**安全模式**：跳过后台音频保活、自动更新检查与默认定时引擎，优先保证 App 能打开。
+- **关于页新增诊断面板**：显示启动状态/累计崩溃次数/机型/系统/界面类型，
+  提供「🩺 查看崩溃日志」「🔓 退出安全模式并恢复正常启动」按钮，日志可一键复制。
+- **关于页布局重构**：改用 ScrollView + UILabel 自动撑高，兼容 iPad 横屏与分屏窄宽度。
+
 ## [v1.0.9] - 2026-10-11
 
 ### 🛡️ 个人数据升级安全防覆盖体系与 Documents 物理双轨加固

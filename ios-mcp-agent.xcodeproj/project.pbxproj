@@ -23,6 +23,8 @@
 		B100000000000000000000BE /* EnvironmentDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000AF /* EnvironmentDetector.swift */; };
 		B100000000000000000000BF /* DataPersistenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000B0 /* DataPersistenceManager.swift */; };
 		B100000000000000000000C0 /* AppUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000C1 /* AppUpdateManager.swift */; };
+		B100000000000000000000C2 /* AlertCompat.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000C3 /* AlertCompat.swift */; };
+		B100000000000000000000C4 /* CrashGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000000000000000000C5 /* CrashGuard.swift */; };
 		C100000000000000000000B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C100000000000000000000A1 /* Assets.xcassets */; };
 		C100000000000000000000B2 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C100000000000000000000A2 /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
@@ -44,6 +46,8 @@
 		B100000000000000000000AF /* EnvironmentDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentDetector.swift; sourceTree = "<group>"; };
 		B100000000000000000000B0 /* DataPersistenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPersistenceManager.swift; sourceTree = "<group>"; };
 		B100000000000000000000C1 /* AppUpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateManager.swift; sourceTree = "<group>"; };
+		B100000000000000000000C3 /* AlertCompat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertCompat.swift; sourceTree = "<group>"; };
+		B100000000000000000000C5 /* CrashGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashGuard.swift; sourceTree = "<group>"; };
 		C100000000000000000000A0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C100000000000000000000A1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C100000000000000000000A2 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -89,6 +93,8 @@
 				B100000000000000000000AF /* EnvironmentDetector.swift */,
 				B100000000000000000000B0 /* DataPersistenceManager.swift */,
 				B100000000000000000000C1 /* AppUpdateManager.swift */,
+				B100000000000000000000C3 /* AlertCompat.swift */,
+				B100000000000000000000C5 /* CrashGuard.swift */,
 				C100000000000000000000A0 /* Info.plist */,
 				C100000000000000000000A1 /* Assets.xcassets */,
 				C100000000000000000000A2 /* LaunchScreen.storyboard */,
@@ -198,6 +204,8 @@
 				B100000000000000000000BE /* EnvironmentDetector.swift in Sources */,
 				B100000000000000000000BF /* DataPersistenceManager.swift in Sources */,
 				B100000000000000000000C0 /* AppUpdateManager.swift in Sources */,
+				B100000000000000000000C2 /* AlertCompat.swift in Sources */,
+				B100000000000000000000C4 /* CrashGuard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -253,11 +261,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.11;
 				PRODUCT_BUNDLE_IDENTIFIER = com.local.iosmcpagent;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -275,11 +283,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.11;
 				PRODUCT_BUNDLE_IDENTIFIER = com.local.iosmcpagent;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};

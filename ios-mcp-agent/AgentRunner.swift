@@ -191,7 +191,12 @@ final class AgentRunner {
     // MARK: - 模型交互（纯文本，无图像开销）
 
     private func chat(_ userText: String) async throws -> [String: Any] {
-        var req = URLRequest(url: URL(string: config.llmBase.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/chat/completions")!)
+        // 🔴 用户手填的 Base URL 若非法，强制解包会直接闪退，这里改为抛错由上层提示
+        let rawBase = config.llmBase.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: rawBase + "/chat/completions") else {
+            throw MCPError.badResponse("模型接口地址格式无效：\(config.llmBase)")
+        }
+        var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.timeoutInterval = 60
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

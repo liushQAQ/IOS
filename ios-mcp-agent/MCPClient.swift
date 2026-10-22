@@ -41,7 +41,10 @@ final class MCPClient {
     }
 
     func health() async throws -> String {
-        let (data, _) = try await NetworkCompat.data(from: URL(string: base + "/health")!, session: session)
+        guard let url = URL(string: base + "/health") else {
+            throw MCPError.badResponse("服务端地址格式无效：\(base)")
+        }
+        let (data, _) = try await NetworkCompat.data(from: url, session: session)
         return String(data: data, encoding: .utf8) ?? ""
     }
 
@@ -70,7 +73,11 @@ final class MCPClient {
     }
 
     private func post(_ payload: [String: Any]) async throws -> [String: Any]? {
-        var req = URLRequest(url: URL(string: base + "/mcp")!)
+        // 🔴 用户可在设置页手填任意地址，非法字符串若强制解包会直接闪退，这里改为抛错
+        guard let url = URL(string: base + "/mcp") else {
+            throw MCPError.badResponse("服务端地址格式无效：\(base)")
+        }
+        var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json, text/event-stream", forHTTPHeaderField: "Accept")

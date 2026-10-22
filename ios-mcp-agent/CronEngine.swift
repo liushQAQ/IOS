@@ -605,7 +605,8 @@ final class CronEngine {
     // MARK: - 后台常驻巡检
 
     func start() {
-        stop()
+        // 幂等：重复调用不再重建 Timer / 反复申请后台任务（避免泄漏 background task 名额）
+        guard timer == nil else { return }
         BackgroundKeeper.shared.start()
         timer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
             self?.checkSchedules()
@@ -619,32 +620,35 @@ final class CronEngine {
 
     // MARK: - 硬件与环境广播监听 (CarPlay、充电、电量)
 
+    /// 闭包式观察者（彻底摆脱 selector 派发：CronEngine 是纯 Swift 类，
+    /// 用 addObserver(forName:queue:) 可保证任意情形下都不会出现 unrecognized selector）
+    private var hardwareObservers: [NSObjectProtocol] = []
+
     private func setupHardwareListeners() {
         UIDevice.current.isBatteryMonitoringEnabled = true
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleAudioRouteChange),
-            name: AVAudioSession.routeChangeNotification,
-            object: nil
-        )
+        let center = NotificationCenter.default
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleBatteryStateChange),
-            name: UIDevice.batteryStateDidChangeNotification,
-            object: nil
-        )
+        hardwareObservers.append(center.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.handleAudioRouteChange()
+        })
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleBatteryLevelChange),
-            name: UIDevice.batteryLevelDidChangeNotification,
-            object: nil
-        )
+        hardwareObservers.append(center.addObserver(
+            forName: UIDevice.batteryStateDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.handleBatteryStateChange()
+        })
+
+        hardwareObservers.append(center.addObserver(
+            forName: UIDevice.batteryLevelDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.handleBatteryLevelChange()
+        })
     }
 
-    @objc private func handleAudioRouteChange(notification: Notification) {
+    private func handleAudioRouteChange() {
         let isCarPlay = checkIsCarPlayConnected()
         if isCarPlay && !lastCarPlayState {
             triggerHardwareWorkflow(mode: .carplay)
@@ -652,14 +656,14 @@ final class CronEngine {
         lastCarPlayState = isCarPlay
     }
 
-    @objc private func handleBatteryStateChange() {
+    private func handleBatteryStateChange() {
         let state = UIDevice.current.batteryState
         if state == .charging || state == .full {
             triggerHardwareWorkflow(mode: .charging)
         }
     }
 
-    @objc private func handleBatteryLevelChange() {
+    private func handleBatteryLevelChange() {
         let level = Int(UIDevice.current.batteryLevel * 100)
         if level <= 20 && level > 0 {
             triggerHardwareWorkflow(mode: .lowBattery)
@@ -842,8 +846,8 @@ final class CronEngine {
                 }
 
             case .requireJailbroken:
-                let rep = EnvironmentDetector.shared.currentReport
-                if rep == nil || !rep!.isJailbroken || !rep!.isMcpReachable {
+                guard let rep = EnvironmentDetector.shared.currentReport,
+                      rep.isJailbroken, rep.isMcpReachable else {
                     return false
                 }
 
@@ -875,7 +879,7 @@ final class CronEngine {
         isExecuting = true
         let mcp = MCPClient(base: AgentConfig.load().mcpBase)
 
-        Task {
+        Task { @MainActor in
             var logs: [String] = ["🚀 开始执行工作流: 【\(task.name)】"]
             
             for (idx, step) in task.steps.enumerated() {
@@ -887,6 +891,7 @@ final class CronEngine {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
             logs.append("🎉 工作流【\(task.name)】全部步骤执行完毕")
+            // isExecuting 与 checkSchedules 的读写在主线程，避免数据竞争
             self.isExecuting = false
             completion?(logs.joined(separator: "\n"))
         }
@@ -982,8 +987,10 @@ final class CronEngine {
 
         case .delay:
             let sec = Double(step.param) ?? 2.0
-            let nano = UInt64(sec * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: nano)
+            // 🔴 防 Swift 运行时陷阱：负值 / NaN / 无穷大时 UInt64() 会直接 trap 崩溃
+            // （可通过「从剪贴板还原备份配置」导入 param:"-1" 或 "nan" 精确触达）
+            let safe = (sec.isFinite && sec > 0) ? min(sec, 3600) : 2.0
+            try? await Task.sleep(nanoseconds: UInt64(safe * 1_000_000_000))
             return true
         }
     }
@@ -1018,9 +1025,16 @@ final class CronEngine {
             }
         }
 
-        let screenBounds = await MainActor.run { UIScreen.main.bounds }
-        let w = Double(screenBounds.width > 0 ? screenBounds.width : 390)
-        let h = Double(screenBounds.height > 0 ? screenBounds.height : 844)
+        // iPad 分屏/多窗口下 UIScreen.main 可能给出整屏尺寸，这里以 keyWindow 尺寸优先
+        let effective: CGRect = await MainActor.run {
+            let windowBounds = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first(where: { $0.isKeyWindow })?.bounds
+            return windowBounds ?? UIScreen.main.bounds
+        }
+        let w = Double(effective.width > 0 ? effective.width : 390)
+        let h = Double(effective.height > 0 ? effective.height : 844)
 
         let col1 = w * 0.23
         let col2 = w * 0.50

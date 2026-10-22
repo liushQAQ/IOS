@@ -34,15 +34,16 @@ final class AppUpdateManager {
     }
 
     private static var topViewController: UIViewController? {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+        guard let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive })
+                ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
               let window = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first,
-              var top = window.rootViewController else {
+              let root = window.rootViewController else {
             return nil
         }
-        while let presented = top.presentedViewController {
-            top = presented
-        }
-        return top
+        // 逐层解析到最顶层可呈现控制器（含导航栈与分屏多窗口场景）
+        return UIViewController.dsh_topMost(from: root) ?? root
     }
 
     func checkForUpdates(manual: Bool = false) {
@@ -54,7 +55,7 @@ final class AppUpdateManager {
         var loadingAlert: UIAlertController?
         if manual {
             let alert = UIAlertController(title: "正在检查更新", message: "正在通过国内免代理节点检查最新构建…", preferredStyle: .alert)
-            topVC.present(alert, animated: true)
+            topVC.presentAlertSafely(alert)
             loadingAlert = alert
         }
 
@@ -84,7 +85,7 @@ final class AppUpdateManager {
                         let msg = lastError?.localizedDescription ?? "所有加速节点均未响应，请检查网络连接。"
                         let alert = UIAlertController(title: "检查更新失败", message: "无法连接更新源：\(msg)", preferredStyle: .alert)
                         alert.addAction(UIAlertAction(title: "好", style: .default))
-                        Self.topViewController?.present(alert, animated: true)
+                        Self.topViewController?.presentAlertSafely(alert)
                     }
                 }
                 if let loading = loadingAlert {
@@ -177,7 +178,7 @@ final class AppUpdateManager {
                 })
             }
             alert.addAction(UIAlertAction(title: "好", style: .cancel))
-            topVC.present(alert, animated: true)
+            topVC.presentAlertSafely(alert)
         }
     }
 
@@ -209,7 +210,7 @@ final class AppUpdateManager {
         }
 
         alert.addAction(UIAlertAction(title: "稍后提醒", style: .cancel))
-        topVC.present(alert, animated: true)
+        topVC.presentAlertSafely(alert)
     }
 
     func installViaTrollStore(remoteURLString: String, filename: String) {
@@ -270,7 +271,7 @@ final class AppUpdateManager {
         guard let topVC = Self.topViewController else { return }
 
         let progressAlert = UIAlertController(title: "正在加速下载最新包", message: "正在通过国内镜像下载 \(filename)…\n进度：0%", preferredStyle: .alert)
-        topVC.present(progressAlert, animated: true)
+        topVC.presentAlertSafely(progressAlert)
 
         let destURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
         try? FileManager.default.removeItem(at: destURL)
@@ -281,7 +282,7 @@ final class AppUpdateManager {
                     progressAlert.dismiss(animated: true) {
                         let alert = UIAlertController(title: "下载失败", message: "所有国内加速镜像节点均无法下载，请稍后重试。", preferredStyle: .alert)
                         alert.addAction(UIAlertAction(title: "好", style: .default))
-                        Self.topViewController?.present(alert, animated: true)
+                        Self.topViewController?.presentAlertSafely(alert)
                     }
                 }
                 return
@@ -337,7 +338,13 @@ final class AppUpdateManager {
     private func presentShareForFile(_ fileURL: URL) {
         guard let topVC = Self.topViewController else { return }
         let act = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
-        act.popoverPresentationController?.sourceView = topVC.view
-        topVC.present(act, animated: true)
+        // 🔴 iPad 关键修复：UIActivityViewController 在 iPad 上必须是 popover，
+        // 未设置 sourceView + sourceRect 会直接崩溃。
+        if let popover = act.popoverPresentationController {
+            popover.sourceView = topVC.view
+            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 1, height: 1)
+            popover.permittedArrowDirections = []
+        }
+        topVC.presentAlertSafely(act)
     }
 }

@@ -197,7 +197,10 @@ final class SettingsViewController: UIViewController {
     }
 
     @objc private func applyPrivatePreset(_ control: UISegmentedControl) {
-        let preset = BuiltInModels.options[control.selectedSegmentIndex]
+        // 防越界：selectedSegmentIndex 未选中时为 -1（自用版注入预设后属可达风险）
+        let idx = control.selectedSegmentIndex
+        guard idx >= 0, idx < BuiltInModels.options.count else { return }
+        let preset = BuiltInModels.options[idx]
         baseField.text = preset.base
         keyField.text = preset.key
         modelField.text = preset.model
@@ -233,16 +236,13 @@ final class SettingsViewController: UIViewController {
                     })
                 }
                 subAlert.addAction(UIAlertAction(title: "确定", style: .cancel))
-                self.present(subAlert, animated: true)
+                self.presentAlertSafely(subAlert)
             })
         }
 
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        if let popover = sheet.popoverPresentationController {
-            popover.sourceView = providerPresetButton
-            popover.sourceRect = providerPresetButton.bounds
-        }
-        present(sheet, animated: true)
+        // 🔴 iPad 关键修复：actionSheet 在 iPad 上必须带 popover 锚点，否则必崩
+        presentActionSheet(sheet, sourceView: providerPresetButton)
     }
 
     /// 核心功能：点击网络请求 Base URL + Key 获取在线可用模型并弹出选择菜单
@@ -334,17 +334,14 @@ final class SettingsViewController: UIViewController {
 
         alert.addAction(UIAlertAction(title: "取消", style: .cancel, handler: nil))
 
-        if let popover = alert.popoverPresentationController {
-            popover.sourceView = fetchButton
-            popover.sourceRect = fetchButton.bounds
-        }
-        present(alert, animated: true)
+        // 🔴 iPad 关键修复：模型选择列表是 actionSheet，必须补 popover 锚点
+        presentActionSheet(alert, sourceView: fetchButton)
     }
 
     private func showAlert(_ msg: String) {
         let alert = UIAlertController(title: "提示", message: msg, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "确定", style: .default))
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     @objc private func saveConfig() {
@@ -389,7 +386,7 @@ final class SettingsViewController: UIViewController {
             }
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     @objc private func resetFactoryDefaults() {
@@ -399,6 +396,6 @@ final class SettingsViewController: UIViewController {
             self?.showAlert("已恢复为出厂默认预设")
         })
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 }

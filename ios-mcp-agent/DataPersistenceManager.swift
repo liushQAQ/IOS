@@ -13,8 +13,16 @@ final class DataPersistenceManager {
     private let fileManager = FileManager.default
 
     // 持久化存储根目录: Documents/ios_mcp_data/
+    // 🔴 启动期高危点加固：极端环境（巨魔/异常沙盒）下 urls(for:) 可能返回空数组，
+    // 旧写法 [0] 会直接索引越界导致「一打开就闪退」。此处改为安全兜底，绝不越界。
     private var dataDirectory: URL {
-        let docs = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let docs: URL
+        if let first = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
+            docs = first
+        } else {
+            // 兜底：退回 App 沙盒根，保证 App 至少可正常启动
+            docs = URL(fileURLWithPath: NSHomeDirectory())
+        }
         let dir = docs.appendingPathComponent("ios_mcp_data", isDirectory: true)
         if !fileManager.fileExists(atPath: dir.path) {
             try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)

@@ -81,7 +81,7 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
             let sub = alert.textFields?[1].text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             self.showStepPickerForQuickAction(title: title, subtitle: sub, editItem: nil)
         })
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     private func showStepPickerForQuickAction(title: String, subtitle: String, editItem: QuickActionItem?) {
@@ -118,7 +118,7 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
         }
 
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(sheet, animated: true)
+        presentActionSheet(sheet)
     }
 
     private func pickAppForQuickAction(title: String, subtitle: String, editItem: QuickActionItem?) {
@@ -155,10 +155,10 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
                 }
                 self?.tableView.reloadSections(IndexSet(integer: 1), with: .automatic)
             })
-            self?.present(alert, animated: true)
+            self?.presentAlertSafely(alert)
         })
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(sheet, animated: true)
+        presentActionSheet(sheet)
     }
 
     // MARK: - TableView DataSource
@@ -265,6 +265,8 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
 
         // Section 2: Cron 工作流列表
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: "CronCell")
+        // 防越界：viewWillAppear 会整体替换任务数组，与重绘之间存在时序差
+        guard indexPath.row < CronEngine.shared.tasks.count else { return cell }
         let task = CronEngine.shared.tasks[indexPath.row]
 
         let switchView = UISwitch()
@@ -308,6 +310,8 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
                 addNewQuickAction()
             }
         } else if indexPath.section == 2 {
+            // 防越界：数组可能已被 viewWillAppear 整体替换
+            guard indexPath.row < CronEngine.shared.tasks.count else { return }
             let task = CronEngine.shared.tasks[indexPath.row]
             let editor = CronTaskEditViewController(task: task, isNew: false)
             navigationController?.pushViewController(editor, animated: true)
@@ -352,7 +356,7 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
             self?.refreshEnvironment()
         }))
         alert.addAction(UIAlertAction(title: "我知道了", style: .cancel))
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
@@ -386,7 +390,7 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
         })
 
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(sheet, animated: true)
+        presentActionSheet(sheet)
     }
 
     private func promptEditQuickActionDetails(at index: Int) {
@@ -417,7 +421,7 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
             CronEngine.shared.updateQuickAction(item)
             self.tableView.reloadSections(IndexSet(integer: 1), with: .automatic)
         })
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     private func runSingleStep(_ step: WorkflowStep, title: String) {
@@ -427,7 +431,7 @@ final class CronTasksViewController: UIViewController, UITableViewDataSource, UI
             DispatchQueue.main.async {
                 let alert = UIAlertController(title: "执行结果", message: logMsg, preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "确定", style: .default))
-                self?.present(alert, animated: true)
+                self?.presentAlertSafely(alert)
             }
         }
     }
@@ -789,7 +793,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
         }
 
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(sheet, animated: true)
+        presentActionSheet(sheet)
     }
 
     private func promptConditionParam(type: ConditionType, defaultParam: String, title: String, hint: String) {
@@ -802,7 +806,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
             self.task.conditionItems.append(ConditionItem(type: type, param: param, isEnabled: true))
             self.tableView.reloadSections(IndexSet(integer: 2), with: .automatic)
         })
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     private func editCondition(at index: Int) {
@@ -816,7 +820,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
                 self.task.conditionItems[index].param = alert.textFields?.first?.text ?? ""
                 self.tableView.reloadSections(IndexSet(integer: 2), with: .automatic)
             })
-            present(alert, animated: true)
+            presentAlertSafely(alert)
         }
     }
 
@@ -832,7 +836,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
             })
         }
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(sheet, animated: true)
+        presentActionSheet(sheet)
     }
 
     private func editIntervalRange() {
@@ -850,7 +854,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
                 self.tableView.reloadSections(IndexSet(integer: 1), with: .automatic)
             }
         })
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     private func editRepeatDays() {
@@ -868,7 +872,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
             self?.tableView.reloadSections(IndexSet(integer: 1), with: .automatic)
         })
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(sheet, animated: true)
+        presentActionSheet(sheet)
     }
 
     private func editMonthDays() {
@@ -885,7 +889,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
             self.task.monthDays = validDays.isEmpty ? [1] : validDays.sorted()
             self.tableView.reloadSections(IndexSet(integer: 1), with: .automatic)
         })
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     // MARK: - 步骤添加与应用选择器弹窗 (手写 + 点选规范)
@@ -923,7 +927,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
         }
 
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(sheet, animated: true)
+        presentActionSheet(sheet)
     }
 
     private func showAppCatalogPicker() {
@@ -942,7 +946,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
         })
 
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(sheet, animated: true)
+        presentActionSheet(sheet)
     }
 
     private func promptCustomApp() {
@@ -962,7 +966,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
             self?.task.steps.append(step)
             self?.tableView.reloadSections(IndexSet(integer: 3), with: .automatic)
         })
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     private func promptPasscodeStep() {
@@ -984,7 +988,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
             self?.task.steps.append(step)
             self?.tableView.reloadSections(IndexSet(integer: 3), with: .automatic)
         })
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     private func editStepParam(at index: Int) {
@@ -1004,7 +1008,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
             self.task.steps[index].param = newVal
             self.tableView.reloadSections(IndexSet(integer: 3), with: .automatic)
         })
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     private func testRunWorkflow() {
@@ -1012,7 +1016,7 @@ final class CronTaskEditViewController: UIViewController, UITableViewDataSource,
             DispatchQueue.main.async {
                 let alert = UIAlertController(title: "测试运行结果", message: logMsg, preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "确定", style: .default))
-                self?.present(alert, animated: true)
+                self?.presentAlertSafely(alert)
             }
         }
     }

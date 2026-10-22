@@ -10,6 +10,9 @@ final class BackgroundKeeper {
     private init() {}
 
     func start() {
+        // 安全模式（上次启动疑似闪退）下不启动音频保活，避免音频会话异常阻断启动
+        if CrashGuard.shared.safeMode { return }
+
         // 1. 申请系统短时后台任务兜底
         if bgTaskID == .invalid {
             bgTaskID = UIApplication.shared.beginBackgroundTask(withName: "AgentExecution") { [weak self] in

@@ -24,7 +24,10 @@ final class ViewController: UIViewController {
         navigationItem.rightBarButtonItems = [settingsBtn, cronBtn]
 
         // 启动时自动激活后台常驻 Cron 定时引擎
-        CronEngine.shared.start()
+        // 🔴 安全模式（上次启动疑似闪退）下跳过该步，优先保证 App 能正常打开
+        if !CrashGuard.shared.safeMode {
+            CronEngine.shared.start()
+        }
 
         input.font = .systemFont(ofSize: 17)
         input.layer.borderColor = UIColor.separator.cgColor
@@ -66,9 +69,11 @@ final class ViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
         ])
 
-        // 启动时静默检查更新
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            AppUpdateManager.shared.checkForUpdates(manual: false)
+        // 启动时静默检查更新（安全模式下跳过，避免网络层异常阻断启动）
+        if !CrashGuard.shared.safeMode {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                AppUpdateManager.shared.checkForUpdates(manual: false)
+            }
         }
     }
 
@@ -164,7 +169,7 @@ final class ViewController: UIViewController {
             self?.checkMcpStatus()
         }))
         alert.addAction(UIAlertAction(title: "我知道了", style: .cancel))
-        present(alert, animated: true)
+        presentAlertSafely(alert)
     }
 
     @objc private func openSettings() {
@@ -207,7 +212,7 @@ final class ViewController: UIViewController {
                         self?.executeAgentTask(task: task, config: config)
                     }))
                     alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-                    self.present(alert, animated: true)
+                    self.presentAlertSafely(alert)
                 }
             } else {
                 await MainActor.run {
