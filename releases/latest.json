@@ -1,11 +1,11 @@
 {
   "version": "1.0.131",
-  "build": 86,
-  "updated_at": "2026-10-22 14:00:00",
-  "title": "v1.0.131(86) 排队消息行叠印根治：预览单行省略号 + 相邻进度条负 margin 自愈取消",
-  "changelog": "1. 🥇 排队/等待发送消息行叠印根治：长消息预览锁定单行省略号截断，不再折行溢出压线；\n2. 🥇 排队条与目标进度条（↑0% 费用明细等）同屏叠印根治：官方排队条负 margin 设计在相邻 dock 时自动取消，两层永不重叠；\n3. 🥇 84/83 全部能力保留：文件「打开」调起 iOS 原生分享、会话时间线长摘要叠印根治、行高自愈兜底；\n4. iOS 14 / 15 / 16.x 全通吃；巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-86.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-86.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-86.tipa",
+  "build": 87,
+  "updated_at": "2026-10-22 18:35:00",
+  "title": "v1.0.131(87) 撤销86布局改动归位插件与模型行；排队条叠印改用抬层+实底+毛玻璃前缀根治",
+  "changelog": "1. 🥇 撤销 86 的排队条布局改动：费用明细插件、积分胶囊、模型选择器全部归位，错位乱码消失；\n2. 🥇 排队条叠印根治换正确打法：排队条抬层+实底+补 iOS 毛玻璃前缀，底下的进度条/插件被真正盖住不再透视；\n3. 🥇 长排队消息预览单行省略号截断保留；\n4. 84/83 全部能力保留：文件「打开」iOS 原生分享、时间线长摘要叠印根治、行高自愈；巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-87.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-87.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-87.tipa",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.131"
 }
