@@ -883,6 +883,31 @@ const A_PLUGIN_PAGE = () => {
   }
   GATE.anchorCritical = { total: CRITICAL_ANCHORS.length, dead: deadCritical };
 
+  /* ================= 断言 9：插件条排队引擎的「排队条免疫」=================
+     🔴 v1.0.131(88) 真凶（老总 2026-10-22 截图：发排队消息后费用明细跑到待发送行上叠印）：
+      ① cm-* 挂在 VERcba_dock 里，而 VERcba_dock 是 VERcba_card 的兄弟 → card.contains 恒 false；
+      ② 唯一兜底 querySelector('[class*="composerStack"] [class*="_dock"]') 在官方排队条
+        [data-queue-dock]（x1ZYoW_dock）存在时命中的是排队条 → 费用明细被判「不在 dock 内」
+        踢出排队引擎，退回 shim_23 静态 top:4px（祖先 composerSeat 顶部 = 排队条那一行）。
+     实锤：有排队条时 cm inline left/top 空、computed top=4px、offsetParent=composerSeat(y608)
+      → 渲染 y614，排队条 y610，同行叠印；修复后 cm y658（卡片插件条），排队条 594..640 不相交。
+     这条静态断言的意义：真机才复现的排队态无法在闸门里稳定构造，但**代码特征**可以拦 ——
+     任何人把这两处修法删掉/改回旧写法，这里立刻红，禁止打包。 */
+  {
+    const bundle = APP_JS;
+    chk(/hasAttribute\('data-queue-dock'\)/.test(bundle),
+      '[插件条] 排队条免疫：dock 选取跳过官方 [data-queue-dock]',
+      /hasAttribute\('data-queue-dock'\)/.test(bundle) ? '守卫在' : '守卫被删 → 费用明细会退回 composerSeat 顶部叠排队行');
+    chk(/:not\(\[data-dsh-pos\]\)/.test(bundle),
+      '[插件条] 兜底：未标位插件元素退回原生 dock 流（禁止静态 top:4px）',
+      /:not\(\[data-dsh-pos\]\)/.test(bundle) ? '兜底在' : '兜底被删 → 引擎未接管时会叠印排队行');
+    chk(/qdEl && qdEl\.contains\(el\)/.test(bundle),
+      '[插件条] 排队条子树永不入插件条',
+      /qdEl && qdEl\.contains\(el\)/.test(bundle) ? '排除在' : '排除被删 → 排队消息行可能被吸进插件条');
+  }
+  GATE.pluginStripQueueGuard = true;
+
+
   console.log(' 结果: ' + PASS + ' 绿 / ' + FAIL + ' 红 / ' + BLOCKED.length + ' 项无法校验');
   if (BLOCKED.length) {
     console.log('\n ⏸️ 无法校验（DSH 前端死循环，零注入裸页面同样复现，非 App 侧回归）：');

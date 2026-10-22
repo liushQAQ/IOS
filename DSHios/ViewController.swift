@@ -6032,6 +6032,20 @@ function applySidebarInset() {
             '  max-width: none !important;',
             '  min-width: 0 !important;',
             '  flex: 0 0 auto !important;',
+            '}',
+            // 🔴 v1.0.131(88) 兜底：引擎还没标位（data-dsh-pos）的插件元素一律退回原生 dock 流，
+            //   禁止 shim_23 的静态 left/top（祖先 composerSeat 顶部 = 官方排队条那一行）把它们
+            //   甩到排队消息行上叠印。引擎写入的是 inline !important，优先级高于本表，已标位者不受影响。
+            '.dcc-root:not([data-dsh-pos]),',
+            '.cm-stat-entry:not([data-dsh-pos]),',
+            '.cm-stat-dock:not([data-dsh-pos]),',
+            '.cm-bbox:not([data-dsh-pos]),',
+            '.dsh-po-capsule:not([data-dsh-pos]) {',
+            '  position: static !important;',
+            '  left: auto !important;',
+            '  right: auto !important;',
+            '  top: auto !important;',
+            '  transform: none !important;',
             '}'
           ].join('\\n');
           function isNativeCls(c) {
@@ -6064,7 +6078,27 @@ function applySidebarInset() {
               out.push(el); seen.push(el);
             }
             // v1.0.131b 抓取 v2：通配根类（不写死完整类名，插件热重载/小版本改后缀也抓得到）
-            var dockEl = document.querySelector('[class*="composerStack"] [class*="_dock"]');
+            // 🔴 v1.0.131(88) 真凶：官方排队条 [data-queue-dock]（x1ZYoW_dock）在 composerStack 里
+            //   DOM 更靠前，旧写法 querySelector('[class*="composerStack"] [class*="_dock"]') 命中排队条
+            //   而不是会话框 dock（VERcba_dock）→ 费用明细/网关被判「不在 dock 内」踢出排队引擎，
+            //   退回 shim_23 静态 left/top（祖先 composerSeat 顶部 = 排队条那一行）→ 正好叠在排队行上。
+            //   实锤（Chromium 430x932 有排队条时）：cm inline left/top 均为空、computed top=4px、
+            //   offsetParent=composerSeat(y608) → 渲染 y614，排队条 y610，同一行。
+            //   修法：遍历所有 _dock，跳过排队条自身与其后代，取真正的会话框 dock。
+            var qdEl = document.querySelector('[data-queue-dock]');
+            var dockEl = null;
+            (function () {
+              var ds = document.querySelectorAll('[class*="composerStack"] [class*="_dock"]');
+              for (var di = 0; di < ds.length; di++) {
+                var d = ds[di];
+                if (d.hasAttribute && d.hasAttribute('data-queue-dock')) { continue; }
+                if (qdEl && qdEl.contains(d)) { continue; }
+                dockEl = d; break;
+              }
+            })();
+            // 归集作用域：card 与 dock 的共同父级（VERcba_root）。费用明细/网关挂在 dock 里、
+            //   dock 又是 card 的兄弟，旧判据 card.contains 恒 false，只能靠 dockEl —— 一并纳入 blockEl。
+            var blockEl = card.parentElement;
             var sels = ['.dcc-root', '[class*="dcc-root"]', '.dsh-po-capsule', '[class*="dsh-po-capsule"]',
                         '.cm-stat-entry', '[class*="cm-stat"]', '.cm-bbox', '[class*="cm-bbox"]'];
             for (var s = 0; s < sels.length; s++) {
@@ -6072,10 +6106,12 @@ function applySidebarInset() {
               for (var c = 0; c < cand.length; c++) {
                 var el = cand[c];
                 // 只收会话框卡片内 / dock 内的，侧栏余额部件（cm-foot 等）不碰
-                if (!(card.contains(el) || (dockEl && dockEl.contains(el)))) { continue; }
+                // v1.0.131(88)：排队条子树一律不碰（官方排队消息行绝不入插件条）
+                if (qdEl && qdEl.contains(el)) { continue; }
+                if (!(card.contains(el) || (blockEl && blockEl.contains(el)) || (dockEl && dockEl.contains(el)))) { continue; }
                 // 通配防重：祖先若也是插件根（父子双命中），只取最外层
                 var p2 = el.parentElement, skip = false;
-                while (p2 && p2 !== card && p2 !== dockEl && p2 !== document.body) {
+                while (p2 && p2 !== card && p2 !== blockEl && p2 !== dockEl && p2 !== document.body) {
                   var pc = (p2.className || '').toString();
                   if (pc.indexOf('cm-stat') >= 0 || pc.indexOf('cm-bbox') >= 0 || pc.indexOf('dcc-root') >= 0 || pc.indexOf('dsh-po-capsule') >= 0) { skip = true; break; }
                   p2 = p2.parentElement;
@@ -6156,6 +6192,8 @@ function applySidebarInset() {
               var ar = anc.getBoundingClientRect();
               setImp(el, 'left', Math.round(x - ar.left) + 'px');
               setImp(el, 'top', Math.round(cy - h / 2 - ar.top) + 'px');
+              // v1.0.131(88)：打标「已被引擎接管」，CSS 兜底规则据此放行（未标位者退回原生 dock 流）
+              try { if (!el.hasAttribute('data-dsh-pos')) { el.setAttribute('data-dsh-pos', '1'); } } catch (e) {}
               // v1.0.131b：dock 类部件（费用明细/网关）入列时顺带 inline 去底融入
               //   （真机 CSS 通道可能死亡，inline !important 优先级最高，双保险）
               var cn3 = (el.className || '').toString();
@@ -6207,7 +6245,7 @@ function applySidebarInset() {
           function tick() {
             if (!isDSH()) { return; }
             injectCSS();
-            try { layout(); } catch (e) {}
+            try { layout(); layout(); } catch (e) {}
           }
           tick();
           setInterval(tick, 900);
