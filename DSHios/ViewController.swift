@@ -5632,6 +5632,23 @@ function applySidebarInset() {
             '  background: var(--dsw-specific-menu, #232326) !important;',
             '  -webkit-backdrop-filter: var(--dsw-menu-backdrop-filter, blur(20px)) !important;',
             '  backdrop-filter: var(--dsw-menu-backdrop-filter, blur(20px)) !important;',
+            '}',
+            // ── v1.0.131(89) 运行命令/工具调用行锁单行（老总真机 23:05：「命令输出超过一行的还是重叠」）──
+            //   因果实锤（Chromium 摘注入对比）：__dshMobileFit build 81 的 [class*="_text_"] pre-wrap 通配
+            //   命中行标题 _text_1rdzk_17（同元素还挂 VmGLcq_title），长命令在官方 24px 定高
+            //   _row_k7ery_26（overflow:hidden）行盒里折出第二行 → 与相邻行叠印。
+            //   摘掉注入 ws 由 pre-wrap 恢复 normal —— 因果闭合。
+            //   data-disclosure-row 是 React 语义属性（跨版本稳定），未展开态锁单行+省略号；
+            //   展开态（祖先 data-expanded）还回 pre-wrap，展开阅读不受影响。
+            '[data-disclosure-row="true"] [class*="_text_"] {',
+            '  white-space: nowrap !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  min-width: 0 !important;',
+            '}',
+            '[data-expanded] [data-disclosure-row="true"] [class*="_text_"],',
+            '[data-disclosure-row="true"][data-expanded] [class*="_text_"] {',
+            '  white-space: pre-wrap !important;',
             '}'
           ].join('\\n');
           function isDSH() {
@@ -6027,11 +6044,16 @@ function applySidebarInset() {
           var GAP = 14, PAD_L = 14, PAD_R = 12, BAND = 40, MIN_W = 60;
           var CSS = [
             // 模型选择器自适应：永不越界压发送钮（老总 15:28 第一条）
+            // 🔴 v1.0.131(89)：flex 0 0 auto 改 0 1 auto —— 真机 23:05 模型 pill 被钉在窄条上
+            //   只剩「i-3.8」（不收缩 → 溢出父容器被裁）。改可收缩后：有富余显示全名，
+            //   撤回/重优等挤占时优雅缩+省略号，绝不越父、绝不压发送钮（配合 label ellipsis）。
             '[class*="composerStack"] [class*="standardControls"] { min-width: 0 !important; }',
             '[class*="composerStack"] [class*="standardControls"] [class*="_trigger"] {',
             '  max-width: none !important;',
             '  min-width: 0 !important;',
-            '  flex: 0 0 auto !important;',
+            '  flex: 0 1 auto !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
             '}',
             // 🔴 v1.0.131(88) 兜底：引擎还没标位（data-dsh-pos）的插件元素一律退回原生 dock 流，
             //   禁止 shim_23 的静态 left/top（祖先 composerSeat 顶部 = 官方排队条那一行）把它们
