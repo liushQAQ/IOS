@@ -1,11 +1,11 @@
 {
   "version": "1.0.131",
-  "build": 88,
-  "updated_at": "2026-10-22 22:25:00",
-  "title": "v1.0.131(88) 排队条免疫——费用明细/积分胶囊不再被踢出插件条叠到待发送消息行上",
-  "changelog": "1. 🥇 发排队消息时「费用明细跑到待发送行上、积分胶囊消失」根治：排队条存在时官方排队组件被误认成会话框 dock，费用部件被插件条引擎踢出、退回旧静态定位正好叠在排队行——88 修掉这个误判，费用明细/积分/网关胶囊在插件条一行排齐；\n2. 🥇 插件条引擎双保险：没接管的插件元素退回原生位置（绝不叠排队行），排队条子树永不进插件条；\n3. 🥇 布局重排后自动二次收敛，插件条位置永不吃陈旧坐标；\n4. 87/86/84/83 全部能力保留：排队条抬层+实底+毛玻璃前缀、文件「打开」iOS 原生分享、时间线长摘要叠印根治、行高自愈；巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-88.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-88.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-88.tipa",
+  "build": 89,
+  "updated_at": "2026-10-23 01:25:00",
+  "title": "v1.0.131(89) 模型选择器收缩自适应 + 运行命令长文本单行省略——真机两处叠印/裁切双根治",
+  "changelog": "1. 🥇 真机截图回归双修：模型选择按钮被压成「i-3.8」且漂移——插件条行内 trigger 不收缩（flex:0 0 auto）溢出父容器被裁，改为 flex:0 1 auto + ellipsis 可收缩，窄行下只省略不越界；\n2. 🥇 运行命令输出超过一行的两行互相重叠——官方 _text_ 组件被 __dshMobileFit 的 white-space:pre-wrap 通配命中，在 24px 定高行盒内折行叠印，改为 [data-disclosure-row] 窄域 nowrap + ellipsis 锁单行（展开态 pre-wrap 还回，锚 data-* 不再通配误伤）；\n3. 88 全部能力保留：排队条免疫（费用明细/积分胶囊不被踢出插件条叠排队行）、引擎双保险、布局重排二次收敛、排队条抬层+实底+毛玻璃前缀、文件「打开」iOS 原生分享、时间线长摘要叠印根治；\n4. 回归闸门 65 绿 0 红（含静态防复发断言），凭证随版发布；巨魔一键极速升级。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-89.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-89.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-89.tipa",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.131"
 }
