@@ -2768,16 +2768,40 @@ final class ViewController: UIViewController {
             });
           }
 
+          // 🔴 build 84：解析当前预览文件的完整路径（三类来源，供「打开」改道分享与保存按钮共用）
+          function resolveCurrentPreviewPath() {
+            var pathEl = document.querySelector('[data-textpreview-path], [class*="previewPath"]');
+            var p = pathEl ? (pathEl.getAttribute('title') || pathEl.textContent || '') : '';
+            if (p && /[\\\\/]/.test(p)) { return p.trim(); }
+            var titleTab = document.querySelector('[data-dockkit-strip] [aria-selected="true"], [data-dockkit-strip] [class*="active"]');
+            p = titleTab ? (titleTab.getAttribute('title') || titleTab.textContent || '') : '';
+            if (p && /[\\\\/]/.test(p)) { return p.trim(); }
+            var els = document.querySelectorAll('div, span');
+            for (var i = 0; i < els.length && i < 3000; i++) {
+              if (els[i].children.length !== 0) { continue; }
+              var t = (els[i].textContent || '').trim();
+              if (t.length > 5 && t.length < 300 && /^[A-Za-z]:[\\\\/]/.test(t)) { return t; }
+            }
+            return '';
+          }
           // 动态注入 2：在不可预览文件页面（如 tipa/zip/exe/ipa）注入醒目的【📥 保存 / 分享到手机】按钮
           function enrichPreviewHeader() {
             var emptyContainer = document.querySelector('[data-textpreview-unsupported], [class*="unsupportedPreview"], [class*="unpreviewable"]');
-            if (emptyContainer && !emptyContainer.querySelector('.dsh-mobile-save-file-btn')) {
-              var pathEl = document.querySelector('[data-textpreview-path], [class*="previewPath"]');
-              var fullPath = pathEl ? (pathEl.getAttribute('title') || pathEl.textContent || '') : '';
-              if (!fullPath) {
-                var titleTab = document.querySelector('[data-dockkit-strip] [aria-selected="true"], [data-dockkit-strip] [class*="active"]');
-                fullPath = titleTab ? (titleTab.getAttribute('title') || titleTab.textContent || '') : '';
+            // 🔴 build 84：DSH 换版后上述类名/属性常失效（哈希类），
+            //    补「该格式文件暂时无法预览」文本锚兜底（官方文案比类名稳定）。
+            if (!emptyContainer) {
+              var els2 = document.querySelectorAll('div, span');
+              for (var j = 0; j < els2.length && j < 3000; j++) {
+                if (els2[j].children.length !== 0) { continue; }
+                var t2 = (els2[j].textContent || '').trim();
+                if (t2 === '该格式文件暂时无法预览') {
+                  emptyContainer = els2[j].parentElement || els2[j];
+                  break;
+                }
               }
+            }
+            if (emptyContainer && !emptyContainer.querySelector('.dsh-mobile-save-file-btn')) {
+              var fullPath = resolveCurrentPreviewPath();
               var btn = document.createElement('button');
               btn.className = 'dsh-mobile-save-file-btn';
               btn.type = 'button';
@@ -2886,6 +2910,15 @@ final class ViewController: UIViewController {
               if (pcSplitBtn) {
                 // 如果这是手机端的“保存/分享”自定义按钮，则允许正常执行
                 if (target.closest('.dsh-mobile-save-file-btn') || target.closest('.dsh-mobile-share-btn') || target.closest('.dsh-mobile-download-btn')) {
+                  return;
+                }
+                // 🔴 build 84：文件预览页的「打开」按钮改道原生分享/保存，不再弹「禁止打开」拦截
+                //   （老总 2026-10-22 12:11 报障：文件 tab 打开 tipa 只弹拦截，问题反复出现；现在直接调起系统分享面板）
+                var previewPath = resolveCurrentPreviewPath();
+                if (previewPath) {
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                  shareFileByPath(previewPath, previewPath.split(/[\\\\/]/).pop() || previewPath);
                   return;
                 }
                 e.preventDefault();
