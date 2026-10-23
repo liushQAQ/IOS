@@ -760,43 +760,26 @@ final class ViewController: UIViewController {
             '  position: relative !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
+            '  justify-content: space-between !important;',
             '  width: 100% !important;',
             '  box-sizing: border-box !important;',
             '}',
-            '/* 目录按钮（左侧抽屉开关）：最左端自然排列，不脱标 */',
-            'html body [data-phase] header [class*="titleRow"] > button[aria-label*="目录"],',
-            'html body [data-phase] header [class*="titleRow"] > button[aria-label*="侧边栏"] {',
-            '  flex: 0 0 auto !important;',
-            '  margin-right: 6px !important;',
-            '  position: static !important;',
-            '}',
-            '/* 标题集群（titleCluster）：主弹性自适应区，占满中间剩余空间 */',
-            '.ank0OG_titleCluster,',
-            '[data-phase] header [class*="titleCluster"] {',
-            '  display: flex !important;',
-            '  align-items: center !important;',
-            '  flex: 1 1 auto !important;',
-            '  min-width: 0 !important;',
-            '  position: static !important;',
-            '  margin: 0 !important;',
-            '}',
-            '/* 会话标题：彻底放弃 absolute 脱标，采用 Flex 自适应与优雅单行省略 */',
             '.ank0OG_crumbs,',
             '[data-phase] header [class*="crumbs"],',
             '[data-phase] header [class$="_crumbs"] {',
-            '  position: static !important;',
-            '  flex: 0 1 auto !important;',
-            '  min-width: 40px !important;',
+            '  position: absolute !important;',
+            '  left: 54px !important;',
             '  right: var(--dsh-head-right, 96px) !important;',
+            '  margin: 0 auto !important;',
+            '  display: flex !important;',
+            '  justify-content: center !important;',
+            '  align-items: center !important;',
+            '  text-align: center !important;',
             '  max-width: calc(100% - 54px - var(--dsh-head-right, 96px)) !important;',
+            '  min-width: 0 !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
-            '  margin: 0 8px 0 0 !important;',
-            '  left: auto !important;',
-            '  display: flex !important;',
-            '  align-items: center !important;',
-            '  text-align: left !important;',
             '  pointer-events: auto !important;',
             '}',
             '.ank0OG_crumbs *,',
@@ -804,7 +787,7 @@ final class ViewController: UIViewController {
             '.ank0OG_crumb,',
             '.ank0OG_crumbCurrent,',
             '.ank0OG_crumbSeg {',
-            '  text-align: left !important;',
+            '  text-align: center !important;',
             '  max-width: 100% !important;',
             '  min-width: 0 !important;',
             '  overflow: hidden !important;',
@@ -815,27 +798,15 @@ final class ViewController: UIViewController {
             '  font-weight: 600 !important;',
             '  font-size: 15px !important;',
             '  line-height: 22px !important;',
-            '  padding: 2px 0px !important;',
+            '  padding: 2px 4px !important;',
             '}',
-            '/* 状态操作集群（智能体团队 + 后台任务）：推至 cluster 最右侧自然顺排 */',
-            '.ank0OG_headerActions,',
-            '[data-phase] header [class*="headerActions"] {',
+            '.ank0OG_titleCluster,',
+            '[data-phase] header [class*="titleCluster"],',
+            '.ank0OG_headerActions {',
+            '  margin-left: auto !important;',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
-            '  flex: 0 0 auto !important;',
-            '  margin-left: auto !important;',
             '  gap: 6px !important;',
-            '  position: static !important;',
-            '  width: auto !important;',
-            '}',
-            '/* 严禁状态集群内部任何元素脱标 */',
-            'html body [data-phase] header [class*="headerActions"] * {',
-            '  position: static !important;',
-            '  transform: none !important;',
-            '  top: auto !important;',
-            '  right: auto !important;',
-            '  bottom: auto !important;',
-            '  left: auto !important;',
             '}',
             '/* 智能体团队及顶栏操作按钮：强制绝对抗挤压、不收缩、不折行、完整保持横排药丸 */',
             '[class*="titleCluster"] > :not([class*="crumbs"]):not([class$="_crumbs"]),',
@@ -851,30 +822,6 @@ final class ViewController: UIViewController {
             '  white-space: nowrap !important;',
             '  min-width: max-content !important;',
             '  word-break: keep-all !important;',
-            '}',
-            '/* 后台任务胶囊指示器：宽度随文字自适应，文字不折行 */',
-            'button[aria-label*="后台任务"],',
-            '[data-job-indicator] button {',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '  gap: 4px !important;',
-            '  width: auto !important;',
-            '  white-space: nowrap !important;',
-            '}',
-            '/* 中间工具区（utilities）：适度限宽，平级自然排列 */',
-            'html body [data-phase] header [class*="headerUtilities"] {',
-            '  flex: 0 0 auto !important;',
-            '  position: static !important;',
-            '  max-width: 25vw !important;',
-            '  overflow: hidden !important;',
-            '}',
-            '/* 最右侧边栏开关（headerCorner）：锁定平级末端，永不被挤压遮盖 */',
-            'html body [data-phase] header [class*="headerCorner"] {',
-            '  flex: 0 0 auto !important;',
-            '  position: static !important;',
-            '  margin-left: 6px !important;',
-            '  width: 32px !important;',
-            '}',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '}',
@@ -1621,22 +1568,22 @@ final class ViewController: UIViewController {
             '[class*="composerStack"] [class*="VERcba_standardControls"] > div > div {',
             '  max-width: 100% !important;',
             '}',
-            '/* ===== v1.0.131(98) 全静态 Flex 自然流重构定版 =====',
-            '   彻底废除 absolute 脱标，左侧按钮 → titleCluster 弹性区 → headerUtilities → headerCorner 自然顺排 */',
+            '/* ===== v1.0.131(94) 顶栏各模块定宽、互不重叠 =====',
+            '   老总真机 13:38 实锤：会话标题与右侧「智能体团队 · 任务运行中」转圈徽标叠在一起，',
+            '   且「轨/迹」「系统监/控」被挤成两行竖排。',
+            '   实测（393 移动布局）：titleRow=[96,8,285,36]，headerUtilities=[282,12,79,28]；',
+            '   crumbs 被本文件前文钉成 absolute + left:54/right:96，右缘算到 285 > 282 —— 实测重叠 3px；',
+            '   同时「智能体团队」按钮又被强制 min-width:max-content 不许收缩，右侧只会更宽。',
+            '   本组选择器特异性 (0,3,3) 高于前文 (0,2,1)，且排在数组最末 → 稳定生效：',
+            '   ① 标题右预留改用 --dsh-head-right（fixHeaderFit 实测右侧模块宽度写入，JS 死时退回 96px）；',
+            '   ② 标题内部一律单行省略，绝不溢出压右侧模块；',
+            '   ③ tab 行三个 tab 永不竖排、永不收缩；其余模块各自限宽可省略。 */',
             'html body [data-phase] header [class*="titleRow"] [class*="crumbs"] {',
-            '  position: static !important;',
-            '  flex: 0 1 auto !important;',
-            '  min-width: 40px !important;',
-            '  max-width: 50vw !important;',
+            '  right: var(--dsh-head-right, 96px) !important;',
+            '  max-width: calc(100% - 54px - var(--dsh-head-right, 96px)) !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
-            '  margin: 0 8px 0 0 !important;',
-            '  left: auto !important;',
-            '  right: auto !important;',
-            '  display: flex !important;',
-            '  align-items: center !important;',
-            '  text-align: left !important;',
             '}',
             'html body [data-phase] header [class*="titleRow"] [class*="crumbs"] * {',
             '  min-width: 0 !important;',
@@ -4401,27 +4348,25 @@ final class ViewController: UIViewController {
               }
               var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 18;
               var want = sb - 2 - shift;
-              /* 🔴 v1.0.131(96) 增量补偿稳态 —— 根治「上滑/切会话/读旧会话整页错位几秒再跳回」。
-                 (95) 的修法是「目标值 want 没变就 return」，但 want = sb-2-shift 是常数，
-                 条件恒真 → 短路永久命中 → 把加载中途测到的那一帧永久锁死：
-                 实测 94 顶栏在 y=27（正确），95 被锁死在 y=-12（缩进状态栏，反而更糟）。
-                 (94) 的修法是每轮「清 margin → 重测 → 再写」，清与写之间必然存在一帧
-                 没有 margin 的裸奔状态，上滑/切会话高频触发时就是肉眼可见的整页上下跳。
-                 (96) 两头都不要：不清任何属性，只读当前实测位置，在现有 margin 之上补残差。
-                 天然位置加载中是 39、加载完是 0 都无所谓 —— 实测 top 恒等于 want，
-                 既不裸奔跳变，也不锁死错位。 */
-              var cur = col.getBoundingClientRect().top;
-              if (!(cur > -600 && cur < 1200)) return;
-              var curMt = parseFloat(col.style.marginTop);
-              if (!(curMt > -600 && curMt < 1200)) curMt = 0;
-              var target = curMt + (want - cur);
-              /* 已经对齐 → 一个属性都不碰（稳态零写入，杜绝清-量-写那一帧跳变） */
-              if (Math.abs(target - curMt) <= 0.5) {
-                window.__dshMtWant = want;
-                if (col.dataset) col.dataset.dshMt = '1';
+              /* 🔴 v1.0.131(95) 稳态零写入 —— 修「上滑/切会话时整页错位几秒再跳回」。
+                 旧实现每一轮都无条件「清 margin → 重新量 top → 再写回」，
+                 中间必然存在一帧「没有 margin」的状态。上滑、切会话、读旧会话时
+                 MutationObserver / 3 秒兜底会被高频触发，这一帧就被眼睛看到了：
+                 顶栏 + 会话框整体上下跳，等渲染稳定、目标值不再变化才停。
+                 现在：目标值 want 没变且本元素已经校正过 → 直接返回，一个属性都不碰。
+                 元素被 React 重建（dataset.dshMt 丢失）或 want 真的变了，才走一次校正。 */
+              if (col.dataset && col.dataset.dshMt === '1'
+                  && typeof window.__dshMtWant === 'number'
+                  && Math.abs(window.__dshMtWant - want) < 0.5) {
                 return;
               }
-              setPI(col, 'margin-top', target + 'px');
+              if (col.dataset && col.dataset.dshMt === '1') { try { col.style.removeProperty('margin-top'); } catch (e3) {} }
+              var cur = col.getBoundingClientRect().top;
+              if (!(cur > -600 && cur < 1200)) return;
+              var d = want - cur;
+              if (Math.abs(d) > 0.5) {
+                setPI(col, 'margin-top', d + 'px');
+              }
               window.__dshMtWant = want;
               if (col.dataset) col.dataset.dshMt = '1';
             } catch (e) {}
@@ -4475,7 +4420,6 @@ function applySidebarInset() {
             try { fixTopChrome(); } catch (e) {}
             try { fixFabRows(); } catch (e) {}
             try { fixOverlayOverflow(); } catch (e) {}
-            try { if (window.__dshMobilePolishRun) window.__dshMobilePolishRun(); } catch (e) {}
             // 🔴 v1.0.123：出血钳制不能只靠 MutationObserver 驱动 —— 页面静止不变化时
             //   一次都不会再跑，刚进页面那一下的出血就一直留在屏幕上（老总看到的就是这个）。
             //   装一个 3 秒兜底定时器（只装一次），保证任何静态页面也会收敛。
@@ -4689,24 +4633,22 @@ function applySidebarInset() {
           // 紧贴右侧抽屉开关（32px）左边并留 10px 间距。
           function shiftAgentButtonRight() {
             try {
-              // 🔴 v1.0.131(97)：彻底停用绝对定位钉死智能体团队（老总 19:27 反馈）。
-              // 旧逻辑把智能体团队强行钉在 right:44px，与后台任务指示器直接重叠。
-              // 现代 DSH 顶栏在 headerActions 内自然流式排列，严禁使用 absolute 暴力抢位。
               var header = document.querySelector('header');
               if (!header) return;
-              var btns = header.querySelectorAll('button[aria-label*="智能体团队"]');
+              var btns = header.querySelectorAll('button[aria-label*=\"智能体团队\"]');
               for (var j = 0; j < btns.length; j++) {
-                var wrap = btns[j].parentElement;
-                if (!wrap) continue;
-                if (wrap.style.position === 'absolute') {
-                  wrap.style.removeProperty('position');
-                  wrap.style.removeProperty('left');
-                  wrap.style.removeProperty('right');
-                  wrap.style.removeProperty('top');
-                  wrap.style.removeProperty('transform');
-                  wrap.style.removeProperty('margin');
-                  wrap.style.removeProperty('z-index');
-                }
+            var wrap = btns[j].parentElement;
+              if (!wrap) continue;
+              if (window.__dshMobilePolish) return;   // shim_16 已接管顶栏摆位，避免两边互相覆盖
+              if (wrap.dataset.dshAgentMoved === '1') continue;
+                wrap.dataset.dshAgentMoved = '1';
+                wrap.style.setProperty('position', 'absolute', 'important');
+                wrap.style.setProperty('left', 'auto', 'important');
+                wrap.style.setProperty('right', '44px', 'important');
+                wrap.style.setProperty('top', '50%', 'important');
+                wrap.style.setProperty('transform', 'translateY(-50%)', 'important');
+                wrap.style.setProperty('margin', '0', 'important');
+                wrap.style.setProperty('z-index', '6', 'important');
               }
             } catch (e) {}
           }
@@ -4997,15 +4939,19 @@ function applySidebarInset() {
             var sbx = seat.parentElement;
             var room = (sbx && sbx.scrollHeight - sbx.clientHeight > 4) ? 1 : 0;
             var mb = num(getComputedStyle(seat).marginBottom);
-            var isSession = (window.location && window.location.pathname && window.location.pathname.indexOf('/session') !== -1)
-                            || seat.dataset.dshBed === '1';
-            if (room || isSession) {
-              // 有滚动余量或处于会话态：用 sticky 自身的 inset 定位 —— 绝对值，天然幂等，
-              // 🔴 v1.0.108「底栏床垫」+ v1.0.131(96)「稳态常驻」：
-              //    根治「读旧会话等待期几秒钟会话框错位再跳回」（老总 16:00 反馈）。
-              //    旧逻辑在 room==0 时立刻扒掉 padding-bottom 和 background，读旧会话那 2 秒由于网络请求中消息未渲染，
-              //    被误判为无余量并拆除床垫，回包后又装回 → 视觉猛烈跳动。
-              //    现改为：只要建立过床垫或处于会话态，保持常驻稳态，不反复拆装。
+            if (room) {
+              // 有滚动余量（会话页）：用 sticky 自身的 inset 定位 —— 绝对值，天然幂等，
+              // 🔴 v1.0.108「底栏床垫」—— 老总 2026-10-16 报的「会话记录翻阅，穿过聊天框模块从底部露出」。
+              //    A/B 实测（同一会话页、同一滚动位置）：
+              //      官方原版：seat 自己 bottom:0 贴死滚动容器底（rect y761..932），座位下沿到屏底没有任何裸区；
+              //      我们的构建：seat bottom:46px → rect y638..886，886..932 这 46pt 成为**没被任何元素铺色的裸带**，
+              //                滚动中的消息就从这个缝里露出来（实测座位下缘往下逐点命中 = DIV.ank0OG_scrollBody；
+              //                老总实拍：「费用明细」下面那一大块就是一条完整的气泡从底部顶出来）。
+              //    修法（**不改任何可见布局**）：sticky inset 由 46px 收到 0，把这 46px 改成 seat 自己的
+              //    padding-bottom —— 盒子底边贴到滚动容器底、内容框仍止于原处（638..886 一寸不动），
+              //    只是那 46px 由「透明」变成「DSH 页面底色」的实心垫子；再给 seat 本身补同色底，
+              //    顺带盖掉座位内部残留的透光区。
+              //    ⚠️ 依旧必须是幂等写入（值对了就不写），与上面「绝不增量」是同一条铁律。
               var pbg = pageBg();
               // ⚠️ 必须**保留 DSH 自己的 padding-bottom**（实测 = 2px），不能拿 need 直接顶掉它：
               //    否则内容框整体下移 2px（实测 卡片 675→677、统计条 769→771、费用条 856→858、
@@ -5024,8 +4970,18 @@ function applySidebarInset() {
               if (mb !== 0) setP(seat, 'margin-bottom', '0px');
             } else {
               // 无滚动余量（首页/新会话页）：sticky 失效（内容不满一屏），只能用 margin 撑；
+              // 此处 margin 与位置是 1:1 的，绝对赋值同样收敛安全。
               if (mb !== need) setP(seat, 'margin-bottom', need + 'px');
               if (seat.style.bottom !== '0px') setP(seat, 'bottom', '0px');
+              // 床垫只属于「有滚动余量」的会话页；切到首页/新会话页要原样撤掉，
+              // 用 removeProperty 交还 DSH 自己的值（不硬写 transparent，免得多留一道我们自己的痕迹）。
+              if (seat.dataset.dshBed === '1') {
+                delete seat.dataset.dshBed;
+                delete seat.dataset.dshOwnPadB;
+                try { seat.style.removeProperty('padding-bottom'); } catch (e) {}
+                try { seat.style.removeProperty('background'); } catch (e) {}
+                seat.dataset.dshBedBg = '';
+              }
             }
           }
           function fixFab() {
@@ -5465,26 +5421,47 @@ function applySidebarInset() {
               if (!isSmall()) return;
               var header = document.querySelector('header');
               if (!header) return;
-              // 🔴 v1.0.131(98)：全静态 Flex 自然流重构定版 —— 彻底废除 JS 绝对定位钉位置反模式。
-              // 物理清除智能体团队与后台任务容器上的内联 position/right/left/transform 属性，
-              // 完全交给 CSS Flexbox 自然流排队（漏洞3：JS 清权防御闭环）。
-              var team = header.querySelector('button[aria-label*="智能体团队"]');
-              var badge = header.querySelector('button[aria-label*="子智能体"]');
+              var hw = header.getBoundingClientRect().width;
+              if (hw < 300) return;
+              // 标题容器收窄 28px：实测标题文字只用到 x≈293，容器到 322，收窄不影响标题显示，
+              // 但能给右侧那排动作按钮让出位置（否则 430 宽下根本排不下）。
+              var nav = header.querySelector('nav');
+              if (nav) {
+                var nr = nav.getBoundingClientRect();
+                if (nr.width > 210) S(nav, 'width', '228px');
+              }
               var jobs = header.querySelector('button[aria-label*="后台任务"]');
-              [team, badge, jobs].forEach(function(btn) {
-                if (btn && btn.parentElement && btn.parentElement !== header) {
-                  var p = btn.parentElement;
-                  if (p.style.position === 'absolute') {
-                    p.style.removeProperty('position');
-                    p.style.removeProperty('left');
-                    p.style.removeProperty('right');
-                    p.style.removeProperty('top');
-                    p.style.removeProperty('transform');
-                    p.style.removeProperty('margin');
-                    p.style.removeProperty('z-index');
-                  }
+              var badge = header.querySelector('button[aria-label*="子智能体"]');
+              var team = header.querySelector('button[aria-label*="智能体团队"]');
+              // ---------- 🔴 老总定版（2026-10-16 20:50）：「③④ 不一样，可以两个下箭头」----------
+              // 曾于 20:15 按「去掉 ④」隐藏过它，老总看清两者功能不同后确认保留 → 恢复摆位。
+              // 结论：③「N 个子智能体」与 ④「N 个后台任务」是两个不同入口，两个 ⌄ 都保留、都收在标题右侧。
+              // 从右往左依次摆：右侧抽屉开关(386..418) | 团队(32) | 徽标(22) | 后台任务(22) | 标题文字(止于 301)
+              // 间距账（430 宽，实测）：标题文字右边界 301 → 可用到 386 共 85px，
+              // 三个图标 22+22+34=78px，剩 7px 分三段 ⇒ 每段约 2px，刚好不压标题、不互压。
+              if (team && team.parentElement && team.parentElement !== header) placeAbs(team.parentElement, hw - 52, 32);
+              if (badge && badge.parentElement && badge.parentElement !== header) {
+                if (badge.dataset.dshBadgeTight !== '1') {
+                  S(badge, 'width', '22px');
+                  S(badge, 'min-width', '0');
+                  S(badge, 'padding', '0');
+                  S(badge, 'box-sizing', 'border-box');
+                  badge.dataset.dshBadgeTight = '1';
                 }
-              });
+                placeAbs(badge.parentElement, hw - 80, 22);
+              }
+              // 「8 个后台任务」在窄屏下只剩一个图标（文字早被隐藏）。它原本被标题 absolute 层压住，
+              // 老总看到的就是那个「孤零零的 ⌄」——一并收到右侧同一排，并留出 3px 不压标题文字。
+              if (jobs && jobs.parentElement && jobs.parentElement !== header) {
+                if (jobs.dataset.dshJobsTight !== '1') {
+                  S(jobs, 'width', '22px');
+                  S(jobs, 'min-width', '0');
+                  S(jobs, 'padding', '0');
+                  S(jobs, 'box-sizing', 'border-box');
+                  jobs.dataset.dshJobsTight = '1';
+                }
+                placeAbs(jobs.parentElement, hw - 104, 22);
+              }
             } catch (e) {}
           }
 
@@ -7117,7 +7094,6 @@ function applySidebarInset() {
         sv.bounces = !shouldLock
         sv.alwaysBounceVertical = !shouldLock
         sv.alwaysBounceHorizontal = false
-        sv.isScrollEnabled = !shouldLock
         if changed {
             sv.showsVerticalScrollIndicator = !shouldLock
             if shouldLock { sv.contentOffset = .zero }
@@ -8359,10 +8335,9 @@ function applySidebarInset() {
             · 原生按钮零位移零悬浮
             · 320~430 小屏自动收缩
             · 优化菜单窄屏改浮层
-            · 上滑切会话不错位
+            · 顶栏文字水平对齐
             """,
             preferredStyle: .alert)
-        Self.alignAlertMessageLeft(alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
             self?.openConnectionGuide()
         })
@@ -9149,10 +9124,6 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
             preferredStyle: .alert
         )
 
-        // 🔴 v1.0.131(97)：老总明确要求「更新说明和关于这里123456靠左对齐」。
-        // UIAlertController 的 message 默认是居中对齐，遍历视图层级设置 textAlignment = .left。
-        Self.alignAlertMessageLeft(alert)
-
         if !tipaURL.isEmpty {
             alert.addAction(UIAlertAction(title: "🚀 极速下载并用巨魔安装 (推荐·零报错)", style: .default) { [weak self] _ in
                 self?.downloadAndInstallTIPA(remoteURLString: tipaURL, fallbackURL: fallbackURL, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
@@ -9170,22 +9141,6 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
 
         alert.addAction(UIAlertAction(title: "稍后提醒", style: .cancel))
         present(alert, animated: true)
-    }
-
-    /// 递归遍历 UIAlertController 的视图树，将 message 对应的 UILabel 设置为靠左对齐
-    private static func alignAlertMessageLeft(_ alert: UIAlertController) {
-        func walk(_ view: UIView) {
-            for sub in view.subviews {
-                if let label = sub as? UILabel {
-                    // 仅将包含多行内容或说明文本的 UILabel 设置为左对齐，标题保持居中
-                    if label.numberOfLines == 0 || (label.text?.contains("\n") == true) || (label.text?.contains("【") == true) {
-                        label.textAlignment = .left
-                    }
-                }
-                walk(sub)
-            }
-        }
-        walk(alert.view)
     }
 
     func installViaTrollStore(remoteURLString: String, fallbackURL: String? = nil) {

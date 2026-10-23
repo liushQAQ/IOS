@@ -1,0 +1,12 @@
+{
+  "version": "1.0.131",
+  "build": 95,
+  "updated_at": "2026-10-23 16:30:00",
+  "title": "v1.0.131(95) 上滑与切换会话不再错位跳回",
+  "changelog": "1. 上滑不再整页跳动\n2. 切会话不再整体错位\n3. 读旧会话不再闪一下\n4. 标题宽度加载中不抖\n5. 稳态零写入不重复刷\n6. 顶栏会话框各自稳定",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-95.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-95.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-95.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.131",
+  "md5": "28da7050902b7315a9141ef57d7fc5fb"
+}
