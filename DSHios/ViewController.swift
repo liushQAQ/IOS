@@ -4348,25 +4348,27 @@ final class ViewController: UIViewController {
               }
               var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 18;
               var want = sb - 2 - shift;
-              /* 🔴 v1.0.131(95) 稳态零写入 —— 修「上滑/切会话时整页错位几秒再跳回」。
-                 旧实现每一轮都无条件「清 margin → 重新量 top → 再写回」，
-                 中间必然存在一帧「没有 margin」的状态。上滑、切会话、读旧会话时
-                 MutationObserver / 3 秒兜底会被高频触发，这一帧就被眼睛看到了：
-                 顶栏 + 会话框整体上下跳，等渲染稳定、目标值不再变化才停。
-                 现在：目标值 want 没变且本元素已经校正过 → 直接返回，一个属性都不碰。
-                 元素被 React 重建（dataset.dshMt 丢失）或 want 真的变了，才走一次校正。 */
-              if (col.dataset && col.dataset.dshMt === '1'
-                  && typeof window.__dshMtWant === 'number'
-                  && Math.abs(window.__dshMtWant - want) < 0.5) {
-                return;
-              }
-              if (col.dataset && col.dataset.dshMt === '1') { try { col.style.removeProperty('margin-top'); } catch (e3) {} }
+              /* 🔴 v1.0.131(96) 增量补偿稳态 —— 根治「上滑/切会话/读旧会话整页错位几秒再跳回」。
+                 (95) 的修法是「目标值 want 没变就 return」，但 want = sb-2-shift 是常数，
+                 条件恒真 → 短路永久命中 → 把加载中途测到的那一帧永久锁死：
+                 实测 94 顶栏在 y=27（正确），95 被锁死在 y=-12（缩进状态栏，反而更糟）。
+                 (94) 的修法是每轮「清 margin → 重测 → 再写」，清与写之间必然存在一帧
+                 没有 margin 的裸奔状态，上滑/切会话高频触发时就是肉眼可见的整页上下跳。
+                 (96) 两头都不要：不清任何属性，只读当前实测位置，在现有 margin 之上补残差。
+                 天然位置加载中是 39、加载完是 0 都无所谓 —— 实测 top 恒等于 want，
+                 既不裸奔跳变，也不锁死错位。 */
               var cur = col.getBoundingClientRect().top;
               if (!(cur > -600 && cur < 1200)) return;
-              var d = want - cur;
-              if (Math.abs(d) > 0.5) {
-                setPI(col, 'margin-top', d + 'px');
+              var curMt = parseFloat(col.style.marginTop);
+              if (!(curMt > -600 && curMt < 1200)) curMt = 0;
+              var target = curMt + (want - cur);
+              /* 已经对齐 → 一个属性都不碰（稳态零写入，杜绝清-量-写那一帧跳变） */
+              if (Math.abs(target - curMt) <= 0.5) {
+                window.__dshMtWant = want;
+                if (col.dataset) col.dataset.dshMt = '1';
+                return;
               }
+              setPI(col, 'margin-top', target + 'px');
               window.__dshMtWant = want;
               if (col.dataset) col.dataset.dshMt = '1';
             } catch (e) {}
@@ -8335,7 +8337,7 @@ function applySidebarInset() {
             · 原生按钮零位移零悬浮
             · 320~430 小屏自动收缩
             · 优化菜单窄屏改浮层
-            · 顶栏文字水平对齐
+            · 上滑切会话不错位
             """,
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in

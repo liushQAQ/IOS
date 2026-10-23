@@ -1027,11 +1027,22 @@ const A_PLUGIN_PAGE = () => {
         : (tabGapNarrow ? 'nowrap + 窄屏收 gap 都在' : '窄屏 gap 未收 → 393 下放不下会溢出'));
     // 🔴 v1.0.131(95)：老总「上滑 / 打开新会话 / 读旧会话几秒钟，整体错位，加载完跳回」。
     //   两条「过渡态不许动」的守卫，删掉任何一条，跳变就会复发。
-    const steadyNoWrite = /typeof window\.__dshMtWant === 'number'[\s\S]{0,160}?return;/.test(bundle);
+    /* 🔴 v1.0.131(96)：95 的短路条件是「want 未变就 return」，而 want 是常数 → 恒真短路 →
+       位置被锁死在加载中途那一帧（实测 94 y=27 正确、95 y=-12 缩进状态栏）。
+       96 改成增量补偿：不清属性 + 按实测残差补。三条断言钉死，缺一即红。 */
+    const steadyNoWrite = /if \(Math\.abs\(target - curMt\) <= 0\.5\) \{[\s\S]{0,200}?return;/.test(bundle);
+    const incremental = /var target = curMt \+ \(want - cur\);/.test(bundle);
+    const noClearJump = !/col\.style\.removeProperty\('margin-top'\)/.test(bundle);
     const holdLastRight = /if \(!\(right > 0\)\) \{[\s\S]{0,600}?过渡态绝不回落到 96px/.test(bundle);
     chk(steadyNoWrite,
-      '[顶栏] 校正稳态零写入（目标值未变不重写 margin，杜绝清-量-写那一帧跳变）',
+      '[顶栏] 校正稳态零写入（已对齐就不碰任何属性，杜绝清-量-写那一帧跳变）',
       steadyNoWrite ? '稳态守卫在' : '🔴 又变回每轮清-量-写 → 上滑/切会话会整页上下跳');
+    chk(incremental,
+      '[顶栏] 顶栏位置走增量补偿（在现有 margin 上补残差，绝不锁死在加载中途那一帧）',
+      incremental ? '增量补偿在' : '🔴 位置会被锁死 → 顶栏缩进状态栏，比跳变更糟');
+    chk(noClearJump,
+      '[顶栏] 校正绝不清 margin（无 removeProperty，杜绝先错后跳那一帧）',
+      noClearJump ? '已根除清属性' : '🔴 又出现 removeProperty → 会有一帧裸奔跳变');
     chk(holdLastRight,
       '[顶栏] 标题右预留过渡态沿用上次值（抓不到右侧模块时不回落 96px）',
       holdLastRight ? '沿用守卫在' : '🔴 又回落 96px → 加载中标题变宽、加载完缩回');
