@@ -1,12 +1,12 @@
 {
   "version": "1.0.131",
-  "build": 96,
-  "updated_at": "2026-10-23 18:25:00",
-  "title": "v1.0.131(96) 后台任务与智能体按钮零重叠，顶栏底栏稳态常驻",
-  "changelog": "1. 任务运行中与智能体零重叠\n2. 顶栏右侧各模块流式顺排\n3. 读旧会话会话框不再跳动\n4. 底栏床垫稳态常驻不闪烁\n5. 外层原生手势彻底锁死\n6. 顶栏位置增量补偿不焊死",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-96.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-96.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-96.tipa",
+  "build": 97,
+  "updated_at": "2026-10-23 20:30:00",
+  "title": "v1.0.131(97) 顶栏模块动态避让零重叠，更新说明靠左对齐",
+  "changelog": "1. 顶栏后台任务与智能体零重叠\n2. 标题文字右侧自动避让无遮挡\n3. 弹窗说明与更新要点靠左对齐\n4. 读旧会话会话框不再跳动\n5. 底栏床垫稳态常驻不闪烁\n6. 外层原生手势彻底锁死",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-97.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-97.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-97.tipa",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.131",
-  "md5": "f09748ecc8a99ed715d07de2dcf05291"
+  "md5": "1b97688586d73c3dca4634a5c3093e71"
 }
