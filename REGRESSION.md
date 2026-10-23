@@ -428,6 +428,18 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
   `[顶栏] 顶栏位置走增量补偿（target = curMt + (want - cur)）` /
   `[顶栏] 校正绝不清 margin（bundle 内 removeProperty('margin-top') 出现次数必须为 0）`。
 
+### R30 顶栏「1个后台任务运行中」与智能体团队按钮重叠 + 底栏稳态常驻（v1.0.131 build 96 根治）
+
+- **老总 17:38 实锤截图**：「看看顶栏，文字1个后台任务运行中和智能体按钮 重叠。」
+- **根因：绝对定位硬编码（`placeAbs`）的恶果。**
+  1. `moveAgentBadge()` 假定后台任务永远只有 22px 窄图标，调用 `placeAbs(team.parentElement, hw - 52, 32)` 将智能体团队用 `position: absolute; right: ...` 强行钉死在右侧 52px。
+  2. 但任务真实运行时，DSH 渲染的是完整状态组件「**1 个后台任务运行中**」（宽度 152px）。该组件自然向右延伸，正好与钉死在右侧的智能体团队重叠，「运行中」三字被智能体图标正面骑脸。
+  3. `fixBottom()` 在读旧会话等请求的 2 秒内因 `room == 0` 把底部 padding-bottom 扒掉、回包后再装回，引发会话框错位颠簸；同时原生层未关闭外层 `isScrollEnabled`，导致整页仍可被拖拽上滑。
+- **修法**：
+  1. **解除顶栏绝对定位**：撤销 `moveAgentBadge()` 中对 `team` / `badge` / `jobs` 的 `placeAbs` 暴力钉死，统一恢复为 `position: static` 的流式排列。各模块在 `headerActions` 内作为 flex 项自然顺排，物理上绝对零重叠，左侧标题通过 `fixHeaderFit` 自动避让整组宽度。
+  2. **底栏稳态常驻**：`fixBottom()` 在处于会话态或建立过床垫时保持常驻稳态，无论内容是否满一屏，底部 padding-bottom 均恒定存在，彻底抹平读旧会话数据请求期间的上下颠簸。
+  3. **原生滚动彻底锁死**：`updatePageScrollLock` 确认 DSH 页面后设置 `sv.isScrollEnabled = !shouldLock`，从手势层杜绝整页被手指拖拽上滑。
+
 ## 三、校验 SOP（每个新版本出包前必做）
 
 ### 前置
