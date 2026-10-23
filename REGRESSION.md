@@ -131,6 +131,43 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
   App 侧发现新插件违规：**只做清占位的隔离，不许帮它搬位**。
 - **闸门防线**：静态断言 `GATE.modelPickerGuard`（4 条）+ `GATE.modelDockGuard`（3 条），共 75 绿 0 红。
 
+### R24 插件源码侧迁到会话头部 + iOS 长期规范页（v1.0.131 build 93，2026-10-23）
+
+- **背景（老总原话）**：「你明白没有，这个不只是说改 iOS 端。是电脑端口也修改在这个位置。任何自建本来占用会话框插件都改」
+  「还有个提示词优化插件，也是占用会话框呀」「在 iOS App 那个地方长期文本显示规范……必须回到顶部 tab 栏，
+  如何规范。也要告诉他们。通用性任何玩家都适合。」
+- **为什么 shim 改不彻底**：shim 只能在 App 侧「视觉上」清占位，插件下一版又会挤回来，
+  且其他玩家装的 App 没这段 shim 就完全没保护。**必须从插件源码侧改 slot**，两端同时生效。
+- **电脑端实测（迁移前）**：`conversation.input.left` 挂积分胶囊、`conversation.input.right` 挂优化胶囊；
+  `ofTiQG_root` 宽 **5px**、`triggerLabel` 宽 **0**。
+- **迁移三件套**：
+  | 插件 | 旧 slot | 新 slot / 配置 | 版本 |
+  |---|---|---|---|
+  | `dsh-our-free-model-composer-credits` | `conversation.input.left` | `conversation.session.header.actions` | 1.1.0→1.2.0 |
+  | `dsh-prompt-optimizer` | `conversation.input.right` | `conversation.session.header.actions` | 1.4.7→1.5.0 |
+  | `dsh-connect-workbuddy` | `creditPosition: composer` | `creditPosition: stats`（落到 `conversation.composer.dock`） | 配置项 |
+- **迁移后实测**：`rightInner = []`（右半工具行腾空）、`ofTiQG` 恢复 **206px**、`triggerLabel` **123px**；
+  头部 4 元素（智能体团队 93 / 优化 85 / 创造模式 68 / 积分 104）**零重叠零出屏**（1440·1280·1024 三档，30 绿）；
+  优化功能回归实测：打字 → 点优化 → **10.18s 草稿 9 字 → 219 字写回**（证明 header slot 同样提供 `useInput`/`inputActions`）。
+- **🔴 新发现的坑（必须记住）**：
+  1. `conversation.session.header.actions` **只在有会话时声明**。新会话空态 `conversation.session` 子节点为 0，
+     slot 不存在 → 空态验证会误判「插件注册成功但不渲染」，第一次跑 `_host_verify` 就是 12 红假警。
+     **验证必须先点开真实会话。**
+  2. `[data-slot]` 元素带 `style="display: contents"`，`getBoundingClientRect()` **恒为 0**，量几何必须取子元素。
+  3. `conversation.input.model` 是 single slot，第二个注册者会抛
+     `single slot "conversation.input.model.label" already has a registration at priority 0`；
+     `dsh-model-search-live` 用 `priority:-1` 接管替换官方（合规），`dsh-connect-workbuddy` 的 ModelLabel 撞车（历史问题，不影响布局）。
+  4. `inject` 里读 `remote.session` 等在部分上下文缺失 → `slot entry crashed`，接管型插件必须防御。
+- **iOS 侧同步退出（关键）**：插件自己合规后，shim 必须停止接管它，否则双方互删互插。
+  `dsh-po-capsule` 从 `KNOWN` 抓取表、`sels` 抓取表、`releaseHijack()` 三处移除
+  （`releaseHijack` 会清它展开态的 width/flex/display）。
+  注：`grab()` 原本就有 `card/blockEl/dockEl` 包含判据，头部元素抓不到，但留着等于埋雷。
+- **iOS 长期规范页**：设置页底部新增 `🔴 插件布局规范（所有玩家必读）` →
+  `PluginLayoutRulesViewController`（8 张卡片，随 App 分发、永久常驻）。
+  老总要求「也要告诉他们」——装 App 的玩家不看 GitHub，规范必须出现在玩家一定看得到的地方。
+- **闸门防线**：本轮改动后 `regression.js` **75 绿 0 红**（凭证 `src=e023819fa377`）；
+  新增 `_diag/_host_verify.js`（电脑端 30 绿）、`_po_probe.js` / `_po_func2.js` / `_po_narrow.js`（优化胶囊位置+功能+窄屏）。
+
 ## 三、校验 SOP（每个新版本出包前必做）
 
 ### 前置

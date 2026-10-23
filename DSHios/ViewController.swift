@@ -6037,7 +6037,13 @@ function applySidebarInset() {
           //   老总真机 02:06：「模型选择按钮成了悬浮按钮、点击打开错位重叠、应该固定在会话框」。
           //   根因：10-21 把它误判为第三方积分胶囊收入插件条，引擎 layout() 给它写
           //   position:absolute + data-dsh-pos 搬到卡片顶部 = 悬浮。模型选择器退出插件条机制。
-          var KNOWN = ['.cm-stat-entry', '.cm-bbox', '.dsh-po-capsule'];
+          // 🔴 v1.0.131(93)：移除 '.dsh-po-capsule' —— 提示词优化胶囊（dsh-prompt-optimizer
+          //   v1.5.0）已把自己的 slot 从 conversation.input.right 迁到
+          //   conversation.session.header.actions（会话头部 tab 行右侧），会话框里不再有它。
+          //   规范见 PLUGIN_LAYOUT_RULES.md「插件永不占会话框、永不压缩原生按钮」。
+          //   插件自己合规后，shim 不得再接管它 —— 否则 releaseHijack 每 tick 清它的 inline
+          //   （展开态的宽度/flex/display）会与插件自身渲染互相踩踏。
+          var KNOWN = ['.cm-stat-entry', '.cm-bbox'];
           var GAP = 14, PAD_L = 14, PAD_R = 12, BAND = 40, MIN_W = 60;
           var CSS = [
             // 模型选择器自适应：永不越界压发送钮（老总 15:28 第一条）
@@ -6122,8 +6128,9 @@ function applySidebarInset() {
             //   dock 又是 card 的兄弟，旧判据 card.contains 恒 false，只能靠 dockEl —— 一并纳入 blockEl。
             var blockEl = card.parentElement;
             // v1.0.131(90)：sels 移除 dcc-root —— 模型选择器不是插件，永不入列（见 KNOWN 注释）
-            var sels = ['.dsh-po-capsule', '[class*="dsh-po-capsule"]',
-                        '.cm-stat-entry', '[class*="cm-stat"]', '.cm-bbox', '[class*="cm-bbox"]'];
+            // v1.0.131(93)：sels 移除 dsh-po-capsule —— 优化胶囊已迁到会话头部（见 KNOWN 注释），
+            //   不再属于会话框插件条的管辖对象；留在表里只是隐患（将来谁再放回底部就会被误抓搬位）。
+            var sels = ['.cm-stat-entry', '[class*="cm-stat"]', '.cm-bbox', '[class*="cm-bbox"]'];
             for (var s = 0; s < sels.length; s++) {
               var cand = document.querySelectorAll(sels[s]);
               for (var c = 0; c < cand.length; c++) {
@@ -6302,9 +6309,11 @@ function applySidebarInset() {
           //   即使不再注入 CSS，元素也仍被钉在错位坐标上。这是「装新包装完还是错乱」的隐形元凶。
           function releaseHijack() {
             try {
+              // 🔴 v1.0.131(93)：移除 dsh-po-capsule —— 优化胶囊已迁到会话头部（插件侧合规），
+              //   releaseHijack 若继续清它的 inline，会在它展开（优化中 / 优化·撤回·重优）时
+              //   把宽度/flex/display 全部抹掉，与插件自身渲染互相踩踏。
               var sels = ['[data-dsh-pos]', '.dcc-root', '[class*="dcc-root"]',
-                          '.cm-stat-entry', '[class*="cm-stat"]', '.cm-bbox', '[class*="cm-bbox"]',
-                          '.dsh-po-capsule', '[class*="dsh-po-capsule"]'];
+                          '.cm-stat-entry', '[class*="cm-stat"]', '.cm-bbox', '[class*="cm-bbox"]'];
               var props = ['position', 'left', 'right', 'top', 'bottom', 'transform',
                            'max-width', 'max-height', 'min-width', 'min-height', 'height', 'width',
                            'z-index', 'display', 'align-items', 'justify-content', 'order', 'flex',
@@ -6657,22 +6666,25 @@ function applySidebarInset() {
             try { el.setAttribute(TAG, '1'); } catch (e) {}
           }
           // 内部标签被压成 0 宽时恢复（只在停靠后需要，还原时一并清掉）
+          // 🔴 不写死 max-width：宽度改由「容器压缩」决定，标签用 flex 自动收缩 + 省略号，
+          //   否则容器被压到 96px 时标签仍按 110px 撑，反而溢出。
           function widenLabel(root) {
             if (!root) { return; }
             var lab = root.querySelector('[class*="triggerLabel"]');
             var eff = root.querySelector('[class*="triggerEffort"]');
-            var fixOne = function (x, maxW) {
+            var fixOne = function (x) {
               if (!x) { return; }
               setP(x, 'width', 'auto');
-              setP(x, 'max-width', maxW + 'px');
+              setP(x, 'max-width', 'none');
               setP(x, 'min-width', '0');
+              setP(x, 'flex', '0 1 auto');
               setP(x, 'overflow', 'hidden');
               setP(x, 'white-space', 'nowrap');
               setP(x, 'text-overflow', 'ellipsis');
               setP(x, 'display', 'block');
             };
-            fixOne(lab, 110);
-            fixOne(eff, 46);
+            fixOne(lab);
+            fixOne(eff);
           }
           function releaseLabels(root) {
             if (!root) { return; }
@@ -6740,6 +6752,12 @@ function applySidebarInset() {
             releaseLabels(P.off);
             releaseMenus();
           }
+          // 🔴 老总 2026-10-23 09:13 拍板：「那就顶部 tab 处。」
+          //   要求**必须待在 tab 那一行**，不许被挤到下一行。430 真机上 tab 行（对话/轨迹/
+          //   系统监控）右缘约 x=215，右侧只剩约 193px，而两个按钮自然宽 292px ——
+          //   所以要按可用宽度**等比压缩**（各留底线：官方 ≥96px、插件 ≥80px），
+          //   靠省略号收尾；只有连底线都放不下（极窄屏 avail < 96+8+80）才整体下移一行。
+          var MIN_OFF_W = 96, MIN_DCC_W = 80;
           function dock() {
             if (!isDSH()) { restore(); return; }
             // 只在有会话框的页面上停靠（设置页/插件页没有 composer，元素自然不存在）
@@ -6751,25 +6769,44 @@ function applySidebarInset() {
             var cy = info.cy;
             if (!(cy > 0 && cy < 300)) { cy = 97; }
             var top = Math.round(cy - H / 2);
+
+            // ① 先恢复自然上限量自然宽（同步读写，浏览器只在 tick 结束时绘制一帧，不会闪）
+            if (P.off) { setP(P.off, 'max-width', '180px'); }
+            if (P.dcc) { setP(P.dcc, 'max-width', '180px'); }
+            if (P.off) { widenLabel(P.off); }
+            var owNat = 0, dwNat = 0;
+            try { owNat = P.off ? P.off.getBoundingClientRect().width : 0; } catch (e) {}
+            try { dwNat = P.dcc ? P.dcc.getBoundingClientRect().width : 0; } catch (e1) {}
+
+            // ② 算可用宽度（tab 行右侧），决定压缩比
+            var offMax = owNat, dccMax = dwNat, dropRow = false;
+            if (info.rowFound) {
+              var avail = info.vw - info.tabRight - RIGHT - 10;
+              var need = owNat + (P.dcc ? GAP + dwNat : 0);
+              if (need > avail) {
+                if (!P.dcc) {
+                  if (avail >= MIN_OFF_W) { offMax = avail; } else { dropRow = true; }
+                } else {
+                  // 插件模型优先保 104 原宽（它内部不能改），缺口全由官方标签让
+                  dccMax = Math.min(dwNat, Math.max(MIN_DCC_W, avail - GAP - MIN_OFF_W));
+                  offMax = avail - GAP - dccMax;
+                  if (offMax < MIN_OFF_W) { dropRow = true; offMax = MIN_OFF_W; dccMax = MIN_DCC_W; }
+                }
+              }
+            }
+            if (dropRow && info.tabBottom > 0) { top = Math.round(info.tabBottom + 6); }
+
+            // ③ 落位：官方最右，插件按官方实宽往左排
             if (P.off) {
               dockOne(P.off, RIGHT, top);
+              if (offMax < 180) { setP(P.off, 'max-width', Math.round(offMax) + 'px'); }
               widenLabel(P.off);
             }
             var ow = 0;
-            try { ow = P.off ? P.off.getBoundingClientRect().width : 0; } catch (e) {}
-            if (P.dcc) { dockOne(P.dcc, Math.round(RIGHT + ow + GAP), top); }
-            // 🔴 二次校正：与 tab 行横向撞车时整体下移一行（不压「系统监控」）。
-            //   判断用真实渲染宽度（fixed 后已解除压缩），不用估算值。
-            if (info.rowFound) {
-              var dw = 0;
-              try { dw = P.dcc ? P.dcc.getBoundingClientRect().width : 0; } catch (e2) {}
-              var totalW = ow + (P.dcc ? GAP + dw : 0);
-              var avail = info.vw - info.tabRight - RIGHT - 8;
-              if (totalW > avail && info.tabBottom > 0) {
-                var t2 = Math.round(info.tabBottom + 6);
-                if (P.off) { setP(P.off, 'top', t2 + 'px'); }
-                if (P.dcc) { setP(P.dcc, 'top', t2 + 'px'); }
-              }
+            try { ow = P.off ? P.off.getBoundingClientRect().width : 0; } catch (e2) {}
+            if (P.dcc) {
+              dockOne(P.dcc, Math.round(RIGHT + ow + GAP), top);
+              if (dccMax < 180) { setP(P.dcc, 'max-width', Math.round(dccMax) + 'px'); }
             }
             fixMenus();
           }

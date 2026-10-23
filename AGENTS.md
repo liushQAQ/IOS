@@ -35,8 +35,13 @@
 5. 🔴 **插件永不占会话框、永不压缩原生按钮空间**（2026-10-23 老总令，规范见 `PLUGIN_LAYOUT_RULES.md`）：
    - 任何插件（含第三方）不许在 `composerStack` 卡片内加 UI、不许改原生容器宽度给它腾位置、不许用 `transform`「视觉上移」假装搬走（**它仍然占布局宽度**）。
    - `transform` 搬位是本项目两次真机翻车的同一根因（89→90 模型按钮悬浮、90→91 全会话框错乱），**永久禁止**。
-   - 插件要 UI 只能去 `PLUGIN_LAYOUT_RULES.md` 第 3 节的四个合规落点（P1 顶栏 tab 行右侧 / P2 卡片下方 dock / P3 面板 / P4 独立浮层）。
+   - 插件要 UI 只能去 `PLUGIN_LAYOUT_RULES.md` 第 3 节的四个合规落点（P1 会话头部 `conversation.session.header.actions` = 顶部 tab 栏那一行 / P2 卡片下方 dock / P3 面板 / P4 独立浮层）。
    - App 侧发现新插件违规：**只做清占位的隔离，不许帮它搬位**。
+   - 🔴 **两端都要改**（老总 2026-10-23 明令）：「不只是说改 iOS 端，电脑端也修改在这个位置，任何自建本来占用会话框插件都改」。
+     插件源码侧禁 `conversation.input.*` 全系，推荐 `conversation.session.header.actions`；
+     shim 侧一旦插件自己合规，**必须同步退出**（从 `KNOWN`/`sels`/`releaseHijack` 移除），否则双方互删互插。
+   - **面向玩家的长期文本**：规范必须同步出现在 App 内（设置页底部「🔴 插件布局规范（所有玩家必读）」），
+     不能只写在仓库 README ——「也要告诉他们」。
 
 其余编码铁律（禁哈希类名、禁单点补丁、禁 margin 推回、JS 正则 `\(` 双写等 14 条）见 **REGRESSION.md 第四节**。
 

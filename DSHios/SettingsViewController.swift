@@ -381,7 +381,7 @@ final class SettingsViewController: UIViewController {
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
-        let footer = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 160))
+        let footer = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 210))
         let footerLabel = UILabel()
         footerLabel.text = "点行打开该服务；右侧 ✎ 编辑、⇅ 排序（上移/下移/最前/末尾），长按行也可排序；左滑删除。列表保存在本机，电脑 IP 变化时只需编辑对应条目。"
         footerLabel.font = .preferredFont(forTextStyle: .footnote)
@@ -389,6 +389,15 @@ final class SettingsViewController: UIViewController {
         footerLabel.numberOfLines = 0
         footerLabel.translatesAutoresizingMaskIntoConstraints = false
         footer.addSubview(footerLabel)
+
+        let rulesBtn = UIButton(type: .system)
+        rulesBtn.setTitle(" 🔴 插件布局规范（所有玩家必读）", for: .normal)
+        rulesBtn.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        rulesBtn.setImage(UIImage(systemName: "exclamationmark.shield"), for: .normal)
+        rulesBtn.tintColor = .systemRed
+        rulesBtn.translatesAutoresizingMaskIntoConstraints = false
+        rulesBtn.addTarget(self, action: #selector(rulesTapped), for: .touchUpInside)
+        footer.addSubview(rulesBtn)
 
         let guideBtn = UIButton(type: .system)
         guideBtn.setTitle(" 📖 官方 DSH 电脑端连接说明与教程", for: .normal)
@@ -413,7 +422,11 @@ final class SettingsViewController: UIViewController {
             footerLabel.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 20),
             footerLabel.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -20),
 
-            guideBtn.topAnchor.constraint(equalTo: footerLabel.bottomAnchor, constant: 10),
+            rulesBtn.topAnchor.constraint(equalTo: footerLabel.bottomAnchor, constant: 12),
+            rulesBtn.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 20),
+            rulesBtn.trailingAnchor.constraint(lessThanOrEqualTo: footer.trailingAnchor, constant: -20),
+
+            guideBtn.topAnchor.constraint(equalTo: rulesBtn.bottomAnchor, constant: 12),
             guideBtn.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 20),
             guideBtn.trailingAnchor.constraint(lessThanOrEqualTo: footer.trailingAnchor, constant: -20),
 
@@ -445,6 +458,13 @@ final class SettingsViewController: UIViewController {
     @objc private func feedbackTapped() {
         let feedbackVC = FeedbackViewController()
         let nav = UINavigationController(rootViewController: feedbackVC)
+        nav.modalPresentationStyle = .pageSheet
+        present(nav, animated: true)
+    }
+
+    @objc private func rulesTapped() {
+        let rulesVC = PluginLayoutRulesViewController()
+        let nav = UINavigationController(rootViewController: rulesVC)
         nav.modalPresentationStyle = .pageSheet
         present(nav, animated: true)
     }
@@ -788,6 +808,137 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         }
         edit.backgroundColor = .systemBlue
         return UISwipeActionsConfiguration(actions: [delete, edit])
+    }
+}
+
+// MARK: - 插件布局规范页（长期文本 · 所有玩家必读）
+
+/// 长期常驻的规范文本页。
+/// 老总 2026-10-23 令：「在 iOS App 那个地方长期文本显示规范。要求任何插件占用原生会话框位置、
+/// 压缩原生按钮的，必须回到顶部 tab 栏，如何规范。也要告诉他们。通用性任何玩家都适合。」
+final class PluginLayoutRulesViewController: UIViewController {
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "插件布局规范"
+        view.backgroundColor = .systemBackground
+
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .done, target: self, action: #selector(closeTapped))
+
+        let scrollView = UIScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            stack.topAnchor.constraint(equalTo: scrollView.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -20),
+            stack.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -28),
+            stack.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -40)
+        ])
+
+        stack.addArrangedSubview(makeCard(
+            title: "🔴 一句话铁律",
+            body: "插件永远不占会话框（输入框）的位置，永远不压缩原生按钮的空间。\n\n插件要有界面，就去自己的地盘：会话头部（顶部 tab 栏那一行）、卡片下方读数条、侧栏面板、独立浮层。不许挤进用户打字的那个框。",
+            accent: .systemRed))
+
+        stack.addArrangedSubview(makeCard(
+            title: "💥 违规时会发生什么（真实故障）",
+            body: "插件挤进输入框工具行后，那一行宽度是固定的，原生按钮只能被压窄：\n\n• 模型按钮被压到只剩 5 像素宽、文字宽 0 —— 用户以为「模型按钮不见了」\n• 权限模式、语音、齿轮、发送按钮互相叠印，点不动\n• 窄屏（375 / 430 宽）下直接溢出屏幕，右边一半按钮消失\n• 新建会话时模型按钮整块不渲染，只能重启 App\n\n这不是「不好看」，是功能直接不可用。",
+            accent: .systemOrange))
+
+        stack.addArrangedSubview(makeCard(
+            title: "✅ 唯一正确做法：回到顶部 tab 栏",
+            body: "插件界面请挂到 DSH 官方公开插槽：\n\nconversation.session.header.actions\n\n也就是「对话 / 轨迹 / 系统监控」那一行、标题右侧那一排（智能体团队、创造模式所在的位置）。\n\n具体改法：把插件源码里的 slots.inject 里那个 slot 名字换成上面这个。\n\n重要：这个插槽只在「已经打开会话」时才存在。新会话空态下它不声明，所以在空态验证会误以为「注册成功但不显示」——必须在真实会话里验证。",
+            accent: .systemGreen, mono: true))
+
+        stack.addArrangedSubview(makeCard(
+            title: "⛔ 绝对禁止挂这些插槽",
+            body: "conversation.input.left\nconversation.input.right\nconversation.input.model      （除非接管替换官方，必须 priority: -1）\nconversation.input.model.label\nconversation.input.overlay\nconversation.input.attachments\nconversation.input.plan\nconversation.input.permission\nconversation.composer.bar\n\n以上全部位于输入框内部或紧邻工具行，挂上去必然压缩原生按钮。",
+            accent: .systemRed, mono: true))
+
+        stack.addArrangedSubview(makeCard(
+            title: "⛔ 也禁止这些「绕过」写法",
+            body: "1. 用 transform: translate(...) 把元素「视觉上」挪出输入框 —— 它的布局宽度还在原位，照样挤原生按钮。\n\n2. 改原生容器的 padding / width 给插件腾位置。\n\n3. 用 position: absolute / fixed 直接抢占原生按钮的坐标。\n\n4. 把插件挂在「有时不渲染」的容器上（例如无会话数据时 display:none 的读数条）—— 用户会看到按钮时有时无。",
+            accent: .systemRed))
+
+        stack.addArrangedSubview(makeCard(
+            title: "✅ 推荐挂这些插槽",
+            body: "conversation.session.header.actions    会话标题行右侧（首选）\nconversation.session.header.utilities     标题行工具位\nconversation.session.header.corner        标题行最右角（只放图标）\nconversation.composer.dock                卡片下方读数条\nshell.overlay                             全局浮层（关闭态必须零占位）\nsettings.section / sidebar.*              设置页 / 侧栏",
+            accent: .systemGreen, mono: true))
+
+        stack.addArrangedSubview(makeCard(
+            title: "📏 版面约束",
+            body: "• 高度统一 28pt，垂直居中，不换行。\n• 宽度不够时按可用宽度等比压缩、标签出省略号，绝不换行下移、绝不挤压原生按钮。\n• 带下拉菜单的，菜单必须在打开时重新定位贴住自己的按钮（锚点在上半屏向下展开、下半屏向上展开）。\n• 关闭态必须零占位，不得残留隐形占位块。",
+            accent: .systemBlue))
+
+        stack.addArrangedSubview(makeCard(
+            title: "🌍 通用性说明（任何玩家都适用）",
+            body: "本条规范不区分使用者、不区分机器、不区分渠道。\n\nconversation.session.header.actions 是 DSH 官方公开插槽，桌面端与手机端是同一套前端，改插件源码即两端同时生效，不依赖任何本机特有结构。\n\n任何玩家安装同一个插件包，都会得到同样的合规位置。\n\n已按本规范迁移的插件：\n• dsh-our-free-model-composer-credits v1.2.0（积分胶囊）\n• dsh-prompt-optimizer v1.5.0（提示词优化）\n• dsh-connect-workbuddy（余额读数改为输入框下方 dock）",
+            accent: .systemPurple))
+
+        stack.addArrangedSubview(makeCard(
+            title: "🧪 改完怎么自检",
+            body: "1. 输入框工具行（+ / 语音 / 权限 / 模型 / 齿轮 / 发送）里不应出现任何插件元素。\n2. 官方模型选择器的可见宽度不能低于它的文字自然宽度（出现省略号就是被压了）。\n3. 所有原生按钮中心点能被点中，不被任何东西遮挡。\n4. 375 / 430 窄屏下逐张截图看：不溢出、不叠印、不下移。\n5. 必须在「装了全部插件」的环境里测 —— 沙箱没装某个插件，就永远测不出它挤爆布局。",
+            accent: .systemTeal))
+
+        let footer = UILabel()
+        footer.text = "本规范与仓库 PLUGIN_LAYOUT_RULES.md 同源，冲突时以该文件为准。"
+        footer.font = .preferredFont(forTextStyle: .caption1)
+        footer.textColor = .tertiaryLabel
+        footer.numberOfLines = 0
+        stack.addArrangedSubview(footer)
+    }
+
+    @objc private func closeTapped() {
+        dismiss(animated: true)
+    }
+
+    private func makeCard(title: String, body: String, accent: UIColor, mono: Bool = false) -> UIView {
+        let card = UIView()
+        card.backgroundColor = .secondarySystemBackground
+        card.layer.cornerRadius = 12
+
+        let t = UILabel()
+        t.text = title
+        t.font = .preferredFont(forTextStyle: .headline)
+        t.textColor = accent
+        t.numberOfLines = 0
+
+        let d = UILabel()
+        d.text = body
+        d.font = mono
+            ? .monospacedSystemFont(ofSize: 13, weight: .regular)
+            : .preferredFont(forTextStyle: .subheadline)
+        d.textColor = .label
+        d.numberOfLines = 0
+        d.lineBreakMode = .byWordWrapping
+
+        let vStack = UIStackView(arrangedSubviews: [t, d])
+        vStack.axis = .vertical
+        vStack.spacing = 8
+        vStack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(vStack)
+
+        NSLayoutConstraint.activate([
+            vStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 14),
+            vStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
+            vStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -14),
+            vStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -14)
+        ])
+        return card
     }
 }
 
