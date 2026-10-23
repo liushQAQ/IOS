@@ -5,8 +5,8 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-23T04:24:46.642Z",
-  "dshFingerprint": "fojydn",
+  "startedAt": "2026-10-23T04:43:40.381Z",
+  "dshFingerprint": "7nxxzt",
   "dshAssets": 9,
   "domClasses": 0,
   "anchorTotal": 157,
@@ -25,7 +25,7 @@
   "modelPickerGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 66,
+  "pass": 69,
   "fail": 0,
   "failures": [],
   "blocked": [
@@ -35,6 +35,6 @@
     "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）",
     "[锚点] headerCorner 取样 — 会话页死循环连坐，该锚点无法取样（Chromium 对照确认 DOM 在）"
   ],
-  "sourceHash": "471d60a96c158837488ff79e47fc42eaaa8d92e06a90d78783bdc4d3643caf37",
-  "finishedAt": "2026-10-23T04:27:51.338Z"
+  "sourceHash": "804efd5eeebf754d06f7384cc8a49eb55f3724cef70f8b2a79238d8f68ca2eb3",
+  "finishedAt": "2026-10-23T04:46:48.256Z"
 }

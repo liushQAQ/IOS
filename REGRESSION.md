@@ -271,6 +271,29 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
   3. 找锚点优先找 `data-*` 语义属性（`data-conversation-tabs` / `data-queue-dock`），
      CSS Module 哈希前缀（`ank0OG_` / `_727C8a_`）换版即失效。
 
+#### R26.1 胶囊左右次序 + 原生按钮「不是悬浮」（build 94 收尾）
+
+- **老总 12:28**：「积分胶囊和提示词插件更换位置，因为提示词插件点击优化后会弹出更长的菜单，
+  会遮挡后面的插件。」→ 原来顺序是 `系统监控 | 优化 | 积分`，优化点开后从 85px 长到 238px，
+  把右边的积分胶囊挤开/盖住。**改为 `order:1`（积分）/ `order:2`（优化）**，
+  优化排最右，展开只往右侧空白长，遮挡结构上不可能发生。
+  实测 1440：积分 `x=506`、优化 `x=603`（右），闸门 14 绿 0 红。
+- **老总 12:33**：「会话框底原生的 + 完全权限 和 模型选择按钮。**不是悬浮，是和会话框一体的**。」
+  → 核查发现 `alignComposerButtons()` 每 tick 给 `composerStack` 里每个 button 写
+  `transform: translateY(±Npx) !important` 去硬拉中线。**这一掰就把原生按钮掰出了官方基线**，
+  视觉上就像浮在会话框上。另外还有一条 `standardControls _trigger { max-width:150px }`
+  在给原生模型按钮硬限宽。
+- **修法**：
+  1. `alignComposerButtons()` **停用成空壳**（`return;`，保留函数防调用点报错）。
+  2. 删除「模型选择器限宽 150px」整条 CSS 规则。
+  3. 只保留 `flex:0 1 auto` + `min-width:0` + `ellipsis`（允许收缩防溢出，不产生位移）
+     与 `fixComposerClamp()`（只在已越界时钳回，幂等）。
+- **反证**：停用后闸门 `[会话框] N 个按钮按行中心齐平` 仍为 **行内最大离散 0px**
+  （2 行 / 3 行三档全绿）—— 证明官方 flex 本来就排得齐，之前的 transform 完全是多余的。
+- **新增机械断言**：`[会话框] 原生按钮零干预（无 inline position/transform，不是悬浮）`
+  —— 逐个数会话框内非插件按钮的 inline `position`/`transform`，写一个就红。
+  插件元素按类名前缀（`dcc-` / `dsh-po` / `cm-stat` / `cm-bbox`）排除。
+
 ## 三、校验 SOP（每个新版本出包前必做）
 
 ### 前置

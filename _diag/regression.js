@@ -304,7 +304,32 @@ const A_COMPOSER = () => {
     return Math.round((Math.max(...cs2) - Math.min(...cs2)) * 10) / 10;
   });
   const spread = spreads.length ? Math.max(...spreads) : 0;
-  return { found: true, n: boxes.length, spread, lines: lines.length, overlaps: overlaps.slice(0, 4), spills: spills.slice(0, 4) };
+  /* 🔴 v1.0.131(94) 新增断言（老总 12:33 最后强调）：
+     「会话框底原生的 + 完全权限 和 模型选择按钮。不是悬浮，是和会话框一体的。」
+     App 侧绝不许给会话框里的**原生**按钮写 inline position/transform
+     —— 94 版就是靠停用 alignComposerButtons（它给每个按钮写 translateY(±Npx) !important）
+     才把「浮在会话框上」的观感修掉。这里逐个数 inline 写入，写了一个就红。
+     插件元素（dcc- / dsh-po / cm- / data-dsh-pos）不算原生，跳过。 */
+  const PLUGIN_RE = /dcc-|dsh-po|cm-stat|cm-bbox/;
+  const nativeTouched = [];
+  boxes.forEach(({ b, label }) => {
+    let isPlugin = false;
+    let cur = b;
+    for (let d = 0; d < 4 && cur; d++) {
+      const cn = String(cur.className || '') + ' ' +
+        (cur.getAttribute ? ((cur.getAttribute('data-dsh-pos') || '') + (cur.getAttribute('data-plugin-id') || '')) : '');
+      if (PLUGIN_RE.test(cn)) { isPlugin = true; break; }
+      cur = cur.parentElement;
+    }
+    if (isPlugin) return;
+    const st = b.style;
+    const tf = st.getPropertyValue('transform');
+    const pos = st.getPropertyValue('position');
+    if ((tf && tf !== 'none') || /fixed|absolute/.test(pos)) {
+      nativeTouched.push((label || 'btn') + ' [' + (pos || 'pos-') + '|' + (tf || 'tf-') + ']');
+    }
+  });
+  return { found: true, n: boxes.length, spread, lines: lines.length, overlaps: overlaps.slice(0, 4), spills: spills.slice(0, 4), nativeTouched: nativeTouched.slice(0, 4) };
 };
 
 const A_GEAR = () => {
@@ -586,6 +611,7 @@ const A_PLUGIN_PAGE = () => {
         chk(comp.spread <= 0.6, '[会话框] ' + comp.n + ' 个按钮按行中心齐平（' + (comp.lines || 1) + ' 行）', '行内最大离散 ' + comp.spread + 'px');
         chk(comp.overlaps.length === 0, '[会话框] 底排按钮零横向重叠（v1.0.127）', comp.overlaps.length ? comp.overlaps.join(' | ') : '两两扫描 ' + comp.n + ' 个');
         chk(comp.spills.length === 0, '[会话框] 底排按钮不越出父容器', comp.spills.length ? comp.spills.join(' | ') : '');
+        chk((comp.nativeTouched || []).length === 0, '[会话框] 原生按钮零干预（无 inline position/transform，不是悬浮）', (comp.nativeTouched || []).length ? comp.nativeTouched.join(' | ') : '零写入');
       }
 
       /* v1.0.129 底排防挤爆（老总真机 18:41：撤回/重优 出现时发送钮被推出屏幕）：
@@ -955,9 +981,16 @@ const A_PLUGIN_PAGE = () => {
     chk(/cn\.indexOf\('dcc-'\) >= 0/.test(bundle),
       '[模型选择器] 自动发现分支排除 dcc- 前缀',
       /cn\.indexOf\('dcc-'\) >= 0/.test(bundle) ? '排除在' : '排除被删 → dcc 宽 96 会落进 16..280 抓取区间');
-    chk(/function releaseDccRoot\(\)/.test(bundle) && /releaseDccRoot\(\);/.test(bundle),
-      '[模型选择器] releaseDccRoot 清残留（旧装机 inline absolute）+ tick 调用',
-      /function releaseDccRoot\(\)/.test(bundle) ? '清理在' : '清理被删 → 旧装机真机残留 inline 压过样式表，悬浮复燃');
+    // 🔴 v1.0.131(93) 改判：releaseDccRoot 从「清残留」升级为「整体停用空壳」。
+    //   旧判据只查函数存在 + tick 调用，空壳化后仍会绿，但语义已反 —— 必须钉死「已停用」。
+    //   真凶：它按 el.style.cssText 判据会把插件自己写的 inline（display/background/border/height）
+    //   一并清掉，真机上积分胶囊直接消失。
+    const dccRootOff9b = /function releaseDccRoot\(\)\s*\{[\s\S]{0,1400}?本函数已停用/.test(bundle);
+    chk(/function releaseDccRoot\(\)/.test(bundle) && /releaseDccRoot\(\);/.test(bundle) && dccRootOff9b,
+      '[模型选择器] releaseDccRoot 保留空壳且已停用（样式归插件，防清掉 dcc display）',
+      !/function releaseDccRoot\(\)/.test(bundle) ? '函数被删 → 调用点报错'
+        : (!/releaseDccRoot\(\);/.test(bundle) ? 'tick 调用被删'
+          : (dccRootOff9b ? '空壳停用在' : '🔴 被改回实清 → 会抹掉插件 display/background，胶囊真机消失')));
   }
   GATE.modelPickerGuard = true;
 
@@ -977,10 +1010,15 @@ const A_PLUGIN_PAGE = () => {
     chk(/function fixMenus\(\)/.test(bundle) && /data-dsh-menufix|MTAG/.test(bundle),
       '[模型停靠] fixMenus 下拉纠偏在（菜单钉回按钮下方）',
       /function fixMenus\(\)/.test(bundle) ? '纠偏在' : '纠偏被删 → 停靠后点开菜单会跑到屏幕中下部（实测 y413 vs 按钮 y83）');
+    // 🔴 v1.0.131(93)：原判据 skipGuard>=2（releaseHijack + releaseDccRoot 各一处 continue）。
+    //   93 起 releaseDccRoot 整体停用（一个字节都不碰 dcc），比「跳过」更彻底 → 只剩 1 处 continue。
+    //   改判：releaseHijack 跳过 ≥1 且 releaseDccRoot 必须是停用空壳。
     const skipGuard = (bundle.match(/data-dsh-modeldock'\) === '1'\) \{ continue; \}/g) || []).length;
-    chk(skipGuard >= 2,
-      '[模型停靠] releaseHijack / releaseDccRoot 均跳过停靠元素',
-      '跳过点 ' + skipGuard + ' 处（需 ≥2，少一处即 900ms 互删互插）');
+    const dccRootOff = /function releaseDccRoot\(\)\s*\{[\s\S]{0,1400}?本函数已停用/.test(bundle);
+    chk(skipGuard >= 1 && dccRootOff,
+      '[模型停靠] releaseHijack 跳过停靠元素 + releaseDccRoot 已停用（外观归插件）',
+      'releaseHijack 跳过 ' + skipGuard + ' 处（需 ≥1）· releaseDccRoot ' +
+      (dccRootOff ? '已停用' : '🔴 被改回实清 → 900ms 互删互插，胶囊真机消失'));
   }
   GATE.modelDockGuard = true;
 

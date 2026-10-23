@@ -38,6 +38,7 @@
    - 插件要 UI 只能去 `PLUGIN_LAYOUT_RULES.md` 第 3 节的四个合规落点（**P1 会话 tab 栏 = 「对话 / 轨迹 / 系统监控」那一行的右侧** / P2 卡片下方 dock / P3 面板 / P4 独立浮层）。
    - 🔴 **tab 栏是插件地盘**（老总 2026-10-23 12:01）：「轨迹 / 系统监控 就是 dsh 插件（dsh-system-monitor-plugin）生成的，不是官方原生按钮」。tab 栏由 `conversation.view` 槽的注册项渲染，插件往里放东西**不需要官方 slot**；做法是组件里 `ReactDOM.createPortal(胶囊, document.querySelector('[data-conversation-tabs]'))`，锚点只用这个 `data-*` 稳定属性，不用哈希类名。
    - 🔴 **位置归插件，App 只做兜底**：插件已能自己进 tab 栏时，shim **必须退出**（`pickers()` 返回空），否则 App 再 `fixed` 一次等于把 tablist 里的元素拽出来。92/93/94 三次翻车同一根因。原生按钮（`ofTiQG` / 权限 / 语音 / 齿轮 / 发送）**一个都不许动**，它们是会话框的整体原生部分。
+   - 🔴 **会话框底排原生按钮零干预**（老总 2026-10-23 12:33 最后强调：「会话框底原生的 + 完全权限 和 模型选择按钮。不是悬浮，是和会话框一体的」）：`＋ / 完全权限 / 模型选择器 / 语音 / 齿轮 / 发送` 六个按钮**不许写 inline `position` / `transform`（哪怕 2px）/ `width` / `padding` / `margin` / `background` / `border`**。唯一允许的是 `flex:0 1 auto` 防溢出收缩；`alignComposerButtons` 已停用（它写 `translateY !important` 正是「悬浮感」来源，停用后官方 flex 实测行内离散仍为 **0px**）。闸门有机械断言 `[会话框] 原生按钮零干预`。
    - App 侧发现新插件违规：**只做清占位的隔离，不许帮它搬位**。
    - 🔴 **两端都要改**（老总 2026-10-23 明令）：「不只是说改 iOS 端，电脑端也修改在这个位置，任何自建本来占用会话框插件都改」。
      插件源码侧禁 `conversation.input.*` 全系，推荐 `conversation.session.header.actions`；

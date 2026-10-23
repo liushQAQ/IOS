@@ -4073,80 +4073,19 @@ final class ViewController: UIViewController {
           //   逐个把偏差补平。幂等（偏差 < 0.5px 就撤掉 transform，不再动），
           //   不做任何布局改动，也不写死任何像素（换版/换机型自适应）。
           function alignComposerButtons() {
-            try {
-              var host = document.querySelector('[class*=\"composerStack\"]');
-              if (!host) return;
-              var rows = host.querySelectorAll('[class*=\"_row\"]');
-              for (var r = 0; r < rows.length; r++) {
-                var row = rows[r];
-                var list = [];
-                var bs = row.getElementsByTagName('button');
-                for (var i = 0; i < bs.length; i++) {
-                  var b = bs[i];
-                  var bcs = getComputedStyle(b);
-                  if (bcs.display === 'none' || bcs.visibility === 'hidden') continue;
-                  var q = b.getBoundingClientRect();
-                  if (q.width < 14 || q.width > 80 || q.height < 14 || q.height > 80) continue;
-                  /* v1.0.129：扣掉已有 translateY，用「净几何」参与分组与对齐，否则已校准的
-                     按钮会带着旧位移参加下一轮中位数计算，越算越歪（幂等性被破坏） */
-                  var ty = 0;
-                  var tf = bcs.transform || '';
-                  if (tf.indexOf('matrix') === 0) {
-                    var lp = tf.indexOf('('), rp = tf.indexOf(')');
-                    if (lp > 0 && rp > lp) {
-                      var ps = tf.substring(lp + 1, rp).split(',');
-                      ty = parseFloat(ps[5]) || 0;
-                    }
-                  }
-                  list.push([b, { y: q.y - ty, height: q.height }]);
-                }
-                if (list.length < 2) continue;
-                /* 🔴 v1.0.129（底排防挤爆定案）：换行放行后，一个 _row 容器里可能出现上下两行按钮。
-                   绝不能再整容器取中位数 —— 否则上行按钮会被 translateY 硬拽到下行中线，
-                   直接压到模型选择器上（实测 优化 被拽 +11px）。改为：
-                   ① 先用「未加 transform 的几何」按视觉行分组（纵向相交算同组）；
-                   ② 每组各自取中位数各自对齐；跨组互不干扰。
-                   ③ 分组/对齐一律用去 transform 几何，幂等不漂移。 */
-                /* 分组判据＝中心间距：同行按钮的中心差 ≤2px（v1.0.127 实测 0.6px），
-                   跨行至少差一个按钮高（≥22px）。按中心排序后遇到 >10px 的空档就切组。
-                   （早期用「纵向矩形相交」分组在行距 8px、按钮高 28px 时必然把两行串成一组，
-                   优化 被拽 +18px 直压模型选择器 —— 已废弃。） */
-                var groups = [];
-                var sorted = list.slice(0).sort(function (a, b) {
-                  return (a[1].y + a[1].height / 2) - (b[1].y + b[1].height / 2);
-                });
-                for (var gi = 0; gi < sorted.length; gi++) {
-                  var cy2 = sorted[gi][1].y + sorted[gi][1].height / 2;
-                  if (!groups.length || cy2 - groups[groups.length - 1].cy > 10) {
-                    groups.push({ cy: cy2, items: [] });
-                  }
-                  groups[groups.length - 1].cy =
-                    (groups[groups.length - 1].cy * groups[groups.length - 1].items.length + cy2) /
-                    (groups[groups.length - 1].items.length + 1);
-                  groups[groups.length - 1].items.push(sorted[gi]);
-                }
-                for (var gk = 0; gk < groups.length; gk++) {
-                  var items = groups[gk].items;
-                  if (items.length < 2) continue;
-                  var cys = [];
-                  for (var j = 0; j < items.length; j++) cys.push(items[j][1].y + items[j][1].height / 2);
-                  cys.sort(function (x, y) { return x - y; });
-                  var target = cys[Math.floor(cys.length / 2)];
-                  for (var k = 0; k < items.length; k++) {
-                    var el = items[k][0], eq = items[k][1];
-                    var d = Math.round((eq.y + eq.height / 2 - target) * 10) / 10;
-                    if (Math.abs(d) < 0.5) {
-                      if (el.style.getPropertyValue('transform') &&
-                          el.style.getPropertyValue('transform').indexOf('translateY') >= 0) {
-                        el.style.removeProperty('transform');
-                      }
-                      continue;
-                    }
-                    el.style.setProperty('transform', 'translateY(' + (-d) + 'px)', 'important');
-                  }
-                }
-              }
-            } catch (e) {}
+            // 🔴 v1.0.131(94)：**本函数已停用（保留空壳防调用点报错）**。
+            //   老总 2026-10-23 12:33 最后强调：「会话框底原生的 + 完全权限 和
+            //   模型选择按钮。不是悬浮，是和会话框一体的。」
+            //
+            //   本函数原本给 composerStack 里所有 button 写
+            //   `transform: translateY(±Npx) !important` 去强行把中线拉齐 ——
+            //   **这一掰就把原生按钮掰出了官方基线**，视觉上像浮在会话框上面，
+            //   而不是长在会话框里。这正是老总说的「不是悬浮」。
+            //
+            //   现在插件已全部搬出会话框（胶囊进 tab 栏，见 shim_27 / 插件 v1.3.0 与 v1.6.0），
+            //   底排只剩 `+ / 完全权限 / 模型选择 / 语音 / 齿轮 / 发送` 六个原生按钮，
+            //   官方 flex 本来就把它们排成一行 —— 不需要、也**不允许** App 侧再动一个像素。
+            return;
           }
           /* 🔴 v1.0.127：composer 底排按钮「越界钳制」——通用兜底，不依赖任何哈希类名。
              CSS 那条（button[aria-label*="选择模型"]）只管模型选择器这一种；
@@ -5895,15 +5834,12 @@ function applySidebarInset() {
             '  background: transparent !important;',
             '  border: none !important;',
             '  box-shadow: none !important;',
-            '}',
-            // ③（v1.0.131(90) 移除）dcc-root=模型选择器，已回原生流，官方外观不再剥离
-            // ④ 模型选择器限宽 150px：右缘 207+150=357 < 发送钮 370，防压防重叠
-            '[class*="composerStack"] [class*="standardControls"] [class*="_trigger"] {',
-            '  max-width: 150px !important;',
-            '  overflow: hidden !important;',
-            '  text-overflow: ellipsis !important;',
-            '  white-space: nowrap !important;',
             '}'
+            // ③（v1.0.131(90) 移除）dcc-root=模型选择器，已回原生流，官方外观不再剥离
+            // ④（v1.0.131(94) 删除）原「模型选择器限宽 150px」规则整条移除 ——
+            //    老总 2026-10-23 12:33：「会话框底原生的 + 完全权限 和 模型选择按钮。
+            //    不是悬浮，是和会话框一体的。」原生按钮的宽度归官方 flex，
+            //    App 侧既不限宽也不改 flex；插件全部搬走后实测模型按钮有全宽 303px。
           ].join('\\n');
           function isDSH() {
             try {

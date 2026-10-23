@@ -97,6 +97,7 @@ const OV = (a, b) => !(a[0] + a[2] <= b[0] || b[0] + b[2] <= a[0] || a[1] + a[3]
 
     chk(!!r.inComposer && !r.inComposer.dcc && !r.inComposer.po, '会话框内零插件元素', JSON.stringify(r.inComposer));
     chk(!!r.native && r.native.pos === 'relative' && !r.native.inTabs, '原生模型选择器零干预', r.native ? 'pos=' + r.native.pos + ' w=' + r.native.r[2] : 'null');
+    chk(!!r.dcc && !!r.po && r.po.r[0] > r.dcc.r[0] + r.dcc.r[2] - 2, '顺序：积分在左 / 提示词优化在右（展开不遮挡）', r.dcc && r.po ? 'dcc.x=' + r.dcc.r[0] + ' po.x=' + r.po.r[0] : '');
     chk(r.docSW <= r.vw + 1, '页面零横向溢出', 'docSW=' + r.docSW + ' vw=' + r.vw);
     if (errs.length) console.log('  页面错误: ' + JSON.stringify(errs.slice(0, 2)));
 
