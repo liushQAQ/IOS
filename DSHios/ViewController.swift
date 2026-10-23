@@ -801,9 +801,14 @@ final class ViewController: UIViewController {
             '  padding: 2px 4px !important;',
             '}',
             '.ank0OG_titleCluster,',
-            '[data-phase] header [class*="titleCluster"],',
-            '.ank0OG_headerActions {',
+            '[data-phase] header [class*="titleCluster"] {',
             '  margin-left: auto !important;',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  gap: 6px !important;',
+            '}',
+            '.ank0OG_headerActions,',
+            '[data-phase] header [class*="headerActions"] {',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '  gap: 6px !important;',
@@ -4422,6 +4427,7 @@ function applySidebarInset() {
             try { fixTopChrome(); } catch (e) {}
             try { fixFabRows(); } catch (e) {}
             try { fixOverlayOverflow(); } catch (e) {}
+            try { if (window.__dshMobilePolishRun) window.__dshMobilePolishRun(); } catch (e) {}
             // 🔴 v1.0.123：出血钳制不能只靠 MutationObserver 驱动 —— 页面静止不变化时
             //   一次都不会再跑，刚进页面那一下的出血就一直留在屏幕上（老总看到的就是这个）。
             //   装一个 3 秒兜底定时器（只装一次），保证任何静态页面也会收敛。
@@ -4635,22 +4641,24 @@ function applySidebarInset() {
           // 紧贴右侧抽屉开关（32px）左边并留 10px 间距。
           function shiftAgentButtonRight() {
             try {
+              // 🔴 v1.0.131(97)：彻底停用绝对定位钉死智能体团队（老总 19:27 反馈）。
+              // 旧逻辑把智能体团队强行钉在 right:44px，与后台任务指示器直接重叠。
+              // 现代 DSH 顶栏在 headerActions 内自然流式排列，严禁使用 absolute 暴力抢位。
               var header = document.querySelector('header');
               if (!header) return;
-              var btns = header.querySelectorAll('button[aria-label*=\"智能体团队\"]');
+              var btns = header.querySelectorAll('button[aria-label*="智能体团队"]');
               for (var j = 0; j < btns.length; j++) {
-            var wrap = btns[j].parentElement;
-              if (!wrap) continue;
-              if (window.__dshMobilePolish) return;   // shim_16 已接管顶栏摆位，避免两边互相覆盖
-              if (wrap.dataset.dshAgentMoved === '1') continue;
-                wrap.dataset.dshAgentMoved = '1';
-                wrap.style.setProperty('position', 'absolute', 'important');
-                wrap.style.setProperty('left', 'auto', 'important');
-                wrap.style.setProperty('right', '44px', 'important');
-                wrap.style.setProperty('top', '50%', 'important');
-                wrap.style.setProperty('transform', 'translateY(-50%)', 'important');
-                wrap.style.setProperty('margin', '0', 'important');
-                wrap.style.setProperty('z-index', '6', 'important');
+                var wrap = btns[j].parentElement;
+                if (!wrap) continue;
+                if (wrap.style.position === 'absolute') {
+                  wrap.style.removeProperty('position');
+                  wrap.style.removeProperty('left');
+                  wrap.style.removeProperty('right');
+                  wrap.style.removeProperty('top');
+                  wrap.style.removeProperty('transform');
+                  wrap.style.removeProperty('margin');
+                  wrap.style.removeProperty('z-index');
+                }
               }
             } catch (e) {}
           }
@@ -5421,24 +5429,34 @@ function applySidebarInset() {
               var jobs = header.querySelector('button[aria-label*="后台任务"]');
               var badge = header.querySelector('button[aria-label*="子智能体"]');
               var team = header.querySelector('button[aria-label*="智能体团队"]');
-              // 🔴 v1.0.131(96)：解除 placeAbs 绝对定位导致的「后台任务运行中文本与智能体团队重叠」（老总 17:38 实锤截图）。
-              // 当存在「1 个后台任务运行中」时，其宽度达 152px；原 placeAbs(hw-52) 硬编码把智能体团队按在右侧 52px，
-              // 正好直接压在「运行中」三个字上方。
-              // 现改为流式自然排列：各模块在 headerActions 内保持 inline-flex、互不脱标，
-              // 两两之间由 flex gap 自动隔开，物理上绝对零重叠；左侧标题由 fixHeaderFit 自动避让。
-              var resetFlow = function (btn) {
-                if (btn && btn.parentElement && btn.parentElement !== header) {
-                  var p = btn.parentElement;
-                  S(p, 'position', 'static');
-                  S(p, 'transform', 'none');
-                  S(p, 'right', 'auto');
-                  S(p, 'top', 'auto');
-                  S(p, 'margin', '0');
+              // 🔴 v1.0.131(97)：动态计算右侧模块间距，根治「后台任务与智能体按钮重叠」（老总 17:38/19:27 反馈）。
+              // 右侧抽屉开关占用最右侧 38px (hw - 42)；
+              // 从右往左动态摆放：
+              // 1. 团队按钮 (width 32px) 放置在 hw - 48；
+              // 2. 徽标按钮 (width 22px) 放置在 hw - 74；
+              // 3. 后台任务按钮/胶囊：动态测量其实际渲染宽度 jw，放置在 (hw - 78 - jw)，留足 6px 间隙！
+              // 这样无论后台任务是 22px 还是 152px，绝对不会与智能体按钮发生重叠碰撞！
+              if (team && team.parentElement && team.parentElement !== header) {
+                placeAbs(team.parentElement, hw - 46, 32);
+              }
+              if (badge && badge.parentElement && badge.parentElement !== header) {
+                if (badge.dataset.dshBadgeTight !== '1') {
+                  S(badge, 'width', '22px');
+                  S(badge, 'min-width', '0');
+                  S(badge, 'padding', '0');
+                  S(badge, 'box-sizing', 'border-box');
+                  badge.dataset.dshBadgeTight = '1';
                 }
-              };
-              resetFlow(team);
-              resetFlow(badge);
-              resetFlow(jobs);
+                placeAbs(badge.parentElement, hw - 72, 22);
+              }
+              if (jobs && jobs.parentElement && jobs.parentElement !== header) {
+                var jwrap = jobs.parentElement;
+                var jw = jobs.getBoundingClientRect().width;
+                if (!(jw > 10)) jw = 32;
+                // 计算后台任务应当落座的 right 坐标：智能体团队(46) + 间隙(8) + 任务宽度(jw)
+                var targetRight = Math.round(hw - (48 + jw));
+                placeAbs(jwrap, targetRight, Math.round(jw));
+              }
             } catch (e) {}
           }
 
@@ -8316,6 +8334,7 @@ function applySidebarInset() {
             · 上滑切会话不错位
             """,
             preferredStyle: .alert)
+        Self.alignAlertMessageLeft(alert)
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
             self?.openConnectionGuide()
         })
@@ -9102,6 +9121,10 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
             preferredStyle: .alert
         )
 
+        // 🔴 v1.0.131(97)：老总明确要求「更新说明和关于这里123456靠左对齐」。
+        // UIAlertController 的 message 默认是居中对齐，遍历视图层级设置 textAlignment = .left。
+        Self.alignAlertMessageLeft(alert)
+
         if !tipaURL.isEmpty {
             alert.addAction(UIAlertAction(title: "🚀 极速下载并用巨魔安装 (推荐·零报错)", style: .default) { [weak self] _ in
                 self?.downloadAndInstallTIPA(remoteURLString: tipaURL, fallbackURL: fallbackURL, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
@@ -9119,6 +9142,22 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
 
         alert.addAction(UIAlertAction(title: "稍后提醒", style: .cancel))
         present(alert, animated: true)
+    }
+
+    /// 递归遍历 UIAlertController 的视图树，将 message 对应的 UILabel 设置为靠左对齐
+    private static func alignAlertMessageLeft(_ alert: UIAlertController) {
+        func walk(_ view: UIView) {
+            for sub in view.subviews {
+                if let label = sub as? UILabel {
+                    // 仅将包含多行内容或说明文本的 UILabel 设置为左对齐，标题保持居中
+                    if label.numberOfLines == 0 || (label.text?.contains("\n") == true) || (label.text?.contains("【") == true) {
+                        label.textAlignment = .left
+                    }
+                }
+                walk(sub)
+            }
+        }
+        walk(alert.view)
     }
 
     func installViaTrollStore(remoteURLString: String, fallbackURL: String? = nil) {
