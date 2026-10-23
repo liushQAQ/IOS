@@ -452,6 +452,18 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
      - 标题右侧预留由 `fixHeaderFit` 自动测量后推导 `--dsh-head-right`，保证标题文字在到达后台任务前优雅省略。
   3. **关于页与更新说明居中问题**：系统原生 `UIAlertController` 的 message 标签默认是 `textAlignment = .center`，导致序号 123456 变成了中间参差不齐的锯齿排版。通过 `alignAlertMessageLeft` 递归视图树将包含多行/符号的标签设置为 `.left`，实现完美靠左对齐。
 
+### R32 全静态 Flex 自然流重构定版：彻底根治多组件 absolute 脱标重叠（v1.0.131 build 98）
+
+- **老总实锤反馈（截图 1-3 连续暴露）**：顶栏「智能体团队」与「后台任务」打架、或两者与右侧抽屉按钮相切相撞；在有无任务、标题长短变化时反复错位。
+- **深度病因定性（经典布局反模式）**：
+  在移动端狭窄水平线上，会话标题、智能体团队（曾被写死 `right: 44px`）、后台任务三者各自独立用 JS 算像素或强行 `position: absolute` 脱离文档流，彼此无感知。任何一处文字长短变化，脱标组件必然在物理坐标上重叠撞车！
+- **终极根治（经中立评审盖章终审定稿）**：
+  1. **全静态 Flex 自然流**：彻底废除顶栏所有 `position: absolute`，整行由左侧按钮 → titleCluster 弹性区 → headerUtilities → headerCorner 完整锁死自然排队。
+  2. **单行优雅自适应**：中间会话标题 `flex: 0 1 auto; min-width: 40px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`，自适应占用剩余空间，超出自动省略号，绝不侵占右侧。
+  3. **右侧状态流式顺排**：`headerActions` 推至 cluster 最右侧，智能体团队与后台任务作为内部普通子项由 `gap: 6px` 物理隔开，随文字长短自适应拓宽，物理上 100% 绝对不可能重叠！
+  4. **右侧边栏平级防挤压**：`headerCorner` 显式声明 `flex: 0 0 auto !important; position: static !important; margin-left: 6px;`，锁死末端，永不被遮挡。
+  5. **JS 清权兜底防御**：运行时遍历清理残留内联绝对定位属性，高权重 CSS 与 JS 清权双保险。
+
 ## 三、校验 SOP（每个新版本出包前必做）
 
 ### 前置
