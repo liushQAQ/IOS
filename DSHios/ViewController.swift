@@ -6194,23 +6194,14 @@ function applySidebarInset() {
           //   与 collect()/CSS 兜底三路并发：新装机不抓（源头）、旧装机清残留（本函数）、
           //   CSS 无条件 static 兜底（防 JS 通道死亡时新注入漏网）。
           function releaseDccRoot() {
-            try {
-              var ds = document.querySelectorAll('.dcc-root, [class*="dcc-root"]');
-              for (var i = 0; i < ds.length; i++) {
-                var el = ds[i];
-                // 🔴 v1.0.131(92)：模型选择器停靠中（shim_27）绝不能被这里拆掉，
-                //   否则每 900ms 互删互插 → 按钮在顶栏与会话框之间闪烁。
-                if (el.getAttribute('data-dsh-modeldock') === '1') { continue; }
-                if (!el.hasAttribute('data-dsh-pos') && !el.style.cssText) { continue; }
-                el.removeAttribute('data-dsh-pos');
-                var props = ['position', 'left', 'right', 'top', 'bottom', 'transform',
-                             'max-width', 'max-height', 'height', 'z-index', 'width',
-                             'display', 'align-items', 'background', 'border', 'box-shadow', 'margin'];
-                for (var p = 0; p < props.length; p++) {
-                  try { el.style.removeProperty(props[p]); } catch (e2) {}
-                }
-              }
-            } catch (e) {}
+            // 🔴 v1.0.131(93)：**本函数已停用（保留空壳防调用点报错）**。
+            //   它原本的作用是清 90 版之前引擎写在 dcc-root 上的 inline 绝对定位残留。
+            //   但插件 v1.2.0 起已把 dcc 迁到会话头部，旧 inline 是写在旧 DOM 节点上的，
+            //   插件重渲染后就是新节点，不带任何旧 inline —— 这里已经没有东西可清。
+            //   而它按 `el.style.cssText` 判据会把插件**自己写的** inline 一并清掉
+            //   （display / background / border / height），真机上直接导致积分胶囊消失。
+            //   结论：dcc 的样式归插件，shim 一个字节都不碰。
+            return;
           }
           function layout() {
             var card = document.querySelector('[class*="composerStack"] [class*="_card"]');
@@ -6309,10 +6300,13 @@ function applySidebarInset() {
           //   即使不再注入 CSS，元素也仍被钉在错位坐标上。这是「装新包装完还是错乱」的隐形元凶。
           function releaseHijack() {
             try {
-              // 🔴 v1.0.131(93)：移除 dsh-po-capsule —— 优化胶囊已迁到会话头部（插件侧合规），
-              //   releaseHijack 若继续清它的 inline，会在它展开（优化中 / 优化·撤回·重优）时
-              //   把宽度/flex/display 全部抹掉，与插件自身渲染互相踩踏。
-              var sels = ['[data-dsh-pos]', '.dcc-root', '[class*="dcc-root"]',
+              // 🔴 v1.0.131(93)：**移除 dsh-po-capsule 与 dcc-root 两项**。
+              //   这两个插件都已迁到会话头部（插件侧合规），会话框里早就不该有它们。
+              //   继续留在这里的后果（老总 11:36 真机「积分胶囊不见了」）：
+              //   本拆除器把 dcc 的 display / height / background / border 一并抹掉，
+              //   而插件不会重渲染补回 → 胶囊直接塌陷消失。
+              //   插件自己的视觉样式从此不归 shim 管。
+              var sels = ['[data-dsh-pos]',
                           '.cm-stat-entry', '[class*="cm-stat"]', '.cm-bbox', '[class*="cm-bbox"]'];
               var props = ['position', 'left', 'right', 'top', 'bottom', 'transform',
                            'max-width', 'max-height', 'min-width', 'min-height', 'height', 'width',
@@ -6592,10 +6586,13 @@ function applySidebarInset() {
           var TAG = 'data-dsh-modeldock';
           var MTAG = 'data-dsh-menufix';
           var RIGHT = 12, GAP = 8, H = 28, MENU_GAP = 6;
-          var DOCK_PROPS = ['position', 'left', 'right', 'top', 'bottom', 'transform', 'z-index',
-                            'width', 'min-width', 'max-width', 'height', 'min-height',
-                            'margin', 'padding', 'flex', 'order', 'align-items', 'justify-content',
-                            'overflow', 'overflow-x', 'overflow-y', 'white-space', 'text-overflow', 'display'];
+          // 🔴 v1.0.131(93) 关键收窄：只允许本 shim 写/清**定位类**属性。
+          //   旧版这个清单里有 display / padding / margin / background / border / box-shadow /
+          //   flex / align-items / height —— 那些是**插件自己的视觉样式**。
+          //   真机症状（老总 11:36）：「积分胶囊」整块消失：releaseHijack 把它 display/height
+          //   抹了，dockOne 又不恢复 display → 元素塌陷不可见，且插件不会重渲染补回来。
+          //   现在只碰这 8 个定位属性，插件长什么样永远是插件自己的事。
+          var DOCK_PROPS = ['position', 'left', 'right', 'top', 'bottom', 'z-index', 'transform', 'max-width', 'overflow'];
           function isDSH() {
             try {
               if (!document.getElementById('root')) { return false; }
@@ -6645,6 +6642,9 @@ function applySidebarInset() {
             return out;
           }
           // 把**插件**元素钉到 tab 行右侧（只对插件用，原生按钮永不调用本函数）
+          // 🔴 只写 8 个定位属性：不写 display / width / height / padding / margin / flex /
+          //   align-items —— 任何一项都可能把插件自己的胶囊样式压塌（真机上「积分胶囊消失」
+          //   就是这么来的）。position:fixed 后宽度自然按内容撑开，正好是我们要的。
           function dockOne(el, rightPx, topPx, maxW) {
             if (!el) { return; }
             setP(el, 'position', 'fixed');
@@ -6653,19 +6653,11 @@ function applySidebarInset() {
             setP(el, 'right', rightPx + 'px');
             setP(el, 'left', 'auto');
             setP(el, 'bottom', 'auto');
-            setP(el, 'height', H + 'px');
-            setP(el, 'width', 'auto');
-            setP(el, 'min-width', '0');
-            setP(el, 'max-width', (maxW > 0 ? Math.round(maxW) : 180) + 'px');
-            setP(el, 'margin', '0');
             setP(el, 'transform', 'none');
-            setP(el, 'flex', 'none');
-            setP(el, 'order', '0');
-            setP(el, 'align-items', 'center');
-            setP(el, 'justify-content', 'center');
+            setP(el, 'max-width', (maxW > 0 ? Math.round(maxW) : 180) + 'px');
+            // 只有这一条裁剪是必须的（max-width 压缩后超出的内容会跑到屏外）；
+            // 它不是改样式，只是把超出部分剪掉。其余外观全归插件。
             setP(el, 'overflow', 'hidden');
-            setP(el, 'text-overflow', 'ellipsis');
-            setP(el, 'white-space', 'nowrap');
             try { el.setAttribute(TAG, '1'); } catch (e) {}
           }
           // 内部标签被压成 0 宽时恢复（只在停靠后需要，还原时一并清掉）
@@ -6739,19 +6731,32 @@ function applySidebarInset() {
               }
             } catch (e) {}
           }
-          // 🔴 v1.0.131(93) 关键修正（老总 11:36 真机：「模型选择按钮呢，直接不见了。
-          //   这不是原生按钮吗？？？」）：
-          //   **官方模型选择器 ofTiQG 是原生按钮，从此彻底退出停靠机制，一点不碰。**
-          //   92 版把它 fixed 到顶栏，真机上整块消失（原生按钮被搬出可视区/被压制），
-          //   这是「App 侧替原生按钮搬位」的直接后果 —— 也违反 PLUGIN_LAYOUT_RULES.md
-          //   「原生按钮零干预」那一条。
-          //   现在只搬**插件**：插件模型胶囊 dcc + 提示词优化胶囊 po。
-          //   插件搬走后，ofTiQG 靠官方 flex 自然拿到完整宽度（实测 5px → 206px）。
+          // 🔴 v1.0.131(94) 终局（老总 12:01 真机纠正）：
+          //   「对话 轨迹 系统监控，旁边可以放。**轨迹 系统监控 就是 dsh 插件
+          //    （dsh-system-monitor-plugin）生成的啊，不是官方原生按钮**。
+          //    所以积分胶囊和提示词插件按钮！也可以做到放这里啊。」
+          //
+          //   归属厘清：会话区域 tab 栏（「对话/轨迹/系统监控」那一行）由
+          //   `conversation.view` 槽的注册项渲染 —— 「轨迹」是官方 ui-trajectory、
+          //   「系统监控」是第三方插件 dsh-system-monitor-plugin。所以那一行本来就是
+          //   「官方 + 插件共用」的地盘，插件往里放东西不需要任何官方 slot。
+          //   容器带稳定语义属性 data-conversation-tabs（不是 CSS Module 哈希类名）。
+          //
+          //   两个插件已自行改造（credits v1.3.0 / prompt-optimizer v1.6.0）：
+          //   注册位留在 conversation.session.header.actions（降级位），组件里用
+          //   ReactDOM.createPortal 把胶囊投进 [data-conversation-tabs]。
+          //   电脑端实测 1440/1280/1024 三档：胶囊 parentElement 就是 tab 栏、
+          //   紧挨「系统监控」、align-self:center 不被拉伸、零重叠、不出屏；
+          //   原生模型选择器 303px 全宽 position:relative 完全未被动过。
+          //
+          //   因此 **App 侧从此不再搬任何插件**：插件自己就在正确位置，App 再 fixed
+          //   一次等于把 tablist 里的元素拽出来，位置反而错 —— 这是 92/93 两次翻车
+          //   的同一个教训：**位置归插件，App 只做兜底**。
+          //   原生按钮（ofTiQG）依旧零干预，它本来就该待在会话框里、是整体原生的一部分。
           function pickers() {
-            return {
-              dcc: document.querySelector('[class*="dcc-root"]'),
-              po: document.querySelector('[class*="dsh-po-capsule"]')
-            };
+            // 故意返回空：App 侧不再搬运任何插件元素（见上）。
+            // 保留函数是为了让 restore() / dock() / fixMenus() 的调用点不必改。
+            return { dcc: null, po: null };
           }
           function restore() {
             var P = pickers();
@@ -6785,21 +6790,25 @@ function applySidebarInset() {
             if (!info.rowFound) { restore(); return; }
             var cy = info.cy;
             if (!(cy > 0 && cy < 260)) { restore(); return; }
-            var top = Math.round(cy - H / 2);
             var avail = Math.round(info.vw - info.tabRight - RIGHT - 10);
             if (!(avail > 40)) { restore(); return; }
 
-            // ① 量自然宽（临时放开上限，同步读写不会闪）
+            // ① 量自然宽 + 实际高（临时放开上限，同步读写不会闪）
+            //   🔴 高度用实测值而不是写死 28：dockOne 不再强设 height，用真实高度才能垂直居中
             var items = [];
             if (P.dcc) { items.push(P.dcc); }
             if (P.po) { items.push(P.po); }
-            var nat = [];
+            var nat = [], natH = [];
             for (var i = 0; i < items.length; i++) {
               setP(items[i], 'max-width', '180px');
-              var w = 0;
-              try { w = items[i].getBoundingClientRect().width; } catch (e) {}
+              var w = 0, hh = 0;
+              try { var q0 = items[i].getBoundingClientRect(); w = q0.width; hh = q0.height; } catch (e) {}
               nat.push(Math.max(0, Math.round(w)));
+              natH.push(Math.round(hh) || 26);
             }
+            var hMax = 26;
+            for (var hI = 0; hI < natH.length; hI++) { if (natH[hI] > hMax) { hMax = natH[hI]; } }
+            var top = Math.round(cy - hMax / 2);
             var totalGap = GAP * Math.max(0, items.length - 1);
             var need = totalGap;
             var sum = 0;

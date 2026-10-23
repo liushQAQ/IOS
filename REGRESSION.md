@@ -194,6 +194,83 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
   某个原生元素，先问「这是官方的还是插件的」——官方的就停手。
   tab 行没 slot 是官方限制，只能 App 侧 fixed 插件，且必须有「取不到就不动」的分支。
 
+#### R25.1 第二真凶：`releaseHijack` 清插件外观 → 积分胶囊 / 优化胶囊一起消失
+
+- **症状（老总 2026-10-23 12:5x 追问）**：「积分胶囊，还有个提示词优化插件呢，。」
+  原生按钮回来了，但**两个插件自己也没了**。
+- **根因（两条叠加）**：
+  1. `releaseHijack()` 的清单里含 `[class*="dcc-root"]` / `[class*="dsh-po-capsule"]` /
+     `.cm-stat` 等，**每个 tick** 都去清它们的 `display / height / background / border /
+     box-shadow / margin / padding`；
+  2. `dockOne()` 只写定位属性，**从不写回 `display`** → `display` 被抹成空串后，
+     `inline-flex` 的胶囊塌成 0 高、背景边框全丢，插件不会重渲染补回 → 真机整块消失。
+  3. 另有 `releaseDccRoot()` 按 `el.style.cssText` 判据，会把插件**自己写的 inline 一并清掉**
+     （display / background / border / height）。
+- **修法（build 93 第二轮）**：
+  1. `DOCK_PROPS` 收窄到 **9 个定位属性**：
+     `position / left / right / top / bottom / z-index / transform / max-width / overflow`；
+  2. `dockOne()` 只写定位（+ `max-width` / `overflow` 防压缩溢出），
+     **不再写** `height / width / flex / align-items / padding / margin`；
+  3. `releaseHijack()` 的 `sels` 移除 `.dcc-root` / `[class*="dcc-root"]` /
+     `.dsh-po-capsule` / `[class*="dsh-po-capsule"]`，只剩 `[data-dsh-pos] / .cm-stat-entry /
+     [class*="cm-stat"] / .cm-bbox / [class*="cm-bbox"]`；
+  4. `releaseDccRoot()` **整函数停用成空壳**（`return;`，保留函数防调用点报错）。
+- **验证**：`_diag/_tabdock_style.js` **26 绿 0 红** —— 停靠后
+  dcc `{"display":"flex","bg":"rgb(238, 238, 255)","radius":"12px","pad":"0px 10px","h":26,"border":"1px"}`，
+  撤销后 `{"display":"inline-flex","pos":"static","tag":null}` 完整还原。
+  `_tabdock_sim.js` 仍 **42 绿 0 红**（375 档 dcc `[242,84,89,26]`、po `[321,84,42,26]`）。
+- **长期教训**：**位置归 App，外观归插件**。`position:fixed` 会把 `inline-flex` 计算成 `flex`，
+  这是 CSS 规范行为不算破坏；但如果 App 侧顺手去「清样式」，就会把插件自己画的东西删掉。
+  以后想清某个元素的样式，先问「这个属性是定位还是外观」——外观一律不碰。
+
+### R26 会话 tab 栏的归属真相：它是插件地盘，胶囊应该自己 Portal 进去（v1.0.131 build 94）
+
+- **我错在哪**：前面几版一直断定「tab 行没有任何官方 slot，插件放不进去，只能 App 侧 `fixed`」，
+  于是写了 shim_27 用 `position:fixed` 把胶囊搬到 tab 行右侧。这套做法依赖坐标计算、
+  宽度压缩、溢出裁剪，脆弱且两端不一致。
+- **老总 2026-10-23 12:01 纠正（原话）**：「你放屁。对话 轨迹 系统监控，旁边可以放。
+  **轨迹 系统监控 就是 dsh 插件（dsh-system-monitor-plugin）生成的啊，不是官方原生按钮**。
+  所以积分胶囊和提示词插件按钮！也可以做到放这里啊。原生会话框任何按钮都不要动，
+  不是悬浮的！是会话框一个整体的原生。」
+- **源码真相**（`@deepseek-ai/dsh-client-ui-conversation/lib/client.js`）：
+  ```jsx
+  <div role="tablist" data-conversation-tabs="" class={styles.tabs}>
+    {tabs.map(v => <button role="tab" class={styles.tab}>{v.label}</button>)}
+  </div>
+  ```
+  `tabs` 来自 `slots.entries("conversation.view")` —— 每个注册项一个 tab。
+  「对话」= 官方 ui-conversation、「轨迹」= 官方 ui-trajectory、
+  **「系统监控」= 第三方插件 `dsh-system-monitor-plugin`**（它 `slots.inject("conversation.view")`
+  注册了 `order:30` 的第 3 个 view）。
+  容器 `display:flex; gap:36px; padding-left:8px; grid-column:1/-1`，三个 tab 只占左端
+  约 180px，**右侧全是空 flex 空间**。显示条件 `showTabs = !hideChrome && tabs.length > 1`。
+- **修法（两端一起改，这次是插件侧主导）**：
+  1. 插件 `dsh-our-free-model-composer-credits` v1.3.0 / `dsh-prompt-optimizer` v1.6.0：
+     注册位留在 `conversation.session.header.actions`（降级位），组件里
+     `ReactDOM.createPortal(capsule, document.querySelector('[data-conversation-tabs]'))`。
+     锚点用**稳定语义属性** `data-conversation-tabs`，不用哈希类名。
+  2. CSS：`[data-conversation-tabs] > .dcc-root { align-self:center; flex:none; margin-left:-14px; }`
+     —— tab 栏默认 `align-items:stretch` 会把 24px 胶囊拉满整行。
+  3. iOS `shim_27` 的 `pickers()` **改为返回 `{dcc:null, po:null}`**：
+     App 侧不再搬任何插件，插件自己就在正确位置，再 `fixed` 一次等于把 tablist 里的元素
+     拽出来。原生 `ofTiQG` 依旧零干预。
+- **实测（电脑端会话态，原配置 developerTools:false）**：
+  | 档位 | tab 栏 | 优化胶囊 | 积分胶囊 | 原生模型选择器 |
+  |---|---|---|---|---|
+  | 1440 | `[300,50,1112,26]` 对话@308/轨迹@370/系统监控@432 | `[506,50,85,26]` parent=tabs | `[613,51,108,24]` parent=tabs | `[874,833,303,28]` relative |
+  | 1280 | `[300,50,952,26]` | `[506,50,85,26]` | `[613,51,108,24]` | `[763,733,303,28]` relative |
+  | 1024 | `[300,50,696,26]` | `[506,50,85,26]` | `[613,51,108,24]`（自动压到 75 宽） | `[632,701,303,28]` relative |
+  三档各 **13 绿 0 红**：parent 是 tablist、`align-self=center`、与 tab 零重叠、不出屏、
+  `docSW == vw`、会话框内零插件元素、原生按钮 303px 全宽未被动过。
+  截图 `_diag/_enter_session.png` 肉眼可见：`对话 | 轨迹 | 系统监控 | ✨优化 ⚙ | Lobster · —`。
+- **长期教训**：
+  1. 判断「某区域能不能放插件」，先查**谁渲染了它**。tab 行是 `conversation.view` 渲染的，
+     那就天然是插件共用区；不要因为「没有 `[data-slot]` 元素」就断定放不了。
+  2. **位置应该由插件自己争取**，App 侧 `fixed` 只是没有更好的办法时的临时手段。
+     插件能把东西放进正确容器时，App 必须退出（否则两边打架，92/93/94 三次折腾同一根因）。
+  3. 找锚点优先找 `data-*` 语义属性（`data-conversation-tabs` / `data-queue-dock`），
+     CSS Module 哈希前缀（`ank0OG_` / `_727C8a_`）换版即失效。
+
 ## 三、校验 SOP（每个新版本出包前必做）
 
 ### 前置

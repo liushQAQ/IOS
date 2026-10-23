@@ -82,7 +82,7 @@
 
 | 优先级 | 位置 | 约束 |
 |---|---|---|
-| **P1** | **会话头部 `conversation.session.header.actions`**（等于「对话 / 轨迹 / 系统监控」tab 行右侧、标题行那一排：`mobil · 智能体团队 · 创造模式 · [你的插件]`） | 高度 28px、垂直居中；**必须待在那一行**，宽度不够时按可用宽度等比压缩（标签出省略号），不许换行下移、不许挤压原生按钮 |
+| **P1** | **会话区域 tab 栏**（「对话 / 轨迹 / 系统监控」那一行的右侧空白） | 高度 26~28px、垂直居中（`align-self:center`）；与最后一个 tab 间距 20~24px；宽度不够等比压缩出省略号；不许换行下移、不许压 tab 按钮、不许挤压会话框原生按钮 |
 | **P2** | 会话卡片**下方**的 dock 行（`conversation.composer.dock` / `VERcba_dock`） | 仅限常驻渲染的内容；且 `flex-wrap: wrap` 允许换行 |
 | **P3** | 侧边栏抽屉 / 设置面板 / 插件自己的页面内 | 不覆盖抽屉内原生入口 |
 | **P4** | 独立浮层 | 不覆盖 composer，不覆盖顶栏原生按钮，必须有 `pointer-events` 收敛，关闭态零占位 |
@@ -121,6 +121,71 @@
 插件要接管必须显式 `priority: -1`，且要在 `inject` 里对所有上下文服务做防御
 （实测 `remote.session` 缺失会让 `slot entry crashed`）。
 
+### 3.1.1 tab 栏是「官方 + 插件共用」的地盘 —— P1 的真正落点
+
+> 老总 2026-10-23 12:01 纠正原话：「对话 轨迹 系统监控，旁边可以放。
+> **轨迹 系统监控 就是 dsh 插件（dsh-system-monitor-plugin）生成的啊，不是官方原生按钮**。
+> 所以积分胶囊和提示词插件按钮！也可以做到放这里啊。原生会话框任何按钮都不要动。」
+
+**归属事实（读官方源码 `@deepseek-ai/dsh-client-ui-conversation/lib/client.js` 确认）：**
+
+```jsx
+<div role="tablist" data-conversation-tabs="" class={styles.tabs}>
+  {tabs.map(v => <button role="tab" class={styles.tab}>{v.label}</button>)}
+</div>
+```
+
+- `tabs` 来自 `slots.entries("conversation.view")` —— 每个注册项一个 tab。
+  「对话」= 官方 ui-conversation、「轨迹」= 官方 ui-trajectory、
+  **「系统监控」= 第三方插件 `dsh-system-monitor-plugin`**。
+- 所以 tab 行天生就是插件可以贡献 UI 的地方，**不需要任何官方 slot**。
+- 容器 CSS：`display:flex; gap:36px; margin-top:10px; padding-left:8px; grid-column:1/-1`，
+  三个 tab 只占左端一小段，**右侧全是空 flex 空间**。
+- 显示条件：`showTabs = !hideChrome && tabs.length > 1` —— 至少两个 view 才出现。
+  电脑端默认 `developerTools:false` 会过滤掉 `trajectory`，此时若只装了「对话」一个 view，
+  **tab 行不存在**；装任意一个 `conversation.view` 插件（如系统监控）即可凑到 2 个。
+
+**推荐做法（两个自建插件已在用）：**
+
+```js
+// 1) 注册位留在 header.actions 当降级位（这里本来就只在会话态声明）
+ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({...}, Capsule));
+
+// 2) 组件里把胶囊 Portal 进 tab 栏
+const [bar, setBar] = useState(null);
+useEffect(() => {
+  const seek = () => {
+    const el = document.querySelector('[data-conversation-tabs]');  // 稳定语义属性
+    if (el === null) return false;
+    setBar(el); return true;
+  };
+  if (seek()) return;
+  const t = setInterval(() => seek() && clearInterval(t), 500);   // tab 栏晚于组件挂载
+  return () => clearInterval(t);
+}, []);
+return bar === null ? capsule : ReactDOM.createPortal(capsule, bar);
+```
+
+**必须遵守：**
+1. 锚点只用 `data-conversation-tabs`。**绝不**用 CSS Module 哈希类名
+   （`ank0OG_tabs` / 旧版 `_727C8a_tabs`，换版即失效）。
+2. 胶囊 CSS 必须 `align-self:center; flex:none`——tab 栏默认 `align-items:stretch`
+   会把 24px 的胶囊拉满整行高度。
+3. 用 `margin-left:-14px` 把 36px 的 `gap` 收到 22px，视觉上紧挨「系统监控」。
+4. **取不到 tab 栏一律降级回注册位**，绝不整块消失。
+5. 浮层（下拉 / 弹窗）仍 Portal 到 `document.body`，跟着锚点 rect 定位。
+
+**实测（电脑端 1440 / 1280 / 1024，会话态）：**
+
+| 项 | 1280 档实测值 |
+|---|---|
+| tab 栏 | `[300,50,952,26]`，对话@x308 / 轨迹@x370 / 系统监控@x432 |
+| 提示词优化胶囊 | `[506,50,85,26]`，`parentElement === tablist`，`align-self:center` |
+| 积分胶囊 | `[613,51,108,24]`，`parentElement === tablist` |
+| 零重叠 / 不出屏 | ✅ 0 对；`docSW == vw` |
+| 原生模型选择器 | `[763,733,303,28]` `position:relative`，全宽 303px，**未被碰过** |
+
+
 ### 3.2 App 适配侧（iOS shim）
 
 只做两件事：**① 隔离**（把违规插件的 inline 占位清掉，让它回原生流）；
@@ -145,6 +210,22 @@
   `top = tabBtnCenterY - 14`，从右往左排（最右 `right:12`）。
 - 取不到 tab 行的页面（无轨迹数据 / 新会话空态 / 电脑端）→ **完全不动**，
   让插件留在它自己的 `header.actions` 里，绝不制造错位。
+
+**🔴 3.2.3 App 侧只许碰 9 个定位属性，插件外观一个字节都不许动（build 93 事故）**
+
+> 老总 12:5x 真机追问：「积分胶囊，还有个提示词优化插件呢，。」——两个插件都不见了。
+
+- App 侧唯一允许写的属性白名单（`DOCK_PROPS`）：
+  `position` / `left` / `right` / `top` / `bottom` / `z-index` / `transform` / `max-width` / `overflow`。
+- **禁止** App 侧写：`display` / `background` / `border` / `border-radius` / `box-shadow` /
+  `padding` / `margin` / `height` / `width` / `flex` / `align-items` —— 外观归插件，插件自己会渲染。
+- 事故根因：旧的 `releaseHijack` 清单里含 `[class*="dcc-root"]`，每个 tick 都去清
+  `display / height / background / border / box-shadow`，而 `dockOne` 只写定位、**不写回 `display`**
+  → `display` 被抹成空后胶囊塌陷成 0 高，插件不会重渲染补回 → 真机整块消失。
+- 现状：`releaseHijack` 的 sels 已移除 dcc / po；`releaseDccRoot()` **整函数停用成空壳**（`return;`）。
+  插件样式归插件，App 侧只负责「搬到哪」。
+- `position: fixed` 会把 `inline-flex` 计算成 `flex`（**CSS 规范行为，必然发生，不算破坏样式**）；
+  撤销停靠后必须还原成 `static` + 原 `display`。
 
 **所有落点共同要求**：
 1. 幂等（值不变不重复写），脱离状态可完全还原（清 inline 后回到原生位置）。

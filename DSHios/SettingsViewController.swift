@@ -851,7 +851,7 @@ final class PluginLayoutRulesViewController: UIViewController {
 
         stack.addArrangedSubview(makeCard(
             title: "🔴 一句话铁律",
-            body: "插件永远不占会话框（输入框）的位置，永远不压缩原生按钮的空间。\n\n插件要有界面，就去自己的地盘：会话头部（顶部 tab 栏那一行）、卡片下方读数条、侧栏面板、独立浮层。不许挤进用户打字的那个框。",
+            body: "插件永远不占会话框（输入框）的位置，永远不压缩原生按钮的空间。原生会话框里的按钮（模型 / 权限 / 语音 / 齿轮 / 发送）是一个整体，一个都不许动。\n\n插件要有界面，就去自己的地盘：会话 tab 栏（「对话 / 轨迹 / 系统监控」那一行的右侧）、卡片下方读数条、侧栏面板、独立浮层。不许挤进用户打字的那个框。",
             accent: .systemRed))
 
         stack.addArrangedSubview(makeCard(
@@ -860,8 +860,8 @@ final class PluginLayoutRulesViewController: UIViewController {
             accent: .systemOrange))
 
         stack.addArrangedSubview(makeCard(
-            title: "✅ 唯一正确做法：回到顶部 tab 栏",
-            body: "插件界面请挂到 DSH 官方公开插槽：\n\nconversation.session.header.actions\n\n也就是「对话 / 轨迹 / 系统监控」那一行、标题右侧那一排（智能体团队、创造模式所在的位置）。\n\n具体改法：把插件源码里的 slots.inject 里那个 slot 名字换成上面这个。\n\n重要：这个插槽只在「已经打开会话」时才存在。新会话空态下它不声明，所以在空态验证会误以为「注册成功但不显示」——必须在真实会话里验证。",
+            title: "✅ 唯一正确做法：放进会话 tab 栏",
+            body: "「对话 / 轨迹 / 系统监控」这一行叫会话 tab 栏，它是由 DSH 的 conversation.view 插槽渲染出来的 —— 其中「系统监控」就是第三方插件 dsh-system-monitor-plugin 贡献的。\n\n所以这一行本来就是「官方 + 插件共用」的地盘，插件往里放东西不需要任何官方插槽，右侧全是空位。\n\n推荐两步：\n\n① 注册位仍用 conversation.session.header.actions（它只在会话态声明，正好当降级位）\n\n② 组件里把胶囊 Portal 进 tab 栏容器：\n\ndocument.querySelector('[data-conversation-tabs]')\nReactDOM.createPortal(胶囊, 那个容器)\n\n锚点必须用 data-conversation-tabs 这个稳定语义属性，绝不用 CSS Module 哈希类名（ank0OG_tabs / _727C8a_tabs 之类，换版本就失效）。\n\n取不到 tab 栏（新会话空态 / 版本改结构）就降级回注册位渲染，绝不让胶囊整块消失。",
             accent: .systemGreen, mono: true))
 
         stack.addArrangedSubview(makeCard(
@@ -875,8 +875,8 @@ final class PluginLayoutRulesViewController: UIViewController {
             accent: .systemRed))
 
         stack.addArrangedSubview(makeCard(
-            title: "✅ 推荐挂这些插槽",
-            body: "conversation.session.header.actions    会话标题行右侧（首选）\nconversation.session.header.utilities     标题行工具位\nconversation.session.header.corner        标题行最右角（只放图标）\nconversation.composer.dock                卡片下方读数条\nshell.overlay                             全局浮层（关闭态必须零占位）\nsettings.section / sidebar.*              设置页 / 侧栏",
+            title: "✅ 推荐挂这些位置",
+            body: "[P1 首选] 会话 tab 栏（对话/轨迹/系统监控 那一行右侧）\n           锚点 data-conversation-tabs\n\n[降级位] conversation.session.header.actions    会话标题行右侧\nconversation.session.header.utilities     标题行工具位\nconversation.session.header.corner        标题行最右角（只放图标）\nconversation.composer.dock                卡片下方读数条\nshell.overlay                             全局浮层（关闭态必须零占位）\nsettings.section / sidebar.*              设置页 / 侧栏",
             accent: .systemGreen, mono: true))
 
         stack.addArrangedSubview(makeCard(
@@ -886,7 +886,7 @@ final class PluginLayoutRulesViewController: UIViewController {
 
         stack.addArrangedSubview(makeCard(
             title: "🌍 通用性说明（任何玩家都适用）",
-            body: "本条规范不区分使用者、不区分机器、不区分渠道。\n\nconversation.session.header.actions 是 DSH 官方公开插槽，桌面端与手机端是同一套前端，改插件源码即两端同时生效，不依赖任何本机特有结构。\n\n任何玩家安装同一个插件包，都会得到同样的合规位置。\n\n已按本规范迁移的插件：\n• dsh-our-free-model-composer-credits v1.2.0（积分胶囊）\n• dsh-prompt-optimizer v1.5.0（提示词优化）\n• dsh-connect-workbuddy（余额读数改为输入框下方 dock）",
+            body: "本条规范不区分使用者、不区分机器、不区分渠道。\n\n会话 tab 栏（conversation.view 渲染出来的那一行）在桌面端与手机端是同一套前端，插件自己 Portal 进去，两端同时到同一个位置，不依赖任何本机特有结构。\n\n任何玩家安装同一个插件包，都会得到同样的合规位置。\n\n已按本规范迁移的插件：\n• dsh-our-free-model-composer-credits v1.3.0（积分胶囊 → tab 栏）\n• dsh-prompt-optimizer v1.6.0（提示词优化 → tab 栏）\n• dsh-connect-workbuddy（余额读数改为输入框下方 dock）",
             accent: .systemPurple))
 
         stack.addArrangedSubview(makeCard(
