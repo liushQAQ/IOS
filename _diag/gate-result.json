@@ -5,13 +5,13 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-22T20:32:06.507Z",
+  "startedAt": "2026-10-23T01:05:37.720Z",
   "dshFingerprint": "6vk7ht",
   "dshAssets": 9,
   "domClasses": 0,
-  "anchorTotal": 154,
+  "anchorTotal": 160,
   "anchorDead": 0,
-  "anchorCssAlive": 99,
+  "anchorCssAlive": 105,
   "anchorResidue": 55,
   "dshSheets": 210,
   "ownSheets": 11,
@@ -21,11 +21,12 @@
   },
   "pluginStripQueueGuard": true,
   "modelPickerGuard": true,
+  "modelDockGuard": true,
   "ok": true,
-  "pass": 72,
+  "pass": 75,
   "fail": 0,
   "failures": [],
   "blocked": [],
-  "sourceHash": "a08a15865c87697e58d126f29309359b0ef89caf0f64bb794f6ad1ce1356e726",
-  "finishedAt": "2026-10-22T20:34:31.411Z"
+  "sourceHash": "1ab932f126dbd88e07eee904332617b5b57d38c36ac0a1af1a211c0f0a6eccdd",
+  "finishedAt": "2026-10-23T01:08:40.423Z"
 }

@@ -6191,6 +6191,9 @@ function applySidebarInset() {
               var ds = document.querySelectorAll('.dcc-root, [class*="dcc-root"]');
               for (var i = 0; i < ds.length; i++) {
                 var el = ds[i];
+                // 🔴 v1.0.131(92)：模型选择器停靠中（shim_27）绝不能被这里拆掉，
+                //   否则每 900ms 互删互插 → 按钮在顶栏与会话框之间闪烁。
+                if (el.getAttribute('data-dsh-modeldock') === '1') { continue; }
                 if (!el.hasAttribute('data-dsh-pos') && !el.style.cssText) { continue; }
                 el.removeAttribute('data-dsh-pos');
                 var props = ['position', 'left', 'right', 'top', 'bottom', 'transform',
@@ -6312,6 +6315,9 @@ function applySidebarInset() {
                 var list = document.querySelectorAll(sels[s]);
                 for (var i = 0; i < list.length; i++) {
                   var el = list[i];
+                  // 🔴 v1.0.131(92)：停靠中的模型选择器（shim_27 搬去顶栏 tab 行右侧）跳过，
+                  //   否则本拆除器每 tick 把停靠样式清空 → 按钮弹回底部，与 shim_27 死循环互删。
+                  if (el.getAttribute('data-dsh-modeldock') === '1') { continue; }
                   if (seenEl.indexOf(el) >= 0) { continue; }
                   seenEl.push(el);
                   try { el.removeAttribute('data-dsh-pos'); } catch (e1) {}
@@ -6540,6 +6546,241 @@ function applySidebarInset() {
           if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', boot); } else { boot(); }
           window.addEventListener('load', boot);
           setInterval(function () { installCss(); fixOnce(); }, 3000);
+        })();
+""",
+"""
+        // ===== shim_27（v1.0.131 build 92）：模型选择器停靠区 —— 搬离会话框底排 =====
+        // 老总 2026-10-23 08:53 原话：「模型按钮不见了，我自己创建的两个模型放在其他位置可以吗。
+        //   不要放在会话框底部，占用原生按钮的位置。还在底部和费用明细一起？或者还在顶栏下面，
+        //   对话，轨迹，系统监控 的旁边位置。你觉得哪个方案？」
+        //
+        // 定案：**顶栏下面 · tab 行右侧**（不选「底部和费用明细一起」）。
+        //   否决费用明细那行的硬理由（实测 _models_probe.js 2026-10-23 08:54）：
+        //     费用明细 dock（VERcba_dock）在无会话数据时 computed display = **none** ——
+        //     整块压根不渲染。模型按钮放那里 = 新会话/空会话时跟着消失，
+        //     正好重演老总刚骂过的「新建会话，模型选择按钮都没了」。
+        //     tab 行是常驻导航（对话/轨迹/系统监控），空会话也在，右侧本来空着。
+        //
+        // 「模型按钮不见了」的真正原因（不是被隐藏，是被挤扁）：
+        //   官方模型选择器 ofTiQG_root 实测只有 **5px 宽**，内部 ofTiQG_triggerLabel **宽 0** ——
+        //   被同在底排的 dcc-root(插件模型，104px) 压缩到不可见。91 拆掉搬位层后交回官方
+        //   flex，官方自己在这个宽度下也保不住它。
+        //
+        // 实现（先用 _dock_exp.js 在沙箱实验验证，再落到这里）：
+        //   ① 两个选择器 fixed 停靠到顶栏下方右侧：官方最右（right:12），插件排在它左边（gap 8）；
+        //   ② fixed 脱离 flex 压缩后标签自然展开（实测 label 0 → 110px），同时把底部原生
+        //      按钮位置全部让出来（实测 tools 228→116、trailing 258）；
+        //   ③ 🔴 实测隐患：两者的下拉都是 position:fixed 且位置由前端按「原始位置」算 ——
+        //      停靠后菜单跑到屏幕中下部（ofTiQG_menu y=413 / dcc-panel y=640，而按钮在 y=83）。
+        //      故 fixMenus() 每个 tick 把**已打开**的菜单钉回「按钮下方 6px、右端对齐」，
+        //      关闭态一律不碰。
+        //   ④ 与 91 的拆除器解耦：releaseHijack / releaseDccRoot 原本会清 dcc 的全部 inline，
+        //      现已跳过 [data-dsh-modeldock="1"]，否则每 900ms 互删互插。
+        (function () {
+          if (window.top !== window) { return; }
+          if (window.__dshModelDock) { return; }
+          window.__dshModelDock = 1;
+          var TAG = 'data-dsh-modeldock';
+          var MTAG = 'data-dsh-menufix';
+          var RIGHT = 12, GAP = 8, H = 28, MENU_GAP = 6;
+          var DOCK_PROPS = ['position', 'left', 'right', 'top', 'bottom', 'transform', 'z-index',
+                            'width', 'min-width', 'max-width', 'height', 'min-height',
+                            'margin', 'padding', 'flex', 'order', 'align-items', 'justify-content',
+                            'overflow', 'overflow-x', 'overflow-y', 'white-space', 'text-overflow', 'display'];
+          function isDSH() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e) { return false; }
+          }
+          function setP(el, p, v) { try { el.style.setProperty(p, v, 'important'); } catch (e) {} }
+          function clearP(el, ps) {
+            if (!el) { return; }
+            for (var i = 0; i < ps.length; i++) { try { el.style.removeProperty(ps[i]); } catch (e) {} }
+            if (el.getAttribute('style') === '') { el.removeAttribute('style'); }
+          }
+          // 停靠锚点：优先取「对话/轨迹/系统监控」tab 行的垂直中心与最右缘（真机有，最准）；
+          // 取不到（首页/沙箱无 tab 行）时按「状态栏 + 38」兜底 —— 实测真机 tab 行中心就在 97pt。
+          // 🔴 为什么要 tabRight：430 宽下两个模型按钮共约 292px，而 tab 行（对话/轨迹/系统监控）
+          //   本身占到 x≈215 —— 硬塞同一行会压住「系统监控」。故拿到 tabRight 后做空间判断，
+          //   放不下就整体下移到 tab 行下方一行（见 dock() 的二次校正）。
+          function anchorInfo() {
+            var out = { rowFound: false, cy: 0, tabRight: 0, tabBottom: 0, vw: window.innerWidth || 430 };
+            try {
+              var cands = document.querySelectorAll('[role="tab"], button');
+              var right = 0, bottom = 0, cy = 0;
+              for (var i = 0; i < cands.length; i++) {
+                var t = (cands[i].textContent || '').trim();
+                if (t === '对话' || t === '轨迹' || t === '系统监控') {
+                  var r = cands[i].getBoundingClientRect();
+                  if (r.width > 8 && r.height > 8) {
+                    if (r.right > right) { right = r.right; }
+                    if (r.bottom > bottom) { bottom = r.bottom; }
+                    cy = r.y + r.height / 2;
+                    out.rowFound = true;
+                  }
+                }
+              }
+              if (out.rowFound) {
+                out.cy = cy; out.tabRight = Math.round(right); out.tabBottom = Math.round(bottom);
+                return out;
+              }
+            } catch (e) {}
+            var sb = parseFloat(window.__dshNativeStatusBar);
+            if (!(sb > 0)) {
+              try { sb = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-sb-native')); } catch (e2) {}
+            }
+            if (!(sb > 0)) { try { sb = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar')); } catch (e3) {} }
+            if (!(sb > 0)) { sb = 59; }
+            out.cy = sb + 38;
+            return out;
+          }
+          function dockOne(el, rightPx, topPx) {
+            if (!el) { return; }
+            setP(el, 'position', 'fixed');
+            setP(el, 'z-index', '60');
+            setP(el, 'top', topPx + 'px');
+            setP(el, 'right', rightPx + 'px');
+            setP(el, 'left', 'auto');
+            setP(el, 'bottom', 'auto');
+            setP(el, 'height', H + 'px');
+            setP(el, 'width', 'auto');
+            setP(el, 'min-width', '0');
+            setP(el, 'max-width', '180px');
+            setP(el, 'margin', '0');
+            setP(el, 'transform', 'none');
+            setP(el, 'flex', 'none');
+            setP(el, 'order', '0');
+            setP(el, 'align-items', 'center');
+            setP(el, 'justify-content', 'center');
+            setP(el, 'overflow', 'visible');
+            try { el.setAttribute(TAG, '1'); } catch (e) {}
+          }
+          // 内部标签被压成 0 宽时恢复（只在停靠后需要，还原时一并清掉）
+          function widenLabel(root) {
+            if (!root) { return; }
+            var lab = root.querySelector('[class*="triggerLabel"]');
+            var eff = root.querySelector('[class*="triggerEffort"]');
+            var fixOne = function (x, maxW) {
+              if (!x) { return; }
+              setP(x, 'width', 'auto');
+              setP(x, 'max-width', maxW + 'px');
+              setP(x, 'min-width', '0');
+              setP(x, 'overflow', 'hidden');
+              setP(x, 'white-space', 'nowrap');
+              setP(x, 'text-overflow', 'ellipsis');
+              setP(x, 'display', 'block');
+            };
+            fixOne(lab, 110);
+            fixOne(eff, 46);
+          }
+          function releaseLabels(root) {
+            if (!root) { return; }
+            var lab = root.querySelector('[class*="triggerLabel"]');
+            var eff = root.querySelector('[class*="triggerEffort"]');
+            clearP(lab, DOCK_PROPS);
+            clearP(eff, DOCK_PROPS);
+          }
+          // 已打开下拉的定位纠偏 —— 只处理可见且尺寸正常的菜单，关闭态一律不碰。
+          function fixMenus() {
+            try {
+              var pairs = [
+                { btn: document.querySelector('[class*="ofTiQG_trigger"]'),
+                  sels: ['[class*="ofTiQG_menu"]', '[class*="bre-model-menu"]'] },
+                { btn: document.querySelector('.dcc-btn') || document.querySelector('.dcc-root'),
+                  sels: ['.dcc-panel', '[class*="dcc-panel"]'] }
+              ];
+              for (var k = 0; k < pairs.length; k++) {
+                var btn = pairs[k].btn;
+                if (!btn) { continue; }
+                var m = null;
+                for (var s = 0; s < pairs[k].sels.length && !m; s++) { m = document.querySelector(pairs[k].sels[s]); }
+                if (!m) { continue; }
+                var cs = null;
+                try { cs = getComputedStyle(m); } catch (e1) { continue; }
+                if (cs.display === 'none' || cs.visibility === 'hidden') { continue; }
+                var mq = m.getBoundingClientRect();
+                if (mq.width < 60 || mq.height < 30) { continue; }
+                var bq = btn.getBoundingClientRect();
+                if (bq.width < 4) { continue; }
+                var wantTop = Math.round(bq.bottom + MENU_GAP);
+                var wantLeft = Math.round(bq.right - mq.width);
+                var maxLeft = window.innerWidth - 8 - mq.width;
+                if (wantLeft > maxLeft) { wantLeft = Math.round(maxLeft); }
+                if (wantLeft < 8) { wantLeft = 8; }
+                if (Math.abs(mq.top - wantTop) > 1.5) { setP(m, 'top', wantTop + 'px'); setP(m, 'bottom', 'auto'); }
+                if (Math.abs(mq.left - wantLeft) > 1.5) { setP(m, 'left', wantLeft + 'px'); setP(m, 'right', 'auto'); }
+                try { m.setAttribute(MTAG, '1'); } catch (e2) {}
+              }
+            } catch (e) {}
+          }
+          function releaseMenus() {
+            try {
+              var ms = document.querySelectorAll('[' + MTAG + ']');
+              for (var i = 0; i < ms.length; i++) {
+                clearP(ms[i], ['top', 'left', 'right', 'bottom']);
+                ms[i].removeAttribute(MTAG);
+              }
+            } catch (e) {}
+          }
+          function pickers() {
+            return {
+              off: document.querySelector('[class*="ofTiQG_root"]'),
+              dcc: document.querySelector('.dcc-root') || document.querySelector('[class*="dcc-root"]')
+            };
+          }
+          function restore() {
+            var P = pickers();
+            [P.off, P.dcc].forEach(function (el) {
+              if (!el) { return; }
+              if (el.getAttribute(TAG) !== '1') { return; }
+              clearP(el, DOCK_PROPS);
+              el.removeAttribute(TAG);
+            });
+            releaseLabels(P.off);
+            releaseMenus();
+          }
+          function dock() {
+            if (!isDSH()) { restore(); return; }
+            // 只在有会话框的页面上停靠（设置页/插件页没有 composer，元素自然不存在）
+            var card = document.querySelector('[class*="composerStack"] [class*="_card"]');
+            if (!card) { restore(); return; }
+            var P = pickers();
+            if (!P.off && !P.dcc) { return; }
+            var info = anchorInfo();
+            var cy = info.cy;
+            if (!(cy > 0 && cy < 300)) { cy = 97; }
+            var top = Math.round(cy - H / 2);
+            if (P.off) {
+              dockOne(P.off, RIGHT, top);
+              widenLabel(P.off);
+            }
+            var ow = 0;
+            try { ow = P.off ? P.off.getBoundingClientRect().width : 0; } catch (e) {}
+            if (P.dcc) { dockOne(P.dcc, Math.round(RIGHT + ow + GAP), top); }
+            // 🔴 二次校正：与 tab 行横向撞车时整体下移一行（不压「系统监控」）。
+            //   判断用真实渲染宽度（fixed 后已解除压缩），不用估算值。
+            if (info.rowFound) {
+              var dw = 0;
+              try { dw = P.dcc ? P.dcc.getBoundingClientRect().width : 0; } catch (e2) {}
+              var totalW = ow + (P.dcc ? GAP + dw : 0);
+              var avail = info.vw - info.tabRight - RIGHT - 8;
+              if (totalW > avail && info.tabBottom > 0) {
+                var t2 = Math.round(info.tabBottom + 6);
+                if (P.off) { setP(P.off, 'top', t2 + 'px'); }
+                if (P.dcc) { setP(P.dcc, 'top', t2 + 'px'); }
+              }
+            }
+            fixMenus();
+          }
+          function boot() {
+            dock();
+            setTimeout(dock, 1500);
+            setTimeout(dock, 4000);
+            setInterval(dock, 900);
+          }
+          if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', boot); } else { boot(); }
+          window.addEventListener('load', boot);
         })();
 """,
     ]

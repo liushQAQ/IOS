@@ -961,6 +961,29 @@ const A_PLUGIN_PAGE = () => {
   }
   GATE.modelPickerGuard = true;
 
+  /* ================= 断言 9c：模型选择器停靠区（v1.0.131 build 92）=================
+     老总 2026-10-23 08:53：「模型按钮不见了…我自己创建的两个模型放在其他位置可以吗。
+     不要放在会话框底部，占用原生按钮的位置。」定案：顶栏下面 tab 行右侧。
+     实测真凶：官方 ofTiQG_root 被 dcc-root(104px) 挤到 only 5px 宽、triggerLabel 宽 0 —— 按钮"消失"。
+     三条代码特征钉死，删任何一处即红：
+       ① 停靠标记 data-dsh-modeldock（shim_27 打标）
+       ② fixMenus 下拉纠偏（停靠后 fixed 菜单会跑到屏幕中下部，必须钉回按钮下方）
+       ③ releaseHijack / releaseDccRoot 跳过停靠元素（否则 900ms 互删互插，按钮闪烁） */
+  {
+    const bundle = APP_JS;
+    chk(/data-dsh-modeldock/.test(bundle) && /function dockOne\(/.test(bundle),
+      '[模型停靠] shim_27 停靠逻辑在（fixed 顶栏 + data-dsh-modeldock）',
+      /function dockOne\(/.test(bundle) ? '停靠在' : '停靠被删 → 模型按钮回底排挤原生位置');
+    chk(/function fixMenus\(\)/.test(bundle) && /data-dsh-menufix|MTAG/.test(bundle),
+      '[模型停靠] fixMenus 下拉纠偏在（菜单钉回按钮下方）',
+      /function fixMenus\(\)/.test(bundle) ? '纠偏在' : '纠偏被删 → 停靠后点开菜单会跑到屏幕中下部（实测 y413 vs 按钮 y83）');
+    const skipGuard = (bundle.match(/data-dsh-modeldock'\) === '1'\) \{ continue; \}/g) || []).length;
+    chk(skipGuard >= 2,
+      '[模型停靠] releaseHijack / releaseDccRoot 均跳过停靠元素',
+      '跳过点 ' + skipGuard + ' 处（需 ≥2，少一处即 900ms 互删互插）');
+  }
+  GATE.modelDockGuard = true;
+
 
   console.log(' 结果: ' + PASS + ' 绿 / ' + FAIL + ' 红 / ' + BLOCKED.length + ' 项无法校验');
   if (BLOCKED.length) {
