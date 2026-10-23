@@ -760,26 +760,44 @@ final class ViewController: UIViewController {
             '  position: relative !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
-            '  justify-content: space-between !important;',
             '  width: 100% !important;',
             '  box-sizing: border-box !important;',
             '}',
+            '/* 目录按钮（左侧抽屉开关）：最左端固定车位 38px 自然排布，永不脱标 */',
+            'html body [data-phase] header [class*="titleRow"] > button[aria-label*="目录"],',
+            'html body [data-phase] header [class*="titleRow"] > button[aria-label*="侧边栏"] {',
+            '  flex: 0 0 38px !important;',
+            '  width: 38px !important;',
+            '  margin-right: 6px !important;',
+            '  position: static !important;',
+            '}',
+            '/* 标题集群（titleCluster）：主弹性自适应区，占满中间剩余空间 */',
+            '.ank0OG_titleCluster,',
+            '[data-phase] header [class*="titleCluster"] {',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  flex: 1 1 auto !important;',
+            '  min-width: 0 !important;',
+            '  position: static !important;',
+            '  margin: 0 !important;',
+            '}',
+            '/* 会话标题：自适应剩余宽度，绝不侵占右侧车位，超出优雅出省略号 */',
             '.ank0OG_crumbs,',
             '[data-phase] header [class*="crumbs"],',
             '[data-phase] header [class$="_crumbs"] {',
-            '  position: absolute !important;',
-            '  left: 54px !important;',
+            '  position: static !important;',
+            '  flex: 0 1 auto !important;',
+            '  min-width: 40px !important;',
             '  right: var(--dsh-head-right, 96px) !important;',
-            '  margin: 0 auto !important;',
-            '  display: flex !important;',
-            '  justify-content: center !important;',
-            '  align-items: center !important;',
-            '  text-align: center !important;',
             '  max-width: calc(100% - 54px - var(--dsh-head-right, 96px)) !important;',
-            '  min-width: 0 !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
+            '  margin: 0 8px 0 0 !important;',
+            '  left: auto !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  text-align: left !important;',
             '  pointer-events: auto !important;',
             '}',
             '.ank0OG_crumbs *,',
@@ -787,7 +805,7 @@ final class ViewController: UIViewController {
             '.ank0OG_crumb,',
             '.ank0OG_crumbCurrent,',
             '.ank0OG_crumbSeg {',
-            '  text-align: center !important;',
+            '  text-align: left !important;',
             '  max-width: 100% !important;',
             '  min-width: 0 !important;',
             '  overflow: hidden !important;',
@@ -798,22 +816,29 @@ final class ViewController: UIViewController {
             '  font-weight: 600 !important;',
             '  font-size: 15px !important;',
             '  line-height: 22px !important;',
-            '  padding: 2px 4px !important;',
+            '  padding: 2px 0px !important;',
             '}',
-            '.ank0OG_titleCluster,',
-            '[data-phase] header [class*="titleCluster"] {',
-            '  margin-left: auto !important;',
-            '  display: inline-flex !important;',
-            '  align-items: center !important;',
-            '  gap: 6px !important;',
-            '}',
+            '/* 状态操作集群（后台任务 + 子智能体 + 智能体团队）：推至 cluster 最右侧专属车位顺排 */',
             '.ank0OG_headerActions,',
             '[data-phase] header [class*="headerActions"] {',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
+            '  flex: 0 0 auto !important;',
+            '  margin-left: auto !important;',
             '  gap: 6px !important;',
+            '  position: static !important;',
+            '  width: auto !important;',
             '}',
-            '/* 智能体团队及顶栏操作按钮：强制绝对抗挤压、不收缩、不折行、完整保持横排药丸 */',
+            '/* 严禁状态集群内部任何元素脱标 */',
+            'html body [data-phase] header [class*="headerActions"] * {',
+            '  position: static !important;',
+            '  transform: none !important;',
+            '  top: auto !important;',
+            '  right: auto !important;',
+            '  bottom: auto !important;',
+            '  left: auto !important;',
+            '}',
+            '/* 智能体团队专属车位 (固定 34px)，强制抗挤压保持药丸形状 */',
             '[class*="titleCluster"] > :not([class*="crumbs"]):not([class$="_crumbs"]),',
             '[class*="titleCluster"] button,',
             '.ank0OG_titleCluster button,',
@@ -827,6 +852,30 @@ final class ViewController: UIViewController {
             '  white-space: nowrap !important;',
             '  min-width: max-content !important;',
             '  word-break: keep-all !important;',
+            '}',
+            '/* 后台任务专属车位 (固定预留 136px，平时占位不抢位，点亮入座零重叠) */',
+            'button[aria-label*="后台任务"],',
+            '[data-job-indicator] button {',
+            '  display: inline-flex !important;',
+            '  align-items: center !important;',
+            '  gap: 4px !important;',
+            '  width: auto !important;',
+            '  white-space: nowrap !important;',
+            '}',
+            '/* 中间工具区（utilities）：适度限宽，平级自然排列 */',
+            'html body [data-phase] header [class*="headerUtilities"] {',
+            '  flex: 0 0 auto !important;',
+            '  position: static !important;',
+            '  max-width: 25vw !important;',
+            '  overflow: hidden !important;',
+            '}',
+            '/* 最右侧边栏开关（headerCorner）：锁定平级末端专属车位 34px，永不被挤压遮盖 */',
+            'html body [data-phase] header [class*="headerCorner"] {',
+            '  flex: 0 0 34px !important;',
+            '  width: 34px !important;',
+            '  position: static !important;',
+            '  margin-left: 6px !important;',
+            '}',
             '  display: inline-flex !important;',
             '  align-items: center !important;',
             '}',
@@ -1573,22 +1622,22 @@ final class ViewController: UIViewController {
             '[class*="composerStack"] [class*="VERcba_standardControls"] > div > div {',
             '  max-width: 100% !important;',
             '}',
-            '/* ===== v1.0.131(94) 顶栏各模块定宽、互不重叠 =====',
-            '   老总真机 13:38 实锤：会话标题与右侧「智能体团队 · 任务运行中」转圈徽标叠在一起，',
-            '   且「轨/迹」「系统监/控」被挤成两行竖排。',
-            '   实测（393 移动布局）：titleRow=[96,8,285,36]，headerUtilities=[282,12,79,28]；',
-            '   crumbs 被本文件前文钉成 absolute + left:54/right:96，右缘算到 285 > 282 —— 实测重叠 3px；',
-            '   同时「智能体团队」按钮又被强制 min-width:max-content 不许收缩，右侧只会更宽。',
-            '   本组选择器特异性 (0,3,3) 高于前文 (0,2,1)，且排在数组最末 → 稳定生效：',
-            '   ① 标题右预留改用 --dsh-head-right（fixHeaderFit 实测右侧模块宽度写入，JS 死时退回 96px）；',
-            '   ② 标题内部一律单行省略，绝不溢出压右侧模块；',
-            '   ③ tab 行三个 tab 永不竖排、永不收缩；其余模块各自限宽可省略。 */',
+            '/* ===== v1.0.131(98) 全按钮固定专属车位模型终极定版 =====',
+            '   彻底废除 absolute 脱标，左侧目录(38px) → titleCluster(标题+专属车位组) → utilities → headerCorner(34px) */',
             'html body [data-phase] header [class*="titleRow"] [class*="crumbs"] {',
+            '  position: static !important;',
+            '  flex: 0 1 auto !important;',
+            '  min-width: 40px !important;',
             '  right: var(--dsh-head-right, 96px) !important;',
             '  max-width: calc(100% - 54px - var(--dsh-head-right, 96px)) !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
+            '  margin: 0 8px 0 0 !important;',
+            '  left: auto !important;',
+            '  display: flex !important;',
+            '  align-items: center !important;',
+            '  text-align: left !important;',
             '}',
             'html body [data-phase] header [class*="titleRow"] [class*="crumbs"] * {',
             '  min-width: 0 !important;',
@@ -5417,46 +5466,26 @@ function applySidebarInset() {
               if (!isSmall()) return;
               var header = document.querySelector('header');
               if (!header) return;
-              var hw = header.getBoundingClientRect().width;
-              if (hw < 300) return;
-              // 标题容器收窄 28px：实测标题文字只用到 x≈293，容器到 322，收窄不影响标题显示，
-              // 但能给右侧那排动作按钮让出位置（否则 430 宽下根本排不下）。
-              var nav = header.querySelector('nav');
-              if (nav) {
-                var nr = nav.getBoundingClientRect();
-                if (nr.width > 210) S(nav, 'width', '228px');
-              }
-              var jobs = header.querySelector('button[aria-label*="后台任务"]');
-              var badge = header.querySelector('button[aria-label*="子智能体"]');
+              // 🔴 v1.0.131(98)：全按钮专属车位模型 —— 彻底清除 JS 绝对定位钉死反模式。
+              // 遍历清除智能体团队与后台任务容器上的内联 position/right/left/transform 脏属性，
+              // 保证所有按钮严格停在专属车位中，互不抢占。
               var team = header.querySelector('button[aria-label*="智能体团队"]');
-              // 🔴 v1.0.131(97)：动态计算右侧模块间距，根治「后台任务与智能体按钮重叠」（老总 17:38/19:27 反馈）。
-              // 右侧抽屉开关占用最右侧 38px (hw - 42)；
-              // 从右往左动态摆放：
-              // 1. 团队按钮 (width 32px) 放置在 hw - 48；
-              // 2. 徽标按钮 (width 22px) 放置在 hw - 74；
-              // 3. 后台任务按钮/胶囊：动态测量其实际渲染宽度 jw，放置在 (hw - 78 - jw)，留足 6px 间隙！
-              // 这样无论后台任务是 22px 还是 152px，绝对不会与智能体按钮发生重叠碰撞！
-              if (team && team.parentElement && team.parentElement !== header) {
-                placeAbs(team.parentElement, hw - 46, 32);
-              }
-              if (badge && badge.parentElement && badge.parentElement !== header) {
-                if (badge.dataset.dshBadgeTight !== '1') {
-                  S(badge, 'width', '22px');
-                  S(badge, 'min-width', '0');
-                  S(badge, 'padding', '0');
-                  S(badge, 'box-sizing', 'border-box');
-                  badge.dataset.dshBadgeTight = '1';
+              var badge = header.querySelector('button[aria-label*="子智能体"]');
+              var jobs = header.querySelector('button[aria-label*="后台任务"]');
+              [team, badge, jobs].forEach(function(btn) {
+                if (btn && btn.parentElement && btn.parentElement !== header) {
+                  var p = btn.parentElement;
+                  if (p.style.position === 'absolute') {
+                    p.style.removeProperty('position');
+                    p.style.removeProperty('left');
+                    p.style.removeProperty('right');
+                    p.style.removeProperty('top');
+                    p.style.removeProperty('transform');
+                    p.style.removeProperty('margin');
+                    p.style.removeProperty('z-index');
+                  }
                 }
-                placeAbs(badge.parentElement, hw - 72, 22);
-              }
-              if (jobs && jobs.parentElement && jobs.parentElement !== header) {
-                var jwrap = jobs.parentElement;
-                var jw = jobs.getBoundingClientRect().width;
-                if (!(jw > 10)) jw = 32;
-                // 计算后台任务应当落座的 right 坐标：智能体团队(46) + 间隙(8) + 任务宽度(jw)
-                var targetRight = Math.round(hw - (48 + jw));
-                placeAbs(jwrap, targetRight, Math.round(jw));
-              }
+              });
             } catch (e) {}
           }
 
