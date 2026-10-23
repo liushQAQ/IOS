@@ -1,11 +1,12 @@
 {
   "version": "1.0.131",
-  "build": 92,
-  "updated_at": "2026-10-23 09:12:00",
-  "title": "v1.0.131(92) 模型选择器搬去顶栏 tab 行右侧——彻底让出会话框原生按钮位",
-  "changelog": "1. 🥇 模型按钮归位（新方案）：你自己创建的两个模型选择器（插件模型 Loom/Lobster + 官方 gemini-3.8-flash）从会话框底部搬到「顶栏下面 · 对话/轨迹/系统监控 右侧」固定停靠，官方最右、插件在左；固定后脱离 flex 压缩，被挤成 5px 宽、文字标签 0 宽的官方模型按钮恢复正常显示；\n2. 🥇 会话框彻底清爽：两个模型按钮移走后底排只剩原生按钮（+ 麦克风 权限 优化 齿轮 发送），工具行宽度 228→116px，不再压缩原生按钮空间；空间不够时（小屏）自动下移到 tab 行下方一行，绝不压住「系统监控」；\n3. 🥇 点击菜单纠偏：停靠后下拉菜单原本会跑到屏幕中间（实测按钮 y=83、菜单 y=413），现已钉死在按钮正下方 6px、右端对齐；\n4. 📋 新增规范 PLUGIN_LAYOUT_RULES.md：任何插件永不占用会话框、永不压缩原生按钮空间（六条绝对禁止 + 四个合规落点 + 四条机械自检），已纳入 AGENTS.md 第 5 条铁律；\n5. 回归闸门 75 绿 0 红（430/393/375 三档全量），新增 3 条模型停靠防复发断言；巨魔一键极速升级。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-92.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-92.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-92.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.131"
+  "build": 93,
+  "updated_at": "2026-10-23 13:28:00",
+  "title": "v1.0.131(93) 插件搬进 tab 栏，会话框回归原生",
+  "changelog": "1. 插件搬到 tab 栏右侧\n2. 会话框按钮回归原生\n3. 原生按钮零位移零悬浮\n4. 小屏自动收缩不重叠\n5. 优化菜单窄屏改浮层\n6. 顶栏文字水平对齐",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-93.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-93.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-93.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.131",
+  "md5": "4e9a3ac94d44089937e39b444b87820f"
 }
