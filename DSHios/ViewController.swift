@@ -6644,7 +6644,8 @@ function applySidebarInset() {
             out.cy = sb + 38;
             return out;
           }
-          function dockOne(el, rightPx, topPx) {
+          // 把**插件**元素钉到 tab 行右侧（只对插件用，原生按钮永不调用本函数）
+          function dockOne(el, rightPx, topPx, maxW) {
             if (!el) { return; }
             setP(el, 'position', 'fixed');
             setP(el, 'z-index', '60');
@@ -6655,14 +6656,16 @@ function applySidebarInset() {
             setP(el, 'height', H + 'px');
             setP(el, 'width', 'auto');
             setP(el, 'min-width', '0');
-            setP(el, 'max-width', '180px');
+            setP(el, 'max-width', (maxW > 0 ? Math.round(maxW) : 180) + 'px');
             setP(el, 'margin', '0');
             setP(el, 'transform', 'none');
             setP(el, 'flex', 'none');
             setP(el, 'order', '0');
             setP(el, 'align-items', 'center');
             setP(el, 'justify-content', 'center');
-            setP(el, 'overflow', 'visible');
+            setP(el, 'overflow', 'hidden');
+            setP(el, 'text-overflow', 'ellipsis');
+            setP(el, 'white-space', 'nowrap');
             try { el.setAttribute(TAG, '1'); } catch (e) {}
           }
           // 内部标签被压成 0 宽时恢复（只在停靠后需要，还原时一并清掉）
@@ -6694,13 +6697,14 @@ function applySidebarInset() {
             clearP(eff, DOCK_PROPS);
           }
           // 已打开下拉的定位纠偏 —— 只处理可见且尺寸正常的菜单，关闭态一律不碰。
+          // 🔴 v1.0.131(93)：**只纠偏插件自己的面板**。
+          //   官方模型选择器（ofTiQG）已彻底退出停靠机制（见 pickers 注释），
+          //   它的下拉本来就是官方算好的位置，再纠偏只会干扰。
           function fixMenus() {
             try {
               var pairs = [
-                { btn: document.querySelector('[class*="ofTiQG_trigger"]'),
-                  sels: ['[class*="ofTiQG_menu"]', '[class*="bre-model-menu"]'] },
-                { btn: document.querySelector('.dcc-btn') || document.querySelector('.dcc-root'),
-                  sels: ['.dcc-panel', '[class*="dcc-panel"]'] }
+                { btn: document.querySelector('[class*="dcc-btn"]') || document.querySelector('[class*="dcc-root"]'),
+                  sels: ['[class*="dcc-panel"]'] }
               ];
               for (var k = 0; k < pairs.length; k++) {
                 var btn = pairs[k].btn;
@@ -6735,78 +6739,87 @@ function applySidebarInset() {
               }
             } catch (e) {}
           }
+          // 🔴 v1.0.131(93) 关键修正（老总 11:36 真机：「模型选择按钮呢，直接不见了。
+          //   这不是原生按钮吗？？？」）：
+          //   **官方模型选择器 ofTiQG 是原生按钮，从此彻底退出停靠机制，一点不碰。**
+          //   92 版把它 fixed 到顶栏，真机上整块消失（原生按钮被搬出可视区/被压制），
+          //   这是「App 侧替原生按钮搬位」的直接后果 —— 也违反 PLUGIN_LAYOUT_RULES.md
+          //   「原生按钮零干预」那一条。
+          //   现在只搬**插件**：插件模型胶囊 dcc + 提示词优化胶囊 po。
+          //   插件搬走后，ofTiQG 靠官方 flex 自然拿到完整宽度（实测 5px → 206px）。
           function pickers() {
             return {
-              off: document.querySelector('[class*="ofTiQG_root"]'),
-              dcc: document.querySelector('.dcc-root') || document.querySelector('[class*="dcc-root"]')
+              dcc: document.querySelector('[class*="dcc-root"]'),
+              po: document.querySelector('[class*="dsh-po-capsule"]')
             };
           }
           function restore() {
             var P = pickers();
-            [P.off, P.dcc].forEach(function (el) {
+            [P.dcc, P.po].forEach(function (el) {
               if (!el) { return; }
               if (el.getAttribute(TAG) !== '1') { return; }
               clearP(el, DOCK_PROPS);
               el.removeAttribute(TAG);
             });
-            releaseLabels(P.off);
             releaseMenus();
           }
-          // 🔴 老总 2026-10-23 09:13 拍板：「那就顶部 tab 处。」
-          //   要求**必须待在 tab 那一行**，不许被挤到下一行。430 真机上 tab 行（对话/轨迹/
-          //   系统监控）右缘约 x=215，右侧只剩约 193px，而两个按钮自然宽 292px ——
-          //   所以要按可用宽度**等比压缩**（各留底线：官方 ≥96px、插件 ≥80px），
-          //   靠省略号收尾；只有连底线都放不下（极窄屏 avail < 96+8+80）才整体下移一行。
-          var MIN_OFF_W = 96, MIN_DCC_W = 80;
+          // 🔴 老总 2026-10-23 11:37 真机纠正：「顶部位置不对，不是说了在下面系统监控旁边。
+          //   不是最上面的顶栏」+「模型选择按钮呢，直接不见了。这不是原生按钮吗？？？」
+          //
+          //   所以本版 shim_27 有两条硬边界：
+          //   ① **原生模型选择器（ofTiQG）零干预** —— 不 fixed、不 widenLabel、不 restore。
+          //      它本来就该待在会话框底排，插件搬走后自然拿到完整宽度。
+          //   ② **只搬插件**（dcc 插件模型胶囊 / po 提示词优化胶囊），落到
+          //      「对话 · 轨迹 · 系统监控」那一行的右侧空白处（= 老总要的「系统监控旁边」）。
+          //   取不到 tab 行时**完全不动**，让插件留在它自己的 header.actions 里。
+          var MIN_W = 56;
           function dock() {
             if (!isDSH()) { restore(); return; }
             // 只在有会话框的页面上停靠（设置页/插件页没有 composer，元素自然不存在）
             var card = document.querySelector('[class*="composerStack"] [class*="_card"]');
             if (!card) { restore(); return; }
             var P = pickers();
-            if (!P.off && !P.dcc) { return; }
+            if (!P.dcc && !P.po) { restore(); return; }
             var info = anchorInfo();
+            // 🔴 没有 tab 行 → 一律不搬（宁可留在插件原生落点，也不制造错位）
+            if (!info.rowFound) { restore(); return; }
             var cy = info.cy;
-            if (!(cy > 0 && cy < 300)) { cy = 97; }
+            if (!(cy > 0 && cy < 260)) { restore(); return; }
             var top = Math.round(cy - H / 2);
+            var avail = Math.round(info.vw - info.tabRight - RIGHT - 10);
+            if (!(avail > 40)) { restore(); return; }
 
-            // ① 先恢复自然上限量自然宽（同步读写，浏览器只在 tick 结束时绘制一帧，不会闪）
-            if (P.off) { setP(P.off, 'max-width', '180px'); }
-            if (P.dcc) { setP(P.dcc, 'max-width', '180px'); }
-            if (P.off) { widenLabel(P.off); }
-            var owNat = 0, dwNat = 0;
-            try { owNat = P.off ? P.off.getBoundingClientRect().width : 0; } catch (e) {}
-            try { dwNat = P.dcc ? P.dcc.getBoundingClientRect().width : 0; } catch (e1) {}
+            // ① 量自然宽（临时放开上限，同步读写不会闪）
+            var items = [];
+            if (P.dcc) { items.push(P.dcc); }
+            if (P.po) { items.push(P.po); }
+            var nat = [];
+            for (var i = 0; i < items.length; i++) {
+              setP(items[i], 'max-width', '180px');
+              var w = 0;
+              try { w = items[i].getBoundingClientRect().width; } catch (e) {}
+              nat.push(Math.max(0, Math.round(w)));
+            }
+            var totalGap = GAP * Math.max(0, items.length - 1);
+            var need = totalGap;
+            var sum = 0;
+            for (var j = 0; j < nat.length; j++) { need += nat[j]; sum += nat[j]; }
+            if (sum <= 0) { sum = 1; }
 
-            // ② 算可用宽度（tab 行右侧），决定压缩比
-            var offMax = owNat, dccMax = dwNat, dropRow = false;
-            if (info.rowFound) {
-              var avail = info.vw - info.tabRight - RIGHT - 10;
-              var need = owNat + (P.dcc ? GAP + dwNat : 0);
-              if (need > avail) {
-                if (!P.dcc) {
-                  if (avail >= MIN_OFF_W) { offMax = avail; } else { dropRow = true; }
-                } else {
-                  // 插件模型优先保 104 原宽（它内部不能改），缺口全由官方标签让
-                  dccMax = Math.min(dwNat, Math.max(MIN_DCC_W, avail - GAP - MIN_OFF_W));
-                  offMax = avail - GAP - dccMax;
-                  if (offMax < MIN_OFF_W) { dropRow = true; offMax = MIN_OFF_W; dccMax = MIN_DCC_W; }
-                }
+            // ② 放不下就**等比压缩**（每项保底 MIN_W，靠省略号收尾），绝不出屏、绝不压 tab
+            var caps = nat.slice();
+            if (need > avail) {
+              var room = Math.max(0, avail - totalGap);
+              for (var n = 0; n < caps.length; n++) {
+                caps[n] = Math.max(MIN_W, Math.floor(room * nat[n] / sum));
               }
             }
-            if (dropRow && info.tabBottom > 0) { top = Math.round(info.tabBottom + 6); }
 
-            // ③ 落位：官方最右，插件按官方实宽往左排
-            if (P.off) {
-              dockOne(P.off, RIGHT, top);
-              if (offMax < 180) { setP(P.off, 'max-width', Math.round(offMax) + 'px'); }
-              widenLabel(P.off);
-            }
-            var ow = 0;
-            try { ow = P.off ? P.off.getBoundingClientRect().width : 0; } catch (e2) {}
-            if (P.dcc) {
-              dockOne(P.dcc, Math.round(RIGHT + ow + GAP), top);
-              if (dccMax < 180) { setP(P.dcc, 'max-width', Math.round(dccMax) + 'px'); }
+            // ③ 从右往左排：最右紧贴屏幕右缘，其余依次左移
+            var acc = RIGHT;
+            for (var k = items.length - 1; k >= 0; k--) {
+              dockOne(items[k], acc, top, caps[k]);
+              acc += caps[k] + GAP;
             }
             fixMenus();
           }
