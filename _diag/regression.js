@@ -994,6 +994,40 @@ const A_PLUGIN_PAGE = () => {
   }
   GATE.modelPickerGuard = true;
 
+  /* ================= 断言 9d：顶栏各模块定宽、互不重叠（v1.0.131 build 94）=================
+     老总 2026-10-23 13:38 真机实锤（截图）：「顶部智能体团队，如果会话有新建子agent，
+     显示转圈圈 + 智能体后台任务运行中，和现有的顶栏标题重叠。主要是手机屏幕不够宽」，
+     并明令「规范每个模块的宽度，不重叠」「纳入以后不要重复产生」。
+
+     根因（实测 393 移动布局）：titleRow=[96,8,285,36]，headerUtilities=[282,12,79,28]；
+     crumbs 被 shim 自己钉成 absolute + left:54/right:96，右缘算到 285 > 282 → 重叠 3px。
+     右侧一多（智能体团队 94px 徽标）就重叠 105px；同时 tab 按钮 white-space:normal
+     被压缩后竖排成「轨/迹」「系统监/控」。
+
+     四条特征钉死，删任何一条即红。 */
+  {
+    const bundle = APP_JS;
+    const hasVarRight = /right: var\(--dsh-head-right, 96px\) !important/.test(bundle);
+    const hasVarMaxW = /max-width: calc\(100% - 54px - var\(--dsh-head-right, 96px\)\)/.test(bundle);
+    const hasFitFn = /function fixHeaderFit\(\)/.test(bundle) && /fixHeaderFit\(\);/.test(bundle);
+    const hasUtilCap = /headerUtilities[\s\S]{0,120}max-width: 30vw !important/.test(bundle);
+    const tabNoWrap = /\[data-conversation-tabs\] > button\[role="tab"\] \{[\s\S]{0,220}?white-space: nowrap !important/.test(bundle);
+    const tabGapNarrow = /@media \(max-width: 560px\) \{[\s\S]{0,200}?\[data-conversation-tabs\] \{ gap: 12px !important; \}/.test(bundle);
+    chk(hasVarRight && hasVarMaxW && hasFitFn,
+      '[顶栏] 标题右预留走 --dsh-head-right 实测（不写死 96px）',
+      !hasVarRight ? 'right 又写死 96px → 右侧模块一宽就压标题'
+        : (!hasVarMaxW ? 'max-width 未同步扣减 → 标题仍会伸进右侧模块'
+          : (hasFitFn ? '实测在（fixHeaderFit 已挂调用）' : 'fixHeaderFit 被删/未挂调用')));
+    chk(hasUtilCap,
+      '[顶栏] 右侧模块限宽 30vw（智能体团队+任务运行中不得无限吃宽度）',
+      hasUtilCap ? '上限在' : '🔴 右侧又无上限 → 标题会被挤到 24px 以下');
+    chk(tabNoWrap && tabGapNarrow,
+      '[顶栏] tab 行永不竖排（tab 按钮 nowrap + 窄屏 gap 12px）',
+      !tabNoWrap ? '🔴 tab 按钮又变回 white-space:normal → 窄屏竖排'
+        : (tabGapNarrow ? 'nowrap + 窄屏收 gap 都在' : '窄屏 gap 未收 → 393 下放不下会溢出'));
+  }
+  GATE.headerFitGuard = true;
+
   /* ================= 断言 9c：模型选择器停靠区（v1.0.131 build 92）=================
      老总 2026-10-23 08:53：「模型按钮不见了…我自己创建的两个模型放在其他位置可以吗。
      不要放在会话框底部，占用原生按钮的位置。」定案：顶栏下面 tab 行右侧。

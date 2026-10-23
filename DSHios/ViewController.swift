@@ -769,13 +769,13 @@ final class ViewController: UIViewController {
             '[data-phase] header [class$="_crumbs"] {',
             '  position: absolute !important;',
             '  left: 54px !important;',
-            '  right: 96px !important;',
+            '  right: var(--dsh-head-right, 96px) !important;',
             '  margin: 0 auto !important;',
             '  display: flex !important;',
             '  justify-content: center !important;',
             '  align-items: center !important;',
             '  text-align: center !important;',
-            '  max-width: calc(100% - 150px) !important;',
+            '  max-width: calc(100% - 54px - var(--dsh-head-right, 96px)) !important;',
             '  min-width: 0 !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
@@ -1567,6 +1567,65 @@ final class ViewController: UIViewController {
             '   选择器走结构路径，绝不写 dsh-po-capsule 这类今天有明天没的哈希/动态类名。 */',
             '[class*="composerStack"] [class*="VERcba_standardControls"] > div > div {',
             '  max-width: 100% !important;',
+            '}',
+            '/* ===== v1.0.131(94) 顶栏各模块定宽、互不重叠 =====',
+            '   老总真机 13:38 实锤：会话标题与右侧「智能体团队 · 任务运行中」转圈徽标叠在一起，',
+            '   且「轨/迹」「系统监/控」被挤成两行竖排。',
+            '   实测（393 移动布局）：titleRow=[96,8,285,36]，headerUtilities=[282,12,79,28]；',
+            '   crumbs 被本文件前文钉成 absolute + left:54/right:96，右缘算到 285 > 282 —— 实测重叠 3px；',
+            '   同时「智能体团队」按钮又被强制 min-width:max-content 不许收缩，右侧只会更宽。',
+            '   本组选择器特异性 (0,3,3) 高于前文 (0,2,1)，且排在数组最末 → 稳定生效：',
+            '   ① 标题右预留改用 --dsh-head-right（fixHeaderFit 实测右侧模块宽度写入，JS 死时退回 96px）；',
+            '   ② 标题内部一律单行省略，绝不溢出压右侧模块；',
+            '   ③ tab 行三个 tab 永不竖排、永不收缩；其余模块各自限宽可省略。 */',
+            'html body [data-phase] header [class*="titleRow"] [class*="crumbs"] {',
+            '  right: var(--dsh-head-right, 96px) !important;',
+            '  max-width: calc(100% - 54px - var(--dsh-head-right, 96px)) !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '}',
+            'html body [data-phase] header [class*="titleRow"] [class*="crumbs"] * {',
+            '  min-width: 0 !important;',
+            '  max-width: 100% !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '}',
+            'html body [data-phase] header [class*="headerUtilities"] {',
+            '  flex: 0 0 auto !important;',
+            '  max-width: 30vw !important;',
+            '  min-width: 0 !important;',
+            '  overflow: hidden !important;',
+            '}',
+            'html body [data-phase] header [class*="headerUtilities"] * {',
+            '  min-width: 0 !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '}',
+            '[data-conversation-tabs] {',
+            '  flex-wrap: nowrap !important;',
+            '  min-width: 0 !important;',
+            '}',
+            '[data-conversation-tabs] > button[role="tab"] {',
+            '  flex: 0 0 auto !important;',
+            '  white-space: nowrap !important;',
+            '  word-break: keep-all !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '}',
+            '[data-conversation-tabs] > :not(button[role="tab"]) {',
+            '  flex: 0 1 auto !important;',
+            '  min-width: 0 !important;',
+            '  white-space: nowrap !important;',
+            '  overflow: hidden !important;',
+            '}',
+            '@media (max-width: 560px) {',
+            '  [data-conversation-tabs] { gap: 12px !important; }',
+            '  /* gap 36 → 12 之后，插件胶囊原来的 -14px 负边距会变成负间距（实测重叠 2px）→ 清零 */',
+            '  [data-conversation-tabs] > [class*="dcc-root"],',
+            '  [data-conversation-tabs] > [data-dsh-po-shell] { margin-left: 0 !important; }',
             '}',
 
           ].join('\\n');
@@ -4209,6 +4268,45 @@ final class ViewController: UIViewController {
              （老总 2026-10-20 截图实测：标题 y≈122，正常应 ≈47，差值正好 59）。
              这里与 fixTop 解耦：只要有 frame 就清 padding，有 centerCol 就把列顶硬校到
              want = 状态栏高 - 2 - TOP_SHIFT。公式是绝对值（幂等），谁来都不会越校越偏。 */
+          // 🔴 v1.0.131(94)：顶栏「标题 × 右侧模块」防重叠。
+          //   纯 CSS 拿不到右侧模块宽度（「智能体团队」「任务运行中」徽标宽度随状态变化，
+          //   且被强制 min-width:max-content 不许收缩），只能实测后写进 CSS 变量，
+          //   由 [class*="crumbs"] 的 right / max-width 消费。JS 死时 CSS 里 96px 兜底。
+          function fixHeaderFit() {
+            try {
+              var row = document.querySelector('[data-phase] header [class*="titleRow"]');
+              if (row === null) return;
+              var rb = row.getBoundingClientRect();
+              if (!(rb.width > 0)) return;
+              var right = 0;
+              var utils = row.querySelector('[class*="headerUtilities"]');
+              if (utils !== null) {
+                var ub = utils.getBoundingClientRect();
+                if (ub.width > 0) right = (rb.right - ub.left) + 6;   // 含标题与右侧模块的间隙
+              }
+              if (!(right > 0)) {
+                var acts = row.querySelector('[class*="headerActions"]');
+                if (acts !== null) {
+                  var ab = acts.getBoundingClientRect();
+                  if (ab.width > 0) right = (rb.right - ab.left) + 6;
+                }
+              }
+              // 🔴 右侧模块必须有上限：实测「智能体团队 + 任务运行中」在 393 下可占 181px。
+              //   注意：右侧限宽不能与 --dsh-head-right 互相推导（会形成 14px 的死循环重叠，
+              //   实测四档恒差 14px），所以右侧用独立的 30vw 上限（见 CSS），
+              //   这里只负责量「限宽之后」右侧模块的真实左缘，反推标题的右边距。
+              var vw = window.innerWidth || 375;
+              var cap = Math.round(vw * 0.55);
+              if (right > cap) right = cap;
+              if (right < 96) right = 96;   // 不低于历史预留，保持原有居中观感
+              var v = Math.ceil(right) + 'px';
+              var root = document.documentElement;
+              if (root.style.getPropertyValue('--dsh-head-right') !== v) {
+                root.style.setProperty('--dsh-head-right', v);
+              }
+            } catch (e) {}
+          }
+
           function fixTopChrome() {
             try {
               /* 🔴 同上：跨 IIFE 边界，setP/num/sbHeight 一律不可用，全自包含。 */
@@ -4299,6 +4397,7 @@ function applySidebarInset() {
             try { fixComposerClamp(); } catch (e) {}   // v1.0.127 底排按钮越界钳制
             try { guardPeakAlert(); } catch (e) {}
             try { fixPageHeadFab(); } catch (e) {}
+            try { fixHeaderFit(); } catch (e) {}   // v1.0.131(94) 顶栏标题 × 右侧模块防重叠
             try { fixTopChrome(); } catch (e) {}
             try { fixFabRows(); } catch (e) {}
             try { fixOverlayOverflow(); } catch (e) {}
@@ -4310,6 +4409,7 @@ function applySidebarInset() {
                 window.__dshBleedT = setInterval(function () {
                   try { guardPeakAlert(); } catch (e) {}
                   try { fixPageHeadFab(); } catch (e) {}
+                  try { fixHeaderFit(); } catch (e) {}
                   try { fixTopChrome(); } catch (e) {}
                   try { fixFabRows(); } catch (e) {}
                   try { fixComposerClamp(); } catch (e) {}

@@ -78,10 +78,7 @@
 | CI exit 65 | Swift 多行字符串 JS `\(` 转义 | 双写 `\\(` 或不用正则（REGRESSION.md 铁律 8） |
 | CI 校验凭证被拒 | 凭证过期/sourceHash 不符 | 重跑闸门 |
 | 会话页 evaluate 挂死 | DSH 前端死循环（连坐，非 App 回归） | 闸门已有 30s 哨兵 + 18 分钟看门狗；重启 DSH（指纹会变） |
-<<<<<<< HEAD
 | git push SSL handshake 失败（curl/gh 却通） | 代理节点掐 git 的 TLS 特征（2026-10-20 晚实锤，8 连败） | 重试数轮；仍败改用 gh api Contents API 单文件推送（PUT repos/<o>/<r>/contents/<path>，带 sha + branch），推完记下远端 HEAD，网络恢复后 git fetch && git reset --hard origin/personal 对齐 |
-=======
->>>>>>> f848a67 (docs: AI 接手规程入仓 —— AGENTS.md 必读入口 + REGRESSION.md 补 R18/R19/R20)
 
 ---
 
@@ -91,11 +88,20 @@
 发布产物：`releases/`（全历史保留，严禁覆盖）；在线清单：`releases/latest.json`（App 内检测更新读它）。
 统计网关源码：`E:\desktop\所有skill\dsh-stat\stat_server.py`（9071，Tailscale Funnel 8443 对外）。
 
+🔴 **顶栏 / 会话框布局铁律（2026-10-23 老总令，永久）**：
+1. **顶栏每多一个模块，必须重新分配一次宽度**。凡是「给谁让位」的留白，一律走
+   `--dsh-head-right` 这类**实测变量 + 兜底默认值**，严禁写死像素（`right: 96px` 这类
+   在「今天刚好」之后必然翻车 —— 右侧一加「智能体团队 / 任务运行中」就压住标题）。
+2. **两个互相推导的宽度变量必然死锁**。右侧模块的上限必须独立给定（现为 30vw），
+   不许写成 `calc(var(--dsh-head-right) - Npx)`（实测四档恒差 14px 重叠，无解）。
+3. **横向排列的模块先 `nowrap`，再谈省略**。`white-space: normal` 的 flex 子项被压缩时
+   不是出省略号，而是**竖排**（「轨迹」「系统监控」被压成两行就是这个）。
+4. 会话框底排原生按钮（＋ / 完全权限 / 模型 / 语音 / 齿轮 / 发送）**零干预**：
+   禁止 inline `position`/`transform`/`width`/`padding`/`margin`。闸门有机械断言。
+详见 `REGRESSION.md` R27、`PLUGIN_LAYOUT_RULES.md`。
+
 ---
 
-<<<<<<< HEAD
 > 🤝 本规程对 **DSH 侧 AI 同样生效**：DSH 有时也执行 iOS 打包（老总 2026-10-21 令），
 > 交接卡副本已放 DSH 工作区 E:\desktop\所有skill\deepseek-harness-desktop\AGENTS.md，双方必须遵守同一套禁令与流程。
-=======
->>>>>>> f848a67 (docs: AI 接手规程入仓 —— AGENTS.md 必读入口 + REGRESSION.md 补 R18/R19/R20)
-*最后更新：2026-10-20 · v1.0.130(74) · 老总真机验收通过*
+*最后更新：2026-10-23 · v1.0.131(94) · 顶栏各模块定宽不重叠*
