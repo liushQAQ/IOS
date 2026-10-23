@@ -174,6 +174,23 @@ return bar === null ? capsule : ReactDOM.createPortal(capsule, bar);
 3. 用 `margin-left:-14px` 把 36px 的 `gap` 收到 22px，视觉上紧挨「系统监控」。
 4. **取不到 tab 栏一律降级回注册位**，绝不整块消失。
 5. 浮层（下拉 / 弹窗）仍 Portal 到 `document.body`，跟着锚点 rect 定位。
+6. **垂直对齐要对 tab 的「文字中心」，不是按钮几何中心**（2026-10-23 12:48 老总：
+   「轨迹 系统监控 Loomy 不在一个水平高度」）。tab 按钮是 `padding: 0 0 9px`
+   （底下 9px 给选中态下划线留位），所以文字中心比按钮几何中心高 **9/2 = 4.5px**；
+   胶囊整元素居中会对齐几何中心 → 视觉偏低 4.5px。补 `position:relative; top:-4.5px`
+   （不改布局流、不改容器高度、不创建 containing block）。实测 tab 文字 `cy=58.5`、
+   未补偿的胶囊 `cy=63`，补偿后 **0.00px**。
+7. **窄屏必须允许收缩，展开型控件必须换形态**（2026-10-23 12:54 老总：
+   「IOS APP 在实际屏幕的压缩下，不要重叠在一起」）。
+   - 三个 tab 在 390 宽下已占 ~184px，两个胶囊放不下 → 用 `flex: 0 1 auto` +
+     `min-width`（+ 内部 `min-width:0` / `text-overflow:ellipsis`），
+     **空间够时宽度不变（`flex-grow:0`），不够才收缩出省略号**。
+     ❌ 不要用 `flex:none` —— 会有元素被顶出屏幕右边。
+   - 会「点开后变长」的控件（如提示词优化的撤回/重优）：宽屏保持原形态（`display:contents`），
+     窄屏（`@media max-width:560px`）改成贴锚点下沿的 `position:absolute` 浮层，
+     **外壳宽度恒定 → 不占 flex 空间、不越界、不重叠**。
+   - 沙盒实测（`_diag/_po_more_css.js`，真视口 430/390/375/320 四档）**24 绿 0 红**：
+     零重叠、不出屏、`docSW == vw`。
 
 **实测（电脑端 1440 / 1280 / 1024，会话态）：**
 
