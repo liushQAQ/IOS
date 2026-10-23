@@ -4291,6 +4291,15 @@ final class ViewController: UIViewController {
                   if (ab.width > 0) right = (rb.right - ab.left) + 6;
                 }
               }
+              if (!(right > 0)) {
+                /* 🔴 v1.0.131(95)：过渡态绝不回落到 96px。
+                   切会话 / 打开新会话的瞬间，右侧模块（智能体团队、任务运行中）还没挂载，
+                   量到的宽度是 0 —— 旧逻辑此时回落到 96px，于是标题先变宽、铺满顶栏，
+                   等数据加载完右侧模块出现，标题又缩回 216px。
+                   这就是老总看到的「加载几秒钟整体错位，加载完再跳回来」。
+                   正确做法：读不到就**沿用上次值**，一个字节都不改。 */
+                return;
+              }
               // 🔴 右侧模块必须有上限：实测「智能体团队 + 任务运行中」在 393 下可占 181px。
               //   注意：右侧限宽不能与 --dsh-head-right 互相推导（会形成 14px 的死循环重叠，
               //   实测四档恒差 14px），所以右侧用独立的 30vw 上限（见 CSS），
@@ -4339,9 +4348,18 @@ final class ViewController: UIViewController {
               }
               var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 18;
               var want = sb - 2 - shift;
-              /* 🔴 v1.0.126：先清掉我们上一轮写的 margin 再量自然位置，然后写绝对差。
-                 增量法在外部又加了 padding 时会拿脏值累加；清-量-设每次都从干净基线出发，
-                 无论 padding 被刷回多少次都能精确抵消，幂等。 */
+              /* 🔴 v1.0.131(95) 稳态零写入 —— 修「上滑/切会话时整页错位几秒再跳回」。
+                 旧实现每一轮都无条件「清 margin → 重新量 top → 再写回」，
+                 中间必然存在一帧「没有 margin」的状态。上滑、切会话、读旧会话时
+                 MutationObserver / 3 秒兜底会被高频触发，这一帧就被眼睛看到了：
+                 顶栏 + 会话框整体上下跳，等渲染稳定、目标值不再变化才停。
+                 现在：目标值 want 没变且本元素已经校正过 → 直接返回，一个属性都不碰。
+                 元素被 React 重建（dataset.dshMt 丢失）或 want 真的变了，才走一次校正。 */
+              if (col.dataset && col.dataset.dshMt === '1'
+                  && typeof window.__dshMtWant === 'number'
+                  && Math.abs(window.__dshMtWant - want) < 0.5) {
+                return;
+              }
               if (col.dataset && col.dataset.dshMt === '1') { try { col.style.removeProperty('margin-top'); } catch (e3) {} }
               var cur = col.getBoundingClientRect().top;
               if (!(cur > -600 && cur < 1200)) return;
@@ -4349,6 +4367,7 @@ final class ViewController: UIViewController {
               if (Math.abs(d) > 0.5) {
                 setPI(col, 'margin-top', d + 'px');
               }
+              window.__dshMtWant = want;
               if (col.dataset) col.dataset.dshMt = '1';
             } catch (e) {}
           }

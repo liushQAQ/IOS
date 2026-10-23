@@ -1025,6 +1025,16 @@ const A_PLUGIN_PAGE = () => {
       '[顶栏] tab 行永不竖排（tab 按钮 nowrap + 窄屏 gap 12px）',
       !tabNoWrap ? '🔴 tab 按钮又变回 white-space:normal → 窄屏竖排'
         : (tabGapNarrow ? 'nowrap + 窄屏收 gap 都在' : '窄屏 gap 未收 → 393 下放不下会溢出'));
+    // 🔴 v1.0.131(95)：老总「上滑 / 打开新会话 / 读旧会话几秒钟，整体错位，加载完跳回」。
+    //   两条「过渡态不许动」的守卫，删掉任何一条，跳变就会复发。
+    const steadyNoWrite = /typeof window\.__dshMtWant === 'number'[\s\S]{0,160}?return;/.test(bundle);
+    const holdLastRight = /if \(!\(right > 0\)\) \{[\s\S]{0,600}?过渡态绝不回落到 96px/.test(bundle);
+    chk(steadyNoWrite,
+      '[顶栏] 校正稳态零写入（目标值未变不重写 margin，杜绝清-量-写那一帧跳变）',
+      steadyNoWrite ? '稳态守卫在' : '🔴 又变回每轮清-量-写 → 上滑/切会话会整页上下跳');
+    chk(holdLastRight,
+      '[顶栏] 标题右预留过渡态沿用上次值（抓不到右侧模块时不回落 96px）',
+      holdLastRight ? '沿用守卫在' : '🔴 又回落 96px → 加载中标题变宽、加载完缩回');
   }
   GATE.headerFitGuard = true;
 
