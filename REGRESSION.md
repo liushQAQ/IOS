@@ -113,6 +113,24 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - 修法（shim_18，进 `DSHios/ViewController.swift` iosCompatShims）：iOS 上整层禁用装饰副本 `span[data-shimmer] > span[inert]{display:none!important}`（只损失扫光动画，顺带减轻合成负担）+ 副本文字 `[data-shimmer-text]{white-space:nowrap!important}` 双保险 + `span[data-shimmer]` 内 `_label/_summaryText/_summary` 兜底钳制。**全用 React 稳定属性锚定，零 CSS Module 哈希类名（6.5 铁律）**；带 isDSH 判据 + 3s 定时器兜底。
 - 🔴 **方法论沉淀**：①「真机有、复刻无」时先怀疑**引擎版本差异**（overflow:clip/mask/contain 全是 iOS 版本敏感点）；②会话页 evaluate 冻死是常态，诊断要靠「页面内自采集+外传」或纯静态拆 bundle；③TextShimmer 类「装饰副本」组件是幽灵文字/叠行的高发源——凡见「第二行颜色更浅的重叠文本」先查装饰副本层。
 
+### R23 插件占用会话框 / 压缩原生按钮（v1.0.131 build 89→92 三次翻车，2026-10-23 立规）
+
+- **症状谱**（同一根因的三种表现，全部真机才现）：
+  1. 模型选择按钮飞离会话框成悬浮按钮，点击菜单错位重叠（build 89→90 老总报障）；
+  2. 会话框所有按钮位置错乱重叠「没眼看」，新建会话模型按钮直接消失（build 90→91 老总两张截图）；
+  3. 官方模型选择器只剩 5px 宽、文字标签 0 宽 = 「模型按钮不见了」（build 91→92 老总报障）。
+- **根因（三处叠加，全是布局劫持）**：
+  1. `dsh-po-capsule`（第三方优化插件）被写 `transform: translate(24px, -85px)` —— **只改绘制位置，仍占工具行 85px 布局宽度**；
+  2. `VERcba_standardControls` 被写 `padding-right: 48px` 硬扣工具行宽度；
+  3. shim_24 排队引擎把 `dcc-root` / `cm-*` 全部 `position:absolute` + inline `!important` 抢位。
+- **为什么闸门测不出**：沙箱**没装** `dsh-po-capsule`，插件元素不存在 → 撑爆工具行的现象永远复现不了。这是本项目「沙箱绿、真机错」最典型的盲区（第二次踩）。
+- **修法（build 91）**：三块 shim 全部停注入、引擎 `layout()` 下线、新增 `releaseHijack()` / `releaseCard()` 幂等清旧装机 inline 残留，**布局全权交回 DSH 官方原生 flex**；`fixComposerClamp` 保留（越界安全网，幂等）。
+- **修法（build 92，模型按钮最终落点）**：`dcc-root` + `ofTiQG_root` 用 `fixed` 停靠到「顶栏下方 tab 行右侧」（`shim_27`），官方最右、插件在左；fixed 后脱离 flex 压缩，标签自然展开（实测 0 → 110px）；退让逻辑：先量 tab 右缘，放不下整体下移一行；下拉菜单用 `fixMenus()` 每 tick 钉回按钮下方 6px（实测原本跑到 y=413，按钮在 y=83）。
+- **🔴 永久规范（老总 2026-10-23 令）**：见 **`PLUGIN_LAYOUT_RULES.md`** ——
+  任何插件**永不占用会话框位置、永不压缩原生按钮空间**；禁止用 `transform`「视觉上移」假装搬走（仍占布局宽度）；插件 UI 只能落在四个合规落点（顶栏 tab 行右侧 / 卡片下方 dock / 面板 / 独立浮层）。
+  App 侧发现新插件违规：**只做清占位的隔离，不许帮它搬位**。
+- **闸门防线**：静态断言 `GATE.modelPickerGuard`（4 条）+ `GATE.modelDockGuard`（3 条），共 75 绿 0 红。
+
 ## 三、校验 SOP（每个新版本出包前必做）
 
 ### 前置
