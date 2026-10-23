@@ -781,23 +781,22 @@ final class ViewController: UIViewController {
             '  position: static !important;',
             '  margin: 0 !important;',
             '}',
-            '/* 会话标题：自适应剩余宽度，绝不侵占右侧车位，超出优雅出省略号 */',
+            '/* 会话标题：钉在 left: 54px，严格为左侧目录按钮留出 54px 专属空间，绝不倒置顺序 */',
             '.ank0OG_crumbs,',
             '[data-phase] header [class*="crumbs"],',
             '[data-phase] header [class$="_crumbs"] {',
-            '  position: static !important;',
-            '  flex: 0 1 auto !important;',
-            '  min-width: 40px !important;',
+            '  position: absolute !important;',
+            '  left: 54px !important;',
             '  right: var(--dsh-head-right, 96px) !important;',
-            '  max-width: calc(100% - 54px - var(--dsh-head-right, 96px)) !important;',
-            '  overflow: hidden !important;',
-            '  text-overflow: ellipsis !important;',
-            '  white-space: nowrap !important;',
-            '  margin: 0 8px 0 0 !important;',
-            '  left: auto !important;',
+            '  margin: 0 !important;',
             '  display: flex !important;',
             '  align-items: center !important;',
             '  text-align: left !important;',
+            '  max-width: calc(100% - 54px - var(--dsh-head-right, 96px)) !important;',
+            '  min-width: 0 !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
             '  pointer-events: auto !important;',
             '}',
             '.ank0OG_crumbs *,',
@@ -1622,22 +1621,15 @@ final class ViewController: UIViewController {
             '[class*="composerStack"] [class*="VERcba_standardControls"] > div > div {',
             '  max-width: 100% !important;',
             '}',
-            '/* ===== v1.0.131(98) 全按钮固定专属车位模型终极定版 =====',
-            '   彻底废除 absolute 脱标，左侧目录(38px) → titleCluster(标题+专属车位组) → utilities → headerCorner(34px) */',
+            '/* ===== v1.0.131(100) 标题锁在 left: 54px 杜绝挤压左侧目录按钮 ===== */',
             'html body [data-phase] header [class*="titleRow"] [class*="crumbs"] {',
-            '  position: static !important;',
-            '  flex: 0 1 auto !important;',
-            '  min-width: 40px !important;',
+            '  position: absolute !important;',
+            '  left: 54px !important;',
             '  right: var(--dsh-head-right, 96px) !important;',
             '  max-width: calc(100% - 54px - var(--dsh-head-right, 96px)) !important;',
             '  overflow: hidden !important;',
             '  text-overflow: ellipsis !important;',
             '  white-space: nowrap !important;',
-            '  margin: 0 8px 0 0 !important;',
-            '  left: auto !important;',
-            '  display: flex !important;',
-            '  align-items: center !important;',
-            '  text-align: left !important;',
             '}',
             'html body [data-phase] header [class*="titleRow"] [class*="crumbs"] * {',
             '  min-width: 0 !important;',
@@ -4568,9 +4560,9 @@ function applySidebarInset() {
               var row = rows[i];
               var cluster = row.querySelector('[class*=\"titleCluster\"]');
               var header = row.closest('header') || row;
-              var dir = header.querySelector('button[aria-label=\"打开目录\"], button[aria-label=\"收起目录\"], button[aria-label=\"打开侧边栏\"], button[aria-label=\"收起侧边栏\"]');
-              // 目录按钮保持在顶栏左侧最前，不插入到 cluster 内部挤压标题与智能体团队
-              if (dir && row && row.firstChild !== dir && dir.parentNode !== cluster) {
+              var dir = header.querySelector('button[data-mobile-nav="toggle"], button[aria-label="打开目录"], button[aria-label="收起目录"], button[aria-label="打开侧边栏"], button[aria-label="收起侧边栏"]');
+              // 目录按钮保持在顶栏左侧最前，作为 titleRow 的 firstChild 稳居 x≈12px 最左端
+              if (dir && row && row.firstChild !== dir) {
                 row.insertBefore(dir, row.firstChild);
               }
               if (dir && dir.dataset.dshDirStyled !== '1') {
