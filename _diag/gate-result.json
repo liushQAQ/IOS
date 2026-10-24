@@ -1,19 +1,19 @@
 {
-  "version": "1.0.135",
+  "version": "1.0.136",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-24T09:42:47.596Z",
-  "dshFingerprint": "bfs33v",
+  "startedAt": "2026-10-24T16:05:38.964Z",
+  "dshFingerprint": "tm4up4",
   "dshAssets": 9,
   "domClasses": 0,
-  "anchorTotal": 156,
+  "anchorTotal": 157,
   "anchorDead": 0,
-  "anchorCssAlive": 101,
+  "anchorCssAlive": 102,
   "anchorResidue": 55,
-  "dshSheets": 208,
+  "dshSheets": 205,
   "ownSheets": 11,
   "anchorCritical": {
     "total": 12,
@@ -28,10 +28,10 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 97,
+  "pass": 103,
   "fail": 0,
   "failures": [],
   "blocked": [],
-  "sourceHash": "962a0a40bf86253f35d49146db882d248549f9fe9c604bef4d6789e951d925ac",
-  "finishedAt": "2026-10-24T09:45:06.712Z"
+  "sourceHash": "42afc55a4c5c3712d5b01fc343b43dc64952358026093164b124d47fc0c2bf12",
+  "finishedAt": "2026-10-24T16:07:49.645Z"
 }

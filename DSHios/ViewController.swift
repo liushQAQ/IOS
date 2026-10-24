@@ -2415,9 +2415,12 @@ final class ViewController: UIViewController {
             // 🔴 R35（老总 2026-10-24 三症状根治·几何守恒环）：随 syncPanelNav 的 300ms 节拍幂等校正——
             //   ① 右栏/侧栏内联 padding-top 钉回「原生状态栏 + 6 - topshift」：React 重挂载出新节点时
             //      CSS 变量公式是第一道（已改读 --dsh-sb-native），这里是第二道保险，值不对才写、幂等；
-            //   ② 抽屉开关按钮防出屏：右溢 N px 就写 translateX(-N px) 拉回；不溢了就把旧补偿清掉。
-            //      治「关闭右侧抽屉后按钮超出屏幕」——打开/关闭一轮后 React 重挂载按钮、旧补偿丢失，
-            //      bleed guard 只在自身扫描周期跑，这里挂进 300ms 常驻环零等待补位。
+            //   ② 抽屉开关按钮防出屏：右溢就拉回、不溢就清补偿。
+            //   🔴 R38（v1.0.136，老总三犯根治）防出屏全面重写 —— 104 真机三犯复盘（探针实证）：
+            //      旧增量补位动画中途会抓到「面板内部的开关按钮」（选择器不限定 header）并把累计
+            //      溢出量写上去（实测 translateX(-448px)），动画结束后「无溢出不碰」让巨量负位移
+            //      永久滞留、按钮飞出屏外。重写五铁律：只认 header 内按钮 / 补偿量从基准位重算 /
+            //      稳态门（几何与上一拍全等才动手）/ 48px 幅值上限 / 面板内部按钮旧毒位移就地清除。
             function syncDrawerGeometry() {
               try {
                 var nh = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 59;
@@ -2430,14 +2433,31 @@ final class ViewController: UIViewController {
                     gc.style.setProperty('padding-top', pad, 'important');
                   }
                 }
-                var db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"], [data-sidebar-right-toggle]');
-                if (db) {
+                // 🔴 R38 铁律⑤（104 真机已中毒自愈）：面板内部开关按钮残留的旧版巨量位移
+                //   （旧增量补位动画期误伤产物，实测 -448px）就地清除。只扫 header 以外的。
+                var __staleSels = ['button[data-sidebar-right-toggle]', 'button[aria-label="收起右侧边栏"]', 'button[aria-label="打开右侧边栏"]'];
+                for (var ssi = 0; ssi < __staleSels.length; ssi++) {
+                  var __sts = document.querySelectorAll(__staleSels[ssi]);
+                  for (var ssj = 0; ssj < __sts.length; ssj++) {
+                    var __st = __sts[ssj];
+                    if (!__st || (__st.closest && __st.closest('header'))) continue;
+                    var __stf = __st.style ? __st.style.getPropertyValue('transform') : '';
+                    if (!__stf || __stf.indexOf('translateX(') < 0) continue;
+                    var __sn = 0, __ss = __stf, __sk;
+                    while ((__sk = __ss.indexOf('translateX(')) >= 0) {
+                      var __sv = parseFloat(__ss.substring(__sk + 11));
+                      if (!isNaN(__sv)) __sn += __sv;
+                      __ss = __ss.substring(__sk + 11);
+                    }
+                    if (Math.abs(__sn) > 64) __st.style.removeProperty('transform');
+                  }
+                }
+                // 🔴 R38 铁律①：只认 header 内的开关按钮，面板内部按钮一律不碰
+                //   （旧选择器第三项 [data-sidebar-right-toggle] 不限定 header，动画期会抓到面板内按钮）。
+                var db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
+                if (db && (!db.closest || db.closest('header'))) {
                   var dr = db.getBoundingClientRect();
                   if (dr.width > 0) {
-                    // 增量补位（R35b）：只要「现视觉右缘」越出 vw-2 就在现有 transform 上再叠加差值。
-                    // 旧「只补 curN===0 的初次」逻辑对带位移的出屏视而不见 —— 真机实证按钮会带着
-                    // DSH 自写的 translateX(-10) 出屏，恰恰落在旧逻辑的盲区。无溢出一律不碰
-                    // （不与 DSH/bleed guard 抢写），写值前比对，天然幂等不振荡。
                     var curT = db.style.getPropertyValue('transform');
                     var curN = 0;
                     var scan = curT, kT;
@@ -2446,11 +2466,21 @@ final class ViewController: UIViewController {
                       if (!isNaN(vT)) curN += vT;
                       scan = scan.substring(kT + 11);
                     }
-                    var over = Math.round(dr.right - (window.innerWidth - 2));
-                    if (over > 0) {
-                      var want = curN - over;
-                      if (Math.abs(curN - want) > 0.5) db.style.setProperty('transform', 'translateX(' + want + 'px)', 'important');
+                    // 🔴 R38 铁律②：补偿量永远从「基准位」（视觉位 − 现有位移）重算，
+                    //   DSH 自写位移并入基准考量，不再在现有位移上累减 —— 动画漂移不会被误补偿，
+                    //   陈旧补偿天然自愈；铁律④：48px 幅值上限（32px 按钮永远不需要更大补偿）。
+                    var baseRight = dr.right - curN;
+                    var over = Math.round(baseRight - (window.innerWidth - 2));
+                    var want = over > 0 ? -Math.min(over, 48) : 0;
+                    // 🔴 R38 铁律③：稳态门 —— 几何与上一拍完全一致才动手（动画/重挂载中途一律旁观）。
+                    var keyNow = Math.round(dr.left) + ',' + Math.round(dr.top) + ',' + Math.round(dr.width);
+                    if (db.__dshStableKey === keyNow) {
+                      if (Math.abs(curN - want) > 0.5) {
+                        if (want === 0) db.style.removeProperty('transform');
+                        else db.style.setProperty('transform', 'translateX(' + want + 'px)', 'important');
+                      }
                     }
+                    db.__dshStableKey = keyNow;
                   }
                 }
               } catch (eG) {}
@@ -2495,6 +2525,100 @@ final class ViewController: UIViewController {
                 setInterval(fixAll, 300);
               }
               boot();
+            })();
+
+            // 🔴 R37（老总 2026-10-24：会话框 + 号弹层「闪退」根治）：真凶不是几何也不是焦点——
+            //   会话回合运行期间（AI 流式输出中）会话被「写句柄」持有，+ 弹层打开瞬间的命令目录
+            //   预热拉取被服务端以 session/writer-held 拒绝，前端把弹层状态直接置回关闭（reducer
+            //   路径，不经过任何关闭回调，所以无声无息秒死）。取证链：console 归因探针 + 空闲会话
+            //   对照（_probe_r37_idle 空闲全程存活）+ 传输层双零（fetch/xhr 包装器够不到 RPC 通道）。
+            //   兜底层只能在 React 状态层：弹层挂载后 2.5s 内、无任何用户 dismissing 事件、且内容
+            //   还是空的 open:false 一律判定「伪关闭」吞掉；吞掉后 600ms 仍是空壳就注入一条状态
+            //   提示行；弹层保持打开、点外部正常关闭。锚定语义属性 data-trigger-menu（哈希类随版换）。
+            (function setupTriggerMenuKeeper() {
+              if (window.__dshTriggerMenuKeeper) return;
+              window.__dshTriggerMenuKeeper = true;
+              var DISMISS = 0;
+              document.addEventListener('pointerdown', function () { DISMISS = Date.now(); }, true);
+              document.addEventListener('keydown', function (e) { if (e && e.key === 'Escape') DISMISS = Date.now(); }, true);
+              function hookMenu(el) {
+                if (!el || el.__dshKept) return;
+                // 🔴 openedAt 初值 = 挂载时刻：open:true 的 set 发生在 React 渲染出弹层之前
+                //    （状态变更先于挂载），包装器在挂载时才装上、必然错过本层的 open:true ——
+                //    不用挂载时刻兜底，本层首次打开的失败关闭永远没有 openedAt 可依。
+                el.__dshKept = { openedAt: Date.now(), gen: undefined, hint: false };
+                try {
+                  var fk = Object.keys(el).find(function (k) { return k.indexOf('__reactFiber$') === 0; });
+                  var f = fk ? el[fk] : null;
+                  var hops = 0;
+                  while (f && hops < 60) {
+                    var pr = f.memoizedProps;
+                    if (pr && pr.menu && typeof pr.menu === 'object' && typeof pr.menu.set === 'function' && !pr.menu.__dshKeptWrap) {
+                      var orig = pr.menu.set;
+                      // 🔴 判据只用「时机」（签名对照实证：失败关闭与合法 dismiss 关闭的参数完全同形
+                      //    都是 open:false+groups:[]，groups/textLen 全是烟雾弹）——失败关闭在
+                      //    open:true 后 33~65ms（弹层还没渲染出来人类不可能响应），合法 dismiss
+                      //    实测 900ms+。开层后 200ms 内、且开层后无任何用户 pointerdown/Escape
+                      //    的 open:false 一律判定伪关闭吞掉；generation 必须同代（防跨轮误吞）。
+                      pr.menu.set = function () {
+                        try {
+                          var a0 = arguments[0];
+                          if (a0 && typeof a0 === 'object') {
+                            var meta = el.__dshKept;
+                            if (a0.open === true) {
+                              meta.openedAt = Date.now();
+                              meta.gen = a0.generation;
+                            } else if (a0.open === false && meta.openedAt
+                                       && (Date.now() - meta.openedAt) < 200
+                                       && DISMISS < meta.openedAt
+                                       && (meta.gen === undefined || a0.generation === undefined || a0.generation === meta.gen)) {
+                              setTimeout(function () {
+                                try {
+                                  if (!el.isConnected || el.__dshKept.hint) return;
+                                  if (el.querySelectorAll('[role="menuitem"],[role="option"]').length > 0) return;
+                                  var view = el.querySelector('[class*="viewport"]') || el;
+                                  var tip = document.createElement('div');
+                                  tip.setAttribute('data-dsh-cmd-hint', '');
+                                  tip.style.cssText = 'padding:14px 16px;font-size:13px;opacity:.62;line-height:1.5;text-align:left;';
+                                  tip.textContent = '会话回合运行中，指令目录暂不可用——回合结束后重新打开即可。';
+                                  view.appendChild(tip);
+                                  el.__dshKept.hint = true;
+                                } catch (eH) {}
+                              }, 600);
+                              return undefined;
+                            }
+                          }
+                        } catch (eK) {}
+                        return orig.apply(this, arguments);
+                      };
+                      pr.menu.__dshKeptWrap = true;
+                      return;
+                    }
+                    f = f.return; hops++;
+                  }
+                } catch (eF) {}
+              }
+              function arm() {
+                if (!document.body) { setTimeout(arm, 16); return; }
+                var mo = new MutationObserver(function (muts) {
+                  for (var i = 0; i < muts.length; i++) {
+                    var add = muts[i].addedNodes;
+                    for (var j = 0; j < add.length; j++) {
+                      var n = add[j];
+                      if (!n || n.nodeType !== 1) continue;
+                      if (n.hasAttribute && n.hasAttribute('data-trigger-menu') && n.closest('[data-composer-overlay]')) hookMenu(n);
+                      else if (n.querySelectorAll) {
+                        var hits = n.querySelectorAll('[data-trigger-menu]');
+                        for (var k = 0; k < hits.length; k++) {
+                          if (hits[k].closest('[data-composer-overlay]')) hookMenu(hits[k]);
+                        }
+                      }
+                    }
+                  }
+                });
+                mo.observe(document.documentElement, { childList: true, subtree: true });
+              }
+              arm();
             })();
 
             // 监听 DOM 树中的 data-sidebar-right-open 变化

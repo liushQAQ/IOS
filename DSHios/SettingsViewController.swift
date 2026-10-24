@@ -1199,7 +1199,7 @@ final class ConnectionGuideViewController: UIViewController {
         card.layer.cornerRadius = 12
 
         let badgeLabel = UILabel()
-        badgeLabel.text = "最新更新日志 (v1.0.135)"
+        badgeLabel.text = "最新更新日志 (v1.0.136)"
         badgeLabel.font = .systemFont(ofSize: 12, weight: .bold)
         badgeLabel.textColor = .systemIndigo
         badgeLabel.backgroundColor = .systemIndigo.withAlphaComponent(0.12)
@@ -1218,7 +1218,12 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.lineBreakMode = .byWordWrapping
 
         let logContent = """
-        🥇 1. 文件工作区顶栏下移 + 抽屉按钮出屏二次根治 + 手势收窄（v1.0.135）：
+        🥇 1. 会话框 + 号弹层「闪退」根治 + 抽屉按钮防出屏三犯根治（v1.0.136）：
+        • 老总真机报障：点会话框 + 号弹出的选择框秒退。取证链实锤真凶：会话回合运行期间（AI 流式输出中）会话被「写句柄」持有，+ 弹层打开瞬间的命令目录预热拉取被服务端以 session/writer-held 拒绝，前端把弹层状态直接置回关闭（reducer 路径不经过任何关闭回调，所以无声无息秒死）；空闲会话对照实测弹层全程存活 —— 与注入脚本无关，属 DSH 前端在「回合运行中点 +」场景的原生行为（桌面端同样存在）；
+        • 修法（R37）：监听弹层挂载（锚定 data-trigger-menu 语义属性），弹层挂载后 2.5 秒内、无任何用户点击/Escape、内容还是空的 open:false 一律判定伪关闭吞掉；吞掉后 600ms 仍是空壳就注入「回合运行中，指令目录暂不可用」提示行；弹层保持打开、点外部正常关闭，回合结束重新打开即恢复完整目录；
+        • 抽屉按钮出屏三犯根治（R38）：旧增量补位两条毒路实锤 —— 选择器不限定 header 抓到面板内部开关按钮、在滑入动画中途把累计溢出量写上去（实测 -448px，「无溢出不碰」让巨量负位移永久滞留，收起钮飞出屏外）；重写为只认 header 内开关 + 补偿量永远从基准位（视觉位减现有位移）重算 + 稳态门（几何与上一拍全等才动手）+ 48px 幅值上限 + 面板内部按钮旧中毒位移就地清除自愈；
+        • 回归闸门新增 R37/R38 断言防复发。
+        🥇 2. 文件工作区顶栏下移 + 抽屉按钮出屏二次根治 + 手势收窄（v1.0.135）：
         • 老总真机二轮报障（R35b）：打开右侧抽屉进文件工作区，顶栏按钮还是下移；返回后右侧抽屉按钮还是超出屏幕。取证实锤两处漏点 —— 其一，R35 只让自己的公式改读原生变量，DSH 自有规则仍直读 --dsh-statusbar，DSH 在抽屉/工作区切换时把它重写回偏大的 75，读它的元素整体下移 16~22px；本版新增 --dsh-statusbar 值守卫（MutationObserver 微任务回写，先于渲染零闪烁，html/body 两层全盯，值不等原生实测立即纠正）；
         • 其二，抽屉按钮防出屏旧逻辑「只补初次」对带位移的出屏视而不见（按钮会带着 DSH 自写的 translateX 出屏）—— 改为增量补位：只要视觉右缘越出屏内 2px 就在现有位移上叠加差值，无溢出一律不碰，幂等不振荡；
         • 手势收窄（R36b）：左滑关目录/关面板/返回之前是全屏任意位置都触发，真机横滑扫内容就误关误返 —— 现在右滑开、左滑关/返回两个方向都只认屏幕左缘 32px 竖条，左缘以外任何位置的横滑一律不响应；

@@ -736,7 +736,8 @@ const A_PLUGIN_PAGE = () => {
               out.sb = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar'));
               out.sbNative = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-sb-native'));
               // ② 增量补位：带 DSH 自写位移 translateX(50px) 强推出屏，守恒环必须叠差拉回 vw-2 内
-              const db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"], [data-sidebar-right-toggle]');
+              //   （R38 重写后只认 header 内按钮 —— 选择器同步 header 限定，面板内部按钮绝不入测）
+              const db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
               if (db) {
                 db.style.setProperty('transform', 'translateX(50px)', 'important');
                 await new Promise(r2 => setTimeout(r2, 900));
@@ -760,6 +761,82 @@ const A_PLUGIN_PAGE = () => {
             chk(!r35b.noDb && r35b.dbRight <= r35b.vw - 2 && r35b.dbRight >= r35b.vw - 14,
               '[抽屉·R35b] 抽屉按钮增量补位生效（带 +50px 位移强推出屏，拉回 vw-2 且不过拉）',
               r35b.noDb ? '🔴 会话页找不到抽屉开关按钮' : ('right=' + r35b.dbRight + ' vw=' + r35b.vw + ' tf=' + r35b.tf + ' 收尾后 right=' + r35b.dbRightAfter));
+          }
+
+          // —— R38 行为断言（v1.0.136(105)）：防出屏重写 —— 旧中毒位移（-448px）必须自愈 ——
+          const r38b = await p.evaluate(async () => {
+            const out = {};
+            try {
+              const db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
+              if (!db) { out.noDb = true; return out; }
+              // 复刻 104 真机中毒态：按钮带着巨量负位移飞出左屏，基准位重算必须把它拉回屏内
+              db.style.setProperty('transform', 'translateX(-448px)', 'important');
+              await new Promise(r2 => setTimeout(r2, 900));
+              const rr = db.getBoundingClientRect();
+              out.healLeft = Math.round(rr.left); out.healRight = Math.round(rr.right);
+              out.vw = window.innerWidth;
+              out.tfAfter = db.style.getPropertyValue('transform');
+              db.style.removeProperty('transform');
+              await new Promise(r2 => setTimeout(r2, 700));
+              out.restoredRight = Math.round(db.getBoundingClientRect().right);
+            } catch (e) { out.err = String(e).slice(0, 120); }
+            return out;
+          });
+          if (TO(r38b)) blocked('[抽屉·R38] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
+          else {
+            chk(!r38b.err && !r38b.noDb && r38b.healLeft >= 0 && r38b.healRight <= r38b.vw - 2 && r38b.healRight >= r38b.vw - 14,
+              '[抽屉·R38] 旧中毒位移自愈（-448px 必须被基准位重算拉回屏内 vw-2，左侧不再出屏）',
+              r38b.noDb ? '🔴 找不到 header 内抽屉开关按钮' : (r38b.err ? ('异常 ' + r38b.err) : ('left=' + r38b.healLeft + ' right=' + r38b.healRight + ' vw=' + r38b.vw + ' tf=' + r38b.tfAfter)));
+          }
+
+          // —— R37 行为断言（v1.0.136(105)）：+ 号弹层伪关闭吞掉器 ——
+          // 路由级拦截复刻 writer-held 失败路径（该 RPC 走页面层 fetch/XHR 包装器够不到的通道，
+          // 只能在网络层拦）；真实 tap 打开 → 弹层必须存活 + 注入提示行；点外部必须正常关闭；
+          // 解除拦截后必须恢复打开。三段任何一段红即吞掉器坏。
+          let r37b = { keeper: false };
+          try {
+            const plusPos = await p.evaluate(() => {
+              const pl = document.querySelector('button[class*="VERcba_add"], button[aria-label="添加文件或调用指令"]');
+              if (!pl) return null; const r = pl.getBoundingClientRect();
+              return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+            });
+            if (!plusPos) { r37b.noPlus = true; }
+            else {
+              r37b.keeper = await p.evaluate(() => !!window.__dshTriggerMenuKeeper);
+              await p.route('**/api/commands/list*', (route) => {
+                let rpcId = 'gate';
+                try { rpcId = JSON.parse(route.request().postData() || '{}').rpcId || 'gate'; } catch (e) {}
+                route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ type: 'server-response', rpcId: rpcId, result: { ok: false, error: { code: 'session/writer-held', message: 'gate-sim' } } }) });
+              });
+              await p.touchscreen.tap(plusPos.x, plusPos.y);
+              await p.waitForTimeout(1500);
+              r37b.heldSt = await p.evaluate(() => {
+                const m = document.querySelector('[data-composer-overlay] div[data-trigger-menu]');
+                return m ? { alive: true, hint: !!m.querySelector('[data-dsh-cmd-hint]'), roles: m.querySelectorAll('[role="menuitem"],[role="option"]').length } : { alive: false };
+              });
+              await p.touchscreen.tap(215, 200);
+              await p.waitForTimeout(700);
+              r37b.closedOut = await p.evaluate(() => !document.querySelector('[data-composer-overlay] div[data-trigger-menu]'));
+              await p.unroute('**/api/commands/list*');
+              await p.touchscreen.tap(plusPos.x, plusPos.y);
+              await p.waitForTimeout(1200);
+              r37b.recovered = await p.evaluate(() => !!document.querySelector('[data-composer-overlay] div[data-trigger-menu]'));
+              await p.touchscreen.tap(215, 200).catch(() => {});
+              await p.waitForTimeout(500);
+            }
+          } catch (e37) { r37b.err = String(e37).slice(0, 120); }
+          if (r37b.err) bad('[弹层·R37] 行为断言', '探针异常 ' + r37b.err);
+          else if (r37b.noPlus) console.log('  ℹ [弹层·R37] 会话页无 + 按钮，行为断言跳过（环境缺 composer）');
+          else {
+            chk(r37b.keeper && r37b.heldSt && r37b.heldSt.alive && (r37b.heldSt.hint || r37b.heldSt.roles > 0),
+              '[弹层·R37] + 号弹层防伪关闭（writer-held 拦截下弹层必须存活出提示/内容）',
+              'keeper=' + r37b.keeper + ' alive=' + (r37b.heldSt && r37b.heldSt.alive) + ' hint=' + (r37b.heldSt && r37b.heldSt.hint) + ' roles=' + (r37b.heldSt && r37b.heldSt.roles));
+            chk(r37b.closedOut,
+              '[弹层·R37] 弹层点外部正常关闭（吞伪关闭不劫持真实 dismiss 通道）',
+              r37b.closedOut ? '关闭通道正常' : '🔴 点外部关不掉 → 吞关闭误劫持真实 dismiss');
+            chk(r37b.recovered,
+              '[弹层·R37] 解除拦截后弹层恢复打开（吞关闭不损伤正常打开路径）',
+              r37b.recovered ? '恢复正常' : '🔴 恢复打开失败');
           }
         } else blocked('[dock] 费用部件取样', '60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）');
 
@@ -1194,6 +1271,26 @@ const A_PLUGIN_PAGE = () => {
     chk(sbGuard,
       '[抽屉·R35b] --dsh-statusbar 值守卫在（MutationObserver 微任务回写 + html/body 双层盯防）',
       sbGuard ? '值守卫在' : '🔴 值守卫被删 → DSH 重写 75 后文件工作区/停靠面板整体下移复发');
+    /* R38（v1.0.136）：防出屏补位三犯重写 —— 104 真机实证旧增量写法会在动画期抓到面板内部
+       按钮（选择器不限定 header）并累计出 -448px 巨量位移永久滞留。五铁律缺一即复发。 */
+    const r38src = /var db = document\.querySelector\('header button\[aria-label="打开右侧边栏"\], header button\[aria-label="收起右侧边栏"\]'\)/.test(bundle)
+      && !/收起右侧边栏"\], \[data-sidebar-right-toggle\]'\)/.test(bundle)
+      && /var baseRight = dr\.right - curN;/.test(bundle)
+      && /db\.__dshStableKey === keyNow/.test(bundle)
+      && /Math\.min\(over, 48\)/.test(bundle)
+      && /__staleSels/.test(bundle);
+    chk(r38src,
+      '[抽屉·R38] 防出屏重写五铁律（header 限定 + 基准位重算 + 稳态门 + 48px 上限 + 面板内旧毒位移自愈）',
+      r38src ? '五铁律全在' : '🔴 防出屏回潮旧增量写法 → 动画期误伤面板内部按钮（-448px 中毒案复发）');
+    /* R37（v1.0.136）：+ 号弹层伪关闭吞掉器 —— 回合运行中 commands/list 被写句柄门闩拒绝，
+       前端在 reducer 路径直接置回关闭（无任何关闭回调）。守卫必须常驻，删掉即复发。 */
+    const r37src = /window\.__dshTriggerMenuKeeper/.test(bundle)
+      && /function setupTriggerMenuKeeper\(\)/.test(bundle)
+      && /hasAttribute\('data-trigger-menu'\)/.test(bundle)
+      && /data-dsh-cmd-hint/.test(bundle);
+    chk(r37src,
+      '[弹层·R37] + 号弹层伪关闭吞掉器（写句柄持有期弹层保活 + 空壳状态提示行）',
+      r37src ? '吞掉器在' : '🔴 吞掉器被删 → 回合运行中点 + 弹层秒死（writer-held 闪退复发）');
   }
   GATE.r35DrawerGuard = true;
 
