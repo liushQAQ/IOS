@@ -4348,6 +4348,13 @@ final class ViewController: UIViewController {
                 }
                 for (var ci = 0; ci < cands.length; ci++) {
                   try {
+                    /* 🔴 R32c：流内矩形一律不采信，只认已被 moveAgentBadge 冻结的
+                       绝对定位态。老总双截图（10:39:53/55，无胶囊+流式输出）实锤第二个
+                       横跳源：React 重挂载把 headerActions 打回流内、被流式内容挤压到
+                       左端（left≈124 → 预留顶格 298 → 标题只剩「老总...」），下一拍冻回
+                       又展完。流内帧 right=0 → 过渡态守卫沿用上次值，横跳死。 */
+                    var cpos = getComputedStyle(cands[ci]).position;
+                    if (cpos !== 'absolute') continue;
                     var cb = cands[ci].getBoundingClientRect();
                     if (cb.width > 0 && cb.left > rb.left + 40) {
                       var cand = (rb.right - cb.left) + 8;   // 标题与右侧模块至少 8px 安全间隙

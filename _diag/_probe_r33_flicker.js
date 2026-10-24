@@ -144,5 +144,25 @@ const SAMPLE = () => {
   console.log(`-- [仅阶段2] reserve 取值数: ${reserves.size}（${[...reserves].join(' / ')}）`);
   console.log(`-- [仅阶段2] 标题宽度取值数: ${widths.size}（${[...widths].sort((a,b)=>a-b).join(' / ')}）`);
   console.log(`-- 判定: ${reserves.size >= 2 ? '🔴 横跳复现（预留逐拍互写）' : '✅ 稳定（横跳根治）'}`);
+
+  /* ===== 阶段3：无胶囊 + 流式重挂载（老总截图场景：团队按钮容器被打回流内）===== */
+  await p.evaluate(() => { const c = document.querySelector('[data-r23-capsule]'); if (c) c.remove(); });
+  for (let i = 0; i < 3; i++) { await p.evaluate(() => window.__regTick()); await p.waitForTimeout(400); }
+  const s3 = [];
+  for (let i = 0; i < 10; i++) {
+    await p.evaluate(() => {
+      const acts = document.querySelector('[data-phase] header [class*="headerActions"]');
+      if (acts) { const fresh = acts.cloneNode(true); fresh.removeAttribute('style'); acts.parentElement.replaceChild(fresh, acts); }
+    });
+    await p.evaluate(() => window.__regTick());
+    s3.push(await p.evaluate(SAMPLE));
+    await p.evaluate(() => window.__regTick());
+    s3.push(await p.evaluate(SAMPLE));
+    await p.waitForTimeout(100);
+  }
+  console.log('== 阶段3 无胶囊+团队容器重挂载 ==');
+  const r3 = new Set();
+  for (const s of s3.slice(-8)) { r3.add(s.reserve); console.log(` ${s.phase}  reserve=${s.reserve}  标题=${s.titleW}`); }
+  console.log(`-- [阶段3尾段] reserve 取值数: ${r3.size}（${[...r3].join(' / ')}）→ ${r3.size >= 2 ? '🔴 仍横跳' : '✅ 稳定'}`);
   await b.close();
 })().catch((e) => { console.error('探针失败:', e); process.exit(1); });

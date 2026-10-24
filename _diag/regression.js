@@ -1097,10 +1097,12 @@ const A_PLUGIN_PAGE = () => {
       && /right = \(Math\.round\(rb\.right\) - \(hw2 - 102 - jobsW\)\) \+ 8;/.test(bundle)
       && /window\.__dshJobsMiss = \(window\.__dshJobsMiss \|\| 0\) \+ 1;/.test(bundle)
       && /if \(window\.__dshJobsMiss >= 3\) window\.__dshJobsW = 0;/.test(bundle)
-      && /Math\.abs\(vNum - cur\) > 4/.test(bundle);
+      && /Math\.abs\(vNum - cur\) > 4/.test(bundle)
+      && /var cpos = getComputedStyle\(cands\[ci\]\)\.position;/.test(bundle)
+      && /if \(cpos !== 'absolute'\) continue;/.test(bundle);
     chk(flickerGuard,
-      '[顶栏·R32] 标题预留防横跳（胶囊在场=恒定车位算术单一真值 + 消失三拍确认）',
-      flickerGuard ? '单一真值 + 三拍确认都在' : '🔴 防横跳守卫被删 → 标题在「省略/展开」两态间高频横跳');
+      '[顶栏·R32] 标题预留防横跳（胶囊在场=恒定车位算术单一真值 + 流内矩形全不采信 + 消失三拍确认）',
+      flickerGuard ? '单一真值 + 流内过滤 + 三拍确认都在' : '🔴 防横跳守卫被删 → 标题在「省略/展开」两态间高频横跳');
   }
   GATE.jobCapsuleGuard = true;
 
