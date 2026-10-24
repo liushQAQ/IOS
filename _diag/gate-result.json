@@ -1,11 +1,11 @@
 {
-  "version": "1.0.132",
+  "version": "1.0.133",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-24T04:26:15.654Z",
+  "startedAt": "2026-10-24T04:41:12.196Z",
   "dshFingerprint": "bfs33v",
   "dshAssets": 9,
   "domClasses": 0,
@@ -31,5 +31,5 @@
   "failures": [],
   "blocked": [],
   "sourceHash": "83cac37b943e141ae04a3b7b629e477649ff72c5ae50a95d948258cd400a7405",
-  "finishedAt": "2026-10-24T04:29:10.105Z"
+  "finishedAt": "2026-10-24T04:43:37.847Z"
 }

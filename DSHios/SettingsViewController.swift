@@ -1199,7 +1199,7 @@ final class ConnectionGuideViewController: UIViewController {
         card.layer.cornerRadius = 12
 
         let badgeLabel = UILabel()
-        badgeLabel.text = "最新更新日志 (v1.0.132)"
+        badgeLabel.text = "最新更新日志 (v1.0.133)"
         badgeLabel.font = .systemFont(ofSize: 12, weight: .bold)
         badgeLabel.textColor = .systemIndigo
         badgeLabel.backgroundColor = .systemIndigo.withAlphaComponent(0.12)
@@ -1218,7 +1218,12 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.lineBreakMode = .byWordWrapping
 
         let logContent = """
-        🥇 1. 后台任务胶囊 × 智能体团队按钮重叠根治（v1.0.132）：
+        🥇 1. 会话标题横跳根治 + 图片放大「闪退」根治（v1.0.133）：
+        • 老总真机双截图（间隔 2 秒）实锤横跳：会话标题在「老总…」与完整显示之间反复跳变。挖出两条独立横跳源 —— 其一，后台任务胶囊测量瞬间被冻结宽度污染标题预留；其二（新发现），无胶囊的纯流式输出场景，每次重渲染把智能体团队按钮容器打回流内被瞬时挤压，标题预留随之每帧跳变；
+        • 修法：标题预留「单一真值」化 —— 只采信冻结后的绝对定位态，流内瞬时矩形一律不采信、沿用上次值；探针新增「无胶囊 + 容器重挂载」场景验证，预留全程单值 96px，横跳死；
+        • 图片放大预览「闪退」（实为预览层隐形，App 不退、无崩溃日志）：style 写入序列逐笔取证，预览层挂载后 4ms 内被看门狗按 dialog 规则动手术（max-width/top/left 改锚定），四边锚定被破坏后整层塌缩成 5×0 像素；修法为看门狗整层豁免「含图片的模态对话框」，官方预览层几何/缩放手势/关闭按钮零接触，点遮罩关闭实测正常；
+        • 顶栏按钮顺位与 97 版完全一致；回归闸门新增 R32b/R32c/R33 断言（91 绿 0 红）。
+        🥇 2. 后台任务胶囊 × 智能体团队按钮重叠根治（v1.0.132）：
         • 真凶是 v1.0.83「顶栏按钮统一 32×32」规则漏排除「后台任务」—— 胶囊被硬钳成 32×32，「1 个后台任务运行中」文字从按钮右侧裸溢出糊在团队按钮上（97 版里胶囊自己写的 width:auto 其实从未生效）；排除名单补齐后胶囊恢复自适应宽度；
         • 胶囊定位改为「测量前解冻 + 右缘恒定车位」：根治转圈圈→长文本切换时宽度被冻结的测量死循环；与子智能体徽标/团队按钮恒保 8px 安全间隙，徽标出现/消失也不跳位；
         • 标题避让改为全量实测取最左缘（含绝对定位后的胶囊），标题超长自动省略号、绝不压到右侧任何按钮；按钮级 40vw+单行省略兜底，注入脚本全挂文字也绝不越界；
