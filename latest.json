@@ -1,12 +1,12 @@
 {
-  "version": "1.0.135",
-  "build": 104,
-  "updated_at": "2026-10-24 18:00:00",
-  "title": "v1.0.135(104) 文件工作区下移二次根治 + 手势收窄左缘 + 插件页死胡同根治",
-  "changelog": "1. 文件工作区顶栏下移 + 返回后抽屉按钮出屏二次根治（R35b）：新增 --dsh-statusbar 值守卫（DSH 重写偏大值即微任务级回写，先于渲染零闪烁），抽屉按钮防出屏改增量补位（带位移出屏也能精确拉回）\n2. 手势收窄（R36b）：右滑开目录、左滑关/返回都只认屏幕左缘 32px 竖条，屏幕其余位置的横滑一律不响应，杜绝误关误返\n3. 插件页死胡同根治（R36c）：进「目录→插件」后任何手势都退不出去 —— 整页容器横滚豁免修正 + 左滑到底自动拉开目录，任何页面必有出口\n4. 回归闸门新增 R35b/R36b/R36c 断言，97 条全绿",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.135-104.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.135-104.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.135/DSHios-public-1.0.135-104.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.135",
-  "md5": "c97045abbbcdeb8608566e46f9698c32"
+  "version": "1.0.136",
+  "build": 105,
+  "updated_at": "2026-10-25 00:20:00",
+  "title": "v1.0.136(105) +号弹层闪退根治 + 抽屉按钮出屏三犯根治",
+  "changelog": "1. 会话框 + 号弹层「闪退」根治（R37）：回合运行中（AI 流式输出）会话被写句柄持有，命令目录预热拉取被 session/writer-held 拒绝导致弹层秒死（reducer 路径无关闭回调）——按时机判据吞掉伪关闭（开层 200ms 内无用户点击/Escape 的关闭一律拦下），弹层保持打开并注入「回合运行中，指令目录暂不可用」提示，点外部照常关闭，回合结束重开即恢复完整目录\n2. 右抽屉关闭后按钮超出屏幕三犯根治（R38）：旧增量补位在抽屉滑入动画中途抓到面板内部开关按钮并累计出 translateX(-448px) 永久滞留——五铁律全重写：只认 header 内开关、补偿量从基准位重算、稳态门（几何与上一拍全等才动手）、48px 幅值上限、面板内部按钮旧中毒位移就地清除自愈\n3. 回归闸门新增 R37 三段行为断言 + R38 行为断言与五铁律源锚点，103 条全绿",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.136-105.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.136-105.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.136/DSHios-public-1.0.136-105.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.136",
+  "md5": "0699409a3f2420513324fadcd2f911f1"
 }
