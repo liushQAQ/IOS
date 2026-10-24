@@ -3176,9 +3176,14 @@ final class ViewController: UIViewController {
             '}',
             '',
             '/* v1.0.83：打开目录被挪进标题行后也命中了这条，被压成 32px，',
-            '   和页面自带的 38px 按钮叠在一起。把它排除，保留原始尺寸。 */',
-            '[data-phase] header [class*=\"titleRow\"] button:not([aria-label=\"打开目录\"]):not([aria-label=\"收起目录\"]):not([aria-label=\"打开侧边栏\"]):not([aria-label=\"收起侧边栏\"]):not([aria-label*=\"智能体团队\"]),',
-            '[data-phase] header [class*=\"titleRow\"] [role=\"button\"]:not([aria-label=\"打开目录\"]):not([aria-label=\"收起目录\"]):not([aria-label=\"打开侧边栏\"]):not([aria-label=\"收起侧边栏\"]):not([aria-label*=\"智能体团队\"]),',
+            '   和页面自带的 38px 按钮叠在一起。把它排除，保留原始尺寸。',
+            '   🔴 R23（v1.0.131(101)）：排除名单补上「后台任务」胶囊 —— 该规则特异性极高，',
+            '   一直压过下方胶囊自己的 width:auto !important，真机上胶囊被硬钳成 32×32，',
+            '   「1 个后台任务运行中」文字 span 从按钮右侧裸溢出，直接糊在子智能体徽标/',
+            '   智能体团队按钮上（老总 2026-10-24 截图实锤）。不做此排除，下方所有',
+            '   胶囊宽度约束全部无效。 */',
+            '[data-phase] header [class*=\"titleRow\"] button:not([aria-label=\"打开目录\"]):not([aria-label=\"收起目录\"]):not([aria-label=\"打开侧边栏\"]):not([aria-label=\"收起侧边栏\"]):not([aria-label*=\"智能体团队\"]):not([aria-label*=\"后台任务\"]),',
+            '[data-phase] header [class*=\"titleRow\"] [role=\"button\"]:not([aria-label=\"打开目录\"]):not([aria-label=\"收起目录\"]):not([aria-label=\"打开侧边栏\"]):not([aria-label=\"收起侧边栏\"]):not([aria-label*=\"智能体团队\"]):not([aria-label*=\"后台任务\"]),',
             'button[aria-label=\"更多操作\"],',
             'button[aria-label=\"打开右侧边栏\"],',
             'button[aria-label=\"收起右侧边栏\"],',
@@ -3243,13 +3248,31 @@ final class ViewController: UIViewController {
             '  word-break: keep-all !important;',
             '}',
             '',
-            '/* 后台任务胶囊指示器：允许自适应宽度，确保完整显示数字（如 1）杜绝截断为省略号 */',
+            '/* 后台任务胶囊指示器（🔴 R23 v1.0.131(101) 收紧）：',
+            '   ① 宽度自适应（数字「1」永远完整显示，绝不截成省略号）；',
+            '   ② 但必须硬钳 40vw 上限 + 按钮级单行省略 —— 这是 JS 死亡时的最后防线：',
+            '      旧版只设 nowrap 不设 overflow，wrapper 一旦被冻结在旧宽度，长文本',
+            '      「1 个后台任务运行中」会从按钮右侧裸溢出，直接糊在智能体团队按钮上；',
+            '   ③ 子 span 同步钳制省略，保证截断发生在文字层而非整按钮裁切。 */',
             'button[aria-label*=\"后台任务\"],',
             '[data-job-indicator] button {',
             '  width: auto !important;',
             '  min-width: 28px !important;',
+            '  max-width: 40vw !important;',
             '  padding: 0 6px !important;',
             '  white-space: nowrap !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  flex: 0 0 auto !important;',
+            '}',
+            'button[aria-label*=\"后台任务\"] > span,',
+            '[data-job-indicator] button > span {',
+            '  min-width: 0 !important;',
+            '  max-width: 100% !important;',
+            '  overflow: hidden !important;',
+            '  text-overflow: ellipsis !important;',
+            '  white-space: nowrap !important;',
+            '  flex: 0 1 auto !important;',
             '}',
             '',
             '[data-phase] header [class*=\"crumbs\"],',
@@ -4283,18 +4306,37 @@ final class ViewController: UIViewController {
               if (row === null) return;
               var rb = row.getBoundingClientRect();
               if (!(rb.width > 0)) return;
+              /* 🔴 R23（v1.0.131(101)）：右侧预留改为「全量候选取最左缘」。
+                 旧逻辑只量 utilities，量不到才兜底 headerActions —— 但 moveAgentBadge 会把
+                 后台任务胶囊/团队按钮/子智能体徽标的 wrapper 全部绝对定位（脱离文档流），
+                 utilities 当场塌缩为 0，兜底量到的 headerActions 也只是 32px 车位，
+                 预留回落 96px → 标题伸进胶囊正下方（老总截图：标题压住「1 个后台任务运行中」）。
+                 这里把三类绝对定位 wrapper 一并纳入，谁最靠左听谁的；只认右半区
+                 （left > rb.left+40）的真实元素，左侧目录按钮/标题自身绝不混入。 */
               var right = 0;
+              var cands = [];
               var utils = row.querySelector('[class*="headerUtilities"]');
-              if (utils !== null) {
-                var ub = utils.getBoundingClientRect();
-                if (ub.width > 0) right = (rb.right - ub.left) + 6;   // 含标题与右侧模块的间隙
+              if (utils !== null) cands.push(utils);
+              var acts = row.querySelector('[class*="headerActions"]');
+              if (acts !== null) cands.push(acts);
+              var hdr = row.closest ? row.closest('header') : null;
+              if (!hdr) hdr = document.querySelector('header');
+              if (hdr !== null) {
+                var jb2 = hdr.querySelector('button[aria-label*="后台任务"]');
+                if (jb2 !== null && jb2.parentElement !== null) cands.push(jb2.parentElement);
+                var tb2 = hdr.querySelector('button[aria-label*="智能体团队"]');
+                if (tb2 !== null && tb2.parentElement !== null && tb2.parentElement !== acts) cands.push(tb2.parentElement);
+                var bb2 = hdr.querySelector('button[aria-label*="子智能体"]');
+                if (bb2 !== null && bb2.parentElement !== null) cands.push(bb2.parentElement);
               }
-              if (!(right > 0)) {
-                var acts = row.querySelector('[class*="headerActions"]');
-                if (acts !== null) {
-                  var ab = acts.getBoundingClientRect();
-                  if (ab.width > 0) right = (rb.right - ab.left) + 6;
-                }
+              for (var ci = 0; ci < cands.length; ci++) {
+                try {
+                  var cb = cands[ci].getBoundingClientRect();
+                  if (cb.width > 0 && cb.left > rb.left + 40) {
+                    var cand = (rb.right - cb.left) + 8;   // 标题与右侧模块至少 8px 安全间隙
+                    if (cand > right) right = cand;
+                  }
+                } catch (ce) {}
               }
               if (!(right > 0)) {
                 /* 🔴 v1.0.131(95)：过渡态绝不回落到 96px。
@@ -4307,10 +4349,12 @@ final class ViewController: UIViewController {
               }
               // 🔴 右侧模块必须有上限：实测「智能体团队 + 任务运行中」在 393 下可占 181px。
               //   注意：右侧限宽不能与 --dsh-head-right 互相推导（会形成 14px 的死循环重叠，
-              //   实测四档恒差 14px），所以右侧用独立的 30vw 上限（见 CSS），
-              //   这里只负责量「限宽之后」右侧模块的真实左缘，反推标题的右边距。
+              //   实测四档恒差 14px），所以右侧用独立的 30vw 上限（见 CSS）。
+              //   🔴 R23：上限从 55vw 收紧为 vw-132 —— 胶囊固定车位右缘 hw-102、最宽 40vw，
+              //   其左缘最深到 hw-102-40vw；预留必须能盖住它（vw-102-(40vw)+8 ≤ vw-132 恒成立），
+              //   同时保证标题自身最少剩 ~70px 可用宽度，超出部分由标题省略号截断。
               var vw = window.innerWidth || 375;
-              var cap = Math.round(vw * 0.55);
+              var cap = Math.round(vw - 132);
               if (right > cap) right = cap;
               if (right < 96) right = 96;   // 不低于历史预留，保持原有居中观感
               var v = Math.ceil(right) + 'px';
@@ -5451,11 +5495,25 @@ function applySidebarInset() {
               }
               if (jobs && jobs.parentElement && jobs.parentElement !== header) {
                 var jwrap = jobs.parentElement;
+                /* 🔴 R23（v1.0.131(101)）：placeAbs 会把 wrapper 宽度冻结在上一帧测量值，
+                   而按钮在冻结宽度内被裁剪/溢出后，getBoundingClientRect 量到的永远是
+                   冻结值 —— 「转圈圈时 32px → 长文本渲染后仍 32px」的死循环（探针
+                   _probe_r23_trace.js 逐 tick 实锤：wrapper 恒 32px、right:72px 不再更新）。
+                   修法：测量前先解冻 wrapper（width:auto → 绝对定位收缩包住按钮自然宽度），
+                   同一 JS 任务内量完立即写回，不产生中间帧，零抖动。 */
+                if (jwrap.style.width) S(jwrap, 'width', 'auto');
                 var jw = jobs.getBoundingClientRect().width;
                 if (!(jw > 10)) jw = 32;
-                // 计算后台任务应当落座的 right 坐标：智能体团队(46) + 间隙(8) + 任务宽度(jw)
-                var targetRight = Math.round(hw - (48 + jw));
-                placeAbs(jwrap, targetRight, Math.round(jw));
+                /* 🔴 R23：胶囊宽度上限 40vw —— 「1 个后台任务运行中」在 375~430 全档完整显示，
+                   数字永不截断；更极端文本由按钮级 overflow+ellipsis 省略号兜底（见 CSS）。 */
+                var capJw = Math.round(hw * 0.4);
+                if (jw > capJw) jw = capJw;
+                /* 🔴 R23：右缘恒定 hw-102（= 子智能体徽标左缘 hw-94 再留 8px 安全间隙）。
+                   旧公式 hw-(48+jw) 的右缘随 jw 漂移：jw 小（转圈圈 28~32px）时右缘落在
+                   hw-76~hw-80，直接压住徽标车位 [hw-94,hw-72] 并啃到团队按钮 [hw-78,hw-46]；
+                   jw 大（满文本 130px+）时又把整颗胶囊推到标题区正上方。
+                   固定车位后胶囊只会向左伸展，与右侧按钮列恒保 8px，徽标出现/消失也不跳位。 */
+                placeAbs(jwrap, hw - 102, Math.round(jw));
               }
             } catch (e) {}
           }

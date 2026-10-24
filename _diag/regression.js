@@ -1049,6 +1049,48 @@ const A_PLUGIN_PAGE = () => {
   }
   GATE.headerFitGuard = true;
 
+  /* ================= 断言 9e：后台任务胶囊 × 右侧按钮零重叠（R23，v1.0.131(101)）=================
+     老总 2026-10-24 真机实锤：「转圈圈 + 1 个后台任务运行中 和智能体按钮重叠」。
+     三处真因（探针 _diag/_probe_r23_trace.js 逐 tick 实锤：wrapper 恒 32px / right:72px
+     五个 tick 纹丝不动）：
+       ① moveAgentBadge 把胶囊 wrapper 宽度冻结在上一帧测量值，按钮在冻结宽度内被裁/溢出，
+          jw 每次都量回冻结值 —— 测量死循环，长文本永远拿不到真实宽度；
+       ② 车位公式 hw-(48+jw) 右缘随宽度漂移：jw 小（转圈圈 28~32px）右缘落在 hw-76~80，
+          直接压住子智能体徽标车位 [hw-94,hw-72] 并啃到团队按钮 [hw-78,hw-46]；
+          jw 大（满文本 130px+）整颗胶囊被推到标题区正上方；
+       ③ fixHeaderFit 只量流内 utilities，胶囊被绝对定位后 utilities 塌缩为 0，
+          兜底只量到 32px 车位 → 标题预留回落 96px → 标题伸进胶囊正下方。
+     五条特征钉死，删任何一条即红。 */
+  {
+    const bundle = APP_JS;
+    const unfreeze = /if \(jwrap\.style\.width\) S\(jwrap, 'width', 'auto'\);/.test(bundle);
+    const seatFixed = /placeAbs\(jwrap, hw - 102, Math\.round\(jw\)\)/.test(bundle);
+    const capJw = /var capJw = Math\.round\(hw \* 0\.4\);/.test(bundle) && /if \(jw > capJw\) jw = capJw;/.test(bundle);
+    const btnClamp = /button\[aria-label\*=\\"后台任务\\"\],[\s\S]{0,80}?\[data-job-indicator\] button \{[\s\S]{0,340}?max-width: 40vw !important;[\s\S]{0,340}?overflow: hidden !important;[\s\S]{0,340}?text-overflow: ellipsis !important;/.test(bundle);
+    /* 🔴 真凶级特征：v1.0.83 的「titleRow 按钮统一 32×32」规则特异性极高，会把胶囊
+       硬钳成 32×32 并压过胶囊自己的 width:auto !important —— 排除名单缺它即复发。 */
+    const exclJobs = /\[data-phase\] header \[class\*=\\"titleRow\\"\] button:[\s\S]{0,420}?not\(\[aria-label\*=\\"后台任务\\"\]\)/.test(bundle);
+    const spanClamp = /button\[aria-label\*=\\"后台任务\\"\] > span,[\s\S]{0,420}?text-overflow: ellipsis !important;/.test(bundle);
+    const fitAll = /jb2 = hdr\.querySelector\('button\[aria-label\*="后台任务"\]'\)/.test(bundle)
+      && /var cand = \(rb\.right - cb\.left\) \+ 8;/.test(bundle)
+      && /var cap = Math\.round\(vw - 132\);/.test(bundle);
+    chk(unfreeze && seatFixed && capJw,
+      '[顶栏·R23] 胶囊解冻重测 + 车位右缘恒定 hw-102 + 40vw 上限（治冻结死循环与车位漂移）',
+      !unfreeze ? '🔴 wrapper 冻结死循环回归 → 长文本胶囊宽度永不更新、文本被裁或溢出'
+        : (!seatFixed ? '🔴 车位公式又随 jw 漂移 → 转圈圈压徽标/团队、满文本侵吞标题区'
+          : (capJw ? '解冻重测 + 固定车位 + 40vw 上限全在' : '🔴 40vw 上限被删 → 极端文本无限伸展')));
+    chk(btnClamp && spanClamp,
+      '[顶栏·R23] 胶囊按钮级硬钳制（40vw + overflow + 省略号，JS 死时的最后防线）',
+      btnClamp && spanClamp ? '按钮与子 span 双层钳制在' : '🔴 按钮级 overflow 被删 → wrapper 冻结期文本裸溢出糊在团队按钮上');
+    chk(exclJobs,
+      '[顶栏·R23] 32×32 图标按钮统一规则排除后台任务胶囊（真凶：特异性压制 width:auto）',
+      exclJobs ? '排除名单已补' : '🔴 排除名单缺失 → 胶囊被硬钳 32×32，文字 span 裸溢出糊在徽标/团队按钮上');
+    chk(fitAll,
+      '[顶栏·R23] fixHeaderFit 计入绝对定位胶囊/徽标/团队取最左缘（标题预留无盲区）+ 8px 间隙 + vw-132 上限',
+      fitAll ? '全量候选取最左缘在' : '🔴 标题预留又退回只量流内 utilities → 标题伸进胶囊正下方');
+  }
+  GATE.jobCapsuleGuard = true;
+
   /* ================= 断言 9c：模型选择器停靠区（v1.0.131 build 92）=================
      老总 2026-10-23 08:53：「模型按钮不见了…我自己创建的两个模型放在其他位置可以吗。
      不要放在会话框底部，占用原生按钮的位置。」定案：顶栏下面 tab 行右侧。

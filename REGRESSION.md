@@ -452,6 +452,23 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
      - 标题右侧预留由 `fixHeaderFit` 自动测量后推导 `--dsh-head-right`，保证标题文字在到达后台任务前优雅省略。
   3. **关于页与更新说明居中问题**：系统原生 `UIAlertController` 的 message 标签默认是 `textAlignment = .center`，导致序号 123456 变成了中间参差不齐的锯齿排版。通过 `alignAlertMessageLeft` 递归视图树将包含多行/符号的标签设置为 `.left`，实现完美靠左对齐。
 
+### R32 后台任务胶囊被 32×32 规则钳制 + 胶囊车位公式漂移 + 标题预留盲区（v1.0.131 build 101 根治，2026-10-24）
+
+- **症状（老总 2026-10-24 反馈）**：97 基线上按钮顺位全部正确，但后台任务运行时「转圈圈 + 1 个后台任务运行中」文本与「智能体团队」按钮重叠；标题长时也会压住胶囊。
+- **🔴 本条修正 R31 的一个错误结论**：R31 写的「`hw - 48 - jw` 动态串联排位两两永不重叠」**不成立** —— 该公式让胶囊右缘随宽度漂移：jw 小（转圈圈 28~32px）时右缘落在 hw-76~80，压住子智能体徽标车位 [hw-94,hw-72] 并啃到团队按钮 [hw-78,hw-46]；jw 大（满文本 130px+）时整颗胶囊被推到标题区正上方。
+- **根因链（四处叠加，探针 `_diag/_probe_r23_trace.js` 逐 tick 实锤：wrapper 恒 32px / right:72px 五个 tick 纹丝不动）**：
+  1. **真凶 · 32×32 图标按钮统一规则漏排除**（v1.0.83 遗留）：`[data-phase] header [class*="titleRow"] button:not(打开目录)…:not(智能体团队)` 一律 `width:32px !important; min-width:32px !important`——排除名单**没有「后台任务」**。该规则特异性极高，压过 97 版胶囊自己的 `width:auto !important`（Build 97 里从未生效过）→ 真机胶囊被硬钳 32×32，`「1 个后台任务运行中」`文字 span（nowrap）从按钮右侧裸溢出，糊在徽标/团队按钮上。
+  2. **测量死循环**：`moveAgentBadge` 用 `placeAbs` 把胶囊 wrapper 宽度冻结在上一帧测量值；按钮在冻结宽度内被裁/溢出后，`getBoundingClientRect` 每次都量回冻结值 → jw 永不更新，wrapper 永不重排。
+  3. **车位公式漂移**：见上，`hw-(48+jw)` 随 jw 双向漂移。
+  4. **fixHeaderFit 盲区**：只量流内 `headerUtilities`；胶囊/团队/徽标 wrapper 被 `placeAbs` 绝对定位后 utilities 塌缩为 0，兜底只量到 32px 车位 → `--dsh-head-right` 回落 96px → 标题伸进胶囊正下方。
+- **修法（build 101，全部在 `DSHios/ViewController.swift`）**：
+  1. 32×32 规则排除名单补 `:not([aria-label*="后台任务"])`（两条 titleRow 选择器都补）——不做此排除，下方一切胶囊宽度约束全部无效；
+  2. `moveAgentBadge` 胶囊分支：测量前先解冻 wrapper（`width:auto`，同一 JS 任务内量完即写回，零中间帧零抖动）→ 量自然宽度 → 钳 40vw 上限 → **右缘恒定 `hw-102`**（= 徽标左缘 hw-94 再保 8px），胶囊只向左伸展，徽标出现/消失不跳位；
+  3. `fixHeaderFit` 改「全量候选取最左缘」：utilities + headerActions + 胶囊/团队/徽标 wrapper 一并实测（只认右半区 left>rb.left+40），预留 = rb.right - 最左缘 + **8px** 间隙；上限从 55vw 收紧为 `vw-132`（恰好盖住 40vw 胶囊车位，同时标题最少剩 ~70px）；「过渡态沿用上次值」守卫原样保留。
+  4. 按钮级最后防线：胶囊 `max-width:40vw !important + overflow:hidden + text-overflow:ellipsis` + 子 span 同步钳制——**JS 死亡时文本也绝不越过按钮边界**；数字「1」在 375~430 全档完整显示。
+- **闸门防线**：`regression.js` 断言 9e（`GATE.jobCapsuleGuard`）4 条特征钉死；探针 `_probe_r23_jobscap.js`（430/393/375 三档、冷挂载+文本变长两场景）对拍胶囊×团队/徽标/标题全部零重叠、8px 间隙成立。⚠️ 探针场景 B1 的 32px「重叠」是人为把 aria-label 改成 `●` 的假象——官方组件 aria-label 恒为「N 个后台任务运行中」（`dsh-client-ui-jobs` 的 countLabel），不存在该状态。
+- **方法论沉淀**：①「写入者自己量自己」的绝对定位必须先解冻再测量，否则测量值被上一次写入锁死；②高特异性统一规则（v1.0.83 32×32）新增受控元素时**必须检查排除名单**——胶囊在 97 版里写的 `width:auto !important` 从未生效过就是被它压死的；③绝对定位元素会让流内容器塌缩，凡是「量容器反推预留」的逻辑必须把绝对定位子元素一并纳入候选。
+
 ## 三、校验 SOP（每个新版本出包前必做）
 
 ### 前置
