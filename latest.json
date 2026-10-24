@@ -1,12 +1,12 @@
 {
-  "version": "1.0.132",
-  "build": 101,
-  "updated_at": "2026-10-24 10:40:00",
-  "title": "v1.0.132(101) 后台任务胶囊与智能体团队按钮重叠根治",
-  "changelog": "1. 后台任务胶囊不再压智能体团队按钮\n2. 转圈圈/长文本胶囊自动省略截断\n3. 标题与右侧按钮恒保 8px 安全间隙\n4. 顶栏按钮顺位与 97 版完全一致\n5. 注入脚本全挂时按钮级 40vw 省略兜底\n6. 回归闸门升级 89 条断言全绿",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.132-101.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.132-101.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.132/DSHios-public-1.0.132-101.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.132",
-  "md5": "f9e188f159600f13f327bb146ace93ce"
+  "version": "1.0.133",
+  "build": 102,
+  "updated_at": "2026-10-24 12:48:00",
+  "title": "v1.0.133(102) 会话标题横跳根治 + 图片放大预览闪退根治",
+  "changelog": "1. 会话标题横跳双源根治（真机双截图实锤，流式输出场景实测死跳变）\n2. 标题预留单一真值化，流内瞬时矩形一律不采信\n3. 图片放大预览秒消失根治（看门狗整层豁免灯箱，点遮罩关闭正常）\n4. 顶栏按钮顺位与 97 版完全一致\n5. 回归闸门升级 91 条断言全绿",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.133-102.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.133-102.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.133/DSHios-public-1.0.133-102.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.133",
+  "md5": "d167ee0f9eddd66893bf5f7fb0a40991"
 }
