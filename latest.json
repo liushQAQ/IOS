@@ -1,12 +1,12 @@
 {
-  "version": "1.0.133",
-  "build": 102,
-  "updated_at": "2026-10-24 12:48:00",
-  "title": "v1.0.133(102) 会话标题横跳根治 + 图片放大预览闪退根治",
-  "changelog": "1. 会话标题横跳双源根治（真机双截图实锤，流式输出场景实测死跳变）\n2. 标题预留单一真值化，流内瞬时矩形一律不采信\n3. 图片放大预览秒消失根治（看门狗整层豁免灯箱，点遮罩关闭正常）\n4. 顶栏按钮顺位与 97 版完全一致\n5. 回归闸门升级 91 条断言全绿",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.133-102.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.133-102.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.133/DSHios-public-1.0.133-102.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.133",
-  "md5": "d167ee0f9eddd66893bf5f7fb0a40991"
+  "version": "1.0.134",
+  "build": 103,
+  "updated_at": "2026-10-24 15:35:00",
+  "title": "v1.0.134(103) 右侧抽屉顶栏三症状根治 + 左侧目录手势化",
+  "changelog": "1. 右抽屉打开顶栏闪烁/功能按钮下移/关闭后按钮出屏，三症状同根根治（面板 padding-top 优先读原生 --dsh-sb-native + 300ms 几何守恒环幂等校正与防出屏补位）\n2. 左侧目录按钮整排隐藏，偏移遮挡的二级子菜单恢复原位；开合全改手势：屏幕左缘从左往右滑打开目录，从右往左滑依次关目录→关右侧面板→子页返回，最多退回会话主界面\n3. 顶栏按钮顺位与 97 版完全一致\n4. 回归闸门新增 R35/R36 断言 + 断言7不变量更替，85 条全绿",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.134-103.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.134-103.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.134/DSHios-public-1.0.134-103.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.134",
+  "md5": "f843b4b30bef2fa3fdaa0d986b60c113"
 }
