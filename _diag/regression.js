@@ -1226,10 +1226,13 @@ const A_PLUGIN_PAGE = () => {
       && /EDGE = 32/.test(bundle) && /DIST = 56/.test(bundle)
       && /if \(dx > 0 && sx <= EDGE\)/.test(bundle)
       && /if \(dx < 0 && sx <= EDGE\)/.test(bundle)
-      && /if \(isDirOpen\(\)\) \{ closeDir\(\); return; \}/.test(bundle);
+      && /if \(isDirOpen\(\)\) \{ closeDir\(\); return; \}/.test(bundle)
+      && /if \(goBack\(\)\) return;/.test(bundle)
+      && /if \(!isDirOpen\(\)\) openDir\(\);/.test(bundle)
+      && /r0\.width >= vw \* 0\.9 && r0\.height >= vh \* 0\.6/.test(bundle);
     chk(gest,
-      '[手势·R36] 边缘手势脚本在（左缘右滑开目录 / 左滑关目录→关右栏→子页返回，单例防重挂；R36b 收窄：双方向都只认左缘 32px）',
-      gest ? '手势单例 + 开合/返回链 + 左缘闸在' : '🔴 手势脚本被删/被改 → 目录按钮隐藏后无任何开启通道（功能死锁）');
+      '[手势·R36] 边缘手势脚本在（左缘右滑开目录 / 左滑关目录→关右栏→子页返回→扑空拉开目录，单例防重挂；R36b 双方向左缘闸 + R36c 整页容器豁免修正）',
+      gest ? '手势单例 + 开合/返回/逃生链 + 左缘闸 + 整页豁免修正在' : '🔴 手势脚本被删/被改 → 目录按钮隐藏后无任何开启通道或插件页死胡同回潮（功能死锁）');
   }
   GATE.r36GestureGuard = true;
 

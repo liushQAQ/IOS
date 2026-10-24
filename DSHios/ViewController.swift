@@ -2580,6 +2580,10 @@ final class ViewController: UIViewController {
           //   🔴 R36b（老总 2026-10-24 二次报障）：之前「左滑关/返回」是全屏任意位置都触发，
           //      真机横滑扫内容就误关误返 —— 现在两个方向都只认左缘 32px 竖条，
           //      左缘以外任何位置的横滑一律不响应。
+          //   🔴 R36c（老总 2026-10-24 三次报障）：插件页整页根 SECTION 自带 overflow-x，
+          //      被横滚豁免把落点其上的所有手势掐死，且该页无任何返回钮 → 死胡同。
+          //      修：①整页级容器（近全宽全高）不算横滚豁免；②左滑链路四连兜底：
+          //      关目录 → 关右侧面板 → 子页返回 → 都扑空就拉开目录，任何页面必有出口。
           //   防误触：起点在输入框/可编辑区、或触摸目标处于横向滚动容器内、或纵向位移占比过大，一律放行。
           //   WKWebView allowsBackForwardNavigationGestures=false，与系统边缘返回手势零冲突。
           (function setupDshEdgeGestures() {
@@ -2597,10 +2601,18 @@ final class ViewController: UIViewController {
             }
             function inHScroll(el) {
               var d = 0;
+              var vw = window.innerWidth, vh = window.innerHeight;
               while (el && el !== document.body && d < 12) {
                 try {
                   var cs = getComputedStyle(el);
-                  if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') return true;
+                  if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') {
+                    // 🔴 R36c：整页级容器（近全宽且近全高，如插件页 page 根 SECTION）不算横向滚动区 ——
+                    //    它只是页面壳，算进豁免会把落点在它上面的所有手势全掐死
+                    //    （真机死胡同实锤：插件页任何滑动都打不进来）。真横滚部件（代码块/轮播/tab 条）
+                    //    高度远小于整页，不受影响。
+                    var r0 = el.getBoundingClientRect();
+                    if (!(r0.width >= vw * 0.9 && r0.height >= vh * 0.6)) return true;
+                  }
                 } catch (e) {}
                 el = el.parentElement;
                 d++;
@@ -2690,7 +2702,11 @@ final class ViewController: UIViewController {
                 if (isDirOpen()) { closeDir(); return; }
                 var panel = document.querySelector('[data-sidebar-right-open="true"], .dMHGga_panel[data-sidebar-right-open]');
                 if (panel) { closeRightPanel(); return; }
-                goBack();
+                if (goBack()) return;
+                // 🔴 R36c：无返回钮的页面（插件页等全屏页）左滑到头 = 逃生 —— 自动拉开目录给出口。
+                //    老总 2026-10-24 实证死胡同：进插件页后按钮全无、任何手势都退不出去。
+                //    严禁任何页面成为死胡同：这里保底必有一个可用出口。
+                if (!isDirOpen()) openDir();
               }
             }, { passive: true });
           })();
