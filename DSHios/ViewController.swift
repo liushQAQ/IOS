@@ -2416,11 +2416,11 @@ final class ViewController: UIViewController {
             //   ① 右栏/侧栏内联 padding-top 钉回「原生状态栏 + 6 - topshift」：React 重挂载出新节点时
             //      CSS 变量公式是第一道（已改读 --dsh-sb-native），这里是第二道保险，值不对才写、幂等；
             //   ② 抽屉开关按钮防出屏：右溢就拉回、不溢就清补偿。
-            //   🔴 R38（v1.0.136，老总三犯根治）防出屏全面重写 —— 104 真机三犯复盘（探针实证）：
-            //      旧增量补位动画中途会抓到「面板内部的开关按钮」（选择器不限定 header）并把累计
-            //      溢出量写上去（实测 translateX(-448px)），动画结束后「无溢出不碰」让巨量负位移
-            //      永久滞留、按钮飞出屏外。重写五铁律：只认 header 内按钮 / 补偿量从基准位重算 /
-            //      稳态门（几何与上一拍全等才动手）/ 48px 幅值上限 / 面板内部按钮旧毒位移就地清除。
+            //   🔴 R38（v1.0.136，老总三犯根治）防出屏五铁律：只认 header 内按钮 / 补偿量从基准位重算 /
+            //      稳态门（动画/重挂载中途一律旁观）/ 幅值上限 / 面板内部按钮旧毒位移就地清除。
+            //   🔴 R39（v1.0.137，真机四犯）救援 v2 两改：上限 48→160（「后台任务」胶囊让 flex 溢出
+            //      可超 48，旧上限把按钮留在屏外）；稳态门改模糊 ±2px（胶囊文字周期变宽让坐标每拍
+            //      抖 1px，旧全等门永不满足 → 救援永不触发——真机出屏而沙箱正常的差异根源）。
             function syncDrawerGeometry() {
               try {
                 var nh = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 59;
@@ -2468,19 +2468,28 @@ final class ViewController: UIViewController {
                     }
                     // 🔴 R38 铁律②：补偿量永远从「基准位」（视觉位 − 现有位移）重算，
                     //   DSH 自写位移并入基准考量，不再在现有位移上累减 —— 动画漂移不会被误补偿，
-                    //   陈旧补偿天然自愈；铁律④：48px 幅值上限（32px 按钮永远不需要更大补偿）。
+                    //   陈旧补偿天然自愈。
+                    // 🔴 R39 救援 v2：上限 48 → 160。1.0.136 真机四犯实录：顶栏出现「后台任务」
+                    //   胶囊等额外模块时 flex 横向溢出可超过 48px，48 上限把按钮留在屏外拉不回
+                    //   （老总图一：开关只露 2/3）。铁律②的基准位重算不累加，配合下方模糊稳态门，
+                    //   动画帧误读至多存活一拍即被下一拍重算覆盖，不再需要 48 这种贴身上限。
                     var baseRight = dr.right - curN;
                     var over = Math.round(baseRight - (window.innerWidth - 2));
-                    var want = over > 0 ? -Math.min(over, 48) : 0;
-                    // 🔴 R38 铁律③：稳态门 —— 几何与上一拍完全一致才动手（动画/重挂载中途一律旁观）。
-                    var keyNow = Math.round(dr.left) + ',' + Math.round(dr.top) + ',' + Math.round(dr.width);
-                    if (db.__dshStableKey === keyNow) {
+                    var want = (over > 0 && over <= 160) ? -over : 0;
+                    // 🔴 R39 救援 v2：稳态门从「逐拍全等」改「模糊稳态」——左右/上下 ±2px 内、
+                    //   连续两拍即视为稳态。真机「1 个后台任务」胶囊文字周期变宽会让按钮坐标
+                    //   每拍抖 1px，旧全等门永远不满足 → 救援永不触发（真机出屏而沙箱正常的
+                    //   根因差异）。宽度仍要求全等（宽度变了就是换元素/换布局，必须重新观察）。
+                    var nowL = Math.round(dr.left), nowT = Math.round(dr.top), nowW = Math.round(dr.width);
+                    var lk = db.__dshLastGeo;
+                    var stableNow = lk && Math.abs(lk[0] - nowL) <= 2 && Math.abs(lk[1] - nowT) <= 2 && lk[2] === nowW;
+                    db.__dshLastGeo = [nowL, nowT, nowW];
+                    if (stableNow) {
                       if (Math.abs(curN - want) > 0.5) {
                         if (want === 0) db.style.removeProperty('transform');
                         else db.style.setProperty('transform', 'translateX(' + want + 'px)', 'important');
                       }
                     }
-                    db.__dshStableKey = keyNow;
                   }
                 }
               } catch (eG) {}
@@ -2491,33 +2500,77 @@ final class ViewController: UIViewController {
             //   仍直读 --dsh-statusbar —— DSH 会在抽屉/工作区切换等时机把它重写回偏大的 75，
             //   所有读它的元素随之整体下移 16~22px（真机「打开右侧抽屉到文件工作区，按钮还是下移」同根）。
             //   守卫：MutationObserver 在微任务里回写（先于浏览器渲染，肉眼零闪）+ 300ms 兜底环；
-            //   html 与 body 两层都盯；值等于原生实测（__dshNativeStatusBar / --dsh-sb-native）才放行。
             //   幂等：值对就不写，零自振荡。原生变量未下发（纯浏览器环境）时整段静默。
+            // 🔴 R39（v1.0.137，老总 1.0.136 真机「还是下移/还是出屏」四犯根治）守卫 v2 三补：
+            //   ① 毒写 A/B 实测（_probe_r39_poison）：DSH 若整段覆写 html[style]，会把 --dsh-sb-native
+            //     一起抹掉 —— 旧 nativeVal() 两个来源全灭 → 守卫 bail → 75 永久滞留，顶栏/列垫/
+            //     目录按钮/抽屉开关实测全体 +16pt（=75−59）。v2 给守卫加「记忆冻结」：首次拿到
+            //     原生值就存 __dshSbMemory，此后两来源全灭也认得 59。
+            //   ② fixLevel 从只修 --dsh-statusbar 扩为三变量全恢复（sb / sb-native / topshift）——
+            //     P2 实测 sb-native 丢失后所有 calc(var(--dsh-sb-native, var(--dsh-statusbar))) 兜底链
+            //     全部被 75 带偏，修一个漏两个等于没修。
+            //   ③ 观察范围从 html/body 两层扩到全子树：P3 实测 DSH 写在深层容器上时旧守卫完全不设防，
+            //     该容器子树全体 +16pt。任何元素内联 --dsh-statusbar ≠ 原生值一律就地回写。
             (function setupDshStatusBarGuard() {
               if (window.__dshStatusBarGuard) return;
               window.__dshStatusBarGuard = true;
-              function nativeVal() {
+              function rawNative() {
                 var v = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 0;
                 if (!v) { try { v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-sb-native')); } catch (e0) {} }
                 return (v > 0) ? v : 0;
+              }
+              function nativeVal() {
+                var v = rawNative();
+                if (v > 0) {
+                  // 记忆冻结：首次拿到真值就记住，此后来源全灭（整段覆写）也认得它
+                  if (!(window.__dshSbMemory > 0)) window.__dshSbMemory = v;
+                  return v;
+                }
+                return (window.__dshSbMemory > 0) ? window.__dshSbMemory : 0;
+              }
+              function tsVal() {
+                return (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 18;
               }
               function fixLevel(el) {
                 try {
                   if (!el || !el.style) return;
                   var n = nativeVal(); if (!(n > 0)) return;
                   var cur = parseFloat(el.style.getPropertyValue('--dsh-statusbar'));
-                  if (!isNaN(cur) && Math.abs(cur - n) < 0.5) return;
-                  el.style.setProperty('--dsh-statusbar', n + 'px');
+                  if (isNaN(cur) || Math.abs(cur - n) >= 0.5) el.style.setProperty('--dsh-statusbar', n + 'px');
+                  // 🔴 R39②：三变量全恢复 —— 整段覆写后 sb-native/topshift 一并回写，兜底链不再被 75 带偏
+                  var nat = el.style.getPropertyValue('--dsh-sb-native');
+                  var natN = parseFloat(nat);
+                  if (isNaN(natN) || Math.abs(natN - n) >= 0.5) el.style.setProperty('--dsh-sb-native', n + 'px');
+                  var curTs = parseFloat(el.style.getPropertyValue('--dsh-topshift'));
+                  if (isNaN(curTs) || Math.abs(curTs - tsVal()) >= 0.5) el.style.setProperty('--dsh-topshift', tsVal() + 'px');
                 } catch (e1) {}
               }
               function fixAll() { fixLevel(document.documentElement); fixLevel(document.body); }
+              // 🔴 R39③：深层容器毒写就地回写 —— 只动内联带 --dsh-statusbar 且值偏离原生的元素
+              function fixDeep(el) {
+                try {
+                  if (!el || !el.style || el === document.documentElement || el === document.body) return;
+                  var s = el.style.getPropertyValue('--dsh-statusbar');
+                  if (!s) return;
+                  var n = nativeVal(); if (!(n > 0)) return;
+                  var cur = parseFloat(s);
+                  if (!isNaN(cur) && Math.abs(cur - n) >= 0.5) el.style.setProperty('--dsh-statusbar', n + 'px');
+                } catch (e3) {}
+              }
               function boot() {
                 if (!document.documentElement) { setTimeout(boot, 16); return; }
                 try {
-                  var mo = new MutationObserver(function () { fixAll(); });
-                  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+                  var mo = new MutationObserver(function (muts) {
+                    for (var i = 0; i < muts.length; i++) {
+                      var t = muts[i].target;
+                      if (t === document.documentElement || t === document.body) continue;
+                      fixDeep(t);
+                    }
+                    fixAll();
+                  });
+                  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style'], subtree: true });
                   var watchBody = function () {
-                    if (document.body) { mo.observe(document.body, { attributes: true, attributeFilter: ['style'] }); fixAll(); }
+                    if (document.body) { fixAll(); }
                     else setTimeout(watchBody, 16);
                   };
                   watchBody();
@@ -2525,6 +2578,46 @@ final class ViewController: UIViewController {
                 setInterval(fixAll, 300);
               }
               boot();
+            })();
+
+            // 🔴 R40（v1.0.137，老总 2026-10-24「多终端占用/同步丢失」重大故障）：前台重同步。
+            //   协议考古实证（DSH Desktop 侧 node_modules 源码）：会话事件订阅走 /api/remote.mux
+            //   WebSocket，前端 ConnectionController 唯一的外部重连开关是 window "online" 事件
+            //   （watchBrowserNetwork 只挂了 online/offline 两个监听 → setNetworkAvailable(true) →
+            //   attempt=0、abort 当代连接、立即重连）；退避循环全靠 setTimeout 驱动，WKWebView
+            //   后台挂起 JS 后，回前台只能等最后一个退避 timer 自然到期（最长 10s），若正停在
+            //   「等待网络恢复」分支则**永远卡死** —— 这就是「电脑端在跑（转圈）、手机端不转圈
+            //   不显示不同步」的根因（占用锁本身无超时是官方设计，见 REGRESSION R40）。
+            //   修法：原生 appDidBecomeActive 调 __dshForegroundResync()，合成 online 事件正中
+            //   官方重连开关（零 hack，完全复用官方恢复路径）；隐藏不足 5 秒的秒切不打扰。
+            //   长后台（>90s）：__dshLongBgResync 补发 online 后 1.5s location.reload() 冷恢复
+            //   （官方语义：刷新/重连只从持久事件重建会话，不丢数据）。
+            (function setupForegroundResync() {
+              if (window.__dshForegroundResync) return;
+              var hiddenAt = 0;
+              document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState === 'hidden') hiddenAt = Date.now();
+              }, true);
+              window.__dshLastHiddenFor = function () { return hiddenAt ? (Date.now() - hiddenAt) : 0; };
+              window.__dshForegroundResync = function () {
+                try {
+                  if (document.visibilityState !== 'visible') return 'skip-invisible';
+                  var gap = window.__dshLastHiddenFor();
+                  if (gap > 0 && gap < 5000) return 'skip-short-gap';
+                  window.dispatchEvent(new Event('online'));
+                  setTimeout(function () {
+                    try { if (document.visibilityState === 'visible') window.dispatchEvent(new Event('online')); } catch (e) {}
+                  }, 3000);
+                  return 'resync';
+                } catch (e) { return 'err'; }
+              };
+              window.__dshLongBgResync = function () {
+                try {
+                  window.dispatchEvent(new Event('online'));
+                  setTimeout(function () { try { location.reload(); } catch (e) {} }, 1500);
+                  return 'reload';
+                } catch (e) { return 'err'; }
+              };
             })();
 
             // 🔴 R37（老总 2026-10-24：会话框 + 号弹层「闪退」根治）：真凶不是几何也不是焦点——
@@ -8860,10 +8953,14 @@ function applySidebarInset() {
         }
     }
 
+    /// R40：进入后台的时刻。回前台时据此判断是否需要长后台冷恢复（>90s reload 兜底）
+    private var backgroundedAtForResync: Date?
+
     @objc private func appDidEnterBackground() {
         if isDictating {
             stopVoiceDictation()
         }
+        backgroundedAtForResync = Date()
     }
 
     /// - Parameter markAsDSHService: 加载的是 DSH 服务地址时为 true（记录其 host 用于页面归属判定）；
@@ -8924,6 +9021,21 @@ function applySidebarInset() {
         if !errorOverlay.isHidden || webView.url == nil || !hasLoadedOnce {
             retryTapped()
         }
+
+        // 🔴 R40（v1.0.137，多终端同步丢失根治）：前台重同步。DSH 前端订阅走 /api/remote.mux
+        // WebSocket，唯一的外部重连开关是 window "online" 事件；WKWebView 后台挂起 JS 后
+        // 退避 timer 全停，回前台不踢一脚就永远停在旧订阅上（电脑转圈、手机不动的根因）。
+        // 合成 online 完全复用官方恢复路径；短隐藏（<5s）页面自己会跳过。
+        webView.evaluateJavaScript(
+            "window.__dshForegroundResync ? window.__dshForegroundResync() : ''",
+            completionHandler: nil)
+        // 长后台（>90s）：连接早已断透，online 之后直接冷恢复（官方语义：reload 从持久事件重建会话）
+        if let leftAt = backgroundedAtForResync, Date().timeIntervalSince(leftAt) > 90 {
+            webView.evaluateJavaScript(
+                "window.__dshLongBgResync ? window.__dshLongBgResync() : ''",
+                completionHandler: nil)
+        }
+        backgroundedAtForResync = nil
     }
 
     /// 网络可达性监听：网络从无到有时自动加载，无需手动点刷新。

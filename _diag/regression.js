@@ -789,6 +789,86 @@ const A_PLUGIN_PAGE = () => {
               r38b.noDb ? '🔴 找不到 header 内抽屉开关按钮' : (r38b.err ? ('异常 ' + r38b.err) : ('left=' + r38b.healLeft + ' right=' + r38b.healRight + ' vw=' + r38b.vw + ' tf=' + r38b.tfAfter)));
           }
 
+          // —— R39 行为断言（v1.0.137(106)）：守卫 v2（整段覆写/深层毒写三变量全恢复）+ 救援 v2（>48px 出屏）——
+          const r39b = await p.evaluate(async () => {
+            const out = {};
+            try {
+              const hdr = document.querySelector('header');
+              out.baseTop = hdr ? Math.round(hdr.getBoundingClientRect().top) : null;
+              // ① P2 整段覆写：复刻 DSH setAttribute('style', ...) —— 抹掉全部 dsh 变量只留 75
+              const keep = document.documentElement.getAttribute('style') || '';
+              document.documentElement.setAttribute('style', 'color-scheme: dark; --dsh-statusbar: 75px;');
+              await new Promise(r2 => setTimeout(r2, 700));
+              const cs = getComputedStyle(document.documentElement);
+              out.p2sb = parseFloat(cs.getPropertyValue('--dsh-statusbar'));
+              out.p2nat = parseFloat(cs.getPropertyValue('--dsh-sb-native'));
+              out.p2ts = parseFloat(cs.getPropertyValue('--dsh-topshift'));
+              out.p2Top = hdr ? Math.round(hdr.getBoundingClientRect().top) : null;
+              document.documentElement.setAttribute('style', keep);
+              await new Promise(r2 => setTimeout(r2, 400));
+              // ② P3 深层容器毒写：DSH 写在工作区/面板根上，子树盯防必须就地回写
+              const deep = document.querySelector('[class*="root"]') || document.body.firstElementChild;
+              if (deep) {
+                deep.style.setProperty('--dsh-statusbar', '75px');
+                await new Promise(r2 => setTimeout(r2, 700));
+                out.p3val = parseFloat(deep.style.getPropertyValue('--dsh-statusbar'));
+                out.p3Top = hdr ? Math.round(hdr.getBoundingClientRect().top) : null;
+                deep.style.removeProperty('--dsh-statusbar');
+                await new Promise(r2 => setTimeout(r2, 400));
+              }
+              // ③ 出屏 >48px（超 R38 旧上限）：relative+left 不参与 flex，真实出屏，救援必须拉回 vw-2
+              const db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
+              if (db) {
+                db.style.setProperty('position', 'relative', 'important');
+                db.style.setProperty('left', '55px', 'important');
+                await new Promise(r2 => setTimeout(r2, 1200));
+                out.resRight = Math.round(db.getBoundingClientRect().right);
+                out.vw = window.innerWidth;
+                db.style.removeProperty('left');
+                db.style.removeProperty('position');
+                await new Promise(r2 => setTimeout(r2, 700));
+                out.resRightAfter = Math.round(db.getBoundingClientRect().right);
+              }
+              out.topFinal = hdr ? Math.round(hdr.getBoundingClientRect().top) : null;
+            } catch (e) { out.err = String(e).slice(0, 120); }
+            return out;
+          });
+          if (TO(r39b)) blocked('[抽屉·R39] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
+          else {
+            chk(!r39b.err && r39b.p2sb > 0 && r39b.p2nat > 0 && Math.abs(r39b.p2sb - r39b.p2nat) < 0.5 && Math.abs(r39b.p2ts - 18) < 0.5 && r39b.baseTop !== null && Math.abs(r39b.p2Top - r39b.baseTop) <= 2,
+              '[抽屉·R39] 整段覆写 html[style] 后三变量全恢复、顶栏零位移（1.0.136 真机工作区下移 16pt 根因）',
+              r39b.err ? ('异常 ' + r39b.err) : ('sb=' + r39b.p2sb + ' native=' + r39b.p2nat + ' ts=' + r39b.p2ts + ' 顶栏top ' + r39b.baseTop + '→' + r39b.p2Top));
+            chk(!r39b.err && (r39b.p3val === undefined || (Math.abs(r39b.p3val - r39b.p2nat) < 0.5 && Math.abs(r39b.p3Top - r39b.baseTop) <= 2)),
+              '[抽屉·R39] 深层容器毒写 75 就地回写（全子树盯防，顶栏零位移）',
+              r39b.err ? ('异常 ' + r39b.err) : ('深层值=' + r39b.p3val + ' 顶栏top ' + r39b.baseTop + '→' + r39b.p3Top));
+            chk(!r39b.err && r39b.resRight !== undefined && r39b.resRight <= r39b.vw - 1 && r39b.resRight >= r39b.vw - 14,
+              '[抽屉·R39] 出屏 55px（超旧 48 上限）拉回 vw-2（后台任务胶囊溢出场景）',
+              r39b.err ? ('异常 ' + r39b.err) : ('right=' + r39b.resRight + ' vw=' + r39b.vw + ' 收尾后=' + r39b.resRightAfter));
+          }
+
+          // —— R40 行为断言（v1.0.137(106)）：前台重同步双派发 online + 长后台冷恢复入口 ——
+          const r40b = await p.evaluate(async () => {
+            const out = {};
+            try {
+              if (typeof window.__dshForegroundResync !== 'function') { out.noFn = true; return out; }
+              let n = 0;
+              const bump = () => { n++; };
+              window.addEventListener('online', bump);
+              out.ret = window.__dshForegroundResync();
+              await new Promise(r2 => setTimeout(r2, 3500));
+              window.removeEventListener('online', bump);
+              out.count = n;
+              out.hasLong = typeof window.__dshLongBgResync === 'function';
+            } catch (e) { out.err = String(e).slice(0, 120); }
+            return out;
+          });
+          if (TO(r40b)) blocked('[多端·R40] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
+          else {
+            chk(!r40b.err && !r40b.noFn && r40b.ret === 'resync' && r40b.count >= 2 && r40b.hasLong,
+              '[多端·R40] 前台重同步双派发 online（即时 + 3s 补发）+ 长后台冷恢复入口在',
+              r40b.noFn ? '🔴 重同步函数未注入' : (r40b.err ? ('异常 ' + r40b.err) : ('ret=' + r40b.ret + ' online次数=' + r40b.count + ' longBg=' + r40b.hasLong)));
+          }
+
           // —— R37 行为断言（v1.0.136(105)）：+ 号弹层伪关闭吞掉器 ——
           // 路由级拦截复刻 writer-held 失败路径（该 RPC 走页面层 fetch/XHR 包装器够不到的通道，
           // 只能在网络层拦）；真实 tap 打开 → 弹层必须存活 + 注入提示行；点外部必须正常关闭；
@@ -1271,17 +1351,39 @@ const A_PLUGIN_PAGE = () => {
     chk(sbGuard,
       '[抽屉·R35b] --dsh-statusbar 值守卫在（MutationObserver 微任务回写 + html/body 双层盯防）',
       sbGuard ? '值守卫在' : '🔴 值守卫被删 → DSH 重写 75 后文件工作区/停靠面板整体下移复发');
-    /* R38（v1.0.136）：防出屏补位三犯重写 —— 104 真机实证旧增量写法会在动画期抓到面板内部
-       按钮（选择器不限定 header）并累计出 -448px 巨量位移永久滞留。五铁律缺一即复发。 */
+    /* R39（v1.0.137）：守卫 v2 三补 —— 毒写 A/B 实测（_probe_r39_poison）：整段覆写 html[style]
+       会抹掉 --dsh-sb-native → 旧守卫两来源全灭直接 bail（75 永久滞留，全页 +16pt）；
+       深层容器写 75 旧守卫完全不设防。v2 = 记忆冻结 + 三变量全恢复 + 全子树盯防，缺一即复发。 */
+    const r39guardSrc = /window\.__dshSbMemory/.test(bundle)
+      && /function fixDeep\(/.test(bundle)
+      && /Math\.abs\(curTs - tsVal\(\)\)/.test(bundle)
+      && /attributeFilter: \['style'\], subtree: true/.test(bundle);
+    chk(r39guardSrc,
+      '[抽屉·R39] 守卫 v2（记忆冻结 + sb-native/topshift 三变量全恢复 + 全子树盯防深层毒写）',
+      r39guardSrc ? '守卫 v2 在' : '🔴 守卫退化 → DSH 整段覆写/深层写 75 后文件工作区按钮下移 16pt 复发（真机 1.0.136 四犯实录）');
+    /* R38（v1.0.136）+ R39 救援 v2（v1.0.137）：防出屏五铁律 —— header 限定 / 基准位重算 /
+       稳态门（R39 改模糊 ±2px：胶囊文字变宽让坐标每拍抖 1px，全等门永不满足 → 救援永不触发）/
+       160px 上限（R39 从 48 放宽：后台任务胶囊让 flex 溢出可超 48，旧上限把按钮留在屏外）/
+       面板内旧毒位移自愈。 */
     const r38src = /var db = document\.querySelector\('header button\[aria-label="打开右侧边栏"\], header button\[aria-label="收起右侧边栏"\]'\)/.test(bundle)
       && !/收起右侧边栏"\], \[data-sidebar-right-toggle\]'\)/.test(bundle)
       && /var baseRight = dr\.right - curN;/.test(bundle)
-      && /db\.__dshStableKey === keyNow/.test(bundle)
-      && /Math\.min\(over, 48\)/.test(bundle)
+      && /Math\.abs\(lk\[0\] - nowL\) <= 2/.test(bundle)
+      && /over <= 160/.test(bundle)
       && /__staleSels/.test(bundle);
     chk(r38src,
-      '[抽屉·R38] 防出屏重写五铁律（header 限定 + 基准位重算 + 稳态门 + 48px 上限 + 面板内旧毒位移自愈）',
-      r38src ? '五铁律全在' : '🔴 防出屏回潮旧增量写法 → 动画期误伤面板内部按钮（-448px 中毒案复发）');
+      '[抽屉·R38/39] 防出屏五铁律 v2（header 限定 + 基准位重算 + 模糊稳态门±2px + 160px 上限 + 面板内旧毒自愈）',
+      r38src ? '五铁律 v2 全在' : '🔴 防出屏回潮 → 出屏（全等门卡死/48 上限留尾）或动画期误伤复发');
+    /* R40（v1.0.137）：前台重同步 —— DSH 前端唯一外部重连开关是 window "online" 事件
+       （ConnectionController watchBrowserNetwork）。删掉 → WKWebView 后台挂起 JS 后
+       回前台永远停在旧订阅（电脑转圈、手机不同步）。 */
+    const r40src = /function setupForegroundResync\(\)/.test(bundle)
+      && /window\.__dshForegroundResync/.test(bundle)
+      && /window\.__dshLongBgResync/.test(bundle)
+      && /dispatchEvent\(new Event\('online'\)\)/.test(bundle);
+    chk(r40src,
+      '[多端·R40] 前台重同步器在（合成 online 正中官方重连开关 + 长后台 reload 冷恢复）',
+      r40src ? '重同步器在' : '🔴 重同步器被删 → 回前台订阅不恢复，多终端不同步复发');
     /* R37（v1.0.136）：+ 号弹层伪关闭吞掉器 —— 回合运行中 commands/list 被写句柄门闩拒绝，
        前端在 reducer 路径直接置回关闭（无任何关闭回调）。守卫必须常驻，删掉即复发。 */
     const r37src = /window\.__dshTriggerMenuKeeper/.test(bundle)
