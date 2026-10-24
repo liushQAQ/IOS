@@ -75,6 +75,7 @@ async function prep(p) {
   await p.waitForTimeout(7000);
   await p.evaluate(({ js }) => {
     document.documentElement.style.setProperty('--dsh-statusbar', '59px');
+    document.documentElement.style.setProperty('--dsh-sb-native', '59px');
     document.documentElement.style.setProperty('--dsh-topshift', '18px');
     /* 🔴 v1.0.126 铁律：闸门必须模拟真机 env(safe-area-inset-top)=59。
        桌面 WebKit 的 env() 恒为 0，而真机 iPhone 是 59 —— 这正是「沙箱绿、真机崩」
@@ -724,6 +725,42 @@ const A_PLUGIN_PAGE = () => {
           if (TO(ht2)) blocked('[会话页] 顶栏顶=39', '会话页 30 秒无响应（DSH 前端死循环）');
           else chk(ht2.hdrTop !== null && Math.abs(ht2.hdrTop - 39) <= 2, '[会话页] 顶栏顶=39（真机env=59下收敛）', 'hdrTop=' + ht2.hdrTop + ' framePT=' + ht2.framePT + ' want=39');
           await noteAlive(p); // 会话态关键锚点采样
+
+          // —— R35b 行为断言（v1.0.135(104)）：--dsh-statusbar 值守卫 + 抽屉按钮增量补位 ——
+          const r35b = await p.evaluate(async () => {
+            const out = {};
+            try {
+              // ① 值守卫：硬写 75px（DSH 换版时干的事），守卫必须在渲染前回写原生值
+              document.documentElement.style.setProperty('--dsh-statusbar', '75px');
+              await new Promise(r2 => setTimeout(r2, 200));
+              out.sb = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar'));
+              out.sbNative = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-sb-native'));
+              // ② 增量补位：带 DSH 自写位移 translateX(50px) 强推出屏，守恒环必须叠差拉回 vw-2 内
+              const db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"], [data-sidebar-right-toggle]');
+              if (db) {
+                db.style.setProperty('transform', 'translateX(50px)', 'important');
+                await new Promise(r2 => setTimeout(r2, 900));
+                const rr = db.getBoundingClientRect();
+                out.dbRight = Math.round(rr.right); out.vw = window.innerWidth;
+                out.tf = db.style.getPropertyValue('transform');
+                // 收尾：清掉试验位移，让守恒环按真实几何接管
+                db.style.removeProperty('transform');
+                await new Promise(r2 => setTimeout(r2, 700));
+                const rr2 = db.getBoundingClientRect();
+                out.dbRightAfter = Math.round(rr2.right);
+              } else out.noDb = true;
+            } catch (e) { out.err = String(e).slice(0, 120); }
+            return out;
+          });
+          if (TO(r35b)) blocked('[抽屉·R35b] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
+          else {
+            chk(!r35b.err && r35b.sbNative > 0 && Math.abs(r35b.sb - r35b.sbNative) < 0.5,
+              '[抽屉·R35b] --dsh-statusbar 值守卫生效（硬写 75px 后自动回写原生值）',
+              r35b.err ? ('异常 ' + r35b.err) : (r35b.sbNative > 0 ? '回写后 sb=' + r35b.sb + ' native=' + r35b.sbNative : '🔴 原生变量未下发（探针环境缺 --dsh-sb-native）→ 守卫静默'));
+            chk(!r35b.noDb && r35b.dbRight <= r35b.vw - 2 && r35b.dbRight >= r35b.vw - 14,
+              '[抽屉·R35b] 抽屉按钮增量补位生效（带 +50px 位移强推出屏，拉回 vw-2 且不过拉）',
+              r35b.noDb ? '🔴 会话页找不到抽屉开关按钮' : ('right=' + r35b.dbRight + ' vw=' + r35b.vw + ' tf=' + r35b.tf + ' 收尾后 right=' + r35b.dbRightAfter));
+          }
         } else blocked('[dock] 费用部件取样', '60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）');
 
         // —— 场景 C：插件页，校验左上角 fab 可点、不压标题（v1.0.125 新增）——
@@ -1142,13 +1179,21 @@ const A_PLUGIN_PAGE = () => {
     const overlayTop = /top: calc\(var\(--dsh-sb-native, var\(--dsh-statusbar, 54px\)\) \+ 8px/.test(bundle);
     const geoLoop = /function syncDrawerGeometry\(\)/.test(bundle)
       && (bundle.match(/syncDrawerGeometry\(\);/g) || []).length >= 1
-      && /'translateX\(' \+ \(-over\) \+ 'px\)'/.test(bundle);
+      && /'translateX\(' \+ want \+ 'px\)'/.test(bundle);
     chk(nativeFirst >= 2 && overlayTop,
       '[抽屉·R35] 面板 padding-top 公式优先读原生 --dsh-sb-native（右栏/侧栏 + 固定浮层 top）',
       nativeFirst >= 2 && overlayTop ? '原生变量优先公式在（padding ×' + nativeFirst + ' + 浮层 top）' : '🔴 又退回直读 --dsh-statusbar → DSH 写 75 后面板首帧偏低 18~22px（闪烁+按钮下移+子菜单下沉）');
     chk(geoLoop,
       '[抽屉·R35] syncDrawerGeometry 300ms 常驻环（幂等校正 + 抽屉按钮防出屏补位）',
       geoLoop ? '几何守恒环在' : '🔴 常驻环被删 → React 重挂载后补偿全丢，抽屉按钮再出屏');
+    /* R35b（v1.0.135(104)）：DSH 自有规则仍直读 --dsh-statusbar，DSH 会把它重写回 75 →
+       文件工作区/停靠面板整体下移。守卫必须常驻（MutationObserver 微任务回写 + 300ms 兜底）。 */
+    const sbGuard = /window\.__dshStatusBarGuard/.test(bundle)
+      && /function setupDshStatusBarGuard\(\)/.test(bundle)
+      && /attributeFilter: \['style'\]/.test(bundle);
+    chk(sbGuard,
+      '[抽屉·R35b] --dsh-statusbar 值守卫在（MutationObserver 微任务回写 + html/body 双层盯防）',
+      sbGuard ? '值守卫在' : '🔴 值守卫被删 → DSH 重写 75 后文件工作区/停靠面板整体下移复发');
   }
   GATE.r35DrawerGuard = true;
 
@@ -1180,10 +1225,11 @@ const A_PLUGIN_PAGE = () => {
     const gest = (bundle.match(/window\.__dshEdgeGestures/g) || []).length >= 2
       && /EDGE = 32/.test(bundle) && /DIST = 56/.test(bundle)
       && /if \(dx > 0 && sx <= EDGE\)/.test(bundle)
+      && /if \(dx < 0 && sx <= EDGE\)/.test(bundle)
       && /if \(isDirOpen\(\)\) \{ closeDir\(\); return; \}/.test(bundle);
     chk(gest,
-      '[手势·R36] 边缘手势脚本在（左缘右滑开目录 / 左滑关目录→关右栏→子页返回，单例防重挂）',
-      gest ? '手势单例 + 开合/返回链在' : '🔴 手势脚本被删/被改 → 目录按钮隐藏后无任何开启通道（功能死锁）');
+      '[手势·R36] 边缘手势脚本在（左缘右滑开目录 / 左滑关目录→关右栏→子页返回，单例防重挂；R36b 收窄：双方向都只认左缘 32px）',
+      gest ? '手势单例 + 开合/返回链 + 左缘闸在' : '🔴 手势脚本被删/被改 → 目录按钮隐藏后无任何开启通道（功能死锁）');
   }
   GATE.r36GestureGuard = true;
 

@@ -1199,7 +1199,7 @@ final class ConnectionGuideViewController: UIViewController {
         card.layer.cornerRadius = 12
 
         let badgeLabel = UILabel()
-        badgeLabel.text = "最新更新日志 (v1.0.134)"
+        badgeLabel.text = "最新更新日志 (v1.0.135)"
         badgeLabel.font = .systemFont(ofSize: 12, weight: .bold)
         badgeLabel.textColor = .systemIndigo
         badgeLabel.backgroundColor = .systemIndigo.withAlphaComponent(0.12)
@@ -1218,7 +1218,13 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.lineBreakMode = .byWordWrapping
 
         let logContent = """
-        🥇 1. 右侧抽屉顶栏三症状根治 + 左侧目录改手势操控（v1.0.134）：
+        🥇 1. 文件工作区顶栏下移 + 抽屉按钮出屏二次根治 + 手势收窄（v1.0.135）：
+        • 老总真机二轮报障（R35b）：打开右侧抽屉进文件工作区，顶栏按钮还是下移；返回后右侧抽屉按钮还是超出屏幕。取证实锤两处漏点 —— 其一，R35 只让自己的公式改读原生变量，DSH 自有规则仍直读 --dsh-statusbar，DSH 在抽屉/工作区切换时把它重写回偏大的 75，读它的元素整体下移 16~22px；本版新增 --dsh-statusbar 值守卫（MutationObserver 微任务回写，先于渲染零闪烁，html/body 两层全盯，值不等原生实测立即纠正）；
+        • 其二，抽屉按钮防出屏旧逻辑「只补初次」对带位移的出屏视而不见（按钮会带着 DSH 自写的 translateX 出屏）—— 改为增量补位：只要视觉右缘越出屏内 2px 就在现有位移上叠加差值，无溢出一律不碰，幂等不振荡；
+        • 手势收窄（R36b）：左滑关目录/关面板/返回之前是全屏任意位置都触发，真机横滑扫内容就误关误返 —— 现在右滑开、左滑关/返回两个方向都只认屏幕左缘 32px 竖条，左缘以外任何位置的横滑一律不响应；
+        • 面板开合检测重锚（DSH 前端又换版，哈希类名失效预防）：按 data-sidebar-right-open="true" 属性找载体，不再依赖单一哈希类；
+        • 回归闸门新增 R35b/R36b 断言防复发。
+        🥇 2. 右侧抽屉顶栏三症状根治 + 左侧目录改手势操控（v1.0.134）：
         • 真机三症状同根根治（R35）：右抽屉打开顶栏闪烁一下、打开后功能按钮下移两个位置、关闭回主会话后右侧抽屉按钮超出屏幕 —— 真凶是 DSH 自己会写 --dsh-statusbar 且真机实测偏大（75），React 重挂载面板首帧直读它导致整体偏低 18~22px；面板 padding-top 公式改优先读原生专属 --dsh-sb-native（DSH 写不动），另加 300ms 常驻环幂等校正 + 抽屉按钮防出屏补位（只补不清，防自振荡）；
         • 左侧目录按钮与打开后的子菜单重叠，按老总拍板方案整排隐藏目录/侧边栏开关按钮（R36：0-size + overflow + opacity:0 组合，程序化 click 通道无损），偏移遮挡的二级子菜单恢复原位；开合全改屏幕手势：屏幕左缘从左往右滑打开目录，从右往左滑依次关目录→关右侧面板→子页返回，最多退回会话主界面、不能再退；输入框/横向滚动容器/纵向大幅位移一律放行防误触；
         • 回归闸门新增 R35/R36 断言防复发。

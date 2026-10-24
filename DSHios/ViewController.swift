@@ -2430,33 +2430,80 @@ final class ViewController: UIViewController {
                     gc.style.setProperty('padding-top', pad, 'important');
                   }
                 }
-                var db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
+                var db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"], [data-sidebar-right-toggle]');
                 if (db) {
                   var dr = db.getBoundingClientRect();
                   if (dr.width > 0) {
-                    // 只补不清：已有补偿交给 bleed guard 自己管，这里只兜「React 重挂载后补偿全丢」的空窗，
-                    // 否则会陷入「写了补偿→按钮回屏→判为不溢→清掉→再写」的自振荡（_r35b_run4 实证）。
+                    // 增量补位（R35b）：只要「现视觉右缘」越出 vw-2 就在现有 transform 上再叠加差值。
+                    // 旧「只补 curN===0 的初次」逻辑对带位移的出屏视而不见 —— 真机实证按钮会带着
+                    // DSH 自写的 translateX(-10) 出屏，恰恰落在旧逻辑的盲区。无溢出一律不碰
+                    // （不与 DSH/bleed guard 抢写），写值前比对，天然幂等不振荡。
                     var curT = db.style.getPropertyValue('transform');
                     var curN = 0;
-                    var kT = curT.indexOf('translateX(');
-                    if (kT >= 0) {
-                      var vT = parseFloat(curT.substring(kT + 11));
-                      if (!isNaN(vT)) curN = vT;
+                    var scan = curT, kT;
+                    while ((kT = scan.indexOf('translateX(')) >= 0) {
+                      var vT = parseFloat(scan.substring(kT + 11));
+                      if (!isNaN(vT)) curN += vT;
+                      scan = scan.substring(kT + 11);
                     }
-                    if (curN === 0) {
-                      var over = Math.round(dr.right - (window.innerWidth - 2));
-                      if (over > 0) db.style.setProperty('transform', 'translateX(' + (-over) + 'px)', 'important');
+                    var over = Math.round(dr.right - (window.innerWidth - 2));
+                    if (over > 0) {
+                      var want = curN - over;
+                      if (Math.abs(curN - want) > 0.5) db.style.setProperty('transform', 'translateX(' + want + 'px)', 'important');
                     }
                   }
                 }
               } catch (eG) {}
             }
 
+            // 🔴 R35b（老总 2026-10-24 二次报障根治）：--dsh-statusbar 值守卫。
+            //   R35 只让自己的公式改读 --dsh-sb-native，但 DSH 自有规则（文件工作区/停靠面板头部等）
+            //   仍直读 --dsh-statusbar —— DSH 会在抽屉/工作区切换等时机把它重写回偏大的 75，
+            //   所有读它的元素随之整体下移 16~22px（真机「打开右侧抽屉到文件工作区，按钮还是下移」同根）。
+            //   守卫：MutationObserver 在微任务里回写（先于浏览器渲染，肉眼零闪）+ 300ms 兜底环；
+            //   html 与 body 两层都盯；值等于原生实测（__dshNativeStatusBar / --dsh-sb-native）才放行。
+            //   幂等：值对就不写，零自振荡。原生变量未下发（纯浏览器环境）时整段静默。
+            (function setupDshStatusBarGuard() {
+              if (window.__dshStatusBarGuard) return;
+              window.__dshStatusBarGuard = true;
+              function nativeVal() {
+                var v = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 0;
+                if (!v) { try { v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-sb-native')); } catch (e0) {} }
+                return (v > 0) ? v : 0;
+              }
+              function fixLevel(el) {
+                try {
+                  if (!el || !el.style) return;
+                  var n = nativeVal(); if (!(n > 0)) return;
+                  var cur = parseFloat(el.style.getPropertyValue('--dsh-statusbar'));
+                  if (!isNaN(cur) && Math.abs(cur - n) < 0.5) return;
+                  el.style.setProperty('--dsh-statusbar', n + 'px');
+                } catch (e1) {}
+              }
+              function fixAll() { fixLevel(document.documentElement); fixLevel(document.body); }
+              function boot() {
+                if (!document.documentElement) { setTimeout(boot, 16); return; }
+                try {
+                  var mo = new MutationObserver(function () { fixAll(); });
+                  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+                  var watchBody = function () {
+                    if (document.body) { mo.observe(document.body, { attributes: true, attributeFilter: ['style'] }); fixAll(); }
+                    else setTimeout(watchBody, 16);
+                  };
+                  watchBody();
+                } catch (e2) {}
+                setInterval(fixAll, 300);
+              }
+              boot();
+            })();
+
             // 监听 DOM 树中的 data-sidebar-right-open 变化
             function syncPanelNav() {
               syncDrawerGeometry();
-              var panel = document.querySelector('.dMHGga_panel');
-              var isOpen = panel && panel.hasAttribute('data-sidebar-right-open');
+              // R35b 重锚：面板开合属性在新旧前端可能挂在不同元素上，直接按属性找载体，
+              // 找不到再退回旧哈希类；值必须 === 'true' 才算开（防 DSH 挂 false 态误判）。
+              var panel = document.querySelector('[data-sidebar-right-open="true"], .dMHGga_panel[data-sidebar-right-open]');
+              var isOpen = !!panel && String(panel.getAttribute('data-sidebar-right-open') || '') === 'true';
               toggleBackdrop(!!isOpen);
 
               if (panel && isOpen) {
@@ -2528,8 +2575,11 @@ final class ViewController: UIViewController {
           // 🔴 R36（老总 2026-10-24 方案落地）：左侧目录改手势操控。
           //   按钮已按老总方案整排隐藏（见样式表 R36 规则），交互约定：
           //   ① 屏幕左缘（起点 ≤32px）从左往右滑 ≥56px = 打开目录；
-          //   ② 任意位置从右往左滑 ≥56px = 依次「关目录 → 关右侧面板 → 子页返回」，
+          //   ② 左缘从右往左滑 ≥56px = 依次「关目录 → 关右侧面板 → 子页返回」，
           //      三者都不命中就什么都不做 —— 主会话页没有「返回」按钮，天然钳制在会话主界面，不能再退。
+          //   🔴 R36b（老总 2026-10-24 二次报障）：之前「左滑关/返回」是全屏任意位置都触发，
+          //      真机横滑扫内容就误关误返 —— 现在两个方向都只认左缘 32px 竖条，
+          //      左缘以外任何位置的横滑一律不响应。
           //   防误触：起点在输入框/可编辑区、或触摸目标处于横向滚动容器内、或纵向位移占比过大，一律放行。
           //   WKWebView allowsBackForwardNavigationGestures=false，与系统边缘返回手势零冲突。
           (function setupDshEdgeGestures() {
@@ -2636,10 +2686,10 @@ final class ViewController: UIViewController {
                 if (!isDirOpen()) openDir();
                 return;
               }
-              if (dx < 0) {
+              if (dx < 0 && sx <= EDGE) {
                 if (isDirOpen()) { closeDir(); return; }
-                var panel = document.querySelector('.dMHGga_panel');
-                if (panel && panel.hasAttribute('data-sidebar-right-open')) { closeRightPanel(); return; }
+                var panel = document.querySelector('[data-sidebar-right-open="true"], .dMHGga_panel[data-sidebar-right-open]');
+                if (panel) { closeRightPanel(); return; }
                 goBack();
               }
             }, { passive: true });

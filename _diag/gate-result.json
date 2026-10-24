@@ -1,11 +1,11 @@
 {
-  "version": "1.0.134",
+  "version": "1.0.135",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-24T07:21:08.256Z",
+  "startedAt": "2026-10-24T09:23:02.864Z",
   "dshFingerprint": "bfs33v",
   "dshAssets": 9,
   "domClasses": 0,
@@ -17,9 +17,7 @@
   "ownSheets": 11,
   "anchorCritical": {
     "total": 12,
-    "dead": [
-      "headerCorner"
-    ]
+    "dead": []
   },
   "pluginStripQueueGuard": true,
   "modelPickerGuard": true,
@@ -30,16 +28,10 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 85,
+  "pass": 97,
   "fail": 0,
   "failures": [],
-  "blocked": [
-    "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）",
-    "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）",
-    "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）",
-    "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）",
-    "[锚点] headerCorner 取样 — 会话页死循环连坐，该锚点无法取样（Chromium 对照确认 DOM 在）"
-  ],
-  "sourceHash": "92b7fffbd319c7e48b5f15e1ece271fde39b0d46c431bbdd948b227fd52d2f3b",
-  "finishedAt": "2026-10-24T07:24:14.001Z"
+  "blocked": [],
+  "sourceHash": "2f274c96745a7bfc8a78f3cf0992a38aca0c231a3ff83c940d74a3aca6fce3d0",
+  "finishedAt": "2026-10-24T09:26:00.012Z"
 }
