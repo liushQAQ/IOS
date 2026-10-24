@@ -5,7 +5,7 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-24T04:13:33.284Z",
+  "startedAt": "2026-10-24T04:26:15.654Z",
   "dshFingerprint": "bfs33v",
   "dshAssets": 9,
   "domClasses": 0,
@@ -23,12 +23,13 @@
   "modelPickerGuard": true,
   "headerFitGuard": true,
   "jobCapsuleGuard": true,
+  "lightboxGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 90,
+  "pass": 91,
   "fail": 0,
   "failures": [],
   "blocked": [],
-  "sourceHash": "668455045a419a021f7f7ae0c3c591e88c8a0b3fc9bd9cc4bfb558c9a6f6b5e8",
-  "finishedAt": "2026-10-24T04:15:44.833Z"
+  "sourceHash": "83cac37b943e141ae04a3b7b629e477649ff72c5ae50a95d948258cd400a7405",
+  "finishedAt": "2026-10-24T04:29:10.105Z"
 }

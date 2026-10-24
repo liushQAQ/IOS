@@ -1106,6 +1106,22 @@ const A_PLUGIN_PAGE = () => {
   }
   GATE.jobCapsuleGuard = true;
 
+  /* ================= 断言 9f：图片预览灯箱豁免（R33，v1.0.132(102)）=================
+     老总 2026-10-24 报障：会话中点图片放大「图片闪退」（预览层秒消失），App 不退、
+     无崩溃日志。探针 _probe_r34_lightbox.js 实锤：官方 ImageLightbox
+     （backdrop role=dialog[aria-modal] 含 img，尺寸靠 inset:0 四边锚定）挂载后 4ms
+     内被 shim_00 watchdog 的 max-width/max-height + left/top 手术改成
+     inset:70px auto auto 10px → 塌缩成 5×0 隐形。
+     守卫：watchdog 必须豁免「含 img 的 modal dialog」。删掉即复发。 */
+  {
+    const bundle = APP_JS;
+    const lbExempt = /el\.matches\('\[role="dialog"\]\[aria-modal="true"\]'\) && el\.querySelector\('img'\)/.test(bundle);
+    chk(lbExempt,
+      '[图片预览·R33] watchdog 豁免含 img 的 modal dialog（灯箱零接触，防 5×0 塌缩）',
+      lbExempt ? '豁免在' : '🔴 灯箱又被 watchdog 手术 → 预览层挂载即隐形（图片打不开）');
+  }
+  GATE.lightboxGuard = true;
+
   /* ================= 断言 9c：模型选择器停靠区（v1.0.131 build 92）=================
      老总 2026-10-23 08:53：「模型按钮不见了…我自己创建的两个模型放在其他位置可以吗。
      不要放在会话框底部，占用原生按钮的位置。」定案：顶栏下面 tab 行右侧。

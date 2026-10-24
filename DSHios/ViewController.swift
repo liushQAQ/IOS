@@ -2239,6 +2239,17 @@ final class ViewController: UIViewController {
                 if (!el || !(el instanceof HTMLElement)) return;
                 if (el.offsetParent === null && el.style.display === 'none') return;
 
+                /* 🔴 R33（v1.0.132(102)）：图片预览灯箱（官方 ImageLightbox）整层豁免。
+                   它是 role=dialog + aria-modal + 内含 img 的全屏组件，尺寸靠 inset:0
+                   四边锚定；本函数的 max-width/max-height + left/top 手术会把四边锚定
+                   改成 top+left+auto → 塌缩成 5×0 隐形（探针 _probe_r34_lightbox.js
+                   实测 rect [10,70,5,0]，挂载后 4ms 内完成），表现就是「点开图片放大
+                   直接消失/闪退」，App 不退、无崩溃日志（老总 2026-10-24 报障）。
+                   灯箱自带完整视口几何与关闭按钮钉位（另有 CSS 兜底），零接触。 */
+                try {
+                  if (el.matches('[role="dialog"][aria-modal="true"]') && el.querySelector('img')) return;
+                } catch (eLb) {}
+
                 var winW = window.innerWidth;
                 var winH = window.innerHeight;
                 if (winW > 768) return;

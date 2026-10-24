@@ -471,6 +471,17 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - **🔴 R32b 追加（2026-10-24 真机复检，build 102 候选）**：老总双截图实锤「标题在只剩省略号/展开完全两态间高频横跳」。根因：DSH 流式输出每 ~300ms 重渲染一次，胶囊 wrapper 被打回流内一帧（内联样式清零），当拍 utilities 实测矩形被瞬时态污染（430 档量出 378px→顶格 298，标题只剩 62px），下一拍 shim 冻回绝对定位又量回 249px——两个值逐拍互写（探针 `_diag/_probe_r33_flicker.js` 节点级重挂载复现 62↔111px）。终版修法：**胶囊在场时标题预留「单一真值」化**——只由恒定车位算术 `Math.round(rb.right)-(Math.round(hw2)-102-jobsW)+8` 决定（jobsW 由 moveAgentBadge 持久化在 `window.__dshJobsW`），utilities 流内矩形只在无胶囊时采信；胶囊消失须三拍确认（`__dshJobsMiss≥3`）防瞬时卸载闪落闪涨；写入侧吞 ≤4px 亚像素抖动。⚠️ **防抖教训**：曾试「预留变小须双拍确认」，持续流式下瞬时值反复把确认计数清零，防抖失效甚至把坏值锁死（探针实测 reserve 卡死 298）——**周期性污染源面前，防抖治标，唯一真值才治本**。闸门新增防横跳断言（R32 组 5 条，全量 90 绿/0 红），探针 430/393 重挂载场景全程单值。
 - **🔴 R32c 追加（同日老总双截图 10:39:53/55，build 102 候选）**：截图实锤**第二个横跳源**——会话流式输出中**并无后台任务胶囊**，标题仍在「老总...」（62px）/「老总， 我已经完全按照您的指」（~250px）间跳。根因：React 重挂载把 headerActions（智能体团队容器）打回流内、被流式内容挤压到左端（left≈124 → 预留顶格 298），下一拍 shim 冻回又量回 96。修法：**流内矩形一律不采信**——候选必须 `getComputedStyle().position === 'absolute'`（即已被 moveAgentBadge 冻结的稳定态），流内帧 right=0 → 过渡态守卫「沿用上次值」，横跳死。探针阶段 3（无胶囊+团队容器节点级重挂载）reserve 单值 96 稳定。
 
+### R33 会话图片「放大查看」预览层秒消失（老总口称「图片闪退」，v1.0.132(102) 根治，2026-10-24）
+
+- **症状**：会话中点图片放大，预览层瞬间消失（「图片闪退」）。**App 不退、无任何崩溃日志**——老总先发来的 .ips 是 1.0.123(62) 时代 10-19 的侧滑删除崩溃（该问题 1.0.124 墓碑机制已修，与本症无关），据此确认本症不走崩溃通道。
+- **根因（探针 `_diag/_probe_r34_lightbox.js` 实锤，官方组件源码 + style 写入序列双证据）**：
+  1. 官方预览层 = `dsh-client-ui-primitives` 的 **ImageLightbox**：body-portal 上的 `div.backdrop[role=dialog][aria-modal][aria-label=图片预览]`，**尺寸靠 `inset:0` 四边锚定**，内部 stage/mask（mask 挂 `onMouseDown=onClose`）+ img + close 全是 absolute（不撑父高）；
+  2. backdrop 命中 shim_00 watchdog 管辖名单（`[role="dialog"]`），挂载后 **4ms 内**被 `adjustElement` 手术：`max-width:410 + max-height:912 + left:10px + top:70px + right/bottom:auto` —— 四边锚定被改成 top+left+auto，**塌缩成 5×0 像素隐形**（探针实测 rect [10,70,5,0]）；
+  3. 用户视角 = 预览层「闪退/打不开」，App 活着无日志，逐字吻合。
+- **修法**：watchdog `adjustElement` 开头整层豁免「含 img 的 modal dialog」（`el.matches('[role="dialog"][aria-modal="true"]') && el.querySelector('img')` → return）——灯箱自带完整视口几何，关闭按钮另有 CSS 钉位兜底（v1.0.131 既有块），双指缩放手势由 pinch shim 提供，零接触。
+- **验证**：修复后 backdrop 恢复 `inset:0px` 全屏、watchdog 零接触（style 写入序列仅剩无害的 touch-action/overflow）、**点遮罩关闭通道完好**；闸门新增 `[图片预览·R33]` 断言（91 绿/0 红）。
+- **方法论沉淀**：①「App 活着但界面元素秒消失」≠ 崩溃，别去翻 .ips——先查 shim 对该组件 DOM 的每一次 style 写入（MutationObserver 抓写入序列是定位这种案的利器）；②watchdog/clamp 这类「越界浮层回收」逻辑对**靠四边锚定（inset:0）定位的全屏官方组件**是天然炸弹——锚定被改成 top+left+auto 后子元素撑不起尺寸，秒变 0×0；凡 role=dialog 全屏层必须先验豁免。
+
 ## 三、校验 SOP（每个新版本出包前必做）
 
 ### 前置
