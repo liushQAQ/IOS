@@ -1,12 +1,12 @@
 {
   "version": "1.0.131",
-  "build": 99,
-  "updated_at": "2026-10-24 03:50:00",
-  "title": "v1.0.131(99) 顶栏全按钮固定专属车位模型终极落地",
-  "changelog": "1. 顶栏全按钮专属车位固定预留\n2. 后台任务点亮入座不抢位\n3. 彻底杜绝多按钮重叠冲突\n4. 弹窗说明与更新要点靠左对齐\n5. 底栏床垫稳态常驻不闪烁\n6. 外层原生手势彻底锁死",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-99.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-99.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-99.tipa",
+  "build": 100,
+  "updated_at": "2026-10-24 09:10:00",
+  "title": "v1.0.131(100) 顶栏顺序锁死·左侧目录归位最左·标题自54px展开",
+  "changelog": "1. 顶栏顺位彻底恢复标准\n2. 目录按钮锁定最左端\n3. 标题紧随目录优雅展开\n4. 后台任务预留车位不抢占\n5. 智能体与右抽屉稳居最右\n6. 彻底消灭重叠与跳变",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-100.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.131-100.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.131/DSHios-public-1.0.131-100.tipa",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.131",
-  "md5": "10e2670c66b08b27742752e7268cb62c"
+  "md5": "91dd47b1ba083386d50d02037e8595c8"
 }
