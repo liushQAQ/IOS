@@ -1199,7 +1199,7 @@ final class ConnectionGuideViewController: UIViewController {
         card.layer.cornerRadius = 12
 
         let badgeLabel = UILabel()
-        badgeLabel.text = "最新更新日志 (v1.0.88)"
+        badgeLabel.text = "最新更新日志 (v1.0.132)"
         badgeLabel.font = .systemFont(ofSize: 12, weight: .bold)
         badgeLabel.textColor = .systemIndigo
         badgeLabel.backgroundColor = .systemIndigo.withAlphaComponent(0.12)
@@ -1218,7 +1218,12 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.lineBreakMode = .byWordWrapping
 
         let logContent = """
-        🥇 1. 顶栏离状态栏「一大截、越来越宽」彻底根治（v1.0.130）：
+        🥇 1. 后台任务胶囊 × 智能体团队按钮重叠根治（v1.0.132）：
+        • 真凶是 v1.0.83「顶栏按钮统一 32×32」规则漏排除「后台任务」—— 胶囊被硬钳成 32×32，「1 个后台任务运行中」文字从按钮右侧裸溢出糊在团队按钮上（97 版里胶囊自己写的 width:auto 其实从未生效）；排除名单补齐后胶囊恢复自适应宽度；
+        • 胶囊定位改为「测量前解冻 + 右缘恒定车位」：根治转圈圈→长文本切换时宽度被冻结的测量死循环；与子智能体徽标/团队按钮恒保 8px 安全间隙，徽标出现/消失也不跳位；
+        • 标题避让改为全量实测取最左缘（含绝对定位后的胶囊），标题超长自动省略号、绝不压到右侧任何按钮；按钮级 40vw+单行省略兜底，注入脚本全挂文字也绝不越界；
+        • 顶栏按钮顺位与 97 版完全一致（目录最左 → 标题 → 后台任务 → 智能体团队 → 右侧抽屉）；回归闸门新增 4 条 R32 断言（89 绿 0 红），探针 430/393/375 三档对拍零重叠。
+        🥇 2. 顶栏离状态栏「一大截、越来越宽」彻底根治（v1.0.130）：
         • 真机三张截图（16:20 / 18:41 / 21:09）与沙箱逐条带像素对拍实锤：标题 +59.7 / Tab 文字 +59.3 / Tab 下划线 +61.0，页内布局与沙箱完全一致 —— 整个 WebView 被原生层整体下移一个状态栏高度（59pt），页面层（CSS/JS/env）彻底无辜，此前几版页面层修法全部打不中；
         • 真凶：「重试」按钮与「清缓存重载」把页面归属标记 isCurrentServiceDSH 写死成 false —— 它们加载的明明就是 DSH 地址，却被当成外部网页，顶部约束被原生层多推一个状态栏高度（冷启动 PC 未就绪 → 报错页 → 点重试，必踩）；
         • 修法四处：重试/清缓存一律继承当前归属绝不重置；归属判据新增「与主控地址同 host 即 DSH 页」并自愈掰正标记；页内探针确认 DSH 页时原生顶部约束强制归零（与滚动锁共用同一条只认页内 DOM 的判据，外部网页/仪表盘零影响）；

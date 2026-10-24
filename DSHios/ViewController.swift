@@ -3177,7 +3177,7 @@ final class ViewController: UIViewController {
             '',
             '/* v1.0.83：打开目录被挪进标题行后也命中了这条，被压成 32px，',
             '   和页面自带的 38px 按钮叠在一起。把它排除，保留原始尺寸。',
-            '   🔴 R23（v1.0.131(101)）：排除名单补上「后台任务」胶囊 —— 该规则特异性极高，',
+            '   🔴 R32（v1.0.131(101)）：排除名单补上「后台任务」胶囊 —— 该规则特异性极高，',
             '   一直压过下方胶囊自己的 width:auto !important，真机上胶囊被硬钳成 32×32，',
             '   「1 个后台任务运行中」文字 span 从按钮右侧裸溢出，直接糊在子智能体徽标/',
             '   智能体团队按钮上（老总 2026-10-24 截图实锤）。不做此排除，下方所有',
@@ -3248,7 +3248,7 @@ final class ViewController: UIViewController {
             '  word-break: keep-all !important;',
             '}',
             '',
-            '/* 后台任务胶囊指示器（🔴 R23 v1.0.131(101) 收紧）：',
+            '/* 后台任务胶囊指示器（🔴 R32 v1.0.131(101) 收紧）：',
             '   ① 宽度自适应（数字「1」永远完整显示，绝不截成省略号）；',
             '   ② 但必须硬钳 40vw 上限 + 按钮级单行省略 —— 这是 JS 死亡时的最后防线：',
             '      旧版只设 nowrap 不设 overflow，wrapper 一旦被冻结在旧宽度，长文本',
@@ -4306,7 +4306,7 @@ final class ViewController: UIViewController {
               if (row === null) return;
               var rb = row.getBoundingClientRect();
               if (!(rb.width > 0)) return;
-              /* 🔴 R23（v1.0.131(101)）：右侧预留改为「全量候选取最左缘」。
+              /* 🔴 R32（v1.0.131(101)）：右侧预留改为「全量候选取最左缘」。
                  旧逻辑只量 utilities，量不到才兜底 headerActions —— 但 moveAgentBadge 会把
                  后台任务胶囊/团队按钮/子智能体徽标的 wrapper 全部绝对定位（脱离文档流），
                  utilities 当场塌缩为 0，兜底量到的 headerActions 也只是 32px 车位，
@@ -4350,7 +4350,7 @@ final class ViewController: UIViewController {
               // 🔴 右侧模块必须有上限：实测「智能体团队 + 任务运行中」在 393 下可占 181px。
               //   注意：右侧限宽不能与 --dsh-head-right 互相推导（会形成 14px 的死循环重叠，
               //   实测四档恒差 14px），所以右侧用独立的 30vw 上限（见 CSS）。
-              //   🔴 R23：上限从 55vw 收紧为 vw-132 —— 胶囊固定车位右缘 hw-102、最宽 40vw，
+              //   🔴 R32：上限从 55vw 收紧为 vw-132 —— 胶囊固定车位右缘 hw-102、最宽 40vw，
               //   其左缘最深到 hw-102-40vw；预留必须能盖住它（vw-102-(40vw)+8 ≤ vw-132 恒成立），
               //   同时保证标题自身最少剩 ~70px 可用宽度，超出部分由标题省略号截断。
               var vw = window.innerWidth || 375;
@@ -5495,7 +5495,7 @@ function applySidebarInset() {
               }
               if (jobs && jobs.parentElement && jobs.parentElement !== header) {
                 var jwrap = jobs.parentElement;
-                /* 🔴 R23（v1.0.131(101)）：placeAbs 会把 wrapper 宽度冻结在上一帧测量值，
+                /* 🔴 R32（v1.0.131(101)）：placeAbs 会把 wrapper 宽度冻结在上一帧测量值，
                    而按钮在冻结宽度内被裁剪/溢出后，getBoundingClientRect 量到的永远是
                    冻结值 —— 「转圈圈时 32px → 长文本渲染后仍 32px」的死循环（探针
                    _probe_r23_trace.js 逐 tick 实锤：wrapper 恒 32px、right:72px 不再更新）。
@@ -5504,11 +5504,11 @@ function applySidebarInset() {
                 if (jwrap.style.width) S(jwrap, 'width', 'auto');
                 var jw = jobs.getBoundingClientRect().width;
                 if (!(jw > 10)) jw = 32;
-                /* 🔴 R23：胶囊宽度上限 40vw —— 「1 个后台任务运行中」在 375~430 全档完整显示，
+                /* 🔴 R32：胶囊宽度上限 40vw —— 「1 个后台任务运行中」在 375~430 全档完整显示，
                    数字永不截断；更极端文本由按钮级 overflow+ellipsis 省略号兜底（见 CSS）。 */
                 var capJw = Math.round(hw * 0.4);
                 if (jw > capJw) jw = capJw;
-                /* 🔴 R23：右缘恒定 hw-102（= 子智能体徽标左缘 hw-94 再留 8px 安全间隙）。
+                /* 🔴 R32：右缘恒定 hw-102（= 子智能体徽标左缘 hw-94 再留 8px 安全间隙）。
                    旧公式 hw-(48+jw) 的右缘随 jw 漂移：jw 小（转圈圈 28~32px）时右缘落在
                    hw-76~hw-80，直接压住徽标车位 [hw-94,hw-72] 并啃到团队按钮 [hw-78,hw-46]；
                    jw 大（满文本 130px+）时又把整颗胶囊推到标题区正上方。
@@ -8383,13 +8383,11 @@ function applySidebarInset() {
             【设备环境信息】
             \(deviceInfo)
 
-            【本版要点 (v1.0.131)】
-            · 插件搬到 tab 栏右侧
-            · 会话框按钮回归原生
-            · 原生按钮零位移零悬浮
-            · 320~430 小屏自动收缩
-            · 优化菜单窄屏改浮层
-            · 上滑切会话不错位
+            【本版要点 (v1.0.132)】
+            · 后台任务胶囊不再压智能体团队
+            · 转圈圈/长文本胶囊自动省略截断
+            · 标题与右侧按钮恒保 8px 间隙
+            · 顶栏按钮顺位与 97 版完全一致
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
