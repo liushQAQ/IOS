@@ -988,7 +988,10 @@ final class ViewController: UIViewController {
             '[data-dockkit-surface],',
             '[data-dockkit-strip],',
             '[data-aionui-preview-col] {',
-            '  padding-top: calc(var(--dsh-statusbar, 54px) + 6px - var(--dsh-topshift, 0px)) !important;',
+            '  /* R35：优先读原生专属 --dsh-sb-native —— DSH 自己会写 --dsh-statusbar 且真机实测偏大(75)，',
+            '     直接读它会让面板/抽屉首帧整体偏低 18~22px（闪烁+按钮下移+侧栏子菜单下沉同根）；',
+            '     原生变量 DSH 写不动，重挂载首帧即正确。JS 未下发时退回旧变量兜底。 */',
+            '  padding-top: calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 6px - var(--dsh-topshift, 0px)) !important;',
             '  box-sizing: border-box !important;',
             '}',
             '[class*="rightbarCol"],',
@@ -2409,8 +2412,49 @@ final class ViewController: UIViewController {
               window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
             };
 
+            // 🔴 R35（老总 2026-10-24 三症状根治·几何守恒环）：随 syncPanelNav 的 300ms 节拍幂等校正——
+            //   ① 右栏/侧栏内联 padding-top 钉回「原生状态栏 + 6 - topshift」：React 重挂载出新节点时
+            //      CSS 变量公式是第一道（已改读 --dsh-sb-native），这里是第二道保险，值不对才写、幂等；
+            //   ② 抽屉开关按钮防出屏：右溢 N px 就写 translateX(-N px) 拉回；不溢了就把旧补偿清掉。
+            //      治「关闭右侧抽屉后按钮超出屏幕」——打开/关闭一轮后 React 重挂载按钮、旧补偿丢失，
+            //      bleed guard 只在自身扫描周期跑，这里挂进 300ms 常驻环零等待补位。
+            function syncDrawerGeometry() {
+              try {
+                var nh = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 59;
+                var ts = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 0;
+                var pad = (nh + 6 - ts) + 'px';
+                var cols = document.querySelectorAll('[class*="rightbarCol"], .CZPbNW_rightbarCol, [class*="sidebarCol"], .CZPbNW_sidebarCol');
+                for (var gi = 0; gi < cols.length; gi++) {
+                  var gc = cols[gi];
+                  if (gc.style.getPropertyValue('padding-top') !== pad) {
+                    gc.style.setProperty('padding-top', pad, 'important');
+                  }
+                }
+                var db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
+                if (db) {
+                  var dr = db.getBoundingClientRect();
+                  if (dr.width > 0) {
+                    // 只补不清：已有补偿交给 bleed guard 自己管，这里只兜「React 重挂载后补偿全丢」的空窗，
+                    // 否则会陷入「写了补偿→按钮回屏→判为不溢→清掉→再写」的自振荡（_r35b_run4 实证）。
+                    var curT = db.style.getPropertyValue('transform');
+                    var curN = 0;
+                    var kT = curT.indexOf('translateX(');
+                    if (kT >= 0) {
+                      var vT = parseFloat(curT.substring(kT + 11));
+                      if (!isNaN(vT)) curN = vT;
+                    }
+                    if (curN === 0) {
+                      var over = Math.round(dr.right - (window.innerWidth - 2));
+                      if (over > 0) db.style.setProperty('transform', 'translateX(' + (-over) + 'px)', 'important');
+                    }
+                  }
+                }
+              } catch (eG) {}
+            }
+
             // 监听 DOM 树中的 data-sidebar-right-open 变化
             function syncPanelNav() {
+              syncDrawerGeometry();
               var panel = document.querySelector('.dMHGga_panel');
               var isOpen = panel && panel.hasAttribute('data-sidebar-right-open');
               toggleBackdrop(!!isOpen);
@@ -2479,6 +2523,126 @@ final class ViewController: UIViewController {
             }
             observeBody();
             setInterval(syncPanelNav, 300);
+          })();
+
+          // 🔴 R36（老总 2026-10-24 方案落地）：左侧目录改手势操控。
+          //   按钮已按老总方案整排隐藏（见样式表 R36 规则），交互约定：
+          //   ① 屏幕左缘（起点 ≤32px）从左往右滑 ≥56px = 打开目录；
+          //   ② 任意位置从右往左滑 ≥56px = 依次「关目录 → 关右侧面板 → 子页返回」，
+          //      三者都不命中就什么都不做 —— 主会话页没有「返回」按钮，天然钳制在会话主界面，不能再退。
+          //   防误触：起点在输入框/可编辑区、或触摸目标处于横向滚动容器内、或纵向位移占比过大，一律放行。
+          //   WKWebView allowsBackForwardNavigationGestures=false，与系统边缘返回手势零冲突。
+          (function setupDshEdgeGestures() {
+            if (window.__dshEdgeGestures) return;
+            window.__dshEdgeGestures = true;
+            var EDGE = 32, DIST = 56;
+            var sx = 0, sy = 0, st = 0, track = false;
+
+            function visible(el) {
+              if (!el) return false;
+              var r = el.getBoundingClientRect();
+              if (r.width < 4 || r.height < 4) return false;
+              var cs = getComputedStyle(el);
+              return cs.display !== 'none' && cs.visibility !== 'hidden';
+            }
+            function inHScroll(el) {
+              var d = 0;
+              while (el && el !== document.body && d < 12) {
+                try {
+                  var cs = getComputedStyle(el);
+                  if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') return true;
+                } catch (e) {}
+                el = el.parentElement;
+                d++;
+              }
+              return false;
+            }
+            function isDirOpen() {
+              var closers = document.querySelectorAll('header button[aria-label="收起目录"], header button[aria-label="收起侧边栏"], [class*="sidebarCol"] button[aria-label="收起侧边栏"], [class*="sidebarCol"] button[aria-label="收起目录"]');
+              for (var i = 0; i < closers.length; i++) { if (visible(closers[i])) return true; }
+              var col = document.querySelector('[class*="sidebarCol"], .CZPbNW_sidebarCol');
+              if (col) {
+                var cr = col.getBoundingClientRect();
+                if (cr.left > -80 && cr.width > 120) return true;
+              }
+              return false;
+            }
+            function clickFirst(list) {
+              for (var i = 0; i < list.length; i++) {
+                if (list[i]) { list[i].click(); return true; }
+              }
+              return false;
+            }
+            function openDir() {
+              // display:none 的按钮 programmatic click 依然生效（pointer-events 不影响事件派发）
+              return clickFirst([
+                document.querySelector('header button[aria-label="打开目录"]'),
+                document.querySelector('[data-mobile-nav="fab"]'),
+                document.querySelector('header button[aria-label="打开侧边栏"]'),
+                document.querySelector('[aria-label="打开左侧侧边栏"]')
+              ]);
+            }
+            function closeDir() {
+              return clickFirst([
+                document.querySelector('header button[aria-label="收起目录"]'),
+                document.querySelector('header button[aria-label="收起侧边栏"]'),
+                document.querySelector('[class*="sidebarCol"] button[aria-label="收起侧边栏"]'),
+                document.querySelector('[class*="sidebarCol"] button[aria-label="收起目录"]')
+              ]);
+            }
+            function closeRightPanel() {
+              try { if (window.__dshCloseRightPanel) { window.__dshCloseRightPanel(); return true; } } catch (e) {}
+              return clickFirst([
+                document.querySelector('button[aria-label="收起右侧边栏"]'),
+                document.querySelector('[data-sidebar-right-toggle]')
+              ]);
+            }
+            function goBack() {
+              // 只认顶区可见的「返回/后退」按钮；主会话页没有 → 返回 false = 手势到底（钳制）
+              var cands = document.querySelectorAll('button, [role="button"]');
+              var best = null, bestX = 1e9;
+              for (var i = 0; i < cands.length; i++) {
+                var el = cands[i];
+                if (!visible(el)) continue;
+                var r = el.getBoundingClientRect();
+                if (r.top > 220 || r.left < 0) continue;
+                var lb = (el.getAttribute('aria-label') || '') + ' ' + (el.textContent || '');
+                if (lb.indexOf('返回对话') >= 0 || lb.indexOf('返回会话') >= 0) { best = el; break; }
+                if (lb.indexOf('返回') >= 0 || lb.indexOf('后退') >= 0) {
+                  if (r.left < bestX) { bestX = r.left; best = el; }
+                }
+              }
+              if (best) { best.click(); return true; }
+              return false;
+            }
+            document.addEventListener('touchstart', function (e) {
+              if (!e.touches || e.touches.length !== 1) { track = false; return; }
+              var t = e.touches[0];
+              sx = t.clientX; sy = t.clientY; st = Date.now();
+              track = true;
+            }, { passive: true });
+            document.addEventListener('touchend', function (e) {
+              if (!track) return;
+              track = false;
+              var t = e.changedTouches && e.changedTouches[0];
+              if (!t) return;
+              var dx = t.clientX - sx, dy = t.clientY - sy;
+              var adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+              if (Date.now() - st > 1200 || adx < DIST || adx < ady * 1.8) return;
+              var el = e.target;
+              if (el && el.closest && el.closest('input, textarea, [contenteditable="true"]')) return;
+              if (inHScroll(el)) return;
+              if (dx > 0 && sx <= EDGE) {
+                if (!isDirOpen()) openDir();
+                return;
+              }
+              if (dx < 0) {
+                if (isDirOpen()) { closeDir(); return; }
+                var panel = document.querySelector('.dMHGga_panel');
+                if (panel && panel.hasAttribute('data-sidebar-right-open')) { closeRightPanel(); return; }
+                goBack();
+              }
+            }, { passive: true });
           })();
         })();
         """,
@@ -3072,7 +3236,7 @@ final class ViewController: UIViewController {
             '  visibility: visible !important;',
             '  opacity: 1 !important;',
             '  position: fixed !important;',
-            '  top: calc(var(--dsh-statusbar, 54px) + 8px - var(--dsh-topshift, 0px)) !important;',
+            '  top: calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 8px - var(--dsh-topshift, 0px)) !important;',
             '  left: 14px !important;',
             '  width: 38px !important;',
             '  height: 38px !important;',
@@ -3140,6 +3304,33 @@ final class ViewController: UIViewController {
             '  order: -1 !important;',
             '  margin-left: 0 !important;',
             '  z-index: auto !important;',
+            '}',
+            '/* 🔴 R36（老总 2026-10-24 方案拍板）：主顶栏左侧目录按钮整排隐藏，开合全改屏幕手势',
+            '   （左缘右滑开、左滑关/返回）。真机实证：侧栏内容被 DSH 写偏的 --dsh-statusbar 压低后，',
+            '   主顶栏目录按钮（头部透明）正好压在打开后的侧栏子菜单上，历史靠「下移子菜单避让」',
+            '   很别扭 —— 按钮一藏，重叠不存在。只藏按钮本身：headerLeading 36px 首行容器绝不整块',
+            '   display:none（v1.0.104 铁律）；目录抽屉内部自带的收起开关保留作兜底；',
+            '   display:none 的按钮 programmatic .click() 仍可触发，手势通道零障碍。',
+            '   ⚠️ A/B 实证（_diag 逐属性对拍，2026-10-24）：visibility:hidden 与 pointer-events:none',
+            '   都会弄哑 DSH 开关的程序化 click（React 合成事件过滤这两类目标），display 真机又',
+            '   赢不过 DSH 侧 (0,3,1) 的高特异性规则 —— 唯一全胜组合是「盒子压 0 + overflow:hidden',
+            '   + opacity:0」：视觉上彻底消失、无命中热区、click 通道毫发无损。切勿加回 visibility',
+            '   或 pointer-events，手势开目录会当场失灵（0-size 方案 C 组实测 ✅）。 */',
+            'html body header button[aria-label=\"打开目录\"],',
+            'html body header button[aria-label=\"收起目录\"],',
+            'html body header button[aria-label=\"打开侧边栏\"],',
+            'html body header button[aria-label=\"收起侧边栏\"],',
+            'html body [data-mobile-nav=\"toggle\"],',
+            'html body [data-mobile-nav=\"fab\"] {',
+            '  width: 0 !important;',
+            '  height: 0 !important;',
+            '  min-width: 0 !important;',
+            '  min-height: 0 !important;',
+            '  padding: 0 !important;',
+            '  margin: 0 !important;',
+            '  border: none !important;',
+            '  overflow: hidden !important;',
+            '  opacity: 0 !important;',
             '}',
             '/* v1.0.85：侧栏收起后残留的开关按钮滑到屏幕左边外，还露一截。滑出屏幕的隐藏。 */',
             '',
@@ -3323,7 +3514,8 @@ final class ViewController: UIViewController {
             '  width: 252px !important;',
             '  max-width: 252px !important;',
             '  min-width: 0 !important;',
-            '  padding-top: calc(var(--dsh-statusbar, 54px) + 6px - var(--dsh-topshift, 0px)) !important;',
+            '  /* R35：同右侧面板，改读原生专属变量（DSH 写 --dsh-statusbar=75 会把侧栏内容整体压低）。 */',
+            '  padding-top: calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 6px - var(--dsh-topshift, 0px)) !important;',
             '  padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;',
             '  height: 100vh !important;',
             '  height: 100dvh !important;',
@@ -8438,11 +8630,11 @@ function applySidebarInset() {
             【设备环境信息】
             \(deviceInfo)
 
-            【本版要点 (v1.0.132)】
-            · 后台任务胶囊不再压智能体团队
-            · 转圈圈/长文本胶囊自动省略截断
-            · 标题与右侧按钮恒保 8px 间隙
-            · 顶栏按钮顺位与 97 版完全一致
+            【本版要点 (v1.0.134)】
+            · 右抽屉顶栏闪烁/按钮下移/出屏根治
+            · 左侧目录改手势：左缘右滑开、左滑关/返回
+            · 隐藏目录按钮，二级子菜单恢复原位
+            · 标题横跳与图片预览修复延续在案
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)

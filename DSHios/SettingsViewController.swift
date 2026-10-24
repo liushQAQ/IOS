@@ -1199,7 +1199,7 @@ final class ConnectionGuideViewController: UIViewController {
         card.layer.cornerRadius = 12
 
         let badgeLabel = UILabel()
-        badgeLabel.text = "最新更新日志 (v1.0.133)"
+        badgeLabel.text = "最新更新日志 (v1.0.134)"
         badgeLabel.font = .systemFont(ofSize: 12, weight: .bold)
         badgeLabel.textColor = .systemIndigo
         badgeLabel.backgroundColor = .systemIndigo.withAlphaComponent(0.12)
@@ -1218,6 +1218,10 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.lineBreakMode = .byWordWrapping
 
         let logContent = """
+        🥇 1. 右侧抽屉顶栏三症状根治 + 左侧目录改手势操控（v1.0.134）：
+        • 真机三症状同根根治（R35）：右抽屉打开顶栏闪烁一下、打开后功能按钮下移两个位置、关闭回主会话后右侧抽屉按钮超出屏幕 —— 真凶是 DSH 自己会写 --dsh-statusbar 且真机实测偏大（75），React 重挂载面板首帧直读它导致整体偏低 18~22px；面板 padding-top 公式改优先读原生专属 --dsh-sb-native（DSH 写不动），另加 300ms 常驻环幂等校正 + 抽屉按钮防出屏补位（只补不清，防自振荡）；
+        • 左侧目录按钮与打开后的子菜单重叠，按老总拍板方案整排隐藏目录/侧边栏开关按钮（R36：0-size + overflow + opacity:0 组合，程序化 click 通道无损），偏移遮挡的二级子菜单恢复原位；开合全改屏幕手势：屏幕左缘从左往右滑打开目录，从右往左滑依次关目录→关右侧面板→子页返回，最多退回会话主界面、不能再退；输入框/横向滚动容器/纵向大幅位移一律放行防误触；
+        • 回归闸门新增 R35/R36 断言防复发。
         🥇 1. 会话标题横跳根治 + 图片放大「闪退」根治（v1.0.133）：
         • 老总真机双截图（间隔 2 秒）实锤横跳：会话标题在「老总…」与完整显示之间反复跳变。挖出两条独立横跳源 —— 其一，后台任务胶囊测量瞬间被冻结宽度污染标题预留；其二（新发现），无胶囊的纯流式输出场景，每次重渲染把智能体团队按钮容器打回流内被瞬时挤压，标题预留随之每帧跳变；
         • 修法：标题预留「单一真值」化 —— 只采信冻结后的绝对定位态，流内瞬时矩形一律不采信、沿用上次值；探针新增「无胶囊 + 容器重挂载」场景验证，预留全程单值 96px，横跳死；

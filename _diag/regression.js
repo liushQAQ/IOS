@@ -489,9 +489,12 @@ const A_FINGERPRINT = () => {
 };
 
 
-/* 断言 7：插件页左上角「打开目录」fab 必须可点、不压页面标题
-   （v1.0.125，老总 2026-10-20「固定的左侧侧边栏按钮重叠」）
-   真凶：fab 挂在 overlayLayer(z=20) 里，被 pageHead(z=999) 盖住 + 压住标题。 */
+/* 断言 7：插件页左上角目录 fab —— v1.0.125 旧不变量「可见可点、不压标题」；
+   🔴 R36（v1.0.134，老总 2026-10-24 拍板）不变量更替：目录/侧边栏开关整排隐藏
+   （0-size + overflow:hidden + opacity:0），开目录全改屏幕左缘右滑手势。
+   插件页（pageHead 族）无任何「返回」按钮（_probe_r36_pluginpage.js 实测 backCands=[]），
+   fab 元素是手势 openDir() 在这类页面的唯一 click 载体 —— 必须「隐藏但元素还在」，
+   删元素 = 插件页死锁；fab 运行时可见 = 隐藏规则被 DSH 特异性压过 = 红。 */
 const A_PLUGIN_PAGE = () => {
   const ph = document.querySelector('[class*="pageHead"]');
   if (!ph) return { noPage: true };
@@ -499,20 +502,22 @@ const A_PLUGIN_PAGE = () => {
     const cs = getComputedStyle(b); const q = b.getBoundingClientRect();
     return cs.position === 'fixed' && cs.display !== 'none' && q.width > 10 && q.x < 100 && q.y < 220;
   });
-  if (!fabs.length) return { noFab: true };
-  const fab = fabs[0], q = fab.getBoundingClientRect();
-  const hit = document.elementFromPoint(q.x + q.width / 2, q.y + q.height / 2);
-  const h1 = document.querySelector('h1');
-  let overlapH1 = null;
-  if (h1) {
-    const h = h1.getBoundingClientRect();
-    overlapH1 = !(q.right < h.x || q.x > h.right || q.bottom < h.y || q.y > h.bottom);
+  /* 手势开启通道：openDir() 候选里任一元素仍在 DOM（允许 0-size / opacity:0 隐藏态） */
+  const chSel = ['[data-mobile-nav="fab"]', '[data-mobile-nav="toggle"]', 'header button[aria-label="打开目录"]', 'header button[aria-label="打开侧边栏"]', '[aria-label="打开左侧侧边栏"]'];
+  let fabChannel = null;
+  for (let ci = 0; ci < chSel.length; ci++) { const el = document.querySelector(chSel[ci]); if (el) { fabChannel = chSel[ci]; break; } }
+  let overlapH1 = null, hitCls = null;
+  if (fabs.length) {
+    const fab = fabs[0], q = fab.getBoundingClientRect();
+    const hit = document.elementFromPoint(q.x + q.width / 2, q.y + q.height / 2);
+    const h1 = document.querySelector('h1');
+    if (h1) {
+      const h = h1.getBoundingClientRect();
+      overlapH1 = !(q.right < h.x || q.x > h.right || q.bottom < h.y || q.y > h.bottom);
+    }
+    hitCls = hit ? ((hit.className || '').toString().slice(0, 40) || hit.tagName) : 'none';
   }
-  return {
-    clickable: !!(hit && (hit === fab || fab.contains(hit))),
-    hitCls: hit ? ((hit.className || '').toString().slice(0, 40) || hit.tagName) : 'none',
-    overlapH1, phZ: getComputedStyle(ph).zIndex, phPadLeft: getComputedStyle(ph).paddingLeft,
-  };
+  return { fabVisible: fabs.length > 0, fabChannel, overlapH1, hitCls, phZ: getComputedStyle(ph).zIndex, phPadLeft: getComputedStyle(ph).paddingLeft };
 };
 
 (async () => {
@@ -735,12 +740,14 @@ const A_PLUGIN_PAGE = () => {
         await p.evaluate(() => { try { if (window.__dshLayoutFix) window.__dshLayoutFix(); } catch (e) {} });
         await p.waitForTimeout(800);
         const pp = await p.evaluate(A_PLUGIN_PAGE);
-        if (TO(pp)) blocked('[插件页] fab 可点/不压标题', '会话页卡死后插件页未能进入（DSH 前端死循环）');
+        if (TO(pp)) blocked('[插件页] fab 隐藏/手势通道', '会话页卡死后插件页未能进入（DSH 前端死循环）');
         else if (pp.noPage) bad('[插件页] 找不到 pageHead（锚点失效）');
-        else if (pp.noFab) bad('[插件页] 左上角 fixed 按钮消失');
+        else if (pp.fabVisible) bad('[插件页·R36] 目录 fab 运行时可见（隐藏规则被 DSH 特异性压过）——v1.0.125 旧不变量已由 R36 更替');
         else {
-          chk(pp.clickable, '[插件页] fab 中心可命中自身', '命中=' + (pp.clickable ? 'fab' : (pp.hitCls || '其它')) + ' pageHead z=' + pp.phZ + (modalLog.length ? ' ｜已关插件模态 ' + modalLog.join(',') : ''));
-          chk(pp.overlapH1 === false, '[插件页] fab 不压页面标题', pp.overlapH1 === null ? '页面无 h1' : (pp.overlapH1 ? '仍相交' : '零相交'));
+          chk(!!pp.fabChannel,
+            '[插件页·R36] 目录 fab 已隐藏 + 手势开启通道元素在（openDir 的 click 载体）',
+            pp.fabChannel ? '通道=' + pp.fabChannel + '（隐藏态）' : '🔴 通道元素被删 → 插件页左缘手势开不出目录（该页无返回钮，等于死锁）');
+          if (pp.overlapH1) bad('[插件页] 顶区仍有 fixed 按钮压页面标题 h1');
         }
         await noteAlive(p); // 插件列表页态采样（pageHead 只在这类页面存在）
 
@@ -1121,6 +1128,64 @@ const A_PLUGIN_PAGE = () => {
       lbExempt ? '豁免在' : '🔴 灯箱又被 watchdog 手术 → 预览层挂载即隐形（图片打不开）');
   }
   GATE.lightboxGuard = true;
+
+  /* ================= 断言 9g：右侧抽屉几何守恒（R35，v1.0.134(103)）=================
+     老总 2026-10-24 报障三症状：①右抽屉打开顶栏闪烁一下；②打开后功能按钮顶栏下移两个位置；
+     ③关闭回主会话后右侧抽屉按钮超出屏幕。真机对拍实锤同根：DSH 自己会写 --dsh-statusbar
+     且真机实测 75（偏大 18~22px），React 重挂载面板节点首帧直读它 → 面板整体偏低（闪烁 +
+     按钮下移 + 侧栏子菜单下沉同根）；防出屏 bleed 补偿只在自身扫描周期跑，React 重挂载
+     按钮后补偿全丢 → 出屏空窗。守卫：面板 padding-top 公式必须优先读原生专属 --dsh-sb-native
+     （DSH 写不动）+ syncDrawerGeometry 挂进 300ms 常驻环做幂等校正与防出屏补位。删任一即复发。 */
+  {
+    const bundle = APP_JS;
+    const nativeFirst = (bundle.match(/padding-top: calc\(var\(--dsh-sb-native, var\(--dsh-statusbar, 54px\)\) \+ 6px/g) || []).length;
+    const overlayTop = /top: calc\(var\(--dsh-sb-native, var\(--dsh-statusbar, 54px\)\) \+ 8px/.test(bundle);
+    const geoLoop = /function syncDrawerGeometry\(\)/.test(bundle)
+      && (bundle.match(/syncDrawerGeometry\(\);/g) || []).length >= 1
+      && /'translateX\(' \+ \(-over\) \+ 'px\)'/.test(bundle);
+    chk(nativeFirst >= 2 && overlayTop,
+      '[抽屉·R35] 面板 padding-top 公式优先读原生 --dsh-sb-native（右栏/侧栏 + 固定浮层 top）',
+      nativeFirst >= 2 && overlayTop ? '原生变量优先公式在（padding ×' + nativeFirst + ' + 浮层 top）' : '🔴 又退回直读 --dsh-statusbar → DSH 写 75 后面板首帧偏低 18~22px（闪烁+按钮下移+子菜单下沉）');
+    chk(geoLoop,
+      '[抽屉·R35] syncDrawerGeometry 300ms 常驻环（幂等校正 + 抽屉按钮防出屏补位）',
+      geoLoop ? '几何守恒环在' : '🔴 常驻环被删 → React 重挂载后补偿全丢，抽屉按钮再出屏');
+  }
+  GATE.r35DrawerGuard = true;
+
+  /* ================= 断言 9h：左侧目录手势化（R36，v1.0.134(103)）=================
+     老总 2026-10-24 拍板方案：左侧目录按钮与打开后的子菜单重叠（历史靠下移子菜单避让很别扭）
+     → 整排隐藏目录/侧边栏开关按钮，开合全改屏幕手势（左缘右滑开、左滑关/返回，子页最多退回
+     会话主界面）。A/B 实证铁律：visibility:hidden 与 pointer-events:none 都会弄哑 DSH 开关的
+     程序化 click（React 合成事件过滤），display 又赢不过 DSH 高特异性规则 —— 唯一全胜组合是
+     「盒子压 0 + overflow:hidden + opacity:0」。守卫钉死该组合、禁三类回潮；手势单例与
+     开合/返回链必须在，否则按钮藏了就没人能开目录（功能死锁）。 */
+  {
+    const bundle = APP_JS;
+    let hide36 = false, why36 = '找不到 R36 隐藏规则';
+    let p36 = bundle.indexOf('打开目录');
+    while (p36 >= 0 && !hide36) {
+      const w = bundle.slice(p36, p36 + 1200);
+      if (w.includes('width: 0 !important') && w.includes('opacity: 0 !important')) {
+        const end36 = w.indexOf('}');
+        const blk = end36 >= 0 ? w.slice(0, end36) : w;
+        hide36 = blk.includes('overflow: hidden !important')
+          && !blk.includes('visibility') && !blk.includes('pointer-events') && !blk.includes('display: none');
+        why36 = hide36 ? '' : '规则块组合不完整或混入 visibility/pointer-events/display:none';
+      }
+      p36 = bundle.indexOf('打开目录', p36 + 1);
+    }
+    chk(hide36,
+      '[手势·R36] 目录/侧边栏开关按钮 0-size+overflow+opacity:0 隐藏（程序化 click 通道无损）',
+      hide36 ? '0-size 组合在，无 visibility/pointer-events/display 回潮' : '🔴 隐藏组合被改（' + why36 + '）→ 按钮回潮压子菜单或手势 click 失灵');
+    const gest = (bundle.match(/window\.__dshEdgeGestures/g) || []).length >= 2
+      && /EDGE = 32/.test(bundle) && /DIST = 56/.test(bundle)
+      && /if \(dx > 0 && sx <= EDGE\)/.test(bundle)
+      && /if \(isDirOpen\(\)\) \{ closeDir\(\); return; \}/.test(bundle);
+    chk(gest,
+      '[手势·R36] 边缘手势脚本在（左缘右滑开目录 / 左滑关目录→关右栏→子页返回，单例防重挂）',
+      gest ? '手势单例 + 开合/返回链在' : '🔴 手势脚本被删/被改 → 目录按钮隐藏后无任何开启通道（功能死锁）');
+  }
+  GATE.r36GestureGuard = true;
 
   /* ================= 断言 9c：模型选择器停靠区（v1.0.131 build 92）=================
      老总 2026-10-23 08:53：「模型按钮不见了…我自己创建的两个模型放在其他位置可以吗。
