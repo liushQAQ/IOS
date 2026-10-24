@@ -1,12 +1,12 @@
 {
-  "version": "1.0.134",
-  "build": 103,
-  "updated_at": "2026-10-24 15:35:00",
-  "title": "v1.0.134(103) 右侧抽屉顶栏三症状根治 + 左侧目录手势化",
-  "changelog": "1. 右抽屉打开顶栏闪烁/功能按钮下移/关闭后按钮出屏，三症状同根根治（面板 padding-top 优先读原生 --dsh-sb-native + 300ms 几何守恒环幂等校正与防出屏补位）\n2. 左侧目录按钮整排隐藏，偏移遮挡的二级子菜单恢复原位；开合全改手势：屏幕左缘从左往右滑打开目录，从右往左滑依次关目录→关右侧面板→子页返回，最多退回会话主界面\n3. 顶栏按钮顺位与 97 版完全一致\n4. 回归闸门新增 R35/R36 断言 + 断言7不变量更替，85 条全绿",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.134-103.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.134-103.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.134/DSHios-public-1.0.134-103.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.134",
-  "md5": "f843b4b30bef2fa3fdaa0d986b60c113"
+  "version": "1.0.135",
+  "build": 104,
+  "updated_at": "2026-10-24 18:00:00",
+  "title": "v1.0.135(104) 文件工作区下移二次根治 + 手势收窄左缘 + 插件页死胡同根治",
+  "changelog": "1. 文件工作区顶栏下移 + 返回后抽屉按钮出屏二次根治（R35b）：新增 --dsh-statusbar 值守卫（DSH 重写偏大值即微任务级回写，先于渲染零闪烁），抽屉按钮防出屏改增量补位（带位移出屏也能精确拉回）\n2. 手势收窄（R36b）：右滑开目录、左滑关/返回都只认屏幕左缘 32px 竖条，屏幕其余位置的横滑一律不响应，杜绝误关误返\n3. 插件页死胡同根治（R36c）：进「目录→插件」后任何手势都退不出去 —— 整页容器横滚豁免修正 + 左滑到底自动拉开目录，任何页面必有出口\n4. 回归闸门新增 R35b/R36b/R36c 断言，97 条全绿",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.135-104.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.135-104.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.135/DSHios-public-1.0.135-104.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.135",
+  "md5": "c97045abbbcdeb8608566e46f9698c32"
 }
