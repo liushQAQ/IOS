@@ -4300,43 +4300,61 @@ final class ViewController: UIViewController {
           //   纯 CSS 拿不到右侧模块宽度（「智能体团队」「任务运行中」徽标宽度随状态变化，
           //   且被强制 min-width:max-content 不许收缩），只能实测后写进 CSS 变量，
           //   由 [class*="crumbs"] 的 right / max-width 消费。JS 死时 CSS 里 96px 兜底。
+          /* 🔴 R32b（v1.0.132(102)）：标题预留「单一真值」化 —— 胶囊在场时预留只由
+             恒定车位算术决定（右缘 hw-102、冻结宽度 window.__dshJobsW），其余一切
+             实时矩形候选（utilities 流内瞬时态等）全不采信。
+             老总 2026-10-24 双截图实锤：后台任务运行期间标题在「只剩省略号 / 展开完全」
+             两态间高频横跳。根因：DSH 流式输出每 ~300ms 重渲染一次，胶囊 wrapper 被打回
+             流内一帧（内联样式清零），当拍 utilities 实测矩形被瞬时态污染（430 档量出
+             378px→顶格 298，标题只剩 62px），下一拍 shim 冻回绝对定位又量回 249px ——
+             两个值逐拍互写。探针 _probe_r33_flicker.js 节点级重挂载复现（62↔111px 翻转）。
+             曾经试过「预留变小须双拍确认」的防抖——实测持续流式下瞬时值反复出现会把
+             确认计数反复清零，防抖失效甚至把坏值锁死，故废弃，改为上面的单一真值方案。 */
           function fixHeaderFit() {
             try {
               var row = document.querySelector('[data-phase] header [class*="titleRow"]');
               if (row === null) return;
               var rb = row.getBoundingClientRect();
               if (!(rb.width > 0)) return;
-              /* 🔴 R32（v1.0.131(101)）：右侧预留改为「全量候选取最左缘」。
-                 旧逻辑只量 utilities，量不到才兜底 headerActions —— 但 moveAgentBadge 会把
-                 后台任务胶囊/团队按钮/子智能体徽标的 wrapper 全部绝对定位（脱离文档流），
-                 utilities 当场塌缩为 0，兜底量到的 headerActions 也只是 32px 车位，
-                 预留回落 96px → 标题伸进胶囊正下方（老总截图：标题压住「1 个后台任务运行中」）。
-                 这里把三类绝对定位 wrapper 一并纳入，谁最靠左听谁的；只认右半区
-                 （left > rb.left+40）的真实元素，左侧目录按钮/标题自身绝不混入。 */
               var right = 0;
-              var cands = [];
-              var utils = row.querySelector('[class*="headerUtilities"]');
-              if (utils !== null) cands.push(utils);
-              var acts = row.querySelector('[class*="headerActions"]');
-              if (acts !== null) cands.push(acts);
               var hdr = row.closest ? row.closest('header') : null;
               if (!hdr) hdr = document.querySelector('header');
-              if (hdr !== null) {
-                var jb2 = hdr.querySelector('button[aria-label*="后台任务"]');
-                if (jb2 !== null && jb2.parentElement !== null) cands.push(jb2.parentElement);
-                var tb2 = hdr.querySelector('button[aria-label*="智能体团队"]');
-                if (tb2 !== null && tb2.parentElement !== null && tb2.parentElement !== acts) cands.push(tb2.parentElement);
-                var bb2 = hdr.querySelector('button[aria-label*="子智能体"]');
-                if (bb2 !== null && bb2.parentElement !== null) cands.push(bb2.parentElement);
-              }
-              for (var ci = 0; ci < cands.length; ci++) {
-                try {
-                  var cb = cands[ci].getBoundingClientRect();
-                  if (cb.width > 0 && cb.left > rb.left + 40) {
-                    var cand = (rb.right - cb.left) + 8;   // 标题与右侧模块至少 8px 安全间隙
-                    if (cand > right) right = cand;
-                  }
-                } catch (ce) {}
+              var jb2 = (hdr !== null) ? hdr.querySelector('button[aria-label*="后台任务"]') : null;
+              var jobsW = (jb2 !== null || (window.__dshJobsW || 0) > 0) ? (parseFloat(window.__dshJobsW) || 0) : 0;
+              if (jb2 !== null && jobsW > 10) {
+                /* 胶囊在场：单一真值 = 恒定车位算术（含 8px 安全间隙）。
+                   车位右缘恒定 hw-102、冻结宽度 jobsW → 左缘 = hw-102-jw 是恒等式，
+                   与流内/绝对定位状态、React 重挂载、流式输出完全无关 → 预留天然稳定。
+                   输入先取整：重挂载瞬时帧的 rb.right/hw2 带 2~3px 亚像素漂移，
+                   不取整会被 ceil 放大成 3px 的可见抖动（探针实测 249↔252）。 */
+                var hw2 = Math.round(hdr.getBoundingClientRect().width);
+                if (hw2 > 100) {
+                  right = (Math.round(rb.right) - (hw2 - 102 - jobsW)) + 8;
+                }
+              } else {
+                /* 无胶囊（jobsW≤10 视为无）：流内候选 + 团队/徽标 wrapper 实测（R32 逻辑）。
+                   utilities 只在无胶囊时采信 —— 它就是胶囊的父容器，胶囊在场时其流内
+                   矩形被瞬时态污染，是横跳的唯一直接来源。 */
+                var cands = [];
+                var utils = row.querySelector('[class*="headerUtilities"]');
+                if (utils !== null) cands.push(utils);
+                var acts = row.querySelector('[class*="headerActions"]');
+                if (acts !== null) cands.push(acts);
+                if (hdr !== null) {
+                  var tb2 = hdr.querySelector('button[aria-label*="智能体团队"]');
+                  if (tb2 !== null && tb2.parentElement !== null && tb2.parentElement !== acts) cands.push(tb2.parentElement);
+                  var bb2 = hdr.querySelector('button[aria-label*="子智能体"]');
+                  if (bb2 !== null && bb2.parentElement !== null) cands.push(bb2.parentElement);
+                }
+                for (var ci = 0; ci < cands.length; ci++) {
+                  try {
+                    var cb = cands[ci].getBoundingClientRect();
+                    if (cb.width > 0 && cb.left > rb.left + 40) {
+                      var cand = (rb.right - cb.left) + 8;   // 标题与右侧模块至少 8px 安全间隙
+                      if (cand > right) right = cand;
+                    }
+                  } catch (ce) {}
+                }
               }
               if (!(right > 0)) {
                 /* 🔴 v1.0.131(95)：过渡态绝不回落到 96px。
@@ -4357,10 +4375,16 @@ final class ViewController: UIViewController {
               var cap = Math.round(vw - 132);
               if (right > cap) right = cap;
               if (right < 96) right = 96;   // 不低于历史预留，保持原有居中观感
-              var v = Math.ceil(right) + 'px';
+              var vNum = Math.ceil(right);
               var root = document.documentElement;
-              if (root.style.getPropertyValue('--dsh-head-right') !== v) {
-                root.style.setProperty('--dsh-head-right', v);
+              var cur = parseFloat(root.style.getPropertyValue('--dsh-head-right')) || 0;
+              /* 🔴 R32b：≤2px 的残余亚像素抖动直接吞掉（标题宽变化 ≤2px，碰不到任何
+                 字符截断边界）；真实状态变化（任务出现/结束 ≥20px）照常写入。
+                 无条件写但等值/近值跳过 = 稳态零写入。曾试过「变小双拍确认」，
+                 持续流式下瞬时值反复出现把确认计数反复清零，防抖失效甚至锁死坏值
+                （探针实测 reserve 卡死 298），已废弃。 */
+              if (Math.abs(vNum - cur) > 4 && root.style.getPropertyValue('--dsh-head-right') !== vNum + 'px') {
+                root.style.setProperty('--dsh-head-right', vNum + 'px');
               }
             } catch (e) {}
           }
@@ -5514,6 +5538,19 @@ function applySidebarInset() {
                    jw 大（满文本 130px+）时又把整颗胶囊推到标题区正上方。
                    固定车位后胶囊只会向左伸展，与右侧按钮列恒保 8px，徽标出现/消失也不跳位。 */
                 placeAbs(jwrap, hw - 102, Math.round(jw));
+                /* 🔴 R32b：把冻结宽度持久化，供 fixHeaderFit 算术推导标题预留
+                   （车位左缘 = hw-102-jw 是恒等式，React 流式重挂载打回流内的瞬时态
+                   再也污染不了预留 → 标题不再「省略/展开」横跳）。 */
+                window.__dshJobsW = Math.round(jw);
+              }
+              if (!jobs) {
+                /* 🔴 R32b：胶囊消失须三拍确认才清账 —— 流式重挂载的瞬时卸载只有一拍，
+                   立即清账会让标题预留闪落闪涨。连续 3 拍不见胶囊才认定真消失
+                   （任务结束/切会话），此后标题预留回落、恢复流内候选实测。 */
+                window.__dshJobsMiss = (window.__dshJobsMiss || 0) + 1;
+                if (window.__dshJobsMiss >= 3) window.__dshJobsW = 0;
+              } else {
+                window.__dshJobsMiss = 0;
               }
             } catch (e) {}
           }

@@ -1071,7 +1071,7 @@ const A_PLUGIN_PAGE = () => {
        硬钳成 32×32 并压过胶囊自己的 width:auto !important —— 排除名单缺它即复发。 */
     const exclJobs = /\[data-phase\] header \[class\*=\\"titleRow\\"\] button:[\s\S]{0,420}?not\(\[aria-label\*=\\"后台任务\\"\]\)/.test(bundle);
     const spanClamp = /button\[aria-label\*=\\"后台任务\\"\] > span,[\s\S]{0,420}?text-overflow: ellipsis !important;/.test(bundle);
-    const fitAll = /jb2 = hdr\.querySelector\('button\[aria-label\*="后台任务"\]'\)/.test(bundle)
+    const fitAll = /hdr\.querySelector\('button\[aria-label\*="后台任务"\]'\)/.test(bundle)
       && /var cand = \(rb\.right - cb\.left\) \+ 8;/.test(bundle)
       && /var cap = Math\.round\(vw - 132\);/.test(bundle);
     chk(unfreeze && seatFixed && capJw,
@@ -1088,6 +1088,19 @@ const A_PLUGIN_PAGE = () => {
     chk(fitAll,
       '[顶栏·R32] fixHeaderFit 计入绝对定位胶囊/徽标/团队取最左缘（标题预留无盲区）+ 8px 间隙 + vw-132 上限',
       fitAll ? '全量候选取最左缘在' : '🔴 标题预留又退回只量流内 utilities → 标题伸进胶囊正下方');
+    /* 🔴 R32b（2026-10-24 老总双截图）：DSH 流式重渲染把胶囊 wrapper 打回流内一帧，
+       utilities 实时矩形被瞬时态污染 → 预留在 298/249 间逐拍互写 → 标题「只剩省略号 /
+       展开完全」高频横跳（探针 _probe_r33_flicker.js 节点级重挂载复现 62↔111px）。
+       终版守卫：胶囊在场 = 预留单一真值（恒定车位算术，流内瞬时态全不采信）+
+       冻结宽度持久化 + 胶囊消失三拍确认（防瞬时卸载闪落闪涨）。删任何一条即复发。 */
+    const flickerGuard = /window\.__dshJobsW = Math\.round\(jw\);/.test(bundle)
+      && /right = \(Math\.round\(rb\.right\) - \(hw2 - 102 - jobsW\)\) \+ 8;/.test(bundle)
+      && /window\.__dshJobsMiss = \(window\.__dshJobsMiss \|\| 0\) \+ 1;/.test(bundle)
+      && /if \(window\.__dshJobsMiss >= 3\) window\.__dshJobsW = 0;/.test(bundle)
+      && /Math\.abs\(vNum - cur\) > 4/.test(bundle);
+    chk(flickerGuard,
+      '[顶栏·R32] 标题预留防横跳（胶囊在场=恒定车位算术单一真值 + 消失三拍确认）',
+      flickerGuard ? '单一真值 + 三拍确认都在' : '🔴 防横跳守卫被删 → 标题在「省略/展开」两态间高频横跳');
   }
   GATE.jobCapsuleGuard = true;
 
