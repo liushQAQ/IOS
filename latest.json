@@ -1,12 +1,12 @@
 {
-  "version": "1.0.137",
-  "build": 106,
-  "updated_at": "2026-10-25 01:32:00",
-  "title": "v1.0.137(106) 抽屉出屏四犯+工作区下移三犯根治 + 多终端同步丢失根治",
-  "changelog": "1. 文件工作区按钮下移 + 抽屉按钮出屏四犯根治（R39）：DSH 重写状态栏变量三条毒路径全数击穿旧守卫——整段覆写 html 样式把原生变量一并抹掉（旧守卫失明，全页下移 16pt，即真机「按钮下移两个位置」）、写在深层容器上（旧守卫只盯 html/body 不设防，真机有沙箱无，历版沙箱全绿真机翻车的差异根源）、后台任务胶囊让 flex 溢出超 48px 且文字变宽让坐标每拍抖动（旧 48px 上限把按钮留在屏外 + 全等稳态门永不满足）；修法：守卫 v2（记忆冻结+三变量成组恢复+全子树盯防）+ 救援 v2（160px 上限精确收敛 vw-2 + 模糊稳态门 ±2px）\n2. 多终端同步丢失根治（R40，重大故障）：「电脑端在跑手机不转圈不同步」根因是订阅断链后无前台恢复路径——App 回前台合成 online 事件正中 DSH 官方重连开关（即时+3秒双派发），长后台超 90 秒自动冷恢复刷新重建会话；「会话被占用」为官方写句柄锁设计（无过期无抢占），后续在电脑端插件层做空闲让出\n3. 回归闸门 109 绿 0 红（新增 R39/R40 行为断言与源锚点）",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.137-106.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.137-106.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.137/DSHios-public-1.0.137-106.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.137",
-  "md5": "d198887ecc9abe71cebf5c0d3e483131"
+  "version": "1.0.138",
+  "build": 108,
+  "updated_at": "2026-10-25 04:20:00",
+  "title": "v1.0.138(108) 抽屉按钮出屏五犯根治 + 顶排高度锁定 + 开合闪烁根治",
+  "changelog": "1. 抽屉按钮出屏五犯根治（R41）：真凶终于抓到——开始页/抽屉面板顶栏是 DSH 的标签条（对话/轨迹/系统监控/开始每个都是标签），抽屉按钮排在所有标签后面，标签一多整排被推宽、按钮被推进隐藏裁剪区，物理上永远拉不回（沙箱复现按钮被推出屏 261px 被裁，与真机截图逐像素一致）；修法：功能钮簇整体钉在标签条可视右缘（sticky+簇级平移双保险），标签再多也永远可见可点\n2. 顶排高度锁定（R41b）：恒定对齐会话页内容行（实测 36pt=36pt，容差 3pt 超差自动拉回；对齐目标取自会话页自身，绝不压状态栏）\n3. 开合闪烁根治（R41c）：闪烁=面板重挂载先渲染一帧偏低、纠正环 300ms 后才跟上；现在挂载瞬间的渲染前微任务里就把全部矫正打上，第一帧即正确，开/关抽屉全程高度恒定零跳变\n4. 修复前/后对比模拟图与高度对齐验证图均已过目确认；闸门 109 绿 0 红",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.138-108.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.138-108.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.138/DSHios-public-1.0.138-108.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.138",
+  "md5": "ffd09e1bc2d35b6251f384f59415857f"
 }
