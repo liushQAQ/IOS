@@ -869,6 +869,35 @@ const A_PLUGIN_PAGE = () => {
               r40b.noFn ? '🔴 重同步函数未注入' : (r40b.err ? ('异常 ' + r40b.err) : ('ret=' + r40b.ret + ' online次数=' + r40b.count + ' longBg=' + r40b.hasLong)));
           }
 
+          // —— R41 行为断言（v1.0.138(107)）：标签条功能钮簇防裁剪钳制 ——
+          const r41b = await p.evaluate(async () => {
+            const out = {};
+            try {
+              const clusters = document.querySelectorAll('[class*="stripChrome"]');
+              let ch = null;
+              for (const c of clusters) { const r = c.getBoundingClientRect(); if (r.width > 0 && r.top >= 0 && r.top < 140) { ch = c; break; } }
+              if (!ch) { out.noCluster = true; return out; }
+              const before = Math.round(ch.getBoundingClientRect().right);
+              ch.style.setProperty('margin-left', '800px', 'important');
+              await new Promise(r2 => setTimeout(r2, 1300));
+              const rr = ch.getBoundingClientRect();
+              out.before = before; out.right = Math.round(rr.right); out.vw = window.innerWidth;
+              out.tf = ch.style.transform || '(none)';
+              out.clamped = ch.getAttribute('data-dsh-strip-clamp');
+              ch.style.removeProperty('margin-left');
+              await new Promise(r2 => setTimeout(r2, 1300));
+              out.rightAfter = Math.round(ch.getBoundingClientRect().right);
+              out.tfAfter = ch.style.transform || '(none)';
+            } catch (e) { out.err = String(e).slice(0, 120); }
+            return out;
+          });
+          if (TO(r41b)) blocked('[标签条·R41] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
+          else {
+            chk(!r41b.err && !r41b.noCluster && r41b.right <= r41b.vw - 2 && /translateX\(-/.test(r41b.tf),
+              '[标签条·R41] 功能钮簇防裁剪钳制（标签拥挤强推出屏必须整簇拉回 vw-4，绝不逐按钮堆叠）',
+              r41b.noCluster ? '🔴 找不到顶带内 stripChrome 簇' : (r41b.err ? ('异常 ' + r41b.err) : ('强推后 right=' + r41b.right + ' vw=' + r41b.vw + ' tf=' + r41b.tf + ' 解除后=' + r41b.rightAfter + ' tf=' + r41b.tfAfter)));
+          }
+
           // —— R37 行为断言（v1.0.136(105)）：+ 号弹层伪关闭吞掉器 ——
           // 路由级拦截复刻 writer-held 失败路径（该 RPC 走页面层 fetch/XHR 包装器够不到的通道，
           // 只能在网络层拦）；真实 tap 打开 → 弹层必须存活 + 注入提示行；点外部必须正常关闭；
@@ -1384,6 +1413,18 @@ const A_PLUGIN_PAGE = () => {
     chk(r40src,
       '[多端·R40] 前台重同步器在（合成 online 正中官方重连开关 + 长后台 reload 冷恢复）',
       r40src ? '重同步器在' : '🔴 重同步器被删 → 回前台订阅不恢复，多终端不同步复发');
+    /* R41（v1.0.138）：标签条功能钮簇防裁剪 —— 顶栏那条是 DSH 标签条（不是 header），
+       功能钮簇排在标签后，标签一多整簇被推入 pane overflow-x:hidden 裁剪区物理拉不回。
+       簇级单值重算（不累加）+ 带宽上拉，删任一即复发（真机五犯实录）。 */
+    const r41src = /querySelectorAll\('\[class\*="stripChrome"\]'\)/.test(bundle)
+      && /data-dsh-strip-clamp/.test(bundle)
+      && /__overC > 2 && __overC <= 1200/.test(bundle)
+      && /tabHostHeader/.test(bundle)
+      && /data-dsh-strip-pull-n/.test(bundle)
+      && /__dshMountGuard/.test(bundle);
+    chk(r41src,
+      '[标签条·R41] 功能钮簇防裁剪钳制 + 同高对齐 + 挂载即矫（簇级平移 + R41b 对齐 + R41c 防闪烁）',
+      r41src ? '簇级钳制 + 同高对齐 + 挂载即矫全在' : '🔴 钳制/对齐/挂载即矫缺件 → 出屏、高度不一致或开合闪烁复发');
     /* R37（v1.0.136）：+ 号弹层伪关闭吞掉器 —— 回合运行中 commands/list 被写句柄门闩拒绝，
        前端在 reducer 路径直接置回关闭（无任何关闭回调）。守卫必须常驻，删掉即复发。 */
     const r37src = /window\.__dshTriggerMenuKeeper/.test(bundle)

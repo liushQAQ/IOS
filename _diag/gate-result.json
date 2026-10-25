@@ -1,19 +1,19 @@
 {
-  "version": "1.0.137",
+  "version": "1.0.138",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-24T17:21:23.825Z",
-  "dshFingerprint": "tm4up4",
+  "startedAt": "2026-10-25T11:56:10.190Z",
+  "dshFingerprint": "cq3ydj",
   "dshAssets": 9,
   "domClasses": 0,
-  "anchorTotal": 157,
+  "anchorTotal": 162,
   "anchorDead": 0,
-  "anchorCssAlive": 102,
+  "anchorCssAlive": 107,
   "anchorResidue": 55,
-  "dshSheets": 205,
+  "dshSheets": 208,
   "ownSheets": 11,
   "anchorCritical": {
     "total": 12,
@@ -31,7 +31,9 @@
   "pass": 109,
   "fail": 0,
   "failures": [],
-  "blocked": [],
-  "sourceHash": "7d155faafd9d8d4b4a38820f71fe517c2428fb8c9666d615b6acc62dc73dac75",
-  "finishedAt": "2026-10-24T17:23:43.290Z"
+  "blocked": [
+    "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）"
+  ],
+  "sourceHash": "2d16ed69aec819f178b6f1a67f42433ae317979511d715481b6bd6dd4bf32909",
+  "finishedAt": "2026-10-25T11:58:42.883Z"
 }

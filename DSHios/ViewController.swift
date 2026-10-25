@@ -1160,7 +1160,20 @@ final class ViewController: UIViewController {
             '  overflow-y: auto !important;',
             '  -webkit-overflow-scrolling: touch !important;',
             '}',
-            '/* 3.2 全局模态弹窗、确认框、AI问答/选择题卡片、下拉菜单全局安全规范：',
+            '/* 🔴 R41（v1.0.138，老总真机「开始页抽屉按钮超出屏幕拉不回」根治）：',
+            '   开始页顶栏是 DSH 的标签条（对话/轨迹/系统监控/开始 每个都是标签），',
+            '   功能钮簇（退出全屏+收起右侧边栏）排在标签后面；标签一多整簇被推入',
+            '   pane 的 overflow-x:hidden 裁剪区（实测 4 标签即被推超屏 843px，物理拉不回）。',
+            '   修法：簇 sticky 钉在标签条可视右缘，标签再多也永远可见可点；',
+            '   叠在标签上时给页面底色防穿透。JS 侧另有簇级平移兜底（syncDrawerGeometry）。 */',
+            '[class*="stripChrome_"] {',
+            '  position: sticky !important;',
+            '  right: 4px !important;',
+            '  z-index: 7 !important;',
+            '  background: var(--dsh-pagebg, rgb(21, 21, 23)) !important;',
+            '  padding-left: 6px !important;',
+            '  box-shadow: -8px 0 12px -8px var(--dsh-pagebg, rgb(21, 21, 23)) !important;',
+            '}',
             '   1. 严格避让状态栏与灵动岛（top >= var(--dsh-statusbar, 54px) + 8px）；',
             '   2. 严格避让底部安全区（bottom >= env(safe-area-inset-bottom, 16px) + 8px）；',
             '   3. 限制最大高度（最大不超过 calc(100vh - var(--dsh-statusbar, 54px) - 80px)），内部强制开启平滑惯性滚动，绝不顶出状态栏、绝不超出底栏！ */',
@@ -2492,6 +2505,85 @@ final class ViewController: UIViewController {
                     }
                   }
                 }
+
+                // 🔴 R41（v1.0.138，老总真机 1.0.137 验收「开始页抽屉按钮还是超出屏幕」五犯根治）：
+                //   真凶不是状态栏变量也不是 transform —— 抽屉面板内的顶栏是 DSH 标签条
+                //   （对话/轨迹/系统监控/开始 每个都是标签），功能钮簇（退出全屏+收起右侧
+                //   边栏）排在标签后面，标签一多整簇被推入 pane 的 overflow-x:hidden 裁剪区
+                //   （沙箱注入 4 标签即复现：按钮 right 超屏 843px，物理拉不回）。
+                //   注意：这里的「面板内收起按钮」与 R38 铁律①禁碰的「面板内按钮」不同——
+                //   R38 禁的是旧逻辑在动画期对它**累减**出 -448px；本兜底是**簇级单值重算**
+                //   （每拍从基准位重算、不累加、有上限），-448 类中毒在数学上不可能复发。
+                //   遍历所有簇：主面板的 stripChrome 常隐藏，抽屉面板内的才是可见真身。
+                try {
+                  var __clusters = document.querySelectorAll('[class*="stripChrome"]');
+                  for (var __ci = 0; __ci < __clusters.length && __ci < 6; __ci++) {
+                    var __cluster = __clusters[__ci];
+                    var __cr = __cluster.getBoundingClientRect();
+                    if (__cr.width <= 0 || __cr.top < 0 || __cr.top >= 140) continue;
+                    var __cn = 0, __cs2 = __cluster.style.getPropertyValue('transform'), __ck;
+                    while ((__ck = __cs2.indexOf('translateX(')) >= 0) {
+                      var __cv = parseFloat(__cs2.substring(__ck + 11));
+                      if (!isNaN(__cv)) __cn += __cv;
+                      __cs2 = __cs2.substring(__ck + 11);
+                    }
+                    var __baseR = __cr.right - __cn;
+                    var __overC = Math.round(__baseR - (window.innerWidth - 4));
+                    if (__overC > 2 && __overC <= 1200) {
+                      __cluster.style.setProperty('transform', 'translateX(' + (-__overC) + 'px)', 'important');
+                      __cluster.style.setProperty('z-index', '9', 'important');
+                      __cluster.setAttribute('data-dsh-strip-clamp', '1');
+                    } else if (__overC <= 2 && __cluster.getAttribute('data-dsh-strip-clamp') === '1') {
+                      __cluster.style.removeProperty('transform');
+                      __cluster.removeAttribute('data-dsh-strip-clamp');
+                    }
+                  }
+                } catch (eC) {}
+
+                // 🔴 R41b（v1.0.138，老总「开始页顶栏和会话页一样高度」对齐式校正）：
+                //   标签条内容行（chrome 按钮行）比会话页内容行（header 顶+8）低超过 3pt
+                //   即上拉至齐平；齐平即零动作。对齐目标取自会话页自身 → 会话页不压状态栏，
+                //   对齐后的开始页必然也不压（同高传递安全性）。门槛：标签条宿主与 header
+                //   距离 Δ<40（开始页形态）；会话页标签行距 header ~85pt 被挡，永不误伤。
+                //   绝对值单拍重算（不累加，防 R38 类振荡）；拉力记 data-dsh-strip-pull-n。
+                try {
+                  var __tsh = document.querySelector('[class*="tabHostHeader"]');
+                  if (__tsh) {
+                    var __tr2 = __tsh.getBoundingClientRect();
+                    if (__tr2.width > 0) {
+                      var __hdr2 = document.querySelector('header');
+                      var __hdrTop2 = __hdr2 ? Math.round(__hdr2.getBoundingClientRect().top) : -1;
+                      var __gap = (__hdrTop2 >= 0) ? (__tr2.top - __hdrTop2) : 999;
+                      if (__gap < 40) {
+                        var __contentNow = Math.round(__tr2.top) + 14;
+                        try {
+                          var __chbs = __tsh.querySelectorAll('button');
+                          for (var __cbi = 0; __cbi < __chbs.length; __cbi++) {
+                            var __cbr = __chbs[__cbi].getBoundingClientRect();
+                            if (__cbr.width > 0 && __cbr.top >= 0) { __contentNow = Math.round(__cbr.top); break; }
+                          }
+                        } catch (eCB) {}
+                        var __target = __hdrTop2 + 8;
+                        var __pullOld = parseFloat(__tsh.getAttribute('data-dsh-strip-pull-n') || '0') || 0;
+                        var __natural = __contentNow + __pullOld;
+                        var __delta = __natural - __target;
+                        var __newPull = (__delta > 3) ? Math.min(80, Math.round(__delta)) : 0;
+                        if (__newPull !== __pullOld) {
+                          if (__newPull > 0) {
+                            __tsh.style.setProperty('margin-top', (-__newPull) + 'px', 'important');
+                            __tsh.setAttribute('data-dsh-strip-pull-n', String(__newPull));
+                          } else {
+                            __tsh.style.removeProperty('margin-top');
+                            __tsh.removeAttribute('data-dsh-strip-pull-n');
+                          }
+                        }
+                      } else if (__tsh.getAttribute('data-dsh-strip-pull-n')) {
+                        __tsh.style.removeProperty('margin-top');
+                        __tsh.removeAttribute('data-dsh-strip-pull-n');
+                      }
+                    }
+                  }
+                } catch (eT2) {}
               } catch (eG) {}
             }
 
@@ -2714,7 +2806,44 @@ final class ViewController: UIViewController {
               arm();
             })();
 
-            // 监听 DOM 树中的 data-sidebar-right-open 变化
+                // 🔴 R41c（v1.0.138，老总「打开关闭抽屉一闪一闪一会高一会低」根治·挂载即矫）：
+                //   闪烁机制：每次开/关抽屉 React 重挂载面板/标签条 → 新节点带着 DSH 自己的
+                //   偏低间距先渲染一帧 → 300ms 守恒环下一拍才纠正 → 肉眼跳变。根治：childList
+                //   观察器在**渲染前的微任务**里对新增的面板/列/标签条节点立即跑一遍全部矫正
+                //   （列垫 + 簇钳制 + 行高对齐），第一帧即正确；突发挂载用微任务合并成一拍。
+                try {
+                  if (!window.__dshMountGuard) {
+                    window.__dshMountGuard = true;
+                    var __mtSel = '[class*="rightbarCol"], [class*="sidebarCol"], [class*="panel"], [class*="tabHostHeader"], [class*="tabStrip"], [class*="stripChrome"], [data-sidebar-right-open]';
+                    var __mtPend = false;
+                    var __mtMo = new MutationObserver(function (muts) {
+                      for (var mi = 0; mi < muts.length; mi++) {
+                        var add = muts[mi].addedNodes;
+                        for (var mj = 0; mj < add.length; mj++) {
+                          var nd = add[mj];
+                          if (!nd || nd.nodeType !== 1) continue;
+                          var hit = false;
+                          try { hit = nd.matches(__mtSel) || nd.querySelector(__mtSel); } catch (eM) {}
+                          if (hit) { __mtPend = true; break; }
+                        }
+                        if (__mtPend) break;
+                      }
+                      if (__mtPend) {
+                        Promise.resolve().then(function () {
+                          __mtPend = false;
+                          try { syncDrawerGeometry(); } catch (eG2) {}
+                        });
+                      }
+                    });
+                    var __mtArm = function () {
+                      if (document.documentElement) __mtMo.observe(document.documentElement, { childList: true, subtree: true });
+                      else setTimeout(__mtArm, 16);
+                    };
+                    __mtArm();
+                  }
+                } catch (eMT) {}
+
+                // 监听 DOM 树中的 data-sidebar-right-open 变化
             function syncPanelNav() {
               syncDrawerGeometry();
               // R35b 重锚：面板开合属性在新旧前端可能挂在不同元素上，直接按属性找载体，
