@@ -869,14 +869,40 @@ const A_PLUGIN_PAGE = () => {
               r40b.noFn ? '🔴 重同步函数未注入' : (r40b.err ? ('异常 ' + r40b.err) : ('ret=' + r40b.ret + ' online次数=' + r40b.count + ' longBg=' + r40b.hasLong)));
           }
 
-          // —— R41 行为断言（v1.0.138(107)）：标签条功能钮簇防裁剪钳制 ——
+          // —— R41 行为断言（v1.0.138(107)，R43 改造）：标签条功能钮簇防裁剪钳制 ——
+          // R43 起语义升级：屏内簇被强推出屏必须整簇拉回；**屏外簇（收起面板内）绝不许被平移**。
+          // 页面当前没有屏内簇时，临时注入一个语义同构的探针簇（class 含 stripChrome）来验钳制数学，
+          // 绝不拿屏外簇冒充屏内簇（旧断言正是这么"验过"幽灵按钮缺陷的）。
           const r41b = await p.evaluate(async () => {
             const out = {};
             try {
-              const clusters = document.querySelectorAll('[class*="stripChrome"]');
-              let ch = null;
-              for (const c of clusters) { const r = c.getBoundingClientRect(); if (r.width > 0 && r.top >= 0 && r.top < 140) { ch = c; break; } }
-              if (!ch) { out.noCluster = true; return out; }
+              const pick = () => {
+                for (const c of document.querySelectorAll('[class*="stripChrome"]')) {
+                  const r = c.getBoundingClientRect();
+                  if (r.width > 0 && r.top >= 0 && r.top < 140) return c;
+                }
+                return null;
+              };
+              let ch = pick();
+              let synthetic = false;
+              if (ch) {
+                const r = ch.getBoundingClientRect();
+                out.pickedVisible = r.left < window.innerWidth - 4;
+              }
+              if (!ch || !out.pickedVisible) {
+                const s = document.createElement('div');
+                s.className = 'stripChrome_probe';
+                s.setAttribute('data-dsh-probe', '1');
+                s.style.cssText = 'position:fixed;left:0;top:60px;width:74px;height:28px;z-index:2;';
+                const b1 = document.createElement('button');
+                b1.style.cssText = 'width:32px;height:32px;';
+                s.appendChild(b1);
+                document.body.insertBefore(s, document.body.firstChild);
+                ch = s;
+                synthetic = true;
+                await new Promise(r2 => setTimeout(r2, 100));
+              }
+              out.synthetic = synthetic;
               const before = Math.round(ch.getBoundingClientRect().right);
               ch.style.setProperty('margin-left', '800px', 'important');
               await new Promise(r2 => setTimeout(r2, 1300));
@@ -888,14 +914,106 @@ const A_PLUGIN_PAGE = () => {
               await new Promise(r2 => setTimeout(r2, 1300));
               out.rightAfter = Math.round(ch.getBoundingClientRect().right);
               out.tfAfter = ch.style.transform || '(none)';
+              if (synthetic) ch.remove();
             } catch (e) { out.err = String(e).slice(0, 120); }
             return out;
           });
           if (TO(r41b)) blocked('[标签条·R41] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
           else {
-            chk(!r41b.err && !r41b.noCluster && r41b.right <= r41b.vw - 2 && /translateX\(-/.test(r41b.tf),
-              '[标签条·R41] 功能钮簇防裁剪钳制（标签拥挤强推出屏必须整簇拉回 vw-4，绝不逐按钮堆叠）',
-              r41b.noCluster ? '🔴 找不到顶带内 stripChrome 簇' : (r41b.err ? ('异常 ' + r41b.err) : ('强推后 right=' + r41b.right + ' vw=' + r41b.vw + ' tf=' + r41b.tf + ' 解除后=' + r41b.rightAfter + ' tf=' + r41b.tfAfter)));
+            chk(!r41b.err && r41b.right <= r41b.vw - 2 && /translateX\(-/.test(r41b.tf),
+              '[标签条·R41] 功能钮簇防裁剪钳制（屏内簇被强推出屏必须整簇拉回 vw-4，绝不逐按钮堆叠）',
+              r41b.err ? ('异常 ' + r41b.err) : ('簇来源=' + (r41b.synthetic ? '临时探针簇（页面当前无屏内簇）' : '页面原生屏内簇') + ' 强推后 right=' + r41b.right + ' vw=' + r41b.vw + ' tf=' + r41b.tf + ' 解除后=' + r41b.rightAfter + ' tf=' + r41b.tfAfter));
+          }
+
+          // —— R43 行为断言（v1.0.140(110)）：自家补丁绝不遮死顶栏、绝不拖屏外簇 ——
+          // 真机六犯形态：收起的面板停在 vw+22，其内部簇被算出「越界 450」并整簇拖进可视区
+          // （幽灵按钮），叠加当时的不透明底色把整条顶栏盖到只剩 5pt 残影。
+          // 三条不变量：①屏外容器内的簇零平移；②顶带可见簇零不透明底色；③任何被本补丁
+          // 写过的行不得被推出其父容器（父容器裁剪 = 顶栏残影）。
+          const r43b = await p.evaluate(async () => {
+            const out = { bad: [], opaque: [], clipped: [] };
+            const clipped = (el, pr) => {
+              if (!pr || pr.height <= 0) return false;
+              const r = el.getBoundingClientRect();
+              if (r.height <= 0) return false;
+              const ov = Math.min(r.bottom, pr.bottom) - Math.max(r.top, pr.top);
+              return ov < r.height * 0.5;
+            };
+            try {
+              await new Promise(r2 => setTimeout(r2, 700));
+              const all = document.querySelectorAll('[class*="stripChrome"]');
+              for (const c of all) {
+                const r = c.getBoundingClientRect();
+                if (r.width <= 0) continue;
+                const tf = c.style.transform || '';
+                if (r.left >= window.innerWidth && tf.indexOf('translateX') >= 0) out.bad.push([Math.round(r.left), tf]);
+                if (r.top >= 0 && r.top < 140) {
+                  const bg = getComputedStyle(c).backgroundColor;
+                  if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') out.opaque.push(bg);
+                  if (clipped(c, c.parentElement ? c.parentElement.getBoundingClientRect() : null)) out.clipped.push([Math.round(r.top), Math.round(r.bottom)]);
+                }
+              }
+              const hosts = document.querySelectorAll('[data-dsh-strip-pull-n]');
+              for (const h of hosts) {
+                if (clipped(h, h.parentElement ? h.parentElement.getBoundingClientRect() : null)) {
+                  const r = h.getBoundingClientRect();
+                  out.clipped.push(['pull', Math.round(r.top), Math.round(r.bottom)]);
+                }
+              }
+            } catch (e) { out.err = String(e).slice(0, 140); }
+            return out;
+          });
+          if (TO(r43b)) blocked('[顶栏·R43] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
+          else {
+            chk(!r43b.err && r43b.bad.length === 0 && r43b.opaque.length === 0 && r43b.clipped.length === 0,
+              '[顶栏·R43] 屏外簇零平移 / 可见簇零不透明底色 / 行不出父容器（自家补丁不许遮死顶栏）',
+              r43b.err ? ('异常 ' + r43b.err) : ('屏外平移=' + JSON.stringify(r43b.bad) + ' 不透明底=' + JSON.stringify(r43b.opaque) + ' 出容器=' + JSON.stringify(r43b.clipped)));
+          }
+
+          // —— R43⑤ 行为断言（v1.0.140(110)）：顶栏开关按钮「4px 死区 + 700ms 超时兜底」——
+          // 真机形态之一：救援在动画收尾后 1~2 拍写一个 2px 微调 → 肉眼就是「打开后一闪」；
+          // 形态之二：顶栏里胶囊/计数每拍抖 1px 让稳态门永不满足 → 按钮永远留在屏外。
+          // 断言：①2px 越界时**不许**写任何位移（死区）；②40px 越界 + 持续抖动时必须 ~1s 内拉回。
+          const r43c = await p.evaluate(async () => {
+            const out = {};
+            try {
+              const db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
+              if (!db) { out.noDb = true; return out; }
+              out.vw = window.innerWidth;
+              db.style.removeProperty('transform');
+              await new Promise(r2 => setTimeout(r2, 700));
+              out.baseRight = Math.round(db.getBoundingClientRect().right);
+              // ① 2px 越界 → 死区
+              db.style.setProperty('position', 'relative', 'important');
+              db.style.setProperty('left', '2px', 'important');
+              await new Promise(r2 => setTimeout(r2, 900));
+              out.smallTf = db.style.transform || '(none)';
+              out.smallRight = Math.round(db.getBoundingClientRect().right);
+              db.style.removeProperty('left');
+              db.style.removeProperty('position');
+              await new Promise(r2 => setTimeout(r2, 800));
+              // ② 40px 越界 + 持续抖动 → 超时兜底必须拉回
+              db.style.setProperty('position', 'relative', 'important');
+              db.style.setProperty('left', '40px', 'important');
+              const jit = setInterval(() => { try { db.style.setProperty('padding-left', (Math.random() * 2).toFixed(1) + 'px', 'important'); } catch (eJ) {} }, 40);
+              await new Promise(r2 => setTimeout(r2, 1300));
+              clearInterval(jit);
+              const rr = db.getBoundingClientRect();
+              out.bigRight = Math.round(rr.right);
+              out.bigTf = db.style.transform || '(none)';
+              db.style.removeProperty('left');
+              db.style.removeProperty('position');
+              db.style.removeProperty('padding-left');
+              await new Promise(r2 => setTimeout(r2, 900));
+              out.afterRight = Math.round(db.getBoundingClientRect().right);
+            } catch (e) { out.err = String(e).slice(0, 140); }
+            return out;
+          });
+          if (TO(r43c)) blocked('[抽屉·R43] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
+          else {
+            chk(!r43c.err && !r43c.noDb && r43c.smallTf === '(none)' && r43c.bigRight <= r43c.vw - 2 && /translateX\(-/.test(r43c.bigTf),
+              '[抽屉·R43] 2px 死区不写位移（杜绝"打开后一闪"）+ 40px 抖动下 700ms 超时兜底拉回 vw-2',
+              r43c.noDb ? '🔴 找不到 header 内抽屉开关按钮' : (r43c.err ? ('异常 ' + r43c.err) : ('死区 tF=' + r43c.smallTf + ' right=' + r43c.smallRight + ' | 抖动 tF=' + r43c.bigTf + ' right=' + r43c.bigRight + ' vw=' + r43c.vw + ' 复原后=' + r43c.afterRight)));
           }
 
           // —— R37 行为断言（v1.0.136(105)）：+ 号弹层伪关闭吞掉器 ——
@@ -1415,7 +1533,9 @@ const A_PLUGIN_PAGE = () => {
       r40src ? '重同步器在' : '🔴 重同步器被删 → 回前台订阅不恢复，多终端不同步复发');
     /* R41（v1.0.138）：标签条功能钮簇防裁剪 —— 顶栏那条是 DSH 标签条（不是 header），
        功能钮簇排在标签后，标签一多整簇被推入 pane overflow-x:hidden 裁剪区物理拉不回。
-       簇级单值重算（不累加）+ 带宽上拉，删任一即复发（真机五犯实录）。 */
+       簇级单值重算（不累加）+ 带宽上拉，删任一即复发（真机五犯实录）。
+       R43（v1.0.140，六犯）：①屏外容器排除（__visC）②顶栏活命自愈（__heals）③拉力封顶（__cap）
+       —— 这三件是「修复自己把顶栏遮死/把屏外簇拖进可视区」的机械防线，删掉即复发。 */
     const r41src = /querySelectorAll\('\[class\*="stripChrome"\]'\)/.test(bundle)
       && /data-dsh-strip-clamp/.test(bundle)
       && /__overC > 2 && __overC <= 1200/.test(bundle)
@@ -1425,6 +1545,19 @@ const A_PLUGIN_PAGE = () => {
     chk(r41src,
       '[标签条·R41] 功能钮簇防裁剪钳制 + 同高对齐 + 挂载即矫（簇级平移 + R41b 对齐 + R41c 防闪烁）',
       r41src ? '簇级钳制 + 同高对齐 + 挂载即矫全在' : '🔴 钳制/对齐/挂载即矫缺件 → 出屏、高度不一致或开合闪烁复发');
+    const r43src = /__visC/.test(bundle)
+      && /__arC\.left >= window\.innerWidth/.test(bundle)
+      && /__heals/.test(bundle)
+      && /__cap/.test(bundle)
+      && /data-dsh-strip-pull-n/.test(bundle)
+      && /background: transparent !important/.test(bundle)
+      && /__dshOverSince/.test(bundle)
+      && /__overMs > 700/.test(bundle)
+      && /__diffN >= 6/.test(bundle)
+      && /var __mtSel = 'header, /.test(bundle);
+    chk(r43src,
+      '[顶栏·R43] 屏外容器零平移 + 顶栏活命自愈 + 拉力封顶 + 簇底色透明 + 6px 死区/700ms 兜底 + header 挂载即矫',
+      r43src ? 'R43 六件套全在' : '🔴 R43 缺件 → 幽灵按钮/顶栏被自家补丁遮死/打开后一闪复发');
     /* R37（v1.0.136）：+ 号弹层伪关闭吞掉器 —— 回合运行中 commands/list 被写句柄门闩拒绝，
        前端在 reducer 路径直接置回关闭（无任何关闭回调）。守卫必须常驻，删掉即复发。 */
     const r37src = /window\.__dshTriggerMenuKeeper/.test(bundle)

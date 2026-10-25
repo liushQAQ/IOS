@@ -1164,15 +1164,18 @@ final class ViewController: UIViewController {
             '   开始页顶栏是 DSH 的标签条（对话/轨迹/系统监控/开始 每个都是标签），',
             '   功能钮簇（退出全屏+收起右侧边栏）排在标签后面；标签一多整簇被推入',
             '   pane 的 overflow-x:hidden 裁剪区（实测 4 标签即被推超屏 843px，物理拉不回）。',
-            '   修法：簇 sticky 钉在标签条可视右缘，标签再多也永远可见可点；',
-            '   叠在标签上时给页面底色防穿透。JS 侧另有簇级平移兜底（syncDrawerGeometry）。 */',
+            '   修法：簇 sticky 钉在标签条可视右缘，标签再多也永远可见可点。',
+            '   🔴 R43（v1.0.140，老总 10-25 20:41 真机六犯「右侧边栏按钮/整条顶栏超出屏幕」）：',
+            '   这里原本还挂了 `background: var(--dsh-pagebg, rgb(21,21,23))` + 6px 左内边距',
+            '   + 负向 box-shadow（防穿透），实测是新的遮挡源 —— 簇被 JS 钳制或 sticky 生效时',
+            '   这块**不透明底色**会整块盖住其下的页面内容（开始页那条标签行=整顶栏，',
+            '   被盖到只剩一条 5pt 残影；暗色下实测渲染成纯黑块）。',
+            '   底色改透明：sticky 仍保证可见可点，遮挡源归零（顶栏永不被自家补丁盖住）。 */',
             '[class*="stripChrome_"] {',
             '  position: sticky !important;',
             '  right: 4px !important;',
             '  z-index: 7 !important;',
-            '  background: var(--dsh-pagebg, rgb(21, 21, 23)) !important;',
-            '  padding-left: 6px !important;',
-            '  box-shadow: -8px 0 12px -8px var(--dsh-pagebg, rgb(21, 21, 23)) !important;',
+            '  background: transparent !important;',
             '}',
             '   1. 严格避让状态栏与灵动岛（top >= var(--dsh-statusbar, 54px) + 8px）；',
             '   2. 严格避让底部安全区（bottom >= env(safe-area-inset-bottom, 16px) + 8px）；',
@@ -2497,10 +2500,29 @@ final class ViewController: UIViewController {
                     var lk = db.__dshLastGeo;
                     var stableNow = lk && Math.abs(lk[0] - nowL) <= 2 && Math.abs(lk[1] - nowT) <= 2 && lk[2] === nowW;
                     db.__dshLastGeo = [nowL, nowT, nowW];
-                    if (stableNow) {
-                      if (Math.abs(curN - want) > 0.5) {
+                    // 🔴 R43⑤（v1.0.140，老总 10-25「主会话里右侧边栏按钮还是出屏 / 打开后一闪一闪」）：
+                    //   R39 的模糊稳态门在真机「后台任务胶囊文字周期变宽 + 智能体团队计数跳动」的
+                    //   顶栏里仍可能**永远不满足** → 救援等不到时机，按钮就一直留在屏外；而它一旦
+                    //   满足，又是在开合动画结束后 1~2 拍才写 → 肉眼就是「打开后一闪」。
+                    //   补两条：①**6px 死区**：位移小于 6px 的微调一律不写（2~4px 位移零视觉收益，
+                    //   却必然被看成一次跳变 —— 这才是「一闪一闪」的真身；代价是按钮最多允许
+                    //   越界 4px，肉眼不可辨）；②**700ms 超时兜底**：按钮连续 700ms 仍在屏外
+                    //   （over>4）就无条件按基准位重算写一次，绝不无限等待。
+                    //   ④ 计时器只在**真正回到屏内（over<=0）**时清零：若按 over<=4 清零，
+                    //   真机抖动让 over 在 2 与 10 之间来回跳时计时器会被反复重置，兜底永不触发
+                    //   （实测沙箱会话页：按钮 right=438 出屏 8px 却始终不写位移）。
+                    if (over > 0) {
+                      if (!db.__dshOverSince) db.__dshOverSince = Date.now();
+                    } else {
+                      db.__dshOverSince = 0;
+                    }
+                    var __overMs = db.__dshOverSince ? (Date.now() - db.__dshOverSince) : 0;
+                    if (stableNow || __overMs > 700) {
+                      var __diffN = Math.abs(curN - want);
+                      if (__diffN >= 6) {
                         if (want === 0) db.style.removeProperty('transform');
                         else db.style.setProperty('transform', 'translateX(' + want + 'px)', 'important');
+                        db.__dshOverSince = 0;
                       }
                     }
                   }
@@ -2517,10 +2539,28 @@ final class ViewController: UIViewController {
                 //   遍历所有簇：主面板的 stripChrome 常隐藏，抽屉面板内的才是可见真身。
                 try {
                   var __clusters = document.querySelectorAll('[class*="stripChrome"]');
-                  for (var __ci = 0; __ci < __clusters.length && __ci < 6; __ci++) {
+                  for (var __ci = 0; __ci < __clusters.length && __ci < 12; __ci++) {
                     var __cluster = __clusters[__ci];
                     var __cr = __cluster.getBoundingClientRect();
                     if (__cr.width <= 0 || __cr.top < 0 || __cr.top >= 140) continue;
+                    // 🔴 R43①（v1.0.140，真机六犯）：祖先链可见性判定 —— 面板收起时整块停在
+                    //   视口右外侧（沙箱实测 x≈452=vw+22），其内部簇自然右缘 ≈880，旧逻辑
+                    //   据此算出「越界 450」并整簇 translateX(-450~-880px) 拖进屏幕坐标，
+                    //   叠加深色底色就成了真机顶栏那排幽灵按钮/黑块。任一祖先整块越过视口
+                    //   右缘 = 隐藏态，直接跳过并清掉该簇的历史补偿。
+                    var __visC = true, __anC = __cluster.parentElement;
+                    for (var __ad = 0; __anC && __anC !== document.body && __ad < 12; __ad++, __anC = __anC.parentElement) {
+                      var __arC = __anC.getBoundingClientRect();
+                      if (__arC.width > 0 && __arC.left >= window.innerWidth) { __visC = false; break; }
+                    }
+                    if (!__visC) {
+                      if (__cluster.getAttribute('data-dsh-strip-clamp') === '1') {
+                        __cluster.style.removeProperty('transform');
+                        __cluster.style.removeProperty('z-index');
+                        __cluster.removeAttribute('data-dsh-strip-clamp');
+                      }
+                      continue;
+                    }
                     var __cn = 0, __cs2 = __cluster.style.getPropertyValue('transform'), __ck;
                     while ((__ck = __cs2.indexOf('translateX(')) >= 0) {
                       var __cv = parseFloat(__cs2.substring(__ck + 11));
@@ -2529,16 +2569,49 @@ final class ViewController: UIViewController {
                     }
                     var __baseR = __cr.right - __cn;
                     var __overC = Math.round(__baseR - (window.innerWidth - 4));
+                    //    R43②：上限保持 1200 —— 真机标签拥挤实测可把簇推到超屏 843px（4 标签），
+                    //    上限砍小会把这条主修复一起废掉；屏外容器（幽灵按钮来源）已由 ① 的
+                    //    祖先链可见性判定整体排除，两者互不冲突。
                     if (__overC > 2 && __overC <= 1200) {
                       __cluster.style.setProperty('transform', 'translateX(' + (-__overC) + 'px)', 'important');
                       __cluster.style.setProperty('z-index', '9', 'important');
                       __cluster.setAttribute('data-dsh-strip-clamp', '1');
                     } else if (__overC <= 2 && __cluster.getAttribute('data-dsh-strip-clamp') === '1') {
                       __cluster.style.removeProperty('transform');
+                      __cluster.style.removeProperty('z-index');
                       __cluster.removeAttribute('data-dsh-strip-clamp');
                     }
                   }
                 } catch (eC) {}
+
+                // 🔴 R43③（v1.0.140，真机六犯，最重要的一条）：顶栏活命自愈。
+                //   凡本补丁自己写过的「簇级平移」或「顶栏上拉」，只要实测把所属行推出了
+                //   它自己的父容器（父容器一旦 overflow:hidden/auto 就是硬裁剪 —— 真机那张
+                //   截图里整条顶栏只剩 y64~69pt 一条 5pt 残影，正是这个形态），本拍立即
+                //   撤回全部本补丁写入。铁律：**任何自家补丁都不允许把顶栏藏起来**，
+                //   宁可放弃对齐/钳制，也不留「修复即遮死」的终态。
+                try {
+                  var __heals = document.querySelectorAll('[data-dsh-strip-clamp], [data-dsh-strip-pull-n]');
+                  for (var __hi = 0; __hi < __heals.length; __hi++) {
+                    var __he = __heals[__hi];
+                    var __heR = __he.getBoundingClientRect();
+                    var __heP = __he.parentElement;
+                    var __hePR = __heP ? __heP.getBoundingClientRect() : null;
+                    //    判据用「与父容器盒子还能重叠多少」而不是「是否完全在内」：簇里放着
+                    //    32pt 按钮、行只有 28pt 属于原生布局，底部本来就会外溢几 pt，不能误判；
+                    //    真正要抓的是「被推出父容器导致可见高度腰斩」（真机那条 5pt 残影）。
+                    if (__hePR && __hePR.height > 0 && __heR.height > 0) {
+                      var __ovH = Math.min(__heR.bottom, __hePR.bottom) - Math.max(__heR.top, __hePR.top);
+                      if (__ovH < __heR.height * 0.5) {
+                        __he.style.removeProperty('margin-top');
+                        __he.style.removeProperty('transform');
+                        __he.style.removeProperty('z-index');
+                        __he.removeAttribute('data-dsh-strip-pull-n');
+                        __he.removeAttribute('data-dsh-strip-clamp');
+                      }
+                    }
+                  }
+                } catch (eH) {}
 
                 // 🔴 R41b（v1.0.138，老总「开始页顶栏和会话页一样高度」对齐式校正）：
                 //   标签条内容行（chrome 按钮行）比会话页内容行（header 顶+8）低超过 3pt
@@ -2567,7 +2640,24 @@ final class ViewController: UIViewController {
                         var __pullOld = parseFloat(__tsh.getAttribute('data-dsh-strip-pull-n') || '0') || 0;
                         var __natural = __contentNow + __pullOld;
                         var __delta = __natural - __target;
-                        var __newPull = (__delta > 3) ? Math.min(80, Math.round(__delta)) : 0;
+                        // 🔴 R43④（v1.0.140，真机六犯）：拉力三重封顶。
+                        //   ①对齐是「微调」，单次 ≤24px —— 要拉几十 px 必然量错了元素；
+                        //   ②父容器一旦是裁剪容器（overflow-x:hidden 会把 overflow-y 也算成
+                        //     auto，正是真机把整条顶栏裁成 5pt 残影的机制），上拉量绝不允许
+                        //     超过「行顶到父容器顶」的可用余量，超了就是自己把顶栏推出可见区；
+                        //   ③父容器不裁剪时按 24px 常规上限。
+                        var __pr = __tsh.parentElement ? __tsh.parentElement.getBoundingClientRect() : null;
+                        var __headroom = 24;
+                        var __clips = false;
+                        try {
+                          var __pcs = __tsh.parentElement ? getComputedStyle(__tsh.parentElement) : null;
+                          if (__pcs) __clips = (__pcs.overflowY !== 'visible' || __pcs.overflowX !== 'visible');
+                        } catch (ePC) {}
+                        if (__clips && __pr && __pr.height > 0) {
+                          __headroom = Math.max(0, Math.floor(__tr2.top - __pr.top));
+                        }
+                        var __cap = Math.max(0, Math.min(24, __headroom));
+                        var __newPull = (__delta > 3) ? Math.min(__cap, Math.round(__delta)) : 0;
                         if (__newPull !== __pullOld) {
                           if (__newPull > 0) {
                             __tsh.style.setProperty('margin-top', (-__newPull) + 'px', 'important');
@@ -2811,10 +2901,13 @@ final class ViewController: UIViewController {
                 //   偏低间距先渲染一帧 → 300ms 守恒环下一拍才纠正 → 肉眼跳变。根治：childList
                 //   观察器在**渲染前的微任务**里对新增的面板/列/标签条节点立即跑一遍全部矫正
                 //   （列垫 + 簇钳制 + 行高对齐），第一帧即正确；突发挂载用微任务合并成一拍。
+                //   🔴 R43⑤（v1.0.140）：选择器补 `header` —— 真机「打开后一闪一闪」的另一半是
+                //   顶栏开关按钮的救援在动画收尾后 1~2 拍才写位移；把 header 纳入挂载即矫，
+                //   会话切换/抽屉开合导致 header 重挂时，救援也在**首帧渲染前**落地，肉眼无跳变。
                 try {
                   if (!window.__dshMountGuard) {
                     window.__dshMountGuard = true;
-                    var __mtSel = '[class*="rightbarCol"], [class*="sidebarCol"], [class*="panel"], [class*="tabHostHeader"], [class*="tabStrip"], [class*="stripChrome"], [data-sidebar-right-open]';
+                    var __mtSel = 'header, [class*="rightbarCol"], [class*="sidebarCol"], [class*="panel"], [class*="tabHostHeader"], [class*="tabStrip"], [class*="stripChrome"], [data-sidebar-right-open]';
                     var __mtPend = false;
                     var __mtMo = new MutationObserver(function (muts) {
                       for (var mi = 0; mi < muts.length; mi++) {

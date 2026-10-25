@@ -1,11 +1,11 @@
 {
-  "version": "1.0.139",
+  "version": "1.0.140",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-25T12:38:17.660Z",
+  "startedAt": "2026-10-25T15:01:09.911Z",
   "dshFingerprint": "cq3ydj",
   "dshAssets": 9,
   "domClasses": 0,
@@ -28,10 +28,13 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 111,
+  "pass": 110,
   "fail": 0,
   "failures": [],
-  "blocked": [],
-  "sourceHash": "2d16ed69aec819f178b6f1a67f42433ae317979511d715481b6bd6dd4bf32909",
-  "finishedAt": "2026-10-25T12:40:37.373Z"
+  "blocked": [
+    "[抽屉·R39] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）",
+    "[多端·R40] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）"
+  ],
+  "sourceHash": "e3dacb236a85e90c157203b69ef7dd58209c3c8ae833b6b65c3f07386492c3a3",
+  "finishedAt": "2026-10-25T15:06:53.317Z"
 }
