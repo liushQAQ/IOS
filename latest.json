@@ -1,12 +1,12 @@
 {
-  "version": "1.0.139",
-  "build": 109,
-  "updated_at": "2026-10-25 21:05:00",
-  "title": "v1.0.139(109) 启动预热提速（网关缓存补丁因真机黑屏已回滚，详见日志）",
-  "changelog": "1. 启动预热（R42 App 侧）：进程拉起最早时机对服务网关发轻量 HEAD 热身——唤醒隧道 + TLS 会话复用，WebView 首请求握手成本近乎归零（ephemeral 不落缓存、失败静默）\n2. 重要说明：同日部署的网关侧「指纹资源 7 天强缓存」补丁（实测热载 4.8MB→0KB）当晚真机出现黑屏，已第一时间回滚，并通过网关 _pcf 版本击穿（121a→121b）强制手机全量重拉恢复——若 App 打开黑屏，强制关闭重开一次即可\n3. 回归闸门 111 绿 0 红",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.139-109.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.139-109.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.139/DSHios-public-1.0.139-109.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.139",
-  "md5": "e50bdcd80e5938d7bcccb466ec1b14dc"
+  "version": "1.0.140",
+  "build": 110,
+  "updated_at": "2026-10-25 23:22:00",
+  "title": "v1.0.140(110) 右侧边栏按钮/整条顶栏出屏六犯根治（真凶=R41补丁自身）",
+  "changelog": "1. R43 六犯根治：开始页顶栏被盖到只剩一条残影、右缘按钮被拖出屏幕——真凶是上一版 R41 补丁自身三处缺陷：①收起面板（屏外容器）内的按钮簇被整簇平移拖进可视区（幽灵按钮）；②按钮簇挂的不透明底色把开始页顶栏整块盖死；③顶栏对齐上拉无父容器裁剪保护。修法四件套：屏外容器零平移（祖先链可见性判定）+ 簇底色改透明 + 顶栏活命自愈（自家补丁把行推出父容器即撤回）+ 拉力三重封顶。\n2. 抽屉开合、标签拥挤出屏钳制（R41 有效部分）全部保留；闸门新增 [顶栏·R43] 行为断言与源锚点。\n3. 回归闸门 110 绿/0 红（2 项 DSH 前端死循环连坐无法校验，非 App 回归）。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.140-110.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.140-110.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.140/DSHios-public-1.0.140-110.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.140",
+  "md5": "badb54f30dde387e0b716568fd28189d"
 }
