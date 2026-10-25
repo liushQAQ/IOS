@@ -1,12 +1,12 @@
 {
-  "version": "1.0.138",
-  "build": 108,
-  "updated_at": "2026-10-25 04:20:00",
-  "title": "v1.0.138(108) 抽屉按钮出屏五犯根治 + 顶排高度锁定 + 开合闪烁根治",
-  "changelog": "1. 抽屉按钮出屏五犯根治（R41）：真凶终于抓到——开始页/抽屉面板顶栏是 DSH 的标签条（对话/轨迹/系统监控/开始每个都是标签），抽屉按钮排在所有标签后面，标签一多整排被推宽、按钮被推进隐藏裁剪区，物理上永远拉不回（沙箱复现按钮被推出屏 261px 被裁，与真机截图逐像素一致）；修法：功能钮簇整体钉在标签条可视右缘（sticky+簇级平移双保险），标签再多也永远可见可点\n2. 顶排高度锁定（R41b）：恒定对齐会话页内容行（实测 36pt=36pt，容差 3pt 超差自动拉回；对齐目标取自会话页自身，绝不压状态栏）\n3. 开合闪烁根治（R41c）：闪烁=面板重挂载先渲染一帧偏低、纠正环 300ms 后才跟上；现在挂载瞬间的渲染前微任务里就把全部矫正打上，第一帧即正确，开/关抽屉全程高度恒定零跳变\n4. 修复前/后对比模拟图与高度对齐验证图均已过目确认；闸门 109 绿 0 红",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.138-108.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.138-108.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.138/DSHios-public-1.0.138-108.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.138",
-  "md5": "ffd09e1bc2d35b6251f384f59415857f"
+  "version": "1.0.139",
+  "build": 109,
+  "updated_at": "2026-10-25 21:05:00",
+  "title": "v1.0.139(109) 启动预热提速（网关缓存补丁因真机黑屏已回滚，详见日志）",
+  "changelog": "1. 启动预热（R42 App 侧）：进程拉起最早时机对服务网关发轻量 HEAD 热身——唤醒隧道 + TLS 会话复用，WebView 首请求握手成本近乎归零（ephemeral 不落缓存、失败静默）\n2. 重要说明：同日部署的网关侧「指纹资源 7 天强缓存」补丁（实测热载 4.8MB→0KB）当晚真机出现黑屏，已第一时间回滚，并通过网关 _pcf 版本击穿（121a→121b）强制手机全量重拉恢复——若 App 打开黑屏，强制关闭重开一次即可\n3. 回归闸门 111 绿 0 红",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.139-109.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.139-109.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.139/DSHios-public-1.0.139-109.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.139",
+  "md5": "e50bdcd80e5938d7bcccb466ec1b14dc"
 }
