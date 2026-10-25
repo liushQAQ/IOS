@@ -1,11 +1,11 @@
 {
-  "version": "1.0.138",
+  "version": "1.0.139",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-25T11:56:10.190Z",
+  "startedAt": "2026-10-25T12:38:17.660Z",
   "dshFingerprint": "cq3ydj",
   "dshAssets": 9,
   "domClasses": 0,
@@ -28,12 +28,10 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 109,
+  "pass": 111,
   "fail": 0,
   "failures": [],
-  "blocked": [
-    "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）"
-  ],
+  "blocked": [],
   "sourceHash": "2d16ed69aec819f178b6f1a67f42433ae317979511d715481b6bd6dd4bf32909",
-  "finishedAt": "2026-10-25T11:58:42.883Z"
+  "finishedAt": "2026-10-25T12:40:37.373Z"
 }

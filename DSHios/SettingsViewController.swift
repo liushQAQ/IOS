@@ -1199,7 +1199,7 @@ final class ConnectionGuideViewController: UIViewController {
         card.layer.cornerRadius = 12
 
         let badgeLabel = UILabel()
-        badgeLabel.text = "最新更新日志 (v1.0.138)"
+        badgeLabel.text = "最新更新日志 (v1.0.139)"
         badgeLabel.font = .systemFont(ofSize: 12, weight: .bold)
         badgeLabel.textColor = .systemIndigo
         badgeLabel.backgroundColor = .systemIndigo.withAlphaComponent(0.12)
@@ -1218,7 +1218,12 @@ final class ConnectionGuideViewController: UIViewController {
         titleLabel.lineBreakMode = .byWordWrapping
 
         let logContent = """
-        🥇 1. 抽屉按钮出屏五犯根治 + 顶排高度锁定（v1.0.138）：
+        🥇 1. 启动提速·固化缓存（v1.0.139，老总「UI 固化」令）：
+        • 痛点实测：每次冷启动手机要从网关拉 5.7MB / 62 个请求（其中 4.8MB 是插件 UI 聚合包）——这是打开慢的大头；
+        • 修法（网关插件 dsh-anywhere 侧，2026-10-25 已部署）：给所有带内容指纹的资源（?rev= 指纹 / 哈希文件名）下发 7 天强缓存——指纹变即 URL 变，缓存天然永不陈旧；实测热启动网络量从 5.7MB 降到约 0.2MB（只剩入口 HTML + 动态数据），静态 UI 全部本地秒出；DSH 换版自动全量刷新，无需动 App；
+        • 修法（App 侧 R42）：进程拉起最早时机对服务网关发一次轻量热身连接（唤醒隧道 + 复用 TLS 会话），WebView 首请求握手成本近乎归零；
+        • 说明：入口 HTML 保持每次校验最新（no-store），保证 DSH 换版立即生效，绝不变砖。
+        🥇 2. 抽屉按钮出屏五犯根治 + 顶排高度锁定（v1.0.138）：
         • 老总 1.0.137 真机两张截图逐像素对拍 + 沙箱复现，真凶终于抓到：开始页/抽屉面板顶栏是 DSH 的「标签条」（对话/轨迹/系统监控/开始 每个都是标签），抽屉按钮排在所有标签后面——标签一多整排被推宽，按钮被推进一个隐藏裁剪区，物理上永远拉不回（复现：按钮被推出屏 261px 被裁）。之前四轮修的都是别的容器，这个按钮根本不在那些守卫的管辖里；
         • 修法（R41）：功能钮簇整体钉在标签条可视右缘（CSS sticky + 簇级平移双保险，标签再多也永远可见可点）；
         • 高度锁定（R41b，老总拍板「要和会话页一样高度」）：顶排高度恒定对齐会话页内容行（容差 3pt，超差自动拉回；对齐目标取自会话页自身，绝不压状态栏）；
