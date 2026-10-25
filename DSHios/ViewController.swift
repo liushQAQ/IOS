@@ -2525,6 +2525,34 @@ final class ViewController: UIViewController {
                         db.__dshOverSince = 0;
                       }
                     }
+                    // 🔴 R44（v1.0.141，老总 10-25 23:19 真机七犯：开→关抽屉回会话页，按钮出屏约 1/3）：
+                    //   沙箱实证（_probe_r44_cycle/_probe_r44_boss 连拍）：关抽屉后 DSH 在 headerCorner
+                    //   上补写自己的 translateX(-8px)，按钮**视觉**右缘被顶到 vw（430/432），但基准位
+                    //   重算（铁律②）认为自然位合法 → 救援永不介入 —— 铁律②的盲区：它防的是「动画期
+                    //   误补偿」，防不住「动画早已结束、DSH 位移长期滞留」。
+                    //   补一条**视觉位救援**：仅在抽屉关闭态（rightbarCol 整块仍在视口右外）且
+                    //   视觉越界 >4px **连续 ≥1200ms**（开合动画 ~300ms，持续滞留必非动画）才出手；
+                    //   出手方式=把总位移整体重算（含 DSH 那份）拉回 vw-2，单值不累加，幂等。
+                    var __visOver = Math.round(dr.right - (window.innerWidth - 2));
+                    var __drawerClosed = true;
+                    try {
+                      var __rc = document.querySelector('[class*="rightbarCol"]');
+                      if (__rc) { var __rr = __rc.getBoundingClientRect(); if (__rr.width > 0 && __rr.left < window.innerWidth) __drawerClosed = false; }
+                      var __op = document.querySelector('[data-sidebar-right-open]');
+                      if (__op) { var __orp = __op.getBoundingClientRect(); if (__orp.width > 0 && __orp.left < window.innerWidth - 4) __drawerClosed = false; }
+                    } catch (eV) {}
+                    if (__drawerClosed && __visOver > 4) {
+                      if (!db.__dshVisSince) db.__dshVisSince = Date.now();
+                      if (Date.now() - db.__dshVisSince >= 1200) {
+                        var __wantTotal = curN - __visOver;
+                        if (Math.abs(__wantTotal) < 1) db.style.removeProperty('transform');
+                        else db.style.setProperty('transform', 'translateX(' + __wantTotal + 'px)', 'important');
+                        db.__dshVisSince = 0;
+                        db.__dshLastGeo = null;
+                      }
+                    } else {
+                      db.__dshVisSince = 0;
+                    }
                   }
                 }
 

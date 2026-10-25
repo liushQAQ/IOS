@@ -1016,6 +1016,35 @@ const A_PLUGIN_PAGE = () => {
               r43c.noDb ? '🔴 找不到 header 内抽屉开关按钮' : (r43c.err ? ('异常 ' + r43c.err) : ('死区 tF=' + r43c.smallTf + ' right=' + r43c.smallRight + ' | 抖动 tF=' + r43c.bigTf + ' right=' + r43c.bigRight + ' vw=' + r43c.vw + ' 复原后=' + r43c.afterRight)));
           }
 
+          // —— R44 行为断言（v1.0.141(111)）：DSH 滞留位移把按钮推贴屏缘 → 视觉位救援必须拉回 ——
+          // 真机七犯形态：关抽屉后 DSH 在 headerCorner 补写/滞留 translateX，按钮视觉右缘贴死 vw，
+          // 基准位救援（死区 6px）放行不管 → 图标被裁 1/3。断言：给 headerCorner 注入 +12px 滞留
+          // 位移，2.5s 内按钮视觉 right 必须回到 vw-2 内，撤除后不得反向过拉（right ≥ vw-14）。
+          const r44b = await p.evaluate(async () => {
+            const out = {};
+            try {
+              const db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
+              if (!db) { out.noDb = true; return out; }
+              const hc = db.closest('[class*="headerCorner"]');
+              out.vw = window.innerWidth;
+              out.hcFound = !!hc;
+              if (!hc) return out;
+              hc.style.setProperty('transform', 'translateX(12px)', 'important');
+              await new Promise(r2 => setTimeout(r2, 2500));
+              out.right = Math.round(db.getBoundingClientRect().right);
+              hc.style.removeProperty('transform');
+              await new Promise(r2 => setTimeout(r2, 1200));
+              out.rightAfter = Math.round(db.getBoundingClientRect().right);
+            } catch (e) { out.err = String(e).slice(0, 140); }
+            return out;
+          });
+          if (TO(r44b)) blocked('[抽屉·R44] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
+          else {
+            chk(!r44b.err && !r44b.noDb && r44b.hcFound && r44b.right <= r44b.vw - 2 && r44b.rightAfter >= r44b.vw - 14,
+              '[抽屉·R44] headerCorner 滞留位移推按钮贴屏缘 → 视觉位救援 2.5s 内拉回 vw-2（撤除不过拉）',
+              r44b.noDb ? '🔴 找不到 header 内抽屉开关按钮' : (!r44b.hcFound ? '🔴 按钮不在 headerCorner 内' : (r44b.err ? ('异常 ' + r44b.err) : ('注入后 right=' + r44b.right + ' vw=' + r44b.vw + ' 撤除后=' + r44b.rightAfter))));
+          }
+
           // —— R37 行为断言（v1.0.136(105)）：+ 号弹层伪关闭吞掉器 ——
           // 路由级拦截复刻 writer-held 失败路径（该 RPC 走页面层 fetch/XHR 包装器够不到的通道，
           // 只能在网络层拦）；真实 tap 打开 → 弹层必须存活 + 注入提示行；点外部必须正常关闭；
@@ -1558,6 +1587,14 @@ const A_PLUGIN_PAGE = () => {
     chk(r43src,
       '[顶栏·R43] 屏外容器零平移 + 顶栏活命自愈 + 拉力封顶 + 簇底色透明 + 6px 死区/700ms 兜底 + header 挂载即矫',
       r43src ? 'R43 六件套全在' : '🔴 R43 缺件 → 幽灵按钮/顶栏被自家补丁遮死/打开后一闪复发');
+    /* R44（v1.0.141）：DSH 滞留位移把按钮推贴屏缘 —— 基准位救援的盲区，视觉位救援兜底。 */
+    const r44src = /__dshVisSince/.test(bundle)
+      && /__visOver/.test(bundle)
+      && /__wantTotal/.test(bundle)
+      && /__drawerClosed/.test(bundle);
+    chk(r44src,
+      '[抽屉·R44] 视觉位救援在（headerCorner 滞留位移贴屏缘 → 1200ms 超时整体重算拉回 vw-2）',
+      r44src ? '视觉位救援在' : '🔴 视觉位救援被删 → 七犯复发（开合抽屉回会话页按钮出屏 1/3）');
     /* R37（v1.0.136）：+ 号弹层伪关闭吞掉器 —— 回合运行中 commands/list 被写句柄门闩拒绝，
        前端在 reducer 路径直接置回关闭（无任何关闭回调）。守卫必须常驻，删掉即复发。 */
     const r37src = /window\.__dshTriggerMenuKeeper/.test(bundle)
