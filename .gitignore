@@ -10,6 +10,7 @@ build/
 
 # Codemagic
 .codemagic/
+.codemagic_config.json
 .env
 
 # macOS
