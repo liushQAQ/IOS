@@ -9178,9 +9178,9 @@ function applySidebarInset() {
             【设备环境信息】
             \(deviceInfo)
 
-            【本版要点 (v1.0.143)】
-            1. 长标题会话默认出屏九犯根治（CSS 兜底 + 守卫直写）
-            2. 开合抽屉回会话页按钮出屏八犯根治（唯一守卫重构）
+            【本版要点】
+            1. 修复后台任务多时，右侧抽屉按钮被挤出屏幕
+            2. 修复开关抽屉回会话页，按钮跑出屏幕
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)

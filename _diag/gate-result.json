@@ -5,7 +5,7 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-26T06:44:49.397Z",
+  "startedAt": "2026-10-26T06:51:19.985Z",
   "dshFingerprint": "s8180",
   "dshAssets": 9,
   "domClasses": 0,
@@ -32,6 +32,6 @@
   "fail": 0,
   "failures": [],
   "blocked": [],
-  "sourceHash": "fb19b5d90dd06b510257cc6e911ebb6ced4613f65ac08adc95f82331545190d1",
-  "finishedAt": "2026-10-26T06:48:37.143Z"
+  "sourceHash": "ba82861edafc10d447260392c5e5e6a8027623b4b79a3721e22a8339a2ffdb66",
+  "finishedAt": "2026-10-26T06:54:32.308Z"
 }
