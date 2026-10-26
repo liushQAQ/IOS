@@ -1658,8 +1658,10 @@ final class ViewController: UIViewController {
             '   🔴 R48（v1.0.144，老总 10-26 14:17 真机「19 个后台任务」抽屉按钮只剩一条边）：',
             '   R47 把角标钉成 absolute right:2，但参照是 titleRow —— 标题行本身被超长胶囊挤窄',
             '   （实测 right=418 < vw=430）时，right:2 是相对 418 算的，按钮整颗被裁出屏幕。',
-            '   修法：参照改成视口（position:fixed + right:2），标题行再窄也与按钮无关；',
-            '   垂直钉在标题行实测中心（top 由 JS 每拍写入，CSS 只给首帧兜底），不跟整页。',
+            '   🔴 R48b（老总令：抽屉按钮相对智能体团队按钮定位，那个按钮位置恒定）：',
+            '   CSS 这里只做「脱离被挤窄的标题行」的兜底（JS 死时也不出屏）；',
+            '   水平位置由 syncDrawerGeometry 每拍按智能体团队按钮的实测右缘 + 6px 间隙重算，',
+            '   不拿屏幕宽度、也不拿标题行当参照。',
             '   JS 守卫继续负责微调（祖先滞留位移补偿），CSS 负责「JS 死也绝不出屏」的最后防线。 */',
             'html body [data-phase] header [class*="headerCorner"],',
             'html body header [class*="headerCorner"] {',
@@ -2508,18 +2510,37 @@ final class ViewController: UIViewController {
                 //   门彻底删除：目标值每拍从当前视觉位整体重算，动画帧误读至多存活一拍即被
                 //   下拍覆盖（R41 教训，此前一直没执行到位）。
                 var db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
-                // 🔴 R48：角标改 position:fixed 后垂直不再跟标题行，每拍把 top 钉到标题行中心。
+                // 🔴 R48b（老总令）：抽屉按钮相对智能体团队按钮定位。
+                //   智能体团队按钮由 placeAbs 钉在恒定车位（实测右缘 392），位置不随胶囊长短变。
+                //   抽屉按钮左缘 = 团队按钮右缘 + 6px 间隙；垂直对齐标题行中心。
+                //   团队按钮还没渲染时退回视口兜底（CSS 的 right:2 已保证不出屏）。
                 //   只在偏差 >1px 时写，稳态零写入。
                 if (db) {
                   var __hc8 = db.closest ? db.closest('[class*="headerCorner"]') : null;
+                  var __team8 = document.querySelector('header button[aria-label*="智能体团队"]');
                   var __row8 = document.querySelector('header [class*="titleRow"]');
                   if (__hc8 && __row8) {
+                    var __cr8 = __hc8.getBoundingClientRect();
                     var __rr8 = __row8.getBoundingClientRect();
-                    if (__rr8.height > 0) {
-                      var __want8 = Math.round(__rr8.top + (__rr8.height - __hc8.getBoundingClientRect().height) / 2);
-                      var __cur8 = parseFloat(__hc8.style.top);
-                      if (isNaN(__cur8) || Math.abs(__cur8 - __want8) > 1) {
-                        __hc8.style.setProperty('top', __want8 + 'px', 'important');
+                    if (__rr8.height > 0 && __cr8.height > 0) {
+                      var __wantTop8 = Math.round(__rr8.top + (__rr8.height - __cr8.height) / 2);
+                      var __curTop8 = parseFloat(__hc8.style.top);
+                      if (isNaN(__curTop8) || Math.abs(__curTop8 - __wantTop8) > 1) {
+                        __hc8.style.setProperty('top', __wantTop8 + 'px', 'important');
+                      }
+                    }
+                    if (__team8) {
+                      var __tr8 = __team8.getBoundingClientRect();
+                      if (__tr8.width > 0 && __cr8.width > 0) {
+                        var __gap8 = 6;
+                        var __wantLeft8 = Math.round(__tr8.right + __gap8);
+                        var __vw8 = window.innerWidth || 430;
+                        if (__wantLeft8 + __cr8.width > __vw8 - 2) __wantLeft8 = Math.round(__vw8 - 2 - __cr8.width);
+                        var __curLeft8 = parseFloat(__hc8.style.left);
+                        if (isNaN(__curLeft8) || Math.abs(__curLeft8 - __wantLeft8) > 1) {
+                          __hc8.style.setProperty('left', __wantLeft8 + 'px', 'important');
+                          __hc8.style.setProperty('right', 'auto', 'important');
+                        }
                       }
                     }
                   }
