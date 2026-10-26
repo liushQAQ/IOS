@@ -1,12 +1,12 @@
 {
-  "version": "1.0.142",
-  "build": 112,
-  "updated_at": "2026-10-26 11:45:00",
-  "title": "v1.0.142(112) 抽屉按钮出屏八犯根治 + 文案精简规范",
-  "changelog": "1. 开合抽屉回会话页，按钮出屏八犯根治（唯一守卫重构）\n2. 更新说明与关于文案精简：序号对齐、靠左排版\n3. 回归闸门 116 绿 0 红",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.142-112.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.142-112.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.142/DSHios-public-1.0.142-112.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.142",
-  "md5": "9b032e721e55fd53cf91f14a6da7ca75"
+  "version": "1.0.143",
+  "build": 113,
+  "updated_at": "2026-10-26 13:30:00",
+  "title": "v1.0.143(113) 长标题会话默认出屏九犯根治（CSS 兜底）",
+  "changelog": "1. 「N 个后台任务」长标题会话默认出屏九犯根治（CSS 兜底 + 守卫直写）\n2. 右侧抽屉按钮固定位：8 场景实测 right 恒 428 零漂移\n3. 回归闸门 117 绿 0 红",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-113.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-113.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.143/DSHios-public-1.0.143-113.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.143",
+  "md5": "0507b944d6e877604e2c132f0536012f"
 }
