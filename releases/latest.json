@@ -1,12 +1,12 @@
 {
   "version": "1.0.143",
-  "build": 115,
-  "updated_at": "2026-10-26 16:30:00",
-  "title": "v1.0.143(115) 修复右侧抽屉按钮消失",
-  "changelog": "1. 修复右侧抽屉按钮消失，按钮回到屏幕右上角\n2. 修复后台任务多时，右侧抽屉按钮被挤出屏幕\n3. 修复开关抽屉回到会话页，按钮位置错乱",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-115.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-115.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.143/DSHios-public-1.0.143-115.tipa",
+  "build": 121,
+  "updated_at": "2026-10-26 20:15:00",
+  "title": "v1.0.143(121) 抽屉改右缘手势（短滑鲸鱼/长滑抽屉）",
+  "changelog": "1. 右侧抽屉按钮隐藏，改由屏幕右缘向左长滑打开\n2. 屏幕右缘手势：短滑唤醒悬浮小鲸鱼，长滑打开右侧抽屉\n3. 彻底解决顶栏按钮受后台任务/标题挤压错乱问题",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-121.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-121.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.143/DSHios-public-1.0.143-121.tipa",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.143",
-  "md5": "ab15928d1fd142159f91368b1ea0d578"
+  "md5": "2a3ba4bd4b364f310491d8ffa7de8e65"
 }
