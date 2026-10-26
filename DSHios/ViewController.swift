@@ -2510,38 +2510,38 @@ final class ViewController: UIViewController {
                 //   门彻底删除：目标值每拍从当前视觉位整体重算，动画帧误读至多存活一拍即被
                 //   下拍覆盖（R41 教训，此前一直没执行到位）。
                 var db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
-                // 🔴 R48b（老总令）：抽屉按钮相对智能体团队按钮定位。
-                //   智能体团队按钮由 placeAbs 钉在恒定车位（实测右缘 392），位置不随胶囊长短变。
-                //   抽屉按钮左缘 = 团队按钮右缘 + 6px 间隙；垂直对齐标题行中心。
-                //   团队按钮还没渲染时退回视口兜底（CSS 的 right:2 已保证不出屏）。
-                //   只在偏差 >1px 时写，稳态零写入。
+                // 🔴 R48c（老总 16:16 真机：右侧抽屉按钮整颗消失）：
+                //   R48b 每拍都按智能体按钮的实测右缘重写 left。窄屏上那次测量是被挤偏的
+                //   瞬时值，按钮被钉死在 left:80，整颗盖到标题上，右边看起来像没了。
+                //   改成：平时一律清掉自己写过的 left/right，交回 CSS 的 right:2（贴屏幕右缘）；
+                //   只有按钮真的跑出屏幕右缘时，才按智能体按钮的右缘 + 6px 拉回来。
                 if (db) {
                   var __hc8 = db.closest ? db.closest('[class*="headerCorner"]') : null;
-                  var __team8 = document.querySelector('header button[aria-label*="智能体团队"]');
-                  var __row8 = document.querySelector('header [class*="titleRow"]');
-                  if (__hc8 && __row8) {
+                  if (__hc8) {
                     var __cr8 = __hc8.getBoundingClientRect();
-                    var __rr8 = __row8.getBoundingClientRect();
-                    if (__rr8.height > 0 && __cr8.height > 0) {
-                      var __wantTop8 = Math.round(__rr8.top + (__rr8.height - __cr8.height) / 2);
-                      var __curTop8 = parseFloat(__hc8.style.top);
-                      if (isNaN(__curTop8) || Math.abs(__curTop8 - __wantTop8) > 1) {
-                        __hc8.style.setProperty('top', __wantTop8 + 'px', 'important');
-                      }
-                    }
-                    if (__team8) {
-                      var __tr8 = __team8.getBoundingClientRect();
-                      if (__tr8.width > 0 && __cr8.width > 0) {
-                        var __gap8 = 6;
-                        var __wantLeft8 = Math.round(__tr8.right + __gap8);
-                        var __vw8 = window.innerWidth || 430;
-                        if (__wantLeft8 + __cr8.width > __vw8 - 2) __wantLeft8 = Math.round(__vw8 - 2 - __cr8.width);
-                        var __curLeft8 = parseFloat(__hc8.style.left);
-                        if (isNaN(__curLeft8) || Math.abs(__curLeft8 - __wantLeft8) > 1) {
-                          __hc8.style.setProperty('left', __wantLeft8 + 'px', 'important');
-                          __hc8.style.setProperty('right', 'auto', 'important');
+                    var __vw8 = window.innerWidth || 430;
+                    var __row8 = document.querySelector('header [class*="titleRow"]');
+                    if (__row8 && __cr8.height > 0) {
+                      var __rr8 = __row8.getBoundingClientRect();
+                      if (__rr8.height > 0) {
+                        var __wantTop8 = Math.round(__rr8.top + (__rr8.height - __cr8.height) / 2);
+                        var __curTop8 = parseFloat(__hc8.style.top);
+                        if (isNaN(__curTop8) || Math.abs(__curTop8 - __wantTop8) > 1) {
+                          __hc8.style.setProperty('top', __wantTop8 + 'px', 'important');
                         }
                       }
+                    }
+                    if (__cr8.width > 0 && __cr8.right > __vw8 - 1) {
+                      var __team8 = document.querySelector('header button[aria-label*="智能体团队"]');
+                      var __tr8 = __team8 ? __team8.getBoundingClientRect() : null;
+                      var __base8 = (__tr8 && __tr8.width > 0 && __tr8.right > __vw8 * 0.5) ? (__tr8.right + 6) : (__vw8 - 2 - __cr8.width);
+                      var __wantRight8 = Math.round(__vw8 - (__base8 + __cr8.width));
+                      if (__wantRight8 < 2) __wantRight8 = 2;
+                      __hc8.style.setProperty('right', __wantRight8 + 'px', 'important');
+                      __hc8.style.setProperty('left', 'auto', 'important');
+                    } else if (__hc8.style.left || (__hc8.style.right && __hc8.style.right !== '2px')) {
+                      __hc8.style.removeProperty('left');
+                      __hc8.style.setProperty('right', '2px', 'important');
                     }
                   }
                 }
