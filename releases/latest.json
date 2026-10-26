@@ -1,12 +1,12 @@
 {
   "version": "1.0.143",
-  "build": 113,
-  "updated_at": "2026-10-26 13:30:00",
-  "title": "v1.0.143(113) 修复顶栏按钮被挤出屏幕",
+  "build": 114,
+  "updated_at": "2026-10-26 15:55:00",
+  "title": "v1.0.143(114) 修复顶栏按钮被挤出屏幕",
   "changelog": "1. 修复后台任务多时，右侧抽屉按钮被挤出屏幕\n2. 修复长标题会话打开后，顶栏按钮跑到屏幕外面\n3. 修复开关抽屉回到会话页，按钮位置错乱",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-113.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-113.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.143/DSHios-public-1.0.143-113.tipa",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-114.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-114.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.143/DSHios-public-1.0.143-114.tipa",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.143",
-  "md5": "0507b944d6e877604e2c132f0536012f"
+  "md5": "2ed79e01b9f90532b54153dcfb5765ff"
 }
