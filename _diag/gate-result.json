@@ -1,11 +1,11 @@
 {
-  "version": "1.0.141",
+  "version": "1.0.142",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-25T15:55:49.341Z",
+  "startedAt": "2026-10-26T02:18:43.306Z",
   "dshFingerprint": "s8180",
   "dshAssets": 9,
   "domClasses": 0,
@@ -28,10 +28,10 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 116,
+  "pass": 115,
   "fail": 0,
   "failures": [],
   "blocked": [],
-  "sourceHash": "ef52b6133eeeb97fa00d0256ebbb99dd1bffa3e2f65291849d9a9c4dab699a81",
-  "finishedAt": "2026-10-25T15:59:42.929Z"
+  "sourceHash": "f18e023f10066981daef410007455644ddb30fce8506a3a0dcb0bfedab77dd65",
+  "finishedAt": "2026-10-26T02:21:50.083Z"
 }

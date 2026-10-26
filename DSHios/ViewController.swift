@@ -2468,90 +2468,54 @@ final class ViewController: UIViewController {
                     if (Math.abs(__sn) > 64) __st.style.removeProperty('transform');
                   }
                 }
-                // 🔴 R38 铁律①：只认 header 内的开关按钮，面板内部按钮一律不碰
-                //   （旧选择器第三项 [data-sidebar-right-toggle] 不限定 header，动画期会抓到面板内按钮）。
+                // 🔴 R38 铁律①：只认 header 内的开关按钮，面板内部按钮一律不碰。
+                // 🔴 R45（v1.0.142，老总 10-26 真机八犯「开→关抽屉回会话页仍出屏约 1/3」，
+                //   指令：代码重构）：R35b 增量补位 / R38 基准位救援 / R39 稳态门+160 上限 /
+                //   R43⑤ 死区+700ms / R44 视觉救援+1200ms **五层补丁全部废除**，换唯一守卫。
+                //   唯一规则（每拍从**当前视觉位**直接解，绝不读旧值累加）：
+                //     不变量 = 按钮视觉完整可见：right ≤ vw 且 left ≥ 0（自然位实测恰 430=vw
+                //     贴边=DSH 原生设计，图标内缩 4px 描边不裁；真机症状全是 right≈vw+10 起）。
+                //     natural（撤掉自身全部位移后的自然位）健康 → 目标位移 = 0（**清零一切
+                //     transform**，含 -448 类旧毒与 DSH 滞留位移——自然位本来就在屏内，清零
+                //     才是回位，"钉到近边"是八犯前几版过拉的根源）；
+                //     natural 右溢 → 目标 = vw − naturalRight；左溢 → 目标 = −naturalLeft。
+                //     目标 ≠ 当前位移，且差量连续两拍（±2px 容差）稳定 → 整体写入目标值。
+                //   祖先（headerCorner）被 DSH 写的滞留位移计入 natural 一起解，我方用自身
+                //   transform 补差 —— 它何时撤、撤多少都不影响收敛（八犯真凶即此滞留 -8px）。
+                //   两拍稳定门挡掉开合动画（~300ms 内视觉位剧变）误伤；静止毒写两拍 ≤600ms
+                //   即出手。**无死区、无计时器、无态豁免、无位移上限**（八犯证明每个门限
+                //   都是漏网口；160/1200 这类上限只会在真机把按钮留在屏外）。
                 var db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
                 if (db && (!db.closest || db.closest('header'))) {
                   var dr = db.getBoundingClientRect();
                   if (dr.width > 0) {
-                    var curT = db.style.getPropertyValue('transform');
-                    var curN = 0;
-                    var scan = curT, kT;
-                    while ((kT = scan.indexOf('translateX(')) >= 0) {
-                      var vT = parseFloat(scan.substring(kT + 11));
-                      if (!isNaN(vT)) curN += vT;
-                      scan = scan.substring(kT + 11);
+                    var __gW = (window.innerWidth || 430) - 2;
+                    var __gTotal = 0, __gScan = db.style.getPropertyValue('transform') || '', __gK;
+                    while ((__gK = __gScan.indexOf('translateX(')) >= 0) {
+                      var __gV = parseFloat(__gScan.substring(__gK + 11));
+                      if (!isNaN(__gV)) __gTotal += __gV;
+                      __gScan = __gScan.substring(__gK + 11);
                     }
-                    // 🔴 R38 铁律②：补偿量永远从「基准位」（视觉位 − 现有位移）重算，
-                    //   DSH 自写位移并入基准考量，不再在现有位移上累减 —— 动画漂移不会被误补偿，
-                    //   陈旧补偿天然自愈。
-                    // 🔴 R39 救援 v2：上限 48 → 160。1.0.136 真机四犯实录：顶栏出现「后台任务」
-                    //   胶囊等额外模块时 flex 横向溢出可超过 48px，48 上限把按钮留在屏外拉不回
-                    //   （老总图一：开关只露 2/3）。铁律②的基准位重算不累加，配合下方模糊稳态门，
-                    //   动画帧误读至多存活一拍即被下一拍重算覆盖，不再需要 48 这种贴身上限。
-                    var baseRight = dr.right - curN;
-                    var over = Math.round(baseRight - (window.innerWidth - 2));
-                    var want = (over > 0 && over <= 160) ? -over : 0;
-                    // 🔴 R39 救援 v2：稳态门从「逐拍全等」改「模糊稳态」——左右/上下 ±2px 内、
-                    //   连续两拍即视为稳态。真机「1 个后台任务」胶囊文字周期变宽会让按钮坐标
-                    //   每拍抖 1px，旧全等门永远不满足 → 救援永不触发（真机出屏而沙箱正常的
-                    //   根因差异）。宽度仍要求全等（宽度变了就是换元素/换布局，必须重新观察）。
-                    var nowL = Math.round(dr.left), nowT = Math.round(dr.top), nowW = Math.round(dr.width);
-                    var lk = db.__dshLastGeo;
-                    var stableNow = lk && Math.abs(lk[0] - nowL) <= 2 && Math.abs(lk[1] - nowT) <= 2 && lk[2] === nowW;
-                    db.__dshLastGeo = [nowL, nowT, nowW];
-                    // 🔴 R43⑤（v1.0.140，老总 10-25「主会话里右侧边栏按钮还是出屏 / 打开后一闪一闪」）：
-                    //   R39 的模糊稳态门在真机「后台任务胶囊文字周期变宽 + 智能体团队计数跳动」的
-                    //   顶栏里仍可能**永远不满足** → 救援等不到时机，按钮就一直留在屏外；而它一旦
-                    //   满足，又是在开合动画结束后 1~2 拍才写 → 肉眼就是「打开后一闪」。
-                    //   补两条：①**6px 死区**：位移小于 6px 的微调一律不写（2~4px 位移零视觉收益，
-                    //   却必然被看成一次跳变 —— 这才是「一闪一闪」的真身；代价是按钮最多允许
-                    //   越界 4px，肉眼不可辨）；②**700ms 超时兜底**：按钮连续 700ms 仍在屏外
-                    //   （over>4）就无条件按基准位重算写一次，绝不无限等待。
-                    //   ④ 计时器只在**真正回到屏内（over<=0）**时清零：若按 over<=4 清零，
-                    //   真机抖动让 over 在 2 与 10 之间来回跳时计时器会被反复重置，兜底永不触发
-                    //   （实测沙箱会话页：按钮 right=438 出屏 8px 却始终不写位移）。
-                    if (over > 0) {
-                      if (!db.__dshOverSince) db.__dshOverSince = Date.now();
-                    } else {
-                      db.__dshOverSince = 0;
-                    }
-                    var __overMs = db.__dshOverSince ? (Date.now() - db.__dshOverSince) : 0;
-                    if (stableNow || __overMs > 700) {
-                      var __diffN = Math.abs(curN - want);
-                      if (__diffN >= 6) {
-                        if (want === 0) db.style.removeProperty('transform');
-                        else db.style.setProperty('transform', 'translateX(' + want + 'px)', 'important');
-                        db.__dshOverSince = 0;
-                      }
-                    }
-                    // 🔴 R44（v1.0.141，老总 10-25 23:19 真机七犯：开→关抽屉回会话页，按钮出屏约 1/3）：
-                    //   沙箱实证（_probe_r44_cycle/_probe_r44_boss 连拍）：关抽屉后 DSH 在 headerCorner
-                    //   上补写自己的 translateX(-8px)，按钮**视觉**右缘被顶到 vw（430/432），但基准位
-                    //   重算（铁律②）认为自然位合法 → 救援永不介入 —— 铁律②的盲区：它防的是「动画期
-                    //   误补偿」，防不住「动画早已结束、DSH 位移长期滞留」。
-                    //   补一条**视觉位救援**：仅在抽屉关闭态（rightbarCol 整块仍在视口右外）且
-                    //   视觉越界 >4px **连续 ≥1200ms**（开合动画 ~300ms，持续滞留必非动画）才出手；
-                    //   出手方式=把总位移整体重算（含 DSH 那份）拉回 vw-2，单值不累加，幂等。
-                    var __visOver = Math.round(dr.right - (window.innerWidth - 2));
-                    var __drawerClosed = true;
-                    try {
-                      var __rc = document.querySelector('[class*="rightbarCol"]');
-                      if (__rc) { var __rr = __rc.getBoundingClientRect(); if (__rr.width > 0 && __rr.left < window.innerWidth) __drawerClosed = false; }
-                      var __op = document.querySelector('[data-sidebar-right-open]');
-                      if (__op) { var __orp = __op.getBoundingClientRect(); if (__orp.width > 0 && __orp.left < window.innerWidth - 4) __drawerClosed = false; }
-                    } catch (eV) {}
-                    if (__drawerClosed && __visOver > 4) {
-                      if (!db.__dshVisSince) db.__dshVisSince = Date.now();
-                      if (Date.now() - db.__dshVisSince >= 1200) {
-                        var __wantTotal = curN - __visOver;
-                        if (Math.abs(__wantTotal) < 1) db.style.removeProperty('transform');
-                        else db.style.setProperty('transform', 'translateX(' + __wantTotal + 'px)', 'important');
-                        db.__dshVisSince = 0;
-                        db.__dshLastGeo = null;
+                    var __gNatR = dr.right - __gTotal, __gNatL = dr.left - __gTotal;
+                    var __gTarget = 0;
+                    if (__gNatR > __gW) __gTarget = Math.round(__gW - __gNatR);
+                    else if (__gNatL < 0) __gTarget = Math.round(-__gNatL);
+                    if (__gTarget !== __gTotal) {
+                      var __gDiff = Math.abs(__gTarget - __gTotal);
+                      var __gPrev = db.__dshGuardX;
+                      db.__dshGuardX = __gDiff;
+                      if (__gPrev && Math.abs(__gPrev - __gDiff) <= 2) {
+                        if (__gTarget === 0) {
+                          db.style.removeProperty('transform');
+                          db.removeAttribute('data-dsh-btn-guard');
+                        } else {
+                          db.style.setProperty('transform', 'translateX(' + __gTarget + 'px)', 'important');
+                          db.setAttribute('data-dsh-btn-guard', String(__gTarget));
+                        }
+                        db.__dshGuardX = null;
                       }
                     } else {
-                      db.__dshVisSince = 0;
+                      db.__dshGuardX = null;
                     }
                   }
                 }

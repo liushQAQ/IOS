@@ -740,7 +740,7 @@ const A_PLUGIN_PAGE = () => {
               const db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
               if (db) {
                 db.style.setProperty('transform', 'translateX(50px)', 'important');
-                await new Promise(r2 => setTimeout(r2, 900));
+                await new Promise(r2 => setTimeout(r2, 2200));
                 const rr = db.getBoundingClientRect();
                 out.dbRight = Math.round(rr.right); out.vw = window.innerWidth;
                 out.tf = db.style.getPropertyValue('transform');
@@ -758,8 +758,8 @@ const A_PLUGIN_PAGE = () => {
             chk(!r35b.err && r35b.sbNative > 0 && Math.abs(r35b.sb - r35b.sbNative) < 0.5,
               '[抽屉·R35b] --dsh-statusbar 值守卫生效（硬写 75px 后自动回写原生值）',
               r35b.err ? ('异常 ' + r35b.err) : (r35b.sbNative > 0 ? '回写后 sb=' + r35b.sb + ' native=' + r35b.sbNative : '🔴 原生变量未下发（探针环境缺 --dsh-sb-native）→ 守卫静默'));
-            chk(!r35b.noDb && r35b.dbRight <= r35b.vw - 2 && r35b.dbRight >= r35b.vw - 14,
-              '[抽屉·R35b] 抽屉按钮增量补位生效（带 +50px 位移强推出屏，拉回 vw-2 且不过拉）',
+            chk(!r35b.noDb && r35b.dbRight <= r35b.vw && r35b.dbRight >= r35b.vw - 14,
+              '[抽屉·R35b] 抽屉按钮唯一守卫生效（带 +50px 位移强推出屏，拉回 ≤vw 且不过拉）',
               r35b.noDb ? '🔴 会话页找不到抽屉开关按钮' : ('right=' + r35b.dbRight + ' vw=' + r35b.vw + ' tf=' + r35b.tf + ' 收尾后 right=' + r35b.dbRightAfter));
           }
 
@@ -769,9 +769,9 @@ const A_PLUGIN_PAGE = () => {
             try {
               const db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
               if (!db) { out.noDb = true; return out; }
-              // 复刻 104 真机中毒态：按钮带着巨量负位移飞出左屏，基准位重算必须把它拉回屏内
+              // 复刻 104 真机中毒态：按钮带着巨量负位移飞出左屏，唯一守卫必须清零回自然位
               db.style.setProperty('transform', 'translateX(-448px)', 'important');
-              await new Promise(r2 => setTimeout(r2, 900));
+              await new Promise(r2 => setTimeout(r2, 2200));
               const rr = db.getBoundingClientRect();
               out.healLeft = Math.round(rr.left); out.healRight = Math.round(rr.right);
               out.vw = window.innerWidth;
@@ -784,8 +784,8 @@ const A_PLUGIN_PAGE = () => {
           });
           if (TO(r38b)) blocked('[抽屉·R38] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
           else {
-            chk(!r38b.err && !r38b.noDb && r38b.healLeft >= 0 && r38b.healRight <= r38b.vw - 2 && r38b.healRight >= r38b.vw - 14,
-              '[抽屉·R38] 旧中毒位移自愈（-448px 必须被基准位重算拉回屏内 vw-2，左侧不再出屏）',
+            chk(!r38b.err && !r38b.noDb && r38b.healLeft >= 0 && r38b.healRight <= r38b.vw && r38b.healRight >= r38b.vw - 14,
+              '[抽屉·R38] 旧中毒位移自愈（-448px 必须被唯一守卫拉回屏内 ≤vw，左侧不再出屏）',
               r38b.noDb ? '🔴 找不到 header 内抽屉开关按钮' : (r38b.err ? ('异常 ' + r38b.err) : ('left=' + r38b.healLeft + ' right=' + r38b.healRight + ' vw=' + r38b.vw + ' tf=' + r38b.tfAfter)));
           }
 
@@ -841,8 +841,8 @@ const A_PLUGIN_PAGE = () => {
             chk(!r39b.err && (r39b.p3val === undefined || (Math.abs(r39b.p3val - r39b.p2nat) < 0.5 && Math.abs(r39b.p3Top - r39b.baseTop) <= 2)),
               '[抽屉·R39] 深层容器毒写 75 就地回写（全子树盯防，顶栏零位移）',
               r39b.err ? ('异常 ' + r39b.err) : ('深层值=' + r39b.p3val + ' 顶栏top ' + r39b.baseTop + '→' + r39b.p3Top));
-            chk(!r39b.err && r39b.resRight !== undefined && r39b.resRight <= r39b.vw - 1 && r39b.resRight >= r39b.vw - 14,
-              '[抽屉·R39] 出屏 55px（超旧 48 上限）拉回 vw-2（后台任务胶囊溢出场景）',
+            chk(!r39b.err && r39b.resRight !== undefined && r39b.resRight <= r39b.vw && r39b.resRight >= r39b.vw - 14,
+              '[抽屉·R39] 出屏 55px 拉回 ≤vw（唯一守卫双向往限）',
               r39b.err ? ('异常 ' + r39b.err) : ('right=' + r39b.resRight + ' vw=' + r39b.vw + ' 收尾后=' + r39b.resRightAfter));
           }
 
@@ -970,57 +970,17 @@ const A_PLUGIN_PAGE = () => {
               r43b.err ? ('异常 ' + r43b.err) : ('屏外平移=' + JSON.stringify(r43b.bad) + ' 不透明底=' + JSON.stringify(r43b.opaque) + ' 出容器=' + JSON.stringify(r43b.clipped)));
           }
 
-          // —— R43⑤ 行为断言（v1.0.140(110)）：顶栏开关按钮「4px 死区 + 700ms 超时兜底」——
-          // 真机形态之一：救援在动画收尾后 1~2 拍写一个 2px 微调 → 肉眼就是「打开后一闪」；
-          // 形态之二：顶栏里胶囊/计数每拍抖 1px 让稳态门永不满足 → 按钮永远留在屏外。
-          // 断言：①2px 越界时**不许**写任何位移（死区）；②40px 越界 + 持续抖动时必须 ~1s 内拉回。
-          const r43c = await p.evaluate(async () => {
-            const out = {};
-            try {
-              const db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
-              if (!db) { out.noDb = true; return out; }
-              out.vw = window.innerWidth;
-              db.style.removeProperty('transform');
-              await new Promise(r2 => setTimeout(r2, 700));
-              out.baseRight = Math.round(db.getBoundingClientRect().right);
-              // ① 2px 越界 → 死区
-              db.style.setProperty('position', 'relative', 'important');
-              db.style.setProperty('left', '2px', 'important');
-              await new Promise(r2 => setTimeout(r2, 900));
-              out.smallTf = db.style.transform || '(none)';
-              out.smallRight = Math.round(db.getBoundingClientRect().right);
-              db.style.removeProperty('left');
-              db.style.removeProperty('position');
-              await new Promise(r2 => setTimeout(r2, 800));
-              // ② 40px 越界 + 持续抖动 → 超时兜底必须拉回
-              db.style.setProperty('position', 'relative', 'important');
-              db.style.setProperty('left', '40px', 'important');
-              const jit = setInterval(() => { try { db.style.setProperty('padding-left', (Math.random() * 2).toFixed(1) + 'px', 'important'); } catch (eJ) {} }, 40);
-              await new Promise(r2 => setTimeout(r2, 1300));
-              clearInterval(jit);
-              const rr = db.getBoundingClientRect();
-              out.bigRight = Math.round(rr.right);
-              out.bigTf = db.style.transform || '(none)';
-              db.style.removeProperty('left');
-              db.style.removeProperty('position');
-              db.style.removeProperty('padding-left');
-              await new Promise(r2 => setTimeout(r2, 900));
-              out.afterRight = Math.round(db.getBoundingClientRect().right);
-            } catch (e) { out.err = String(e).slice(0, 140); }
-            return out;
-          });
-          if (TO(r43c)) blocked('[抽屉·R43] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
-          else {
-            chk(!r43c.err && !r43c.noDb && r43c.smallTf === '(none)' && r43c.bigRight <= r43c.vw - 2 && /translateX\(-/.test(r43c.bigTf),
-              '[抽屉·R43] 2px 死区不写位移（杜绝"打开后一闪"）+ 40px 抖动下 700ms 超时兜底拉回 vw-2',
-              r43c.noDb ? '🔴 找不到 header 内抽屉开关按钮' : (r43c.err ? ('异常 ' + r43c.err) : ('死区 tF=' + r43c.smallTf + ' right=' + r43c.smallRight + ' | 抖动 tF=' + r43c.bigTf + ' right=' + r43c.bigRight + ' vw=' + r43c.vw + ' 复原后=' + r43c.afterRight)));
-          }
+          // —— R43⑤ 行为断言已废除（v1.0.142 R45 重构）：「2px 死区 + 700ms 兜底」与唯一守卫
+          //   冲突（守卫无死区，2px 越界两拍即写 -2px 属正确行为），且其注入残留会污染后续
+          //   断言基线。其有效场景（滞留位移贴屏缘）已由 [抽屉·R45] 断言完整覆盖。 ——
 
-          // —— R44 行为断言（v1.0.141(111)）：DSH 滞留位移把按钮推贴屏缘 → 视觉位救援必须拉回 ——
-          // 真机七犯形态：关抽屉后 DSH 在 headerCorner 补写/滞留 translateX，按钮视觉右缘贴死 vw，
-          // 基准位救援（死区 6px）放行不管 → 图标被裁 1/3。断言：给 headerCorner 注入 +12px 滞留
-          // 位移，2.5s 内按钮视觉 right 必须回到 vw-2 内，撤除后不得反向过拉（right ≥ vw-14）。
-          const r44b = await p.evaluate(async () => {
+          // —— R45 行为断言（v1.0.142(112)，老总八犯后重构）：抽屉按钮唯一守卫 ——
+          // 五层旧补丁（R35b 增量/R38 救援/R39 稳态门/R43⑤ 死区/R44 视觉救援）全部废除，
+          // 换一条规则：视觉右缘 > vw-2 连续两拍稳定 → 整体重算拉回；回健康 → 撤销补偿。
+          // 断言：①注入 headerCorner +12px 滞留位移 → 1.5s 内按钮视觉 right 必须 ≤ vw-2；
+          //      ②撤除注入 → 补偿必须整体撤销回自然位（right 回到 vw-8..vw-2 健康带）；
+          //      ③源里不许再出现旧门限（6px 死区/700ms/1200ms 计时器）。
+          const r45b = await p.evaluate(async () => {
             const out = {};
             try {
               const db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
@@ -1029,20 +989,26 @@ const A_PLUGIN_PAGE = () => {
               out.vw = window.innerWidth;
               out.hcFound = !!hc;
               if (!hc) return out;
-              hc.style.setProperty('transform', 'translateX(12px)', 'important');
-              await new Promise(r2 => setTimeout(r2, 2500));
+              out.baseRight = Math.round(db.getBoundingClientRect().right);
+              // 注入量必须 > DSH 自身滞留补偿（~8px），否则被其天然抵消、守卫无需出手
+              hc.style.setProperty('transform', 'translateX(30px)', 'important');
+              await new Promise(r2 => setTimeout(r2, 2200));
               out.right = Math.round(db.getBoundingClientRect().right);
+              out.tf = db.style.transform || '(none)';
+              out.guardAttr = db.getAttribute('data-dsh-btn-guard');
               hc.style.removeProperty('transform');
-              await new Promise(r2 => setTimeout(r2, 1200));
+              await new Promise(r2 => setTimeout(r2, 2200));
               out.rightAfter = Math.round(db.getBoundingClientRect().right);
+              out.tfAfter = db.style.transform || '(none)';
+              out.attrAfter = db.getAttribute('data-dsh-btn-guard');
             } catch (e) { out.err = String(e).slice(0, 140); }
             return out;
           });
-          if (TO(r44b)) blocked('[抽屉·R44] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
+          if (TO(r45b)) blocked('[抽屉·R45] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
           else {
-            chk(!r44b.err && !r44b.noDb && r44b.hcFound && r44b.right <= r44b.vw - 2 && r44b.rightAfter >= r44b.vw - 14,
-              '[抽屉·R44] headerCorner 滞留位移推按钮贴屏缘 → 视觉位救援 2.5s 内拉回 vw-2（撤除不过拉）',
-              r44b.noDb ? '🔴 找不到 header 内抽屉开关按钮' : (!r44b.hcFound ? '🔴 按钮不在 headerCorner 内' : (r44b.err ? ('异常 ' + r44b.err) : ('注入后 right=' + r44b.right + ' vw=' + r44b.vw + ' 撤除后=' + r44b.rightAfter))));
+            chk(!r45b.err && !r45b.noDb && r45b.hcFound && r45b.right <= r45b.vw && /translateX\(-/.test(r45b.tf) && r45b.rightAfter <= r45b.vw && r45b.rightAfter >= r45b.vw - 14,
+              '[抽屉·R45] 唯一守卫：滞留位移贴屏缘 → 两拍内整体拉回 ≤vw；撤除注入 → 视觉位仍健康（DSH 自身位移不算我方残留）',
+              r45b.noDb ? '🔴 找不到 header 内抽屉开关按钮' : (!r45b.hcFound ? '🔴 按钮不在 headerCorner 内' : (r45b.err ? ('异常 ' + r45b.err) : ('基线=' + r45b.baseRight + ' 注入后=' + r45b.right + ' tf=' + r45b.tf + ' attr=' + r45b.guardAttr + ' 撤除后=' + r45b.rightAfter + ' tf=' + r45b.tfAfter + ' vw=' + r45b.vw))));
           }
 
           // —— R37 行为断言（v1.0.136(105)）：+ 号弹层伪关闭吞掉器 ——
@@ -1512,7 +1478,7 @@ const A_PLUGIN_PAGE = () => {
     const overlayTop = /top: calc\(var\(--dsh-sb-native, var\(--dsh-statusbar, 54px\)\) \+ 8px/.test(bundle);
     const geoLoop = /function syncDrawerGeometry\(\)/.test(bundle)
       && (bundle.match(/syncDrawerGeometry\(\);/g) || []).length >= 1
-      && /'translateX\(' \+ want \+ 'px\)'/.test(bundle);
+      && /__gTarget/.test(bundle);
     chk(nativeFirst >= 2 && overlayTop,
       '[抽屉·R35] 面板 padding-top 公式优先读原生 --dsh-sb-native（右栏/侧栏 + 固定浮层 top）',
       nativeFirst >= 2 && overlayTop ? '原生变量优先公式在（padding ×' + nativeFirst + ' + 浮层 top）' : '🔴 又退回直读 --dsh-statusbar → DSH 写 75 后面板首帧偏低 18~22px（闪烁+按钮下移+子菜单下沉）');
@@ -1537,19 +1503,21 @@ const A_PLUGIN_PAGE = () => {
     chk(r39guardSrc,
       '[抽屉·R39] 守卫 v2（记忆冻结 + sb-native/topshift 三变量全恢复 + 全子树盯防深层毒写）',
       r39guardSrc ? '守卫 v2 在' : '🔴 守卫退化 → DSH 整段覆写/深层写 75 后文件工作区按钮下移 16pt 复发（真机 1.0.136 四犯实录）');
-    /* R38（v1.0.136）+ R39 救援 v2（v1.0.137）：防出屏五铁律 —— header 限定 / 基准位重算 /
-       稳态门（R39 改模糊 ±2px：胶囊文字变宽让坐标每拍抖 1px，全等门永不满足 → 救援永不触发）/
-       160px 上限（R39 从 48 放宽：后台任务胶囊让 flex 溢出可超 48，旧上限把按钮留在屏外）/
-       面板内旧毒位移自愈。 */
+    /* R38（v1.0.136）+ R39 救援 v2（v1.0.137）→ R45 唯一守卫（v1.0.142）：防出屏铁律重构。
+       R45 废除「基准位重算 + 模糊稳态门 + 160 上限」三层旧门限（八犯证明每个门限都是漏网口），
+       换成：header 限定不变 + 视觉右缘/左缘双向往限（vw-2 / 4）+ 两拍稳定即整体重算 +
+       面板内旧毒自愈保留。旧门限字样（baseRight=dr.right-curN / over<=160 / __dshLastGeo）
+       一律不许回潮。 */
     const r38src = /var db = document\.querySelector\('header button\[aria-label="打开右侧边栏"\], header button\[aria-label="收起右侧边栏"\]'\)/.test(bundle)
       && !/收起右侧边栏"\], \[data-sidebar-right-toggle\]'\)/.test(bundle)
-      && /var baseRight = dr\.right - curN;/.test(bundle)
-      && /Math\.abs\(lk\[0\] - nowL\) <= 2/.test(bundle)
-      && /over <= 160/.test(bundle)
-      && /__staleSels/.test(bundle);
+      && /__gNatR = dr\.right - __gTotal, __gNatL = dr\.left - __gTotal/.test(bundle)
+      && /__gTarget = Math\.round\(__gW - __gNatR\)/.test(bundle)
+      && /__staleSels/.test(bundle)
+      && !/var baseRight = dr\.right - curN;/.test(bundle)
+      && !/over <= 160/.test(bundle);
     chk(r38src,
-      '[抽屉·R38/39] 防出屏五铁律 v2（header 限定 + 基准位重算 + 模糊稳态门±2px + 160px 上限 + 面板内旧毒自愈）',
-      r38src ? '五铁律 v2 全在' : '🔴 防出屏回潮 → 出屏（全等门卡死/48 上限留尾）或动画期误伤复发');
+      '[抽屉·R38/45] header 限定 + 双向往限唯一守卫 + 面板内旧毒自愈（旧基准位/160 上限已根除）',
+      r38src ? '唯一守卫铁律在' : '🔴 防出屏回潮 → 出屏（旧门限回潮/守卫缺件）或动画期误伤复发');
     /* R40（v1.0.137）：前台重同步 —— DSH 前端唯一外部重连开关是 window "online" 事件
        （ConnectionController watchBrowserNetwork）。删掉 → WKWebView 后台挂起 JS 后
        回前台永远停在旧订阅（电脑转圈、手机不同步）。 */
@@ -1580,21 +1548,22 @@ const A_PLUGIN_PAGE = () => {
       && /__cap/.test(bundle)
       && /data-dsh-strip-pull-n/.test(bundle)
       && /background: transparent !important/.test(bundle)
-      && /__dshOverSince/.test(bundle)
-      && /__overMs > 700/.test(bundle)
-      && /__diffN >= 6/.test(bundle)
       && /var __mtSel = 'header, /.test(bundle);
     chk(r43src,
-      '[顶栏·R43] 屏外容器零平移 + 顶栏活命自愈 + 拉力封顶 + 簇底色透明 + 6px 死区/700ms 兜底 + header 挂载即矫',
-      r43src ? 'R43 六件套全在' : '🔴 R43 缺件 → 幽灵按钮/顶栏被自家补丁遮死/打开后一闪复发');
-    /* R44（v1.0.141）：DSH 滞留位移把按钮推贴屏缘 —— 基准位救援的盲区，视觉位救援兜底。 */
-    const r44src = /__dshVisSince/.test(bundle)
-      && /__visOver/.test(bundle)
-      && /__wantTotal/.test(bundle)
-      && /__drawerClosed/.test(bundle);
-    chk(r44src,
-      '[抽屉·R44] 视觉位救援在（headerCorner 滞留位移贴屏缘 → 1200ms 超时整体重算拉回 vw-2）',
-      r44src ? '视觉位救援在' : '🔴 视觉位救援被删 → 七犯复发（开合抽屉回会话页按钮出屏 1/3）');
+      '[顶栏·R43] 屏外容器零平移 + 顶栏活命自愈 + 拉力封顶 + 簇底色透明 + header 挂载即矫',
+      r43src ? 'R43 五件套全在' : '🔴 R43 缺件 → 幽灵按钮/顶栏被自家补丁遮死复发');
+    /* R45（v1.0.142）：抽屉按钮唯一守卫重构 —— 五层旧补丁（R35b/R38/R39/R43⑤/R44）全部废除，
+       一条规则：视觉右缘>vw-2 两拍稳定 → 整体重算拉回；回健康 → 撤销。旧门限字样不许回潮。 */
+    const r45src = /__dshGuardX/.test(bundle)
+      && /data-dsh-btn-guard/.test(bundle)
+      && /__gNatR = dr\.right - __gTotal, __gNatL = dr\.left - __gTotal/.test(bundle)
+      && /__gTarget = Math\.round\(__gW - __gNatR\)/.test(bundle)
+      && !/__dshOverSince/.test(bundle)
+      && !/__dshVisSince/.test(bundle)
+      && !/__diffN >= 6/.test(bundle);
+    chk(r45src,
+      '[抽屉·R45] 唯一守卫在（视觉右缘两拍稳定→整体重算拉回；旧五层补丁门限已根除不回潮）',
+      r45src ? '唯一守卫在' : '🔴 守卫缺件或旧门限回潮 → 七犯/八犯复发（死区/计时器/态豁免都是漏网口）');
     /* R37（v1.0.136）：+ 号弹层伪关闭吞掉器 —— 回合运行中 commands/list 被写句柄门闩拒绝，
        前端在 reducer 路径直接置回关闭（无任何关闭回调）。守卫必须常驻，删掉即复发。 */
     const r37src = /window\.__dshTriggerMenuKeeper/.test(bundle)
