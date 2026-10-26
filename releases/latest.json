@@ -1,12 +1,12 @@
 {
-  "version": "1.0.143",
-  "build": 125,
-  "updated_at": "2026-10-26 21:30:00",
-  "title": "v1.0.143(125) 抽屉加高避让灵动岛 + 消除展开闪烁",
-  "changelog": "1. 抽屉状态栏加高避让灵动岛与系统时间，留白更舒适\n2. 消除抽屉展开时右上角三按钮闪烁横跳问题\n3. CI 升级至 macOS 15 + Xcode 16.4，打包秒级完成",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-125.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-125.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.143/DSHios-public-1.0.143-125.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.143",
-  "md5": "9cbfbc3daab405b1a61b8d81b3559ed2"
+  "version": "2.0.0",
+  "build": 1,
+  "updated_at": "2026-10-26 23:55:00",
+  "title": "v2.0.0(1) 重磅升级（离线OCR + 后台保活 + 灵动岛）",
+  "changelog": "1. 引入苹果原生 Vision 离线毫秒级 OCR 拍照/相册提取文字并自动回填\n2. 引入后台延时防断连保活机制 + 任务完成系统横幅通知\n3. 接入 ActivityKit 灵动岛与锁屏实时活动监控\n4. 抽屉状态栏加高避让灵动岛与时间，彻底消除展开时三按钮闪烁",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.0.0-1.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.0.0-1.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.0.0/DSHios-public-2.0.0-1.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.0.0",
+  "md5": "9c4e2cd0bf63aa6b6cf6a3f76aca609e"
 }
