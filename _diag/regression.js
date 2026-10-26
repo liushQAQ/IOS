@@ -1564,6 +1564,51 @@ const A_PLUGIN_PAGE = () => {
     chk(r45src,
       '[抽屉·R45] 唯一守卫在（视觉右缘两拍稳定→整体重算拉回；旧五层补丁门限已根除不回潮）',
       r45src ? '唯一守卫在' : '🔴 守卫缺件或旧门限回潮 → 七犯/八犯复发（死区/计时器/态豁免都是漏网口）');
+    /* R46（v1.0.142）：文案规范打包前机械校验（老总令：「更新说明和关于要尽量最大化精简，
+       排序1-2-3-4-5-6序号对齐，靠左对齐，纳入打包前校验」）。
+       校验三处：① 设置页更新日志卡：logContent 每条一行、序号 1..N 严格递增不重复、
+       每条 ≤ 40 字（含标点，版本号尾注不计）、badge 版本必须动态取 Version.marketing、
+       正文与标题 label 显式 textAlignment = .left；
+       ② 关于页（showAbout）：本版要点 ≤ 3 条且每条 ≤ 40 字；
+       ③ 更新弹窗走 latest.json changelog（服务端下发），App 侧 alignAlertMessageLeft 必须在。 */
+    {
+      const setSrc = fs.readFileSync(path.join(DIR, '..', 'DSHios', 'SettingsViewController.swift'), 'utf8');
+      const vcSrc46 = fs.readFileSync(path.join(DIR, '..', 'DSHios', 'ViewController.swift'), 'utf8');
+      const logErrs = [];
+      const mLog = setSrc.match(/let logContent = """\r?\n([\s\S]*?)\r?\n\s*"""/);
+      if (!mLog) logErrs.push('logContent 块未找到');
+      else {
+        const items = mLog[1].split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        if (items.length < 1) logErrs.push('日志为空');
+        let expect = 1;
+        for (const it of items) {
+          const m = it.match(/^(\d+)\.\s(.+)$/);
+          if (!m) { logErrs.push('非「N. 文本」格式: ' + it.slice(0, 24)); continue; }
+          if (Number(m[1]) !== expect) { logErrs.push('序号断链: 期望 ' + expect + ' 实为 ' + m[1]); continue; }
+          expect++;
+          const body = m[2].replace(/\s*\([0-9.,\-]+\)\s*$/, '');
+          if (body.length > 40) logErrs.push('第' + m[1] + '条超40字(' + body.length + '): ' + body.slice(0, 20) + '…');
+        }
+      }
+      if (!/badgeLabel\.text = "更新日志 \(v\\\(AppDelegate\.Version\.marketing\)\)"/.test(setSrc)) logErrs.push('badge 版本未动态化（禁止写死）');
+      if (!/titleLabel\.textAlignment = \.left/.test(setSrc)) logErrs.push('更新说明标题缺显式左对齐');
+      if (!/contentLabel\.textAlignment = \.left/.test(setSrc)) logErrs.push('更新说明正文缺显式左对齐');
+      const mAbout = vcSrc46.match(/【本版要点[^\n]*\n([\s\S]*?)"""/);
+      if (!mAbout) logErrs.push('关于页本版要点未找到');
+      else {
+        const abItems = mAbout[1].split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        if (abItems.length > 3) logErrs.push('关于页本版要点超3条(' + abItems.length + ')');
+        for (const a of abItems) {
+          const am = a.match(/^\d+\.\s(.+)$/);
+          if (!am) { logErrs.push('关于页要点非序号格式: ' + a.slice(0, 20)); continue; }
+          if (am[1].length > 40) logErrs.push('关于页要点超40字: ' + am[1].slice(0, 20) + '…');
+        }
+      }
+      if (!/alignAlertMessageLeft/.test(vcSrc46)) logErrs.push('更新弹窗左对齐器被删');
+      chk(logErrs.length === 0,
+        '[文案·R46] 更新说明/关于：序号1..N递增·每条≤40字·显式左对齐·badge动态版本·要点≤3条',
+        logErrs.length ? '🔴 ' + logErrs.slice(0, 4).join('；') : '文案规范全过（日志 ' + (mLog ? mLog[1].split(/\r?\n/).filter(s => s.trim()).length : 0) + ' 条）');
+    }
     /* R37（v1.0.136）：+ 号弹层伪关闭吞掉器 —— 回合运行中 commands/list 被写句柄门闩拒绝，
        前端在 reducer 路径直接置回关闭（无任何关闭回调）。守卫必须常驻，删掉即复发。 */
     const r37src = /window\.__dshTriggerMenuKeeper/.test(bundle)

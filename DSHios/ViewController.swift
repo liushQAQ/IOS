@@ -8080,14 +8080,14 @@ function applySidebarInset() {
         detail.numberOfLines = 0
         detail.font = .preferredFont(forTextStyle: .footnote)
         detail.textColor = .secondaryLabel
-        detail.textAlignment = .center
+        detail.textAlignment = .left   // 🔴 v1.0.142 文案规范：多行说明靠左
         detail.lineBreakMode = .byWordWrapping
 
         let hint = UILabel()
         hint.numberOfLines = 0
         hint.font = .preferredFont(forTextStyle: .footnote)
         hint.textColor = .secondaryLabel
-        hint.textAlignment = .center
+        hint.textAlignment = .left   // 🔴 v1.0.142 文案规范：编号提示 1-2-3 靠左对齐
         hint.text = """
         请确认：
         1. 电脑端 DSH 正在运行（支持官方原版）
@@ -9127,11 +9127,9 @@ function applySidebarInset() {
             【设备环境信息】
             \(deviceInfo)
 
-            【本版要点 (v1.0.134)】
-            · 右抽屉顶栏闪烁/按钮下移/出屏根治
-            · 左侧目录改手势：左缘右滑开、左滑关/返回
-            · 隐藏目录按钮，二级子菜单恢复原位
-            · 标题横跳与图片预览修复延续在案
+            【本版要点 (v1.0.142)】
+            1. 开合抽屉回会话页，按钮出屏八犯根治（唯一守卫重构）
+            2. 更新说明与关于文案精简：序号对齐、靠左排版
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
