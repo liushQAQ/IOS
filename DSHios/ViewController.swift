@@ -990,8 +990,9 @@ final class ViewController: UIViewController {
             '[data-aionui-preview-col] {',
             '  /* R35：优先读原生专属 --dsh-sb-native —— DSH 自己会写 --dsh-statusbar 且真机实测偏大(75)，',
             '     直接读它会让面板/抽屉首帧整体偏低 18~22px（闪烁+按钮下移+侧栏子菜单下沉同根）；',
-            '     原生变量 DSH 写不动，重挂载首帧即正确。JS 未下发时退回旧变量兜底。 */',
-            '  padding-top: calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 6px - var(--dsh-topshift, 0px)) !important;',
+            '     🔴 R49（老总令：开始这排状态栏高一点）：全屏面板直接贴顶 y=0，不扣减会话页 topshift，',
+            '     增加顶部呼吸边距（+ 14px，总体 + 20px），避让灵动岛与系统时间不顶头。 */',
+            '  padding-top: calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 6px + 14px) !important;',
             '  box-sizing: border-box !important;',
             '}',
             '[class*="rightbarCol"],',
@@ -2464,8 +2465,9 @@ final class ViewController: UIViewController {
             function syncDrawerGeometry() {
               try {
                 var nh = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 59;
-                var ts = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 0;
-                var pad = (nh + 6 - ts) + 'px';
+                // 🔴 R49（老总令：开始这排状态栏高一点）：全屏面板直接贴顶 y=0，不扣减会话页 topshift，
+                //   增加顶部安全边距至 nh + 20px（即 nh + 6 + 14），避让灵动岛与系统时间不顶头。
+                var pad = (nh + 6 + 14) + 'px';
                 var cols = document.querySelectorAll('[class*="rightbarCol"], .CZPbNW_rightbarCol, [class*="sidebarCol"], .CZPbNW_sidebarCol');
                 for (var gi = 0; gi < cols.length; gi++) {
                   var gc = cols[gi];
@@ -2594,7 +2596,18 @@ final class ViewController: UIViewController {
                     var __visC = true, __anC = __cluster.parentElement;
                     for (var __ad = 0; __anC && __anC !== document.body && __ad < 12; __ad++, __anC = __anC.parentElement) {
                       var __arC = __anC.getBoundingClientRect();
-                      if (__arC.width > 0 && __arC.left >= window.innerWidth) { __visC = false; break; }
+                      if (__arC.width > 0) {
+                        if (__arC.left >= window.innerWidth) { __visC = false; break; }
+                        // 🔴 R49（老总 2026-10-26 真机：打开抽屉三个按钮闪烁一下才归位根治）：
+                        //   祖先是抽屉面板（rightbarCol/sidebarCol）时，若 left > 4，说明抽屉正在
+                        //   滑动动画中（未达到停靠稳态 left <= 0）。此时内部按钮正随抽屉整体平滑滑入，
+                        //   绝不允许对其施加临时的 translateX 平移，否则滑入中途会被强拽出闪烁跳变！
+                        var __cls = (__anC.className && typeof __anC.className === 'string') ? __anC.className : '';
+                        if ((__cls.indexOf('rightbarCol') >= 0 || __cls.indexOf('sidebarCol') >= 0) && __arC.left > 4) {
+                          __visC = false;
+                          break;
+                        }
+                      }
                     }
                     if (!__visC) {
                       if (__cluster.getAttribute('data-dsh-strip-clamp') === '1') {
@@ -4064,8 +4077,8 @@ final class ViewController: UIViewController {
             '  width: 252px !important;',
             '  max-width: 252px !important;',
             '  min-width: 0 !important;',
-            '  /* R35：同右侧面板，改读原生专属变量（DSH 写 --dsh-statusbar=75 会把侧栏内容整体压低）。 */',
-            '  padding-top: calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 6px - var(--dsh-topshift, 0px)) !important;',
+            '  /* R35/R49：同右侧面板，改读原生专属变量，且不扣减 topshift，留出充裕状态栏避让。 */',
+            '  padding-top: calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 6px + 14px) !important;',
             '  padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;',
             '  height: 100vh !important;',
             '  height: 100dvh !important;',
@@ -9194,8 +9207,8 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 右侧抽屉按钮改为从屏幕右缘向左长滑打开
-            2. 修复开关抽屉回会话页，按钮跑出屏幕
+            1. 抽屉状态栏加高避让灵动岛与系统时间
+            2. 消除抽屉展开时右上角三按钮闪烁横跳
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
