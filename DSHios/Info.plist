@@ -74,7 +74,7 @@
 		<true/>
 	</dict>
 	<key>DSHAppVersion</key>
-	<string>1.0.143</string>
+	<string>2.0.0</string>
 	<key>DSHFeedbackEmail</key>
 	<string>734530963@qq.com</string>
 	<key>NSLocalNetworkUsageDescription</key>
@@ -84,7 +84,11 @@
 		<string>_http._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>需要访问相机以扫描二维码等功能。</string>
+	<string>需要访问相机以扫描二维码、拍摄文档与图片并进行离线文本识别（OCR）。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要访问相册以选取图片进行离线文本识别（OCR）或发送文件。</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>需要访问麦克风以支持语音输入。</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

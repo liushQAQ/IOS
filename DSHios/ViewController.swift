@@ -4,10 +4,24 @@ import Network
 import AudioToolbox
 import Speech
 import AVFoundation
+import UserNotifications
+import Vision
+#if canImport(ActivityKit)
+import ActivityKit
+#endif
 
 /// 主界面：全屏 WKWebView，与电脑桌面端 DSH 布局完全一致（无任何原生地址栏/工具栏遮挡）。
 /// 原生只在「连不上」时接管：错误浮层 + 重试；右下角一个半透明小按钮用于换地址/看版本。
-final class ViewController: UIViewController {
+final class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+
+    // MARK: - 2.0 原生增强属性（灵动岛 / 后台延时保活与推送 / Vision 离线 OCR）
+    private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
+    private var isExecutingTask: Bool = false
+    private var currentTaskTitle: String = "会话执行"
+    private var currentStepText: String = "正在处理中..."
+    #if canImport(ActivityKit)
+    private var currentLiveActivity: Any? = nil
+    #endif
 
     private var webView: WKWebView!
     private var activityIndicator: UIActivityIndicatorView!
@@ -208,6 +222,171 @@ final class ViewController: UIViewController {
                 }
             }
         }
+    }
+
+    // MARK: - 2.0 原生统一消息通道 (dshNativeBridge)
+    private static func makeNativeBridge(owner: ViewController) -> WKScriptMessageHandler {
+        VoiceInputBridge { [weak owner] dict in
+            guard let self = owner else { return }
+            let channel = dict["channel"] as? String ?? ""
+            let action = dict["action"] as? String ?? ""
+            let payload = dict["payload"] as? [String: Any] ?? [:]
+            
+            DispatchQueue.main.async {
+                if channel == "ocr" {
+                    self.presentNativeOCRActionSheet()
+                } else if channel == "task" || channel == "live_activity" {
+                    let title = payload["sessionTitle"] as? String ?? payload["sessionName"] as? String
+                    let step = payload["stepText"] as? String
+                    let isFin = payload["isFinished"] as? Bool ?? (action == "finish" || action == "end")
+                    self.handleTaskStatusUpdate(action: action, title: title, stepText: step, isFinished: isFin)
+                }
+            }
+        }
+    }
+
+    /// 2.0 任务执行状态调度：驱动灵动岛、锁屏实时卡片与后台推送
+    private func handleTaskStatusUpdate(action: String, title: String?, stepText: String?, isFinished: Bool) {
+        if let t = title, !t.isEmpty { currentTaskTitle = t }
+        if let s = stepText, !s.isEmpty { currentStepText = s }
+        
+        if action == "start" {
+            isExecutingTask = true
+            updateLiveActivity(step: currentStepText, finished: false)
+        } else if action == "step" || action == "update" {
+            isExecutingTask = true
+            updateLiveActivity(step: currentStepText, finished: false)
+        } else if action == "finish" || action == "end" || isFinished {
+            isExecutingTask = false
+            updateLiveActivity(step: "已完成所有步骤与工具调用", finished: true)
+            sendTaskCompletionNotification(sessionTitle: currentTaskTitle, detail: currentStepText)
+        }
+    }
+
+    /// 任务完成本地通知：退入后台时滑出系统横幅
+    private func sendTaskCompletionNotification(sessionTitle: String, detail: String) {
+        guard UIApplication.shared.applicationState != .active else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "DSH 任务执行完毕"
+        content.body = "会话「\(sessionTitle)」已完成所有步骤与工具调用，点击查看结果。"
+        content.sound = .default
+        let req = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
+    }
+
+    /// 灵动岛 (ActivityKit) 实时活动管理
+    private func updateLiveActivity(step: String, finished: Bool) {
+        #if canImport(ActivityKit)
+        guard #available(iOS 16.1, *) else { return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        
+        if let act = currentLiveActivity as? Activity<DSHTaskAttributes> {
+            let state = DSHTaskAttributes.ContentState(stepText: step, isFinished: finished)
+            Task {
+                if finished {
+                    await act.end(using: state, dismissalPolicy: .after(Date().addingTimeInterval(4.0)))
+                    self.currentLiveActivity = nil
+                } else {
+                    await act.update(using: state)
+                }
+            }
+        } else if !finished {
+            let attrs = DSHTaskAttributes(sessionTitle: currentTaskTitle)
+            let state = DSHTaskAttributes.ContentState(stepText: step, isFinished: false)
+            do {
+                let act = try Activity<DSHTaskAttributes>.request(attributes: attrs, contentState: state, pushType: nil)
+                self.currentLiveActivity = act
+            } catch {}
+        }
+        #endif
+    }
+
+    // MARK: - 原生相机与 Vision 离线毫秒级 OCR
+    func presentNativeOCRActionSheet() {
+        let sheet = UIAlertController(title: "原生 OCR 识字与拍照", message: "基于苹果 Vision 纯端侧离线识别，不消耗网络，提取文字直填输入框", preferredStyle: .actionSheet)
+        
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            sheet.addAction(UIAlertAction(title: "📸 拍照并提取文字 (Vision 离线 OCR)", style: .default) { [weak self] _ in
+                self?.openImagePicker(sourceType: .camera)
+            })
+        }
+        
+        sheet.addAction(UIAlertAction(title: "🖼️ 从相册选择并提取文字", style: .default) { [weak self] _ in
+            self?.openImagePicker(sourceType: .photoLibrary)
+        })
+        
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(sheet, animated: true)
+    }
+    
+    private func openImagePicker(sourceType: UIImagePickerController.SourceType) {
+        let picker = UIImagePickerController()
+        picker.delegate = self
+        picker.sourceType = sourceType
+        picker.modalPresentationStyle = .fullScreen
+        present(picker, animated: true)
+    }
+    
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        picker.dismiss(animated: true)
+        guard let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage else { return }
+        processImageWithVisionOCR(image)
+    }
+    
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+    }
+    
+    private func processImageWithVisionOCR(_ image: UIImage) {
+        guard let cgImage = image.cgImage else {
+            showToast(message: "图片解析失败")
+            return
+        }
+        
+        showToast(message: "⚡ 正在进行离线 OCR 识别...")
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            let request = VNRecognizeTextRequest { req, err in
+                guard let results = req.results as? [VNRecognizedTextObservation], err == nil else {
+                    DispatchQueue.main.async {
+                        self?.showToast(message: "未识别出文字或图片不清晰")
+                    }
+                    return
+                }
+                
+                let lines = results.compactMap { $0.topCandidates(1).first?.string }
+                let fullText = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                DispatchQueue.main.async {
+                    if fullText.isEmpty {
+                        self?.showToast(message: "未在图片中识别出有效文字")
+                    } else {
+                        self?.injectTextToWebViewComposer(text: fullText)
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        self?.showToast(message: "✅ 已提取 \(lines.count) 行文字并回填到输入框")
+                    }
+                }
+            }
+            
+            request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            
+            do {
+                try handler.perform([request])
+            } catch {
+                DispatchQueue.main.async {
+                    self?.showToast(message: "OCR 识别出错: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    private func injectTextToWebViewComposer(text: String) {
+        let b64 = Data(text.utf8).base64EncodedString()
+        let js = "(function(){try{var t=decodeURIComponent(escape(atob('\(b64)')));var ta=document.querySelector('textarea,[contenteditable=\"true\"]');if(ta){if(ta.tagName==='TEXTAREA'){ta.value=(ta.value?ta.value+'\\n':'')+t;ta.dispatchEvent(new Event('input',{bubbles:true}));ta.dispatchEvent(new Event('change',{bubbles:true}));}else{ta.innerText=(ta.innerText?ta.innerText+'\\n':'')+t;ta.dispatchEvent(new Event('input',{bubbles:true}));}ta.focus();}}catch(e){}})();"
+        webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
     /// 累积 Web 侧异常，最多保留最近 4 条，供自诊断浮层展示。
@@ -3204,6 +3383,47 @@ final class ViewController: UIViewController {
                 if (!isDirOpen()) openDir();
               }
             }, { passive: true });
+          })();
+
+          // 2.0 任务状态监听与上报桥接（自动驱动后台保活、通知与灵动岛）
+          (function setupTaskStatusBridge() {
+            if (window.__dshTaskStatusBridge) return;
+            window.__dshTaskStatusBridge = true;
+            var lastState = 'idle';
+            var lastSession = '';
+
+            function getSessionTitle() {
+              var el = document.querySelector('[class*="crumbs"], .ank0OG_crumbCurrent, [class*="crumbCurrent"]');
+              return el ? (el.textContent || '').trim() : '当前会话';
+            }
+
+            function checkStatus() {
+              try {
+                if (!window.webkit || !window.webkit.messageHandlers || !window.webkit.messageHandlers.dshNativeBridge) return;
+                var bridge = window.webkit.messageHandlers.dshNativeBridge;
+                var currentTitle = getSessionTitle();
+                var isRunning = !!document.querySelector('[class*="ReasoningRow"], [aria-label*="停止"], [aria-label*="取消生成"]');
+                
+                if (isRunning && lastState !== 'running') {
+                  lastState = 'running';
+                  lastSession = currentTitle;
+                  bridge.postMessage({
+                    channel: 'task',
+                    action: 'start',
+                    payload: { sessionTitle: currentTitle, stepText: '正在深度思考与执行中...', isFinished: false }
+                  });
+                } else if (!isRunning && lastState === 'running') {
+                  lastState = 'finished';
+                  bridge.postMessage({
+                    channel: 'task',
+                    action: 'finish',
+                    payload: { sessionTitle: lastSession || currentTitle, stepText: '执行完毕', isFinished: true }
+                  });
+                }
+              } catch (e) {}
+            }
+
+            setInterval(checkStatus, 1500);
           })();
         })();
         """,
@@ -7770,6 +7990,8 @@ function applySidebarInset() {
         setupUI()
         loadInitialURL()
         startNetworkWatch()
+        // 2.0 原生增强：请求系统本地横幅通知权限（任务完成通知）
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(appDidBecomeActive),
@@ -8075,6 +8297,8 @@ function applySidebarInset() {
         config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")
         config.userContentController.add(Self.makeVoiceInputBridge(owner: self), name: "dshVoiceInput")
         config.userContentController.add(Self.makeAppUpdateBridge(owner: self), name: "dshAppUpdate")
+        // 2.0 原生统一增强桥接（任务状态/OCR/灵动岛通信）
+        config.userContentController.add(Self.makeNativeBridge(owner: self), name: "dshNativeBridge")
         // v1.0.74：禁止侧滑返回上一个 URL。页面内的返回（抽屉、会话切换）走页面自己的逻辑，
         // WebView 的历史回退会跳出当前服务地址，用户明确不要。
         webView.allowsBackForwardNavigationGestures = false
@@ -8748,7 +8972,12 @@ function applySidebarInset() {
             }
         }
 
-        // 1. 切换服务与连接通道（二级菜单）
+        // 1. 原生 OCR 离线文本识别（拍照或相册提取文本回填输入框）
+        sheet.addAction(UIAlertAction(title: "📸 拍照识字 / 提取文本 (Vision 离线 OCR)", style: .default) { [weak self] _ in
+            self?.presentNativeOCRActionSheet()
+        })
+
+        // 2. 切换服务与连接通道（二级菜单）
         sheet.addAction(UIAlertAction(title: "📡 切换服务与连接通道 ›", style: .default) { [weak self] _ in
             self?.presentConnectionsSubmenu()
         })
@@ -9207,8 +9436,9 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 抽屉状态栏加高避让灵动岛与系统时间
-            2. 消除抽屉展开时右上角三按钮闪烁横跳
+            1. 2.0重磅升级：离线OCR识别与拍照提取
+            2. 后台延时防断连保活与完成横幅通知
+            3. ActivityKit 灵动岛与锁屏实时活动支持
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
@@ -9252,6 +9482,17 @@ function applySidebarInset() {
             stopVoiceDictation()
         }
         backgroundedAtForResync = Date()
+        
+        // 2.0 原生增强：后台防断连短时延时保活（最高申请 180s 系统保护，防止切后台 WebSocket 闪断）
+        if backgroundTaskId == .invalid {
+            backgroundTaskId = UIApplication.shared.beginBackgroundTask(withName: "DSH-Execution-KeepAlive") { [weak self] in
+                guard let self = self else { return }
+                if self.backgroundTaskId != .invalid {
+                    UIApplication.shared.endBackgroundTask(self.backgroundTaskId)
+                    self.backgroundTaskId = .invalid
+                }
+            }
+        }
     }
 
     /// - Parameter markAsDSHService: 加载的是 DSH 服务地址时为 true（记录其 host 用于页面归属判定）；
@@ -9303,6 +9544,11 @@ function applySidebarInset() {
     // MARK: - 联网即加载 (1.0.70 零干扰黄金逻辑)
 
     @objc private func appDidBecomeActive() {
+        // 2.0 原生增强：回到前台立即释放后台延时任务
+        if backgroundTaskId != .invalid {
+            UIApplication.shared.endBackgroundTask(backgroundTaskId)
+            backgroundTaskId = .invalid
+        }
         if let btn = menuButton {
             view.bringSubviewToFront(btn)
             btn.isUserInteractionEnabled = true
@@ -10387,4 +10633,28 @@ enum iOSSafeArea {
         return "\(machineDisplayName)（\(id)）· 标准安全区 顶 \(Int(s.top))pt / 底 \(Int(s.bottom))pt"
     }
 }
+
+// MARK: - 2.0 ActivityKit 灵动岛与锁屏实时活动数据模型
+#if canImport(ActivityKit)
+@available(iOS 16.1, *)
+public struct DSHTaskAttributes: ActivityAttributes {
+    public struct ContentState: Codable, Hashable {
+        public var stepText: String
+        public var isFinished: Bool
+        public var updatedAt: Date
+        
+        public init(stepText: String, isFinished: Bool, updatedAt: Date = Date()) {
+            self.stepText = stepText
+            self.isFinished = isFinished
+            self.updatedAt = updatedAt
+        }
+    }
+    
+    public var sessionTitle: String
+    
+    public init(sessionTitle: String) {
+        self.sessionTitle = sessionTitle
+    }
+}
+#endif
 
