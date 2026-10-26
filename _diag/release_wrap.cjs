@@ -62,7 +62,11 @@ function md5(p) { return crypto.createHash('md5').update(fs.readFileSync(p)).dig
     ghRetry(`gh workflow run build-ipa.yml --repo ${REPO} --ref ${BRANCH}`);
     console.log('  已触发 workflow_dispatch');
     execSync('powershell -NoProfile -Command "Start-Sleep -Seconds 10"');
-    runId = ghRetry(`gh run list --repo ${REPO} --workflow build-ipa.yml --limit 1 --json databaseId,status --jq '.[0] | select(.status!="completed") | .databaseId'`);
+    // Windows shell 会把 --jq 表达式拆坏（select 被当命令），改为取 JSON 自己解析
+    const listRaw = ghRetry(`gh run list --repo ${REPO} --workflow build-ipa.yml --limit 3 --json databaseId,status`);
+    const list = JSON.parse(listRaw);
+    const cur = list.find(r => r.status !== 'completed') || list[0];
+    runId = cur ? String(cur.databaseId) : null;
     if (!runId) throw new Error('未找到在途 run，用 --run <id> 指定');
   }
   let buildNum = null, dlDir = path.join(ROOT, '_dl_wrap');
