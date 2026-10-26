@@ -1552,18 +1552,26 @@ const A_PLUGIN_PAGE = () => {
     chk(r43src,
       '[顶栏·R43] 屏外容器零平移 + 顶栏活命自愈 + 拉力封顶 + 簇底色透明 + header 挂载即矫',
       r43src ? 'R43 五件套全在' : '🔴 R43 缺件 → 幽灵按钮/顶栏被自家补丁遮死复发');
-    /* R45（v1.0.142）：抽屉按钮唯一守卫重构 —— 五层旧补丁（R35b/R38/R39/R43⑤/R44）全部废除，
-       一条规则：视觉右缘>vw-2 两拍稳定 → 整体重算拉回；回健康 → 撤销。旧门限字样不许回潮。 */
-    const r45src = /__dshGuardX/.test(bundle)
-      && /data-dsh-btn-guard/.test(bundle)
-      && /__gNatR = dr\.right - __gTotal, __gNatL = dr\.left - __gTotal/.test(bundle)
+    /* R45（v1.0.142）：抽屉按钮唯一守卫重构 —— 五层旧补丁全部废除。
+       R47（v1.0.143，九犯）：两拍稳定门删除（R39 同款坑：真机胶囊每拍变宽门永不满足），
+       每拍直接写目标值（幂等）；同时补 CSS 兜底 headerCorner absolute（JS 死也绝不出屏）。 */
+    const r45src = /data-dsh-btn-guard/.test(bundle)
+      && /__gNatR = dr\.right - __gTotal/.test(bundle)
       && /__gTarget = Math\.round\(__gW - __gNatR\)/.test(bundle)
+      && /Math\.abs\(__gTarget - __gTotal\) > 0\.5/.test(bundle)
       && !/__dshOverSince/.test(bundle)
       && !/__dshVisSince/.test(bundle)
-      && !/__diffN >= 6/.test(bundle);
+      && !/__diffN >= 6/.test(bundle)
+      && !/__dshGuardX/.test(bundle);
     chk(r45src,
-      '[抽屉·R45] 唯一守卫在（视觉右缘两拍稳定→整体重算拉回；旧五层补丁门限已根除不回潮）',
-      r45src ? '唯一守卫在' : '🔴 守卫缺件或旧门限回潮 → 七犯/八犯复发（死区/计时器/态豁免都是漏网口）');
+      '[抽屉·R45/47] 唯一守卫每拍直写目标值（两拍门已删防胶囊抖动卡门；旧五层补丁与计时器不许多潮）',
+      r45src ? '唯一守卫在' : '🔴 守卫缺件或旧门限回潮 → 七犯/八犯/九犯复发');
+    const r47src = /html body header \[class\*="headerCorner"\]/.test(bundle)
+      && /position: absolute !important/.test(bundle)
+      && /right: 2px !important/.test(bundle);
+    chk(r47src,
+      '[顶栏·R47] headerCorner CSS 绝对定位兜底在（JS 通道死亡时按钮也绝不出屏）',
+      r47src ? 'CSS 兜底在' : '🔴 CSS 兜底被删 → 真机 JS 死亡环境九犯复发（right=434>430）');
     /* R46（v1.0.142）：文案规范打包前机械校验（老总令：「更新说明和关于要尽量最大化精简，
        排序1-2-3-4-5-6序号对齐，靠左对齐，纳入打包前校验」）。
        校验三处：① 设置页更新日志卡：logContent 每条一行、序号 1..N 严格递增不重复、

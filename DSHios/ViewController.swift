@@ -1651,6 +1651,25 @@ final class ViewController: UIViewController {
             '  [data-conversation-tabs] > [class*="dcc-root"],',
             '  [data-conversation-tabs] > [data-dsh-po-shell] { margin-left: 0 !important; }',
             '}',
+            '/* 🔴 R47（v1.0.143，老总真机九犯「13 个后台任务」会话默认出屏）：防出屏必须有 CSS 兜底。',
+            '   九犯实锤（_probe_r47_cssonly）：真机 JS 几何 shim 会整体死亡（R42 已证实的环境），',
+            '   而 R35~R45 十版防出屏全写在 JS 守卫里 —— JS 一死，headerCorner 作为 flex 流内子项，',
+            '   被超长胶囊推出屏外（CSS-only 沙箱实测 right=434 > vw=430，与真机症状同源）。',
+            '   修法：右侧角标整簇**脱离 flex 流钉在行右缘**（absolute right:2），顶行溢出多少都',
+            '   与它无关；标题 crumbs 本就有 right:96px 预留（R32 定版），钉出流外不会被压。',
+            '   JS 守卫继续负责微调（祖先滞留位移补偿），CSS 负责「JS 死也绝不出屏」的最后防线。 */',
+            'html body [data-phase] header [class*="headerCorner"],',
+            'html body header [class*="headerCorner"] {',
+            '  position: absolute !important;',
+            '  right: 2px !important;',
+            '  top: 50% !important;',
+            '  margin-top: 0 !important;',
+            '  margin-left: 0 !important;',
+            '  transform: translateY(-50%) !important;',
+            '  z-index: 21 !important;',
+            '}',
+            '/* 角标出流后，标题行里 flex 流内剩余模块（胶囊/团队）不得越右缘：',
+            '   crumbs 已有 right:96 预留；headerUtilities 限宽 30vw 兜底（上方 R32 规则）。 */',
 
           ].join('\\n');
           function attach() {
@@ -2479,12 +2498,12 @@ final class ViewController: UIViewController {
                 //     transform**，含 -448 类旧毒与 DSH 滞留位移——自然位本来就在屏内，清零
                 //     才是回位，"钉到近边"是八犯前几版过拉的根源）；
                 //     natural 右溢 → 目标 = vw − naturalRight；左溢 → 目标 = −naturalLeft。
-                //     目标 ≠ 当前位移，且差量连续两拍（±2px 容差）稳定 → 整体写入目标值。
-                //   祖先（headerCorner）被 DSH 写的滞留位移计入 natural 一起解，我方用自身
-                //   transform 补差 —— 它何时撤、撤多少都不影响收敛（八犯真凶即此滞留 -8px）。
-                //   两拍稳定门挡掉开合动画（~300ms 内视觉位剧变）误伤；静止毒写两拍 ≤600ms
-                //   即出手。**无死区、无计时器、无态豁免、无位移上限**（八犯证明每个门限
-                //   都是漏网口；160/1200 这类上限只会在真机把按钮留在屏外）。
+                //     目标 ≠ 当前位移 → **每拍直接写入目标值**（幂等：到位后 Δ=0 自然零写入）。
+                //   🔴 R47（v1.0.143 九犯）：原「两拍稳定门」是 R39 同款坑——真机「N 个后台任务」
+                //   胶囊文字随流式刷新每拍变宽，越界量逐拍抖动，门永不满足 → 守卫空转、按钮
+                //   默认出屏（CSS-only 探针实锤 right=434>430 且顶行 scrollWidth 溢出）。
+                //   门彻底删除：目标值每拍从当前视觉位整体重算，动画帧误读至多存活一拍即被
+                //   下拍覆盖（R41 教训，此前一直没执行到位）。
                 var db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
                 if (db && (!db.closest || db.closest('header'))) {
                   var dr = db.getBoundingClientRect();
@@ -2500,22 +2519,14 @@ final class ViewController: UIViewController {
                     var __gTarget = 0;
                     if (__gNatR > __gW) __gTarget = Math.round(__gW - __gNatR);
                     else if (__gNatL < 0) __gTarget = Math.round(-__gNatL);
-                    if (__gTarget !== __gTotal) {
-                      var __gDiff = Math.abs(__gTarget - __gTotal);
-                      var __gPrev = db.__dshGuardX;
-                      db.__dshGuardX = __gDiff;
-                      if (__gPrev && Math.abs(__gPrev - __gDiff) <= 2) {
-                        if (__gTarget === 0) {
-                          db.style.removeProperty('transform');
-                          db.removeAttribute('data-dsh-btn-guard');
-                        } else {
-                          db.style.setProperty('transform', 'translateX(' + __gTarget + 'px)', 'important');
-                          db.setAttribute('data-dsh-btn-guard', String(__gTarget));
-                        }
-                        db.__dshGuardX = null;
+                    if (Math.abs(__gTarget - __gTotal) > 0.5) {
+                      if (__gTarget === 0) {
+                        db.style.removeProperty('transform');
+                        db.removeAttribute('data-dsh-btn-guard');
+                      } else {
+                        db.style.setProperty('transform', 'translateX(' + __gTarget + 'px)', 'important');
+                        db.setAttribute('data-dsh-btn-guard', String(__gTarget));
                       }
-                    } else {
-                      db.__dshGuardX = null;
                     }
                   }
                 }
@@ -9127,9 +9138,9 @@ function applySidebarInset() {
             【设备环境信息】
             \(deviceInfo)
 
-            【本版要点 (v1.0.142)】
-            1. 开合抽屉回会话页，按钮出屏八犯根治（唯一守卫重构）
-            2. 更新说明与关于文案精简：序号对齐、靠左排版
+            【本版要点 (v1.0.143)】
+            1. 长标题会话默认出屏九犯根治（CSS 兜底 + 守卫直写）
+            2. 开合抽屉回会话页按钮出屏八犯根治（唯一守卫重构）
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
