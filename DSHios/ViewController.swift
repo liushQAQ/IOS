@@ -247,7 +247,13 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
 
     /// 2.0 任务执行状态调度：驱动灵动岛、锁屏实时卡片与后台推送
     private func handleTaskStatusUpdate(action: String, title: String?, stepText: String?, isFinished: Bool) {
-        if let t = title, !t.isEmpty { currentTaskTitle = t }
+        if let t = title, !t.isEmpty {
+            if t.contains("Generate the session tit") || t.contains("Generate the session") {
+                currentTaskTitle = "新会话"
+            } else {
+                currentTaskTitle = t
+            }
+        }
         if let s = stepText, !s.isEmpty { currentStepText = s }
         
         if action == "start" {
@@ -1571,11 +1577,15 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '   （实测 computed = matrix(1,0,0,1,0,-2)），把它单独抬高 2px。',
             '   结果 28px 的小按钮中心在 544.9、34px 的圆按钮中心在 542.9 —— 恒定差 2px，',
             '   视觉上就是「圆圈比 + 号高一点」。清掉这条位移后，5 个按钮中心全部落在 544.9，',
-            '   离散度 2px → 0px。 */',
+            '   离散度 2px → 0px。',
+            '   🔴 v2.1 修复：发送按钮固定钉在输入框卡片最右侧！margin-left: auto 吸收左侧所有空隙，',
+            '   彻底根治发送按钮随模型名称长短向左缩进的 bug！*/',
             '[class*=\"composerStack\"] [class*=\"_primary\"],',
             '[class*=\"composerStack\"] [class*=\"_send\"],',
             '[class*=\"composerStack\"] [class*=\"_stop\"] {',
             '  transform: none !important;',
+            '  margin-left: auto !important;',
+            '  flex-shrink: 0 !important;',
             '}',
             '/* ===== v1.0.125 底部插件小部件一行挤爆（老总 2026-10-20：「底部模型用量那些重叠。这是某个插件吧」）=====',
             '   真凶：会话输入框下方的插件 dock（VERcba_dock，DSH 哈希类，用 [class*=\"dock\"] 语义锚）',
@@ -1742,9 +1752,13 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  align-items: center !important;',
             '  justify-content: center !important;',
             '  padding: 0 !important;',
-            '  margin: 0 !important;',
+            '  margin-left: auto !important;',
+            '  margin-top: 0 !important;',
+            '  margin-bottom: 0 !important;',
+            '  margin-right: 0 !important;',
             '  transform: none !important;',
             '  box-sizing: border-box !important;',
+            '  flex-shrink: 0 !important;',
             '}',
             '.uWtHQG_primary svg {',
             '  display: block !important;',
@@ -3394,7 +3408,9 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
 
             function getSessionTitle() {
               var el = document.querySelector('[class*="crumbs"], .ank0OG_crumbCurrent, [class*="crumbCurrent"]');
-              return el ? (el.textContent || '').trim() : '当前会话';
+              var t = el ? (el.textContent || '').trim() : '当前会话';
+              if (t.indexOf('Generate the session') !== -1) return '新会话';
+              return t;
             }
 
             function checkStatus() {
@@ -3424,6 +3440,38 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             }
 
             setInterval(checkStatus, 1500);
+          })();
+
+          // 2.1 会话标题净化：解决弱模型复读提示词导致标题变成 Generate the session tit 的 bug
+          (function setupSessionTitleCleaner() {
+            if (window.__dshTitleCleaner) return;
+            window.__dshTitleCleaner = true;
+
+            function sanitizeNode(node) {
+              if (!node) return;
+              var text = (node.textContent || '').trim();
+              if (text.indexOf('Generate the session') !== -1) {
+                var idx = text.indexOf('(');
+                if (idx !== -1 && text.indexOf(')', idx) !== -1) {
+                  var suffix = text.substring(idx);
+                  node.textContent = '新会话 ' + suffix;
+                } else {
+                  node.textContent = '新会话';
+                }
+              }
+            }
+
+            function scanAndClean() {
+              try {
+                var targets = document.querySelectorAll('[class*="crumbs"], [class*="crumbCurrent"], .ank0OG_crumbCurrent, .ank0OG_crumbSeg, [class*="sessionItem"], [class*="sessionTitle"], [class*="chat-title"], nav a, [role="navigation"] button');
+                for (var i = 0; i < targets.length; i++) {
+                  sanitizeNode(targets[i]);
+                }
+              } catch (e) {}
+            }
+
+            scanAndClean();
+            setInterval(scanAndClean, 1000);
           })();
         })();
         """,
@@ -9436,9 +9484,9 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 2.0重磅升级：离线OCR识别与拍照提取
-            2. 后台延时防断连保活与完成横幅通知
-            3. ActivityKit 灵动岛与锁屏实时活动支持
+            1. 修复发送按钮随模型名变短往左缩进
+            2. 修复新会话标题出现英文提示词
+            3. 原生离线OCR/后台保活/灵动岛
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
