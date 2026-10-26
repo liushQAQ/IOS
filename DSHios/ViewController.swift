@@ -3868,6 +3868,8 @@ final class ViewController: UIViewController {
             'html body header button[aria-label=\"收起目录\"],',
             'html body header button[aria-label=\"打开侧边栏\"],',
             'html body header button[aria-label=\"收起侧边栏\"],',
+            'html body header button[aria-label=\"打开右侧边栏\"],',
+            'html body header button[aria-label=\"收起右侧边栏\"],',
             'html body [data-mobile-nav=\"toggle\"],',
             'html body [data-mobile-nav=\"fab\"] {',
             '  width: 0 !important;',
@@ -8411,7 +8413,14 @@ function applySidebarInset() {
             view.layoutIfNeeded()
         case .changed:
             let translationX = gesture.translation(in: view).x // 向左滑 translationX < 0
-            // 从收起态 (menuCollapsedConstant) 逐渐拉向展开态 (menuExpandedConstant)
+            // 长滑（≥80pt）留给右侧面板：小鲸鱼不再跟着出来，停在收起态。
+            if translationX < -80 {
+                constraint.constant = Self.menuCollapsedConstant
+                button.alpha = 0.20
+                view.layoutIfNeeded()
+                break
+            }
+            // 短滑：从收起态逐渐拉向展开态
             let base = Self.menuCollapsedConstant
             let targetConstant = max(Self.menuExpandedConstant, base + translationX)
             constraint.constant = targetConstant
@@ -8421,8 +8430,14 @@ function applySidebarInset() {
         case .ended, .cancelled:
             let translationX = gesture.translation(in: view).x
             let velocityX = gesture.velocity(in: view).x
-            // 只要向左划过 12pt 或速度大于 200，就完全展开；否则弹回半隐藏态
-            if translationX < -12 || velocityX < -200 {
+            // 两档：长滑（≥80pt）打开右侧面板，小鲸鱼弹回收起；
+            // 短滑（≥12pt）维持原行为，拉出小鲸鱼。
+            if translationX < -80 {
+                setMenuExpanded(false, animated: true)
+                webView?.evaluateJavaScript(
+                    "(function(){var b=document.querySelector('header button[aria-label=\"打开右侧边栏\"]');if(b)b.click();})();",
+                    completionHandler: nil)
+            } else if translationX < -12 || velocityX < -200 {
                 setMenuExpanded(true, animated: true)
             } else {
                 setMenuExpanded(false, animated: true)
@@ -9179,7 +9194,7 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 修复后台任务多时，右侧抽屉按钮被挤出屏幕
+            1. 右侧抽屉按钮改为从屏幕右缘向左长滑打开
             2. 修复开关抽屉回会话页，按钮跑出屏幕
             """,
             preferredStyle: .alert)
