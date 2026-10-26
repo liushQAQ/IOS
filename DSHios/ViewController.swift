@@ -1655,17 +1655,20 @@ final class ViewController: UIViewController {
             '   九犯实锤（_probe_r47_cssonly）：真机 JS 几何 shim 会整体死亡（R42 已证实的环境），',
             '   而 R35~R45 十版防出屏全写在 JS 守卫里 —— JS 一死，headerCorner 作为 flex 流内子项，',
             '   被超长胶囊推出屏外（CSS-only 沙箱实测 right=434 > vw=430，与真机症状同源）。',
-            '   修法：右侧角标整簇**脱离 flex 流钉在行右缘**（absolute right:2），顶行溢出多少都',
-            '   与它无关；标题 crumbs 本就有 right:96px 预留（R32 定版），钉出流外不会被压。',
+            '   🔴 R48（v1.0.144，老总 10-26 14:17 真机「19 个后台任务」抽屉按钮只剩一条边）：',
+            '   R47 把角标钉成 absolute right:2，但参照是 titleRow —— 标题行本身被超长胶囊挤窄',
+            '   （实测 right=418 < vw=430）时，right:2 是相对 418 算的，按钮整颗被裁出屏幕。',
+            '   修法：参照改成视口（position:fixed + right:2），标题行再窄也与按钮无关；',
+            '   垂直钉在标题行实测中心（top 由 JS 每拍写入，CSS 只给首帧兜底），不跟整页。',
             '   JS 守卫继续负责微调（祖先滞留位移补偿），CSS 负责「JS 死也绝不出屏」的最后防线。 */',
             'html body [data-phase] header [class*="headerCorner"],',
             'html body header [class*="headerCorner"] {',
-            '  position: absolute !important;',
+            '  position: fixed !important;',
             '  right: 2px !important;',
-            '  top: 50% !important;',
+            '  top: 26px !important;',
             '  margin-top: 0 !important;',
             '  margin-left: 0 !important;',
-            '  transform: translateY(-50%) !important;',
+            '  transform: none !important;',
             '  z-index: 21 !important;',
             '}',
             '/* 角标出流后，标题行里 flex 流内剩余模块（胶囊/团队）不得越右缘：',
@@ -2505,6 +2508,22 @@ final class ViewController: UIViewController {
                 //   门彻底删除：目标值每拍从当前视觉位整体重算，动画帧误读至多存活一拍即被
                 //   下拍覆盖（R41 教训，此前一直没执行到位）。
                 var db = document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"]');
+                // 🔴 R48：角标改 position:fixed 后垂直不再跟标题行，每拍把 top 钉到标题行中心。
+                //   只在偏差 >1px 时写，稳态零写入。
+                if (db) {
+                  var __hc8 = db.closest ? db.closest('[class*="headerCorner"]') : null;
+                  var __row8 = document.querySelector('header [class*="titleRow"]');
+                  if (__hc8 && __row8) {
+                    var __rr8 = __row8.getBoundingClientRect();
+                    if (__rr8.height > 0) {
+                      var __want8 = Math.round(__rr8.top + (__rr8.height - __hc8.getBoundingClientRect().height) / 2);
+                      var __cur8 = parseFloat(__hc8.style.top);
+                      if (isNaN(__cur8) || Math.abs(__cur8 - __want8) > 1) {
+                        __hc8.style.setProperty('top', __want8 + 'px', 'important');
+                      }
+                    }
+                  }
+                }
                 if (db && (!db.closest || db.closest('header'))) {
                   var dr = db.getBoundingClientRect();
                   if (dr.width > 0) {
