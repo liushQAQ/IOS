@@ -1,12 +1,12 @@
 {
-  "version": "2.1.0",
-  "build": 1,
-  "updated_at": "2026-10-26 17:34:44",
-  "title": "v2.1.0(1) 修复发送按钮固定 + 修复会话标题 + 2.0三大原生能力",
-  "changelog": "1. 修复会话框发送按钮随模型名称变短向左缩进的问题，死死固定在最右侧\n2. 修复新会话标题出现 Generate the session tit 英文提示词的问题\n3. 苹果原生 Vision 离线毫秒级 OCR 拍照/相册提取文字回填\n4. 后台延时防断连保活机制 + 任务完成系统横幅通知\n5. ActivityKit 灵动岛小鲸鱼呼吸状态与锁屏实时活动卡片\n6. 抽屉顶部加高至79px避让灵动岛与时间，消除展开时三按钮闪烁",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.0-1.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.0-1.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.0/DSHios-public-2.1.0-1.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.0",
-  "md5": "0059b074d73d9f11300028a9e482c649"
+  "version": "2.1.1",
+  "build": 2,
+  "updated_at": "2026-10-26 18:10:31",
+  "title": "v2.1.1(2) 修复切换会话弹键盘 + 修复重命名遮挡 + 发送按钮固定",
+  "changelog": "1. 修复切换会话自动弹出键盘遮挡屏幕的问题（仅手指真触输入框才弹键盘）\n2. 修复点击重命名时左侧目录遮挡输入框的问题（点击重命名自动收起左侧抽屉）\n3. 修复会话框发送按钮随模型名称变短向左缩进的问题（固定死在最右侧）\n4. 修复新会话标题出现 Generate the session tit 英文提示词的问题\n5. 苹果原生 Vision 离线毫秒级 OCR 拍照/相册提取文字回填\n6. 后台延时防断连保活机制 + 任务完成系统横幅通知\n7. ActivityKit 灵动岛小鲸鱼呼吸状态与锁屏实时活动卡片\n8. 抽屉顶部加高至79px避让灵动岛与时间，消除展开时三按钮闪烁",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.1-2.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.1-2.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.1/DSHios-public-2.1.1-2.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.1",
+  "md5": "6e7285a13b4b18c4be02b2007d2e54b4"
 }
