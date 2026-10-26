@@ -1,12 +1,12 @@
 {
   "version": "1.0.143",
-  "build": 121,
-  "updated_at": "2026-10-26 20:15:00",
-  "title": "v1.0.143(121) 抽屉改右缘手势（短滑鲸鱼/长滑抽屉）",
-  "changelog": "1. 右侧抽屉按钮隐藏，改由屏幕右缘向左长滑打开\n2. 屏幕右缘手势：短滑唤醒悬浮小鲸鱼，长滑打开右侧抽屉\n3. 彻底解决顶栏按钮受后台任务/标题挤压错乱问题",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-121.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-121.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.143/DSHios-public-1.0.143-121.tipa",
+  "build": 125,
+  "updated_at": "2026-10-26 21:30:00",
+  "title": "v1.0.143(125) 抽屉加高避让灵动岛 + 消除展开闪烁",
+  "changelog": "1. 抽屉状态栏加高避让灵动岛与系统时间，留白更舒适\n2. 消除抽屉展开时右上角三按钮闪烁横跳问题\n3. CI 升级至 macOS 15 + Xcode 16.4，打包秒级完成",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-125.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.143-125.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.143/DSHios-public-1.0.143-125.tipa",
   "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.143",
-  "md5": "2a3ba4bd4b364f310491d8ffa7de8e65"
+  "md5": "9cbfbc3daab405b1a61b8d81b3559ed2"
 }
