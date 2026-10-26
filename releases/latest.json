@@ -1,12 +1,12 @@
 {
-  "version": "1.0.140",
-  "build": 110,
-  "updated_at": "2026-10-25 23:22:00",
-  "title": "v1.0.140(110) 右侧边栏按钮/整条顶栏出屏六犯根治（真凶=R41补丁自身）",
-  "changelog": "1. R43 六犯根治：开始页顶栏被盖到只剩一条残影、右缘按钮被拖出屏幕——真凶是上一版 R41 补丁自身三处缺陷：①收起面板（屏外容器）内的按钮簇被整簇平移拖进可视区（幽灵按钮）；②按钮簇挂的不透明底色把开始页顶栏整块盖死；③顶栏对齐上拉无父容器裁剪保护。修法四件套：屏外容器零平移（祖先链可见性判定）+ 簇底色改透明 + 顶栏活命自愈（自家补丁把行推出父容器即撤回）+ 拉力三重封顶。\n2. 抽屉开合、标签拥挤出屏钳制（R41 有效部分）全部保留；闸门新增 [顶栏·R43] 行为断言与源锚点。\n3. 回归闸门 110 绿/0 红（2 项 DSH 前端死循环连坐无法校验，非 App 回归）。",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.140-110.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.140-110.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.140/DSHios-public-1.0.140-110.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.140",
-  "md5": "badb54f30dde387e0b716568fd28189d"
+  "version": "1.0.141",
+  "build": 111,
+  "updated_at": "2026-10-26 09:00:00",
+  "title": "v1.0.141(111) 抽屉按钮出屏七犯根治（视觉位救援）",
+  "changelog": "1. R44 七犯根治：开→关抽屉回会话页后，右侧抽屉按钮出屏约 1/3——真凶=关抽屉后 DSH 在 headerCorner 上补写并长期滞留 translateX(-8px)，把按钮视觉右缘顶到贴死屏幕边缘被裁角；旧救援按「基准位」重算认为自然位合法 → 永不介入（铁律②盲区）。\n2. 修法：新增视觉位救援——仅在抽屉关闭态且视觉越界>4px 连续≥1200ms（远超开合动画 300ms）才出手，把总位移（含 DSH 那份）整体重算拉回 vw-2，单值不累加、幂等、回屏即清零。开层瞬间的「闪一下」与出屏是同一写入方两个相位，一并收敛。\n3. 回归闸门 116 绿/0 红/0 无法校验（新增 [抽屉·R44] 行为断言 + 源锚点）。",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.141-111.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-1.0.141-111.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v1.0.141/DSHios-public-1.0.141-111.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.141",
+  "md5": "349b9b5c2937569f4e7cb88be8f3ea59"
 }
