@@ -76,6 +76,7 @@
 | 下载网关 502 | dshstat(9071) 死了 | `Start-ScheduledTask -TaskName "DSH-Stat-Server"`（R20） |
 | 3083 无响应 | DSH Desktop 挂了 | `Start-ScheduledTask -TaskName "DSHDesktop-Launch"`，等 15~20 秒 |
 | CI exit 65 | Swift 多行字符串 JS `\(` 转义 | 双写 `\\(` 或不用正则（REGRESSION.md 铁律 8） |
+| CI macos-14 停机限流 / GitHub Actions 排队卡死 | GitHub 正在下线 macos-14 | 已升级为 macos-15 + Xcode 16.4；备用通道可调用 Codemagic API (node tools/trigger_codemagic.cjs) |
 | CI 校验凭证被拒 | 凭证过期/sourceHash 不符 | 重跑闸门 |
 | 会话页 evaluate 挂死 | DSH 前端死循环（连坐，非 App 回归） | 闸门已有 30s 哨兵 + 18 分钟看门狗；重启 DSH（指纹会变） |
 | git push SSL handshake 失败（curl/gh 却通） | 代理节点掐 git 的 TLS 特征（2026-10-20 晚实锤，8 连败） | 重试数轮；仍败改用 gh api Contents API 单文件推送（PUT repos/<o>/<r>/contents/<path>，带 sha + branch），推完记下远端 HEAD，网络恢复后 git fetch && git reset --hard origin/personal 对齐 |
