@@ -1,18 +1,18 @@
 {
-  "version": "2.1.0",
+  "version": "2.1.1",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-26T17:08:45.031Z",
+  "startedAt": "2026-10-26T17:51:21.292Z",
   "dshFingerprint": "s8180",
   "dshAssets": 9,
   "domClasses": 0,
-  "anchorTotal": 167,
+  "anchorTotal": 171,
   "anchorDead": 0,
-  "anchorCssAlive": 109,
-  "anchorResidue": 58,
+  "anchorCssAlive": 112,
+  "anchorResidue": 59,
   "dshSheets": 206,
   "ownSheets": 11,
   "anchorCritical": {
@@ -28,10 +28,15 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 117,
+  "pass": 109,
   "fail": 0,
   "failures": [],
-  "blocked": [],
-  "sourceHash": "0c731f404bd9ed6c4d721b80a28c8880b3e784f05c8624988350878b83fb0765",
-  "finishedAt": "2026-10-26T17:11:26.992Z"
+  "blocked": [
+    "[dock] 插件行换行/零重叠 — 会话页 30 秒无响应（DSH 前端死循环）",
+    "[抽屉·R35b] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）",
+    "[抽屉·R39] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）",
+    "[多端·R40] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）"
+  ],
+  "sourceHash": "e37ce13a64c507fa8300e91df67f152d1f6e9fa0c0e33000a943667901d0f2c6",
+  "finishedAt": "2026-10-26T17:57:03.722Z"
 }

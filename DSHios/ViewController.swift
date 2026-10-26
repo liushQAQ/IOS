@@ -807,12 +807,14 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  [class*="dropdown"],',
             '  [class*="Dropdown"],',
             '  [class*="dialog"],',
+            '  [class*="_dialog_"],',
             '  [class*="Dialog"] {',
             '    max-width: calc(100vw - 20px) !important;',
             '    max-height: calc(100vh - 40px) !important;',
             '    box-sizing: border-box !important;',
             '    overflow-y: auto !important;',
             '    -webkit-overflow-scrolling: touch !important;',
+            '    z-index: 10005 !important;',
             '  }',
             '  /* 原生 HTML5 <dialog>（如费用明细、会话统计弹窗）严格遵守 iOS 顶部状态栏与底部安全区，严禁超高压顶 */',
             '  dialog,',
@@ -3472,6 +3474,93 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
 
             scanAndClean();
             setInterval(scanAndClean, 1000);
+          })();
+
+          // 2.1.1 修复一：切换会话防自动弹键盘（只有手指真实点击输入框才弹键盘）
+          (function setupAutoFocusSuppressor() {
+            if (window.__dshAutoFocusSuppressor) return;
+            window.__dshAutoFocusSuppressor = true;
+
+            var userTappedComposer = false;
+            var tapTimer = null;
+
+            function markUserTap(e) {
+              var target = e.target;
+              if (target && target.closest && target.closest('[class*="composerStack"], [class*="uWtHQG_input"], textarea')) {
+                userTappedComposer = true;
+                clearTimeout(tapTimer);
+                tapTimer = setTimeout(function() { userTappedComposer = false; }, 1200);
+              }
+            }
+
+            document.addEventListener('touchstart', markUserTap, { passive: true, capture: true });
+            document.addEventListener('mousedown', markUserTap, { passive: true, capture: true });
+
+            document.addEventListener('focusin', function(e) {
+              var isComposer = e.target && e.target.closest && e.target.closest('[class*="composerStack"], [class*="uWtHQG_input"], textarea');
+              if (isComposer && !userTappedComposer) {
+                if (typeof e.target.blur === 'function') {
+                  e.target.blur();
+                }
+              }
+            }, true);
+
+            var origFocus = HTMLTextAreaElement.prototype.focus;
+            HTMLTextAreaElement.prototype.focus = function() {
+              var isComposer = this.closest && this.closest('[class*="composerStack"], [class*="uWtHQG_input"]');
+              if (isComposer && !userTappedComposer) {
+                return;
+              }
+              return origFocus.apply(this, arguments);
+            };
+          })();
+
+          // 2.1.1 修复二：点击会话重命名自动关闭左侧目录抽屉（防遮挡重命名输入框）
+          (function setupRenameDrawerCloser() {
+            if (window.__dshRenameCloser) return;
+            window.__dshRenameCloser = true;
+
+            function closeLeftDrawer() {
+              var closeBtns = [
+                document.querySelector('header button[aria-label="收起目录"]'),
+                document.querySelector('header button[aria-label="收起侧边栏"]'),
+                document.querySelector('[class*="sidebarCol"] button[aria-label="收起侧边栏"]'),
+                document.querySelector('[class*="sidebarCol"] button[aria-label="收起目录"]')
+              ];
+              for (var i = 0; i < closeBtns.length; i++) {
+                if (closeBtns[i]) {
+                  closeBtns[i].click();
+                  return true;
+                }
+              }
+              return false;
+            }
+
+            // 1. 用户点击菜单中的“重命名”项时，立即收起目录
+            document.addEventListener('click', function(e) {
+              var el = e.target;
+              if (!el) return;
+              var btn = el.closest ? el.closest('button, [role="menuitem"], a, [class*="item"]') : null;
+              if (btn) {
+                var text = (btn.textContent || '').trim();
+                var aria = (btn.getAttribute('aria-label') || '').trim();
+                if (text.indexOf('重命名') !== -1 || aria.indexOf('重命名') !== -1) {
+                  setTimeout(closeLeftDrawer, 50);
+                }
+              }
+            }, true);
+
+            // 2. 哨兵监测：页面一旦挂载重命名输入框且目录开着，立即关闭目录
+            setInterval(function() {
+              try {
+                var renameInput = document.querySelector('input[class*="renameInput"], [role="dialog"] input');
+                var sidebar = document.querySelector('[class*="sidebarCol"]');
+                var isOpen = sidebar && sidebar.getBoundingClientRect().right > 10;
+                if (renameInput && isOpen) {
+                  closeLeftDrawer();
+                }
+              } catch (e) {}
+            }, 300);
           })();
         })();
         """,
@@ -9484,9 +9573,9 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 修复发送按钮随模型名变短往左缩进
-            2. 修复新会话标题出现英文提示词
-            3. 原生离线OCR/后台保活/灵动岛
+            1. 修复切换会话自动弹出键盘遮挡
+            2. 修复重命名时左侧目录遮挡输入框
+            3. 发送按钮固定与新会话标题净化
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
