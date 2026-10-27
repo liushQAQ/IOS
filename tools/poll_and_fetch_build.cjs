@@ -6,8 +6,8 @@ const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const CONFIG_FILE = path.join(ROOT, '.codemagic_config.json');
 const BUILD_ID = process.argv[2] || '6adf8a5986b11eb17876e733';
-const VERSION = '2.1.3';
-const BUILD_NUM = 4;
+const VERSION = '2.1.4';
+const BUILD_NUM = 5;
 
 if (!fs.existsSync(CONFIG_FILE)) {
   console.error('缺少配置文件');
@@ -80,8 +80,8 @@ async function run() {
     version: VERSION,
     build: BUILD_NUM,
     updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-    title: `v${VERSION}(${BUILD_NUM}) 优化新会话标题+彻底根治目录闪烁+消除抽屉三按钮闪烁`,
-    changelog: "1. 优化新会话标题生成：按提问内容首句话提取，杜绝生成英文提示词\n2. 彻底根治左侧目录列表上下抖动闪烁与重命名遮挡问题\n3. 彻底消除右侧抽屉打开时右上角三个按钮闪烁跳跃的问题\n4. 修复真机版本号一直显示1.0.143且反复提示更新的问题\n5. 修复切换会话自动弹出键盘遮挡屏幕的问题（仅手指真触输入框才弹键盘）\n6. 修复点击重命名时左侧目录遮挡输入框的问题（点击重命名自动收起左侧抽屉）\n7. 修复会话框发送按钮随模型名称变短向左缩进的问题（固定死在最右侧）\n8. 苹果原生 Vision 离线毫秒级 OCR 拍照/相册提取文字回填",
+    title: `v${VERSION}(${BUILD_NUM}) 修复离线OCR回填输入框+修复已归档会话可见性`,
+    changelog: "1. 修复离线OCR识别文字精准回填会话框，对齐最新输入法结构\n2. 修复多终端同步中已归档会话可见性，杜绝多端状态漂移\n3. 优化新会话标题生成：按提问内容首句话提取，杜绝生成英文提示词\n4. 彻底根治左侧目录列表上下抖动闪烁与重命名遮挡问题\n5. 彻底消除右侧抽屉打开时右上角三个按钮闪烁跳跃的问题\n6. 修复真机版本号一直显示1.0.143且反复提示更新的问题\n7. 修复切换会话自动弹出键盘遮挡屏幕的问题（仅手指真触输入框才弹键盘）\n8. 修复点击重命名时左侧目录遮挡输入框的问题（点击重命名自动收起左侧抽屉）\n9. 修复会话框发送按钮随模型名称变短向左缩进的问题（固定死在最右侧）",
     tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     public_tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     tipa_url_fallback: `https://github.com/liushQAQ/IOS/releases/download/v${VERSION}/DSHios-public-${VERSION}-${BUILD_NUM}.tipa`,

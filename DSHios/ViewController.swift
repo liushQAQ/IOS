@@ -391,7 +391,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
     
     private func injectTextToWebViewComposer(text: String) {
         let b64 = Data(text.utf8).base64EncodedString()
-        let js = "(function(){try{var t=decodeURIComponent(escape(atob('\(b64)')));var ta=document.querySelector('textarea,[contenteditable=\"true\"]');if(ta){if(ta.tagName==='TEXTAREA'){ta.value=(ta.value?ta.value+'\\n':'')+t;ta.dispatchEvent(new Event('input',{bubbles:true}));ta.dispatchEvent(new Event('change',{bubbles:true}));}else{ta.innerText=(ta.innerText?ta.innerText+'\\n':'')+t;ta.dispatchEvent(new Event('input',{bubbles:true}));}ta.focus();}}catch(e){}})();"
+        let js = "(function(){try{var t=decodeURIComponent(escape(atob('" + b64 + "')));var ta=document.querySelector('[data-lexical-editor=\"true\"], textarea, [contenteditable=\"true\"]');if(!ta)return;if((ta.hasAttribute('data-lexical-editor')||ta.isContentEditable)&&ta.__lexicalEditor){var editor=ta.__lexicalEditor;var lines=t.split('\\n');var stateObj={root:{children:lines.map(function(l){return{children:l?[{detail:0,format:0,mode:'normal',style:'',text:l,type:'text',version:1}]:[],direction:null,format:'',indent:0,type:'paragraph',version:1,textFormat:0,textStyle:''};}),direction:null,format:'',indent:0,type:'root',version:1}};var parsed=editor.parseEditorState(JSON.stringify(stateObj));editor.setEditorState(parsed);editor.focus();setTimeout(function(){var textNode=ta.querySelector('span[data-lexical-text=\"true\"]');if(textNode&&textNode.firstChild){var sel=window.getSelection();var r=document.createRange();r.setStart(textNode.firstChild,textNode.firstChild.length);r.collapse(true);sel.removeAllRanges();sel.addRange(r);document.dispatchEvent(new Event('selectionchange'));}},50);}else if(ta.tagName==='TEXTAREA'){ta.value=(ta.value?ta.value+'\\n':'')+t;ta.dispatchEvent(new Event('input',{bubbles:true}));ta.dispatchEvent(new Event('change',{bubbles:true}));ta.focus();}else{ta.innerText=(ta.innerText?ta.innerText+'\\n':'')+t;ta.dispatchEvent(new Event('input',{bubbles:true}));ta.focus();}}catch(e){}})();"
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
@@ -9568,9 +9568,9 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 优化新会话标题：按提问首句话提取
-            2. 彻底消除左侧会话列表抖动闪烁与重命名遮挡
-            3. 彻底消除右侧抽屉打开时三按钮闪烁跳跃
+            1. 修复离线OCR识别文字精准回填输入框
+            2. 修复多终端同步中已归档会话可见性
+            3. 优化新会话标题按提问首句话提取
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
