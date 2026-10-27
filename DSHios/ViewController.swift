@@ -3453,7 +3453,6 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
 
             function sanitizeNode(node) {
               if (!node || node.nodeType !== 1) return;
-              // 必须严格只针对包含文本的叶子节点处理，绝对不能篡改包含 SVG/图标/按钮的整个复合项，防止破坏 React 虚拟 DOM 导致重绘闪烁！
               if (node.children && node.children.length > 0) return;
               var text = (node.textContent || '').trim();
               if (text.indexOf('Generate the session') !== -1) {
@@ -3470,8 +3469,8 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
 
             function scanAndClean() {
               try {
-                // 仅精准定向叶子标题文本 span，绝不扫整个 button 或 a 标签
-                var targets = document.querySelectorAll('.ank0OG_crumbCurrent, .ank0OG_crumbSeg, [class*="crumbCurrent"], span[class*="title"], span[class*="sessionTitle"]');
+                // 仅定向顶栏标题区域，绝不扫描左侧目录会话列表，杜绝影响会话列表的正常渲染！
+                var targets = document.querySelectorAll('header .ank0OG_crumbCurrent, header .ank0OG_crumbSeg, header [class*="crumbCurrent"]');
                 for (var i = 0; i < targets.length; i++) {
                   sanitizeNode(targets[i]);
                 }
@@ -3479,7 +3478,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             }
 
             scanAndClean();
-            setInterval(scanAndClean, 3000);
+            setInterval(scanAndClean, 4000);
           })();
 
           // 2.1.1 修复一：切换会话防自动弹键盘（只有手指真实点击输入框才弹键盘）
@@ -5650,7 +5649,9 @@ function applySidebarInset() {
             //   现在统一按 `h + 6 - shift` 写，并改用「读回内联值」判等（比 dataset 鲁棒：
             //   React 复用元素只改 style 时 dataset 残留、dataset 判等会漏写，而读回不会）。
             var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 0;
-            var padTop = (h + 6 - shift) + 'px';
+            var padTop = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0)
+              ? ((window.__dshNativeStatusBar + 6 + 14) + 'px')
+              : ((h + 6 + 14) + 'px');
             var cols = document.querySelectorAll('[class*=\"sidebarCol\"], .CZPbNW_sidebarCol, [class*=\"rightbarCol\"], .CZPbNW_rightbarCol');
             for (var i = 0; i < cols.length; i++) {
               if (cols[i].style.getPropertyValue('padding-top') !== padTop ||
@@ -9567,9 +9568,9 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 修复真机版本号显示与重复提示更新
-            2. 消除会话模块抖动闪烁与重命名优化
-            3. 彻底消除右侧抽屉按钮展开闪烁跳变
+            1. 优化新会话标题：按提问首句话提取
+            2. 彻底消除左侧会话列表抖动闪烁与重命名遮挡
+            3. 彻底消除右侧抽屉打开时三按钮闪烁跳跃
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
