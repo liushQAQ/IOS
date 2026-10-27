@@ -1360,8 +1360,6 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '   被盖到只剩一条 5pt 残影；暗色下实测渲染成纯黑块）。',
             '   底色改透明：sticky 仍保证可见可点，遮挡源归零（顶栏永不被自家补丁盖住）。 */',
             '[class*="stripChrome_"] {',
-            '  position: sticky !important;',
-            '  right: 4px !important;',
             '  z-index: 7 !important;',
             '  background: transparent !important;',
             '}',
@@ -2794,13 +2792,17 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                       if (__arC.width > 0) {
                         if (__arC.left >= window.innerWidth) { __visC = false; break; }
                         // 🔴 R49（老总 2026-10-26 真机：打开抽屉三个按钮闪烁一下才归位根治）：
-                        //   祖先是抽屉面板（rightbarCol/sidebarCol）时，若 left > 4，说明抽屉正在
-                        //   滑动动画中（未达到停靠稳态 left <= 0）。此时内部按钮正随抽屉整体平滑滑入，
+                        //   祖先是抽屉面板（rightbarCol/sidebarCol）时：
+                        //   只要面板还在屏幕右侧外部（left > 0）或带有非零 transform 位移，说明抽屉正在
+                        //   滑动动画中（未达到停靠稳态）。此时内部按钮正随抽屉整体平滑滑入，
                         //   绝不允许对其施加临时的 translateX 平移，否则滑入中途会被强拽出闪烁跳变！
                         var __cls = (__anC.className && typeof __anC.className === 'string') ? __anC.className : '';
-                        if ((__cls.indexOf('rightbarCol') >= 0 || __cls.indexOf('sidebarCol') >= 0) && __arC.left > 4) {
-                          __visC = false;
-                          break;
+                        if (__cls.indexOf('rightbarCol') >= 0 || __cls.indexOf('sidebarCol') >= 0 || __anC.hasAttribute('data-sidebar-right-open')) {
+                          var __anStyle = getComputedStyle(__anC);
+                          if (__arC.left > 0.5 || (__anStyle.transform && __anStyle.transform !== 'none' && __anStyle.transform.indexOf('matrix(1, 0, 0, 1, 0, 0)') === -1)) {
+                            __visC = false;
+                            break;
+                          }
                         }
                       }
                     }
@@ -3450,22 +3452,26 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             window.__dshTitleCleaner = true;
 
             function sanitizeNode(node) {
-              if (!node) return;
+              if (!node || node.nodeType !== 1) return;
+              // 必须严格只针对包含文本的叶子节点处理，绝对不能篡改包含 SVG/图标/按钮的整个复合项，防止破坏 React 虚拟 DOM 导致重绘闪烁！
+              if (node.children && node.children.length > 0) return;
               var text = (node.textContent || '').trim();
               if (text.indexOf('Generate the session') !== -1) {
                 var idx = text.indexOf('(');
                 if (idx !== -1 && text.indexOf(')', idx) !== -1) {
                   var suffix = text.substring(idx);
-                  node.textContent = '新会话 ' + suffix;
+                  var newT = '新会话 ' + suffix;
+                  if (node.textContent !== newT) node.textContent = newT;
                 } else {
-                  node.textContent = '新会话';
+                  if (node.textContent !== '新会话') node.textContent = '新会话';
                 }
               }
             }
 
             function scanAndClean() {
               try {
-                var targets = document.querySelectorAll('[class*="crumbs"], [class*="crumbCurrent"], .ank0OG_crumbCurrent, .ank0OG_crumbSeg, [class*="sessionItem"], [class*="sessionTitle"], [class*="chat-title"], nav a, [role="navigation"] button');
+                // 仅精准定向叶子标题文本 span，绝不扫整个 button 或 a 标签
+                var targets = document.querySelectorAll('.ank0OG_crumbCurrent, .ank0OG_crumbSeg, [class*="crumbCurrent"], span[class*="title"], span[class*="sessionTitle"]');
                 for (var i = 0; i < targets.length; i++) {
                   sanitizeNode(targets[i]);
                 }
@@ -3473,7 +3479,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             }
 
             scanAndClean();
-            setInterval(scanAndClean, 1000);
+            setInterval(scanAndClean, 3000);
           })();
 
           // 2.1.1 修复一：切换会话防自动弹键盘（只有手指真实点击输入框才弹键盘）
@@ -3536,7 +3542,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               return false;
             }
 
-            // 1. 用户点击菜单中的“重命名”项时，立即收起目录
+            // 1. 用户点击菜单中的“重命名”项时，收起目录
             document.addEventListener('click', function(e) {
               var el = e.target;
               if (!el) return;
@@ -3545,22 +3551,10 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 var text = (btn.textContent || '').trim();
                 var aria = (btn.getAttribute('aria-label') || '').trim();
                 if (text.indexOf('重命名') !== -1 || aria.indexOf('重命名') !== -1) {
-                  setTimeout(closeLeftDrawer, 50);
+                  setTimeout(closeLeftDrawer, 100);
                 }
               }
             }, true);
-
-            // 2. 哨兵监测：页面一旦挂载重命名输入框且目录开着，立即关闭目录
-            setInterval(function() {
-              try {
-                var renameInput = document.querySelector('input[class*="renameInput"], [role="dialog"] input');
-                var sidebar = document.querySelector('[class*="sidebarCol"]');
-                var isOpen = sidebar && sidebar.getBoundingClientRect().right > 10;
-                if (renameInput && isOpen) {
-                  closeLeftDrawer();
-                }
-              } catch (e) {}
-            }, 300);
           })();
         })();
         """,
@@ -9573,9 +9567,9 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 修复切换会话自动弹出键盘遮挡
-            2. 修复重命名时左侧目录遮挡输入框
-            3. 发送按钮固定与新会话标题净化
+            1. 修复真机版本号显示与重复提示更新
+            2. 消除会话模块抖动闪烁与重命名优化
+            3. 彻底消除右侧抽屉按钮展开闪烁跳变
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)

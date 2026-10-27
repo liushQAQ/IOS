@@ -6,8 +6,8 @@ const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const CONFIG_FILE = path.join(ROOT, '.codemagic_config.json');
 const BUILD_ID = process.argv[2] || '6adf8a5986b11eb17876e733';
-const VERSION = '2.1.1';
-const BUILD_NUM = 2;
+const VERSION = '2.1.2';
+const BUILD_NUM = 3;
 
 if (!fs.existsSync(CONFIG_FILE)) {
   console.error('缺少配置文件');
@@ -80,8 +80,8 @@ async function run() {
     version: VERSION,
     build: BUILD_NUM,
     updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-    title: `v${VERSION}(${BUILD_NUM}) 修复切换会话弹键盘 + 修复重命名遮挡 + 发送按钮固定`,
-    changelog: "1. 修复切换会话自动弹出键盘遮挡屏幕的问题（仅手指真触输入框才弹键盘）\n2. 修复点击重命名时左侧目录遮挡输入框的问题（点击重命名自动收起左侧抽屉）\n3. 修复会话框发送按钮随模型名称变短向左缩进的问题（固定死在最右侧）\n4. 修复新会话标题出现 Generate the session tit 英文提示词的问题\n5. 苹果原生 Vision 离线毫秒级 OCR 拍照/相册提取文字回填\n6. 后台延时防断连保活机制 + 任务完成系统横幅通知\n7. ActivityKit 灵动岛小鲸鱼呼吸状态与锁屏实时活动卡片\n8. 抽屉顶部加高至79px避让灵动岛与时间，消除展开时三按钮闪烁",
+    title: `v${VERSION}(${BUILD_NUM}) 修复版本号+消除抖动闪烁+消除抽屉三按钮闪烁`,
+    changelog: "1. 修复真机版本号一直显示1.0.143且反复提示更新的问题\n2. 修复会话列表上下抖动闪烁导致无法点击的问题\n3. 彻底消除右侧抽屉打开时右上角三个按钮闪烁跳跃的问题\n4. 修复切换会话自动弹出键盘遮挡屏幕的问题（仅手指真触输入框才弹键盘）\n5. 修复点击重命名时左侧目录遮挡输入框的问题（点击重命名自动收起左侧抽屉）\n6. 修复会话框发送按钮随模型名称变短向左缩进的问题（固定死在最右侧）\n7. 修复新会话标题出现 Generate the session tit 英文提示词的问题\n8. 苹果原生 Vision 离线毫秒级 OCR 拍照/相册提取文字回填",
     tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     public_tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     tipa_url_fallback: `https://github.com/liushQAQ/IOS/releases/download/v${VERSION}/DSHios-public-${VERSION}-${BUILD_NUM}.tipa`,
