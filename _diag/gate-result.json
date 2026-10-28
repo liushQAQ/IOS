@@ -1,19 +1,17 @@
 {
   "version": "2.1.4",
   "sizes": [
-    "430x932",
-    "393x852",
-    "375x812"
+    "430x932"
   ],
-  "startedAt": "2026-10-27T04:52:28.734Z",
-  "dshFingerprint": "l5tnd3",
+  "startedAt": "2026-10-28T14:45:17.841Z",
+  "dshFingerprint": "o0234l",
   "dshAssets": 9,
   "domClasses": 0,
   "anchorTotal": 167,
   "anchorDead": 0,
-  "anchorCssAlive": 111,
-  "anchorResidue": 56,
-  "dshSheets": 206,
+  "anchorCssAlive": 108,
+  "anchorResidue": 59,
+  "dshSheets": 209,
   "ownSheets": 11,
   "anchorCritical": {
     "total": 12,
@@ -30,16 +28,13 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 95,
+  "pass": 69,
   "fail": 0,
   "failures": [],
   "blocked": [
-    "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）",
     "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）",
-    "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）",
-    "[底排防挤爆] 优化胶囊 — 第三方插件未挂载（会话页死循环连坐，非 App 回归）",
     "[锚点] headerCorner 取样 — 会话页死循环连坐，该锚点无法取样（Chromium 对照确认 DOM 在）"
   ],
-  "sourceHash": "4fc3b01583fd8c0c384ea8d78e1f3504ea95c93de604ba0037a9ee51e47d4895",
-  "finishedAt": "2026-10-27T04:55:26.360Z"
+  "sourceHash": "2f8bfca5324e18ca0db4ebb0f1d2c575d032634c6a057dc9096242d50288a18d",
+  "finishedAt": "2026-10-28T14:47:40.784Z"
 }

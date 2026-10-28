@@ -626,8 +626,8 @@ const A_PLUGIN_PAGE = () => {
         const pinch = await p.evaluate(() => {
           const vw = window.innerWidth;
           const comp2 = document.querySelector('[class*="composerStack"]');
-          const sc = document.querySelector('[class*="VERcba_standardControls"]');
-          const cap = sc ? sc.querySelector(':scope > div > div') : null;
+          const sc = document.querySelector('[class*="VERcba_standardControls"], [class*="standardControls"], [class*="trailing"]');
+          const cap = sc ? (sc.querySelector(':scope > div > div') || sc.querySelector(':scope > div') || sc) : null;
           if (!cap) {
             /* v1.0.131 口径：优化胶囊是 dsh-po- 插件动态挂载的。会话页死循环时插件整体未挂载
                → 属「无法校验」（同 pageHead 先例），不是补丁失效实证。
@@ -659,7 +659,7 @@ const A_PLUGIN_PAGE = () => {
             if (r.width < 4) return;
             if (r.right > vw + 0.5) { over++; if (overSample.length < 3) overSample.push(((b.textContent || b.className || '').toString().slice(0, 10)) + ' +' + Math.round(r.right - vw)); }
           });
-          const send = Array.from(comp2.querySelectorAll('button')).find(b => (b.className || '').toString().includes('VERcba_primary'));
+          const send = Array.from(comp2.querySelectorAll('button')).find(b => (b.className || '').toString().includes('primary') || b.getAttribute('aria-label') === '发送消息');
           const box = document.getElementById('__gateFakeCapsule');
           if (box) box.remove();
           return { over, overSample, sendRight: send ? Math.round(send.getBoundingClientRect().right) : null, vw };

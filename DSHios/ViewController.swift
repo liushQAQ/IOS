@@ -3283,6 +3283,8 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             window.__dshEdgeGestures = true;
             var EDGE = 32, DIST = 56;
             var sx = 0, sy = 0, st = 0, track = false;
+            var dirLock = 'none';
+            var isEdgeCandidate = false;
 
             function visible(el) {
               if (!el) return false;
@@ -3373,8 +3375,39 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               if (!e.touches || e.touches.length !== 1) { track = false; return; }
               var t = e.touches[0];
               sx = t.clientX; sy = t.clientY; st = Date.now();
+              dirLock = 'none';
+              var dirOpen = isDirOpen();
+              isEdgeCandidate = (sx <= EDGE) || dirOpen;
               track = true;
             }, { passive: true });
+
+            document.addEventListener('touchmove', function (e) {
+              if (!track) return;
+              var t = e.touches && e.touches[0];
+              if (!t) return;
+              var dx = t.clientX - sx, dy = t.clientY - sy;
+              var adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+
+              // 智能方向锁：位移达到 6px 时判断意图
+              if (dirLock === 'none' && (adx >= 6 || ady >= 6)) {
+                if (isEdgeCandidate && adx >= ady) {
+                  dirLock = 'horizontal';
+                } else if (ady > adx * 1.4) {
+                  dirLock = 'vertical';
+                } else if (adx > ady * 1.4) {
+                  dirLock = 'horizontal';
+                }
+              }
+
+              // 🔴 根治核心：一旦判定为横向滑动手势，强行阻止默认滚动行为，彻底切断底层会话上下颠簸！
+              if (dirLock === 'horizontal') {
+                if (e.cancelable) {
+                  e.preventDefault();
+                }
+                e.stopPropagation();
+              }
+            }, { passive: false });
+
             document.addEventListener('touchend', function (e) {
               if (!track) return;
               track = false;
@@ -3382,7 +3415,10 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               if (!t) return;
               var dx = t.clientX - sx, dy = t.clientY - sy;
               var adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
-              if (Date.now() - st > 1200 || adx < DIST || adx < ady * 1.8) return;
+              var wasHorizontal = (dirLock === 'horizontal');
+              dirLock = 'none';
+
+              if (Date.now() - st > 1200 || adx < DIST || (adx < ady * 1.5 && !wasHorizontal)) return;
               var el = e.target;
               if (el && el.closest && el.closest('input, textarea, [contenteditable="true"]')) return;
               if (inHScroll(el)) return;
@@ -3399,7 +3435,14 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 //    老总 2026-10-24 实证死胡同：进插件页后按钮全无、任何手势都退不出去。
                 //    严禁任何页面成为死胡同：这里保底必有一个可用出口。
                 if (!isDirOpen()) openDir();
+              } else if (dx < 0 && isDirOpen()) {
+                closeDir();
+                return;
               }
+            }, { passive: true });
+            document.addEventListener('touchcancel', function () {
+              track = false;
+              dirLock = 'none';
             }, { passive: true });
           })();
 

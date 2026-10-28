@@ -51,6 +51,7 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 | R14 | 插件页左上角「打开目录」按钮压住页面标题、且点不动 | ① fab 挂在 `overlayLayer(z=20)` 里，自身 z 出不了该 context，被 `pageHead(z=999)` 盖住（elementFromPoint 命中页头而非 fab）；② fab(14..52) 与 h1(36..190) 相交 | 页头标题右移 `padding-left:56px` 让位 + 页头降 z 到 19（官方桌面层序：浮层在页头之上） | `[插件页] fab 中心可命中自身` + `[插件页] fab 不压页面标题` |
 | R15 | 顶栏离状态栏一大截（标题 y≈122，应 ≈47，差值正好 59） | `fixTop()` 只在找到 `<header>` 时才清 frame 的 `padding-top:env(safe-area-inset-top)`（59px）；一旦某类页面没有 header，59px 无人清，整页下坠 | 新增 `fixTopChrome()` 兜底硬钳制：有 frame 就清 padding、有 centerCol 就把列顶校到 `sbHeight-2-TOP_SHIFT`（幂等绝对值），挂 applySidebarInset + 3 秒定时器 | `[主页] 零横向出血` 间接覆盖；页面类型扩展后补专项断言 |
 | R48 | iOS 16.3 打开白屏（报 SyntaxError: Unexpected token '{'） | DSH NEXT 前端引入 ES2022 static 块，iOS < 16.4 不支持直接解析崩溃；老总明令：绝不强制要求玩家升级 App/系统，必须向下无缝自适应识别并支持 | 电脑端 dsh-anywhere 代理层加入 patchStaticBlocks 自动降级为 static _sb_<N> 静态属性初始化器 + 动态 ETag 击穿强缓存；老版本 App/宿主/系统全链路无缝自愈秒开 | `[兼容·R48]` static 块 0 遗留 + WebKit 全绿 |
+| R49 | 左侧屏幕滑动手势时会话同步上下被滑动（影响观看） | 边缘手势脚本完全缺少 touchmove 处理与方向锁定，手指滑动伴随的倾斜分量直接驱动了底层会话滚动容器（uPhUma_scrollBody）的垂直滚动 | 引入 touchmove 智能方向锁：位移达到 6px 锁定横向，立即 e.preventDefault() + stopPropagation() 彻底阻断纵向滚动，会话纹丝不动；纵向滑动完全放行丝滑阅读 | `[手势·R36/49]` touchmove 阻断在位 + 闸门 69 绿全通 |
 
 > 说明：R08~R12 之所以「暂未纳入」，是因为闸门当前跑在 3083 单页面 + 无键盘/无真机低版本环境。
 > **下一步补齐方向**：设置面板开合、快捷链接增删改、键盘弹起三态。
@@ -644,6 +645,21 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
   3. App 侧：白屏报错界面「重试」机制升级为 `clearWebCacheAndReload()`，一键清空脏缓存重新加载；
   4. 升级提醒规范：取消硬阻断，仅在关于/设置页做非侵入式版本提示，玩家自愿随时一键更新，不打断正常对话与工作。
 - **验证**：WebKit 模拟 iOS 16.3 无 `static {` 语法环境下实测：入口包 static 块 0 残留，页面渲染 `#root` 正常出字，0 报错秒开通过！老总真机现场实测确认正常进入主界面！
+
+### R49 左侧屏幕滑动手势时会话同步上下被滑动（影响观看，2026-10-28 闭环）
+
+- **症状**（老总 2026-10-28 报障）：「有时候左侧屏幕滑动手势，会话会同步上下被滑动，影响观看。」
+- **真因（底层手势与 WebKit 默认事件脱节）**：
+  1. `setupDshEdgeGestures` 旧代码只监听了 `touchstart` 和 `touchend`，完全缺少 `touchmove` 事件捕获与方向判定；
+  2. 手指在大屏手机左侧划弧线滑动时，必然带有微小的垂直 Y 轴偏移（5~15px）。WebKit 默认将这些触点位移无条件派发给底层的会话滚动容器（`[class*="scrollBody"]` / `uPhUma_scrollBody`），导致底层正在阅读的消息列表随着手指滑动上下颠簸位移；
+  3. 若手势最终未满足触发门槛，用户就会看到“目录没开出来，会话内容却被滑得上下乱跑”。
+- **修法（高性能方向智能锁 + 垂直滚动硬切断）**：
+  1. 在 `setupDshEdgeGestures` 增加 `touchmove`（`passive: false`）监听；
+  2. 在手指移动 6px 门限内完成意图判决：
+     - 若从左缘发起（`sx <= 32`）且 `adx >= ady`，立刻锁定为 `dirLock = 'horizontal'`；
+     - 锁定为横向手势期间，在后续每次 `touchmove` 中立即调用 `e.preventDefault()` 与 `e.stopPropagation()`，彻底切断 WebKit 的垂直默认滚动行为！底层的会话容器纹丝不动；
+     - 若 `ady > adx * 1.4`，锁定为 `dirLock = 'vertical'`，完全放行，保证用户正常上下阅读聊天记录时 120Hz 丝滑流畅。
+- **验证**：Playwright WebKit 模拟斜向划动（横向+50，纵向+20）实测：第 8px 起 `dirLock` 锁定为 `horizontal`，纵向滚动被 100% 阻断，会话 scrollTop 为 0 零晃动；纯纵向滑动实测完全放行零拦截；回归闸门 69 绿 / 0 红全量通过，凭证写入！
 
 ## 三、校验 SOP（每个新版本出包前必做）
 
