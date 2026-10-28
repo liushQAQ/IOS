@@ -9591,19 +9591,8 @@ function applySidebarInset() {
     }
 
     @objc private func retryTapped() {
-        if let current = webView.url?.absoluteString, !current.isEmpty {
-            // 🔴 v1.0.130 顶栏根治：重试必须**继承当前页面的归属判定**，绝不能写死 false！
-            //   旧代码无条件 markAsDSHService:false —— 冷启动遇到 PC 未就绪 → 报错页 → 老总点「重试」
-            //   → 明明重试的就是 DSH 地址，isCurrentServiceDSH 却被改成 false →
-            //   updateTopSafeAreaFor 把 DSH 页当外部网页，webViewTopConstraint = 59pt，
-            //   整个 WebView 连同顶栏被原生层**整体下移一个状态栏高度**。
-            //   真机三张截图逐条带对拍实锤（2026-10-20 21:09）：标题 +59.7 / Tab +59.3 /
-            //   下划线 +61.0，页内布局与沙箱完全一致 —— 页面层无辜，原生层平移。
-            //   清缓存重载（clearWebCacheAndReload）是同一个病，一并修。
-            loadURLString(current, markAsDSHService: isCurrentServiceDSH ?? true)
-        } else {
-            loadInitialURL()
-        }
+        // 白屏或加载失败后重试：直接清空本地 WebKit 资源缓存并重新加载，杜绝手机端死锁未修复的旧 JS 缓存
+        clearWebCacheAndReload()
     }
 
     /// R40：进入后台的时刻。回前台时据此判断是否需要长后台冷恢复（>90s reload 兜底）
