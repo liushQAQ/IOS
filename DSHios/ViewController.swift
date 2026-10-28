@@ -9611,9 +9611,9 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 修复离线OCR识别文字精准回填输入框
-            2. 修复多终端同步中已归档会话可见性
-            3. 优化新会话标题按提问首句话提取
+            1. 根治左侧边缘滑动手势时会话上下被滑动
+            2. 白屏与加载重试升级为一键清空本地脏缓存
+            3. 修复离线OCR识别文字精准回填输入框
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
