@@ -1,12 +1,12 @@
 {
-  "version": "2.1.4",
-  "build": 5,
-  "updated_at": "2026-10-27 04:58:36",
-  "title": "v2.1.4(5) 修复离线OCR回填输入框+修复已归档会话可见性",
-  "changelog": "1. 修复离线OCR识别文字精准回填会话框，对齐最新输入法结构\n2. 修复多终端同步中已归档会话可见性，杜绝多端状态漂移\n3. 优化新会话标题生成：按提问内容首句话提取，杜绝生成英文提示词\n4. 彻底根治左侧目录列表上下抖动闪烁与重命名遮挡问题\n5. 彻底消除右侧抽屉打开时右上角三个按钮闪烁跳跃的问题\n6. 修复真机版本号一直显示1.0.143且反复提示更新的问题\n7. 修复切换会话自动弹出键盘遮挡屏幕的问题（仅手指真触输入框才弹键盘）\n8. 修复点击重命名时左侧目录遮挡输入框的问题（点击重命名自动收起左侧抽屉）\n9. 修复会话框发送按钮随模型名称变短向左缩进的问题（固定死在最右侧）",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.4-5.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.4-5.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.4/DSHios-public-2.1.4-5.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.4",
-  "md5": "1810e4a2ed4b107bbc8bc48b0e095dd5"
+  "version": "2.1.5",
+  "build": 6,
+  "updated_at": "2026-10-29 00:08:46",
+  "title": "v2.1.5(6) 根治左侧手势会话抖动+清缓存自愈+无缝自适应支持",
+  "changelog": "1. 根治左侧边缘滑动手势时会话内容同步上下滑动的问题（引入智能方向锁与物理滚动阻断）\n2. 白屏与加载重试机制升级为一键清空本地脏缓存重试，彻底杜绝死锁旧代码\n3. 修复离线OCR识别文字精准回填会话框，对齐最新输入法结构\n4. 修复多终端同步中已归档会话可见性，杜绝多端状态漂移\n5. 优化新会话标题生成：按提问内容首句话提取，杜绝生成英文提示词\n6. 彻底根治左侧目录列表上下抖动闪烁与重命名遮挡问题\n7. 彻底消除右侧抽屉打开时右上角三个按钮闪烁跳跃的问题\n8. 修复真机版本号一直显示1.0.143且反复提示更新的问题\n9. 修复切换会话自动弹出键盘遮挡屏幕的问题（仅手指真触输入框才弹键盘）",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.5-6.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.5-6.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.5/DSHios-public-2.1.5-6.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.5",
+  "md5": "1695780a174c7ce6f80acb37d162c899"
 }
