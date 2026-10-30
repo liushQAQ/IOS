@@ -3296,19 +3296,27 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             function inHScroll(el) {
               var d = 0;
               var vw = window.innerWidth, vh = window.innerHeight;
-              while (el && el !== document.body && d < 12) {
+              var cur = el;
+              while (cur && cur !== document.body && cur !== document.documentElement && d < 20) {
                 try {
-                  var cs = getComputedStyle(el);
-                  if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') {
+                  var tag = cur.tagName;
+                  if (tag === 'TABLE' || tag === 'PRE') {
+                    if (cur.scrollWidth > cur.clientWidth + 2) return true;
+                  }
+                  var cs = getComputedStyle(cur);
+                  var ox = cs.overflowX;
+                  if (ox === 'auto' || ox === 'scroll') {
                     // 🔴 R36c：整页级容器（近全宽且近全高，如插件页 page 根 SECTION）不算横向滚动区 ——
                     //    它只是页面壳，算进豁免会把落点在它上面的所有手势全掐死
                     //    （真机死胡同实锤：插件页任何滑动都打不进来）。真横滚部件（代码块/轮播/tab 条）
                     //    高度远小于整页，不受影响。
-                    var r0 = el.getBoundingClientRect();
-                    if (!(r0.width >= vw * 0.9 && r0.height >= vh * 0.6)) return true;
+                    var r0 = cur.getBoundingClientRect();
+                    if (!(r0.width >= vw * 0.9 && r0.height >= vh * 0.6)) {
+                      if (cur.scrollWidth > cur.clientWidth + 2) return true;
+                    }
                   }
                 } catch (e) {}
-                el = el.parentElement;
+                cur = cur.parentElement;
                 d++;
               }
               return false;
@@ -3346,6 +3354,18 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 document.querySelector('[class*="sidebarCol"] button[aria-label="收起目录"]')
               ]);
             }
+            function isRightPanelOpen() {
+              var p = document.querySelector('[data-sidebar-right-open="true"], .dMHGga_panel[data-sidebar-right-open]');
+              return !!p;
+            }
+            function openRightPanel() {
+              return clickFirst([
+                document.querySelector('header button[aria-label="打开右侧边栏"]'),
+                document.querySelector('button[aria-label="打开右侧边栏"]'),
+                document.querySelector('[data-sidebar-right-expand="true"]'),
+                document.querySelector('[data-sidebar-right-toggle]')
+              ]);
+            }
             function closeRightPanel() {
               try { if (window.__dshCloseRightPanel) { window.__dshCloseRightPanel(); return true; } } catch (e) {}
               return clickFirst([
@@ -3374,10 +3394,19 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             document.addEventListener('touchstart', function (e) {
               if (!e.touches || e.touches.length !== 1) { track = false; return; }
               var t = e.touches[0];
+              // 🌟 核心手势优化：如果触摸起点落在任何横向可滚动的表格、代码块或滑块文案上，
+              //    100% 将控制权无条件让给 WebKit 原生横向滚动，手势逻辑彻底放行退出！
+              var el = e.target;
+              if (el && el.closest && el.closest('input, textarea, [contenteditable="true"]')) { track = false; return; }
+              if (inHScroll(el)) { track = false; return; }
+
               sx = t.clientX; sy = t.clientY; st = Date.now();
               dirLock = 'none';
+              var vw = window.innerWidth;
               var dirOpen = isDirOpen();
+              var rPanelOpen = isRightPanelOpen();
               isEdgeCandidate = (sx <= EDGE) || dirOpen;
+              isRightEdgeCandidate = (sx >= vw - 40) || rPanelOpen;
               track = true;
             }, { passive: true });
 
@@ -3385,16 +3414,18 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               if (!track) return;
               var t = e.touches && e.touches[0];
               if (!t) return;
+              if (inHScroll(e.target)) { track = false; dirLock = 'none'; return; }
+
               var dx = t.clientX - sx, dy = t.clientY - sy;
               var adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
 
               // 智能方向锁：位移达到 6px 时判断意图
               if (dirLock === 'none' && (adx >= 6 || ady >= 6)) {
-                if (isEdgeCandidate && adx >= ady) {
+                if ((isEdgeCandidate || isRightEdgeCandidate) && adx >= ady) {
                   dirLock = 'horizontal';
                 } else if (ady > adx * 1.4) {
                   dirLock = 'vertical';
-                } else if (adx > ady * 1.4) {
+                } else if ((isEdgeCandidate || isRightEdgeCandidate) && adx > ady * 1.4) {
                   dirLock = 'horizontal';
                 }
               }
@@ -3417,6 +3448,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               var adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
               var wasHorizontal = (dirLock === 'horizontal');
               dirLock = 'none';
+              var vw = window.innerWidth;
 
               if (Date.now() - st > 1200 || adx < DIST || (adx < ady * 1.5 && !wasHorizontal)) return;
               var el = e.target;
@@ -3435,8 +3467,19 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 //    老总 2026-10-24 实证死胡同：进插件页后按钮全无、任何手势都退不出去。
                 //    严禁任何页面成为死胡同：这里保底必有一个可用出口。
                 if (!isDirOpen()) openDir();
+                return;
               } else if (dx < 0 && isDirOpen()) {
                 closeDir();
+                return;
+              }
+
+              // 🌟 屏幕右缘长滑手势：屏幕右侧向左长滑打开右侧抽屉，右侧抽屉打开时向右滑关闭
+              if (dx < -DIST && sx >= vw - 40) {
+                if (!isRightPanelOpen()) openRightPanel();
+                return;
+              }
+              if (dx > DIST && isRightPanelOpen()) {
+                closeRightPanel();
                 return;
               }
             }, { passive: true });
@@ -5151,7 +5194,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
           //   🔴 特异性：`html body` 前缀 + `:has()` 参数 → 实测压过官方 (0,4,0)；
           //     `:has()` 不支持时整条规则被浏览器丢弃 ⇒ 自动退回官方原样，绝不更坏，
           //     此时由 fallback（老 JS 判定）接管，两条路径互不干扰。
-          //   🔴 兼容：`:has()` 需 Safari/iOS 15.4+；本项目最低 iOS 16.4。
+          //   🔴 兼容：`:has()` 需 Safari/iOS 15.4+；工程部署目标 iOS 14.0、真机地板 iOS 16.3，不支持时自动退回官方原样。
           var __dshHasOk = false;
           try { __dshHasOk = !!(window.CSS && CSS.supports && CSS.supports('selector(:has(*))')); } catch (e) {}
           var __dshStretchCssAt = 0;
@@ -8422,12 +8465,10 @@ function applySidebarInset() {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
-        config.defaultWebpagePreferences.allowsContentJavaScript = true
-        // 兼容 iOS 14 / 15 低版本 WebKit 策略：
-        // 显式在 preferences 上允许 JavaScript 与跨域本地网络访问，避免 ITP 隐私策略拦截 http 局域网请求
-        config.preferences.javaScriptEnabled = true
-        config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
-        config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
+        // iOS 15+ 用新 API 显式允许内容 JS；iOS 14 默认即允许（废弃的 javaScriptEnabled 与两个 KVC 私有键已移除）
+        if #available(iOS 15.0, *) {
+            config.defaultWebpagePreferences.allowsContentJavaScript = true
+        }
         // 绑定持久化数据存储，确保静态资源磁盘缓存生效
         config.websiteDataStore = WKWebsiteDataStore.default()
         // 电脑端一些老页面（如 8210 TTS）没写 <meta name="viewport">，
@@ -8825,8 +8866,8 @@ function applySidebarInset() {
             view.layoutIfNeeded()
         case .changed:
             let translationX = gesture.translation(in: view).x // 向左滑 translationX < 0
-            // 长滑（≥80pt）留给右侧面板：小鲸鱼不再跟着出来，停在收起态。
-            if translationX < -80 {
+            // 长滑（≥52pt）留给右侧面板：小鲸鱼不再跟着出来，停在收起态。
+            if translationX < -52 {
                 constraint.constant = Self.menuCollapsedConstant
                 button.alpha = 0.20
                 view.layoutIfNeeded()
@@ -8842,12 +8883,12 @@ function applySidebarInset() {
         case .ended, .cancelled:
             let translationX = gesture.translation(in: view).x
             let velocityX = gesture.velocity(in: view).x
-            // 两档：长滑（≥80pt）打开右侧面板，小鲸鱼弹回收起；
+            // 两档：长滑（≥52pt）打开右侧面板，小鲸鱼弹回收起；
             // 短滑（≥12pt）维持原行为，拉出小鲸鱼。
-            if translationX < -80 {
+            if translationX < -52 {
                 setMenuExpanded(false, animated: true)
                 webView?.evaluateJavaScript(
-                    "(function(){var b=document.querySelector('header button[aria-label=\"打开右侧边栏\"]');if(b)b.click();})();",
+                    "(function(){var b=document.querySelector('header button[aria-label=\"打开右侧边栏\"], button[aria-label=\"打开右侧边栏\"], [data-sidebar-right-expand=\"true\"], [data-sidebar-right-toggle]');if(b)b.click();})();",
                     completionHandler: nil)
             } else if translationX < -12 || velocityX < -200 {
                 setMenuExpanded(true, animated: true)
@@ -9611,9 +9652,9 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 根治左侧边缘滑动手势时会话上下被滑动
-            2. 白屏与加载重试升级为一键清空本地脏缓存
-            3. 修复离线OCR识别文字精准回填输入框
+            1. 右缘长滑打开右侧抽屉，短滑拉出小鲸鱼
+            2. 会话里表格滑块不再被边缘手势卡住
+            3. 首次打开不再连旧地址，记住上次地址
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
@@ -9629,8 +9670,15 @@ function applySidebarInset() {
     private func loadInitialURL() {
         // 跨版本防覆盖铁律：优先读取本地持久化沙盒中用户已配置/正在使用的地址，绝不覆盖冲掉用户已有 URL！
         let saved = DSHPersistenceCenter.loadLastURL() ?? UserDefaults.standard.string(forKey: Keys.lastURL)
-        let urlString = (saved?.isEmpty == false) ? saved! : defaultURL
-        loadURLString(urlString)
+        if let urlString = saved, !urlString.isEmpty {
+            loadURLString(urlString)
+        } else {
+            // 首次启动无任何历史地址：不再自动加载写死的内网示例 IP，
+            // 等视图挂上窗口后直接弹出地址输入让用户填写（promptForURL 会用示例 IP 作预填）。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.promptForURL()
+            }
+        }
     }
 
     @objc private func retryTapped() {
@@ -9647,7 +9695,8 @@ function applySidebarInset() {
         }
         backgroundedAtForResync = Date()
         
-        // 2.0 原生增强：后台防断连短时延时保活（最高申请 180s 系统保护，防止切后台 WebSocket 闪断）
+        // 切后台向系统申请一次短时延时保活（系统实际只授予约 30 秒，到点由上面的过期回调收回；
+        // WebSocket 后台仍会断，回前台走现有重连与 R40 长后台冷恢复）。
         if backgroundTaskId == .invalid {
             backgroundTaskId = UIApplication.shared.beginBackgroundTask(withName: "DSH-Execution-KeepAlive") { [weak self] in
                 guard let self = self else { return }
@@ -9857,6 +9906,19 @@ extension ViewController: WKNavigationDelegate {
             stopNavigationTimeout()
         }
         decisionHandler(.allow)
+    }
+
+    /// 导航 scheme 白名单：主框架与子框架一律只放行 http/https/about，
+    /// 拦截 javascript:/file:/data: 等方案（createWebViewWith 的 target=_blank 走同一判定）。
+    func webView(_ webView: WKWebView,
+                 decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        let scheme = navigationAction.request.url?.scheme?.lowercased()
+        if scheme == "http" || scheme == "https" || scheme == "about" {
+            decisionHandler(.allow)
+        } else {
+            decisionHandler(.cancel)
+        }
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -10145,7 +10207,11 @@ extension ViewController: WKUIDelegate {
                  for navigationAction: WKNavigationAction,
                  windowFeatures: WKWindowFeatures) -> WKWebView? {
         if navigationAction.targetFrame == nil {
-            webView.load(navigationAction.request)
+            // 与导航 scheme 白名单同一判定：只把 http/https/about 的新窗口请求装回当前 WebView。
+            let scheme = navigationAction.request.url?.scheme?.lowercased()
+            if scheme == "http" || scheme == "https" || scheme == "about" {
+                webView.load(navigationAction.request)
+            }
         }
         return nil
     }

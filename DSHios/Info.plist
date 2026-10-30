@@ -69,12 +69,14 @@
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
 		<true/>
 		<key>NSAllowsArbitraryLoadsInWebContent</key>
 		<true/>
 	</dict>
 	<key>DSHAppVersion</key>
-	<string>2.1.5</string>
+	<string>2.1.6</string>
 	<key>DSHFeedbackEmail</key>
 	<string>734530963@qq.com</string>
 	<key>NSLocalNetworkUsageDescription</key>

@@ -5,9 +5,9 @@ const { execSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const CONFIG_FILE = path.join(ROOT, '.codemagic_config.json');
-const BUILD_ID = process.argv[2] || '6adf8a5986b11eb17876e733';
-const VERSION = '2.1.4';
-const BUILD_NUM = 5;
+const BUILD_ID = process.argv[2] || '6ae22477ca2fbc11e229607c';
+const VERSION = '2.1.6';
+const BUILD_NUM = 7;
 
 if (!fs.existsSync(CONFIG_FILE)) {
   console.error('缺少配置文件');
@@ -80,8 +80,8 @@ async function run() {
     version: VERSION,
     build: BUILD_NUM,
     updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-    title: `v${VERSION}(${BUILD_NUM}) 修复离线OCR回填输入框+修复已归档会话可见性`,
-    changelog: "1. 修复离线OCR识别文字精准回填会话框，对齐最新输入法结构\n2. 修复多终端同步中已归档会话可见性，杜绝多端状态漂移\n3. 优化新会话标题生成：按提问内容首句话提取，杜绝生成英文提示词\n4. 彻底根治左侧目录列表上下抖动闪烁与重命名遮挡问题\n5. 彻底消除右侧抽屉打开时右上角三个按钮闪烁跳跃的问题\n6. 修复真机版本号一直显示1.0.143且反复提示更新的问题\n7. 修复切换会话自动弹出键盘遮挡屏幕的问题（仅手指真触输入框才弹键盘）\n8. 修复点击重命名时左侧目录遮挡输入框的问题（点击重命名自动收起左侧抽屉）\n9. 修复会话框发送按钮随模型名称变短向左缩进的问题（固定死在最右侧）",
+    title: `v${VERSION}(${BUILD_NUM}) 右抽屉长滑手势+横滑表格修复+地址记忆`,
+    changelog: "1. 右缘长滑打开右侧抽屉，短滑拉出小鲸鱼\n2. 会话里表格滑块不再被边缘手势卡住\n3. 首次打开不再连旧地址，自动记住上次地址\n4. 提升本地连接与网页跳转安全校验\n5. 根治左侧边缘滑动手势时会话内容同步上下滑动\n6. 白屏与加载重试升级为一键清空本地脏缓存",
     tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     public_tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     tipa_url_fallback: `https://github.com/liushQAQ/IOS/releases/download/v${VERSION}/DSHios-public-${VERSION}-${BUILD_NUM}.tipa`,
@@ -95,7 +95,7 @@ async function run() {
   // 发布到 GitHub Release
   try {
     console.log('正在创建/更新 GitHub Release...');
-    execSync(`gh -R liushQAQ/IOS release create v${VERSION} "${destTipa}" "${latestJsonPath}" --title "v${VERSION} 正式版（发送按钮固定 + 标题修复 + 2.0三大能力）" --notes "${latestInfo.changelog}"`, { stdio: 'inherit' });
+    execSync(`gh -R liushQAQ/IOS release create v${VERSION} "${destTipa}" "${latestJsonPath}" --title "v${VERSION}(${BUILD_NUM}) 右抽屉长滑手势+横滑表格修复+地址记忆" --notes "${latestInfo.changelog}"`, { stdio: 'inherit' });
   } catch (e) {
     try {
       execSync(`gh -R liushQAQ/IOS release upload v${VERSION} "${destTipa}" "${latestJsonPath}" --clobber`, { stdio: 'inherit' });
@@ -105,11 +105,11 @@ async function run() {
   // 提交 latest.json
   try {
     execSync(`git -C "${ROOT}" add releases/latest.json latest.json "releases/DSHios-public-${VERSION}-${BUILD_NUM}.tipa"`, { stdio: 'inherit' });
-    execSync(`git -C "${ROOT}" commit -m "release: v${VERSION}(${BUILD_NUM}) 发送按钮靠右固定 + 会话标题净化 + 2.0三大功能"`, { stdio: 'inherit' });
+    execSync(`git -C "${ROOT}" commit -m "release: v${VERSION}(${BUILD_NUM}) 产物归档"`, { stdio: 'inherit' });
     execSync(`git -C "${ROOT}" push origin personal`, { stdio: 'inherit' });
   } catch (e) {}
 
-  console.log('🎉 2.1.0 全流程发布圆满成功！');
+  console.log(`🎉 ${VERSION} 全流程发布圆满成功！`);
 }
 
 run().catch(e => {

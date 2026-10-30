@@ -1,25 +1,21 @@
 {
-  "version": "2.1.5",
+  "version": "2.1.6",
   "sizes": [
-    "430x932",
-    "393x852",
-    "375x812"
+    "430x932"
   ],
-  "startedAt": "2026-10-28T15:41:15.605Z",
-  "dshFingerprint": "o0234l",
-  "dshAssets": 9,
+  "startedAt": "2026-10-30T15:55:08.686Z",
+  "dshFingerprint": "9emkq5",
+  "dshAssets": 10,
   "domClasses": 0,
   "anchorTotal": 167,
   "anchorDead": 0,
   "anchorCssAlive": 108,
   "anchorResidue": 59,
-  "dshSheets": 209,
+  "dshSheets": 218,
   "ownSheets": 11,
   "anchorCritical": {
     "total": 12,
-    "dead": [
-      "headerCorner"
-    ]
+    "dead": []
   },
   "pluginStripQueueGuard": true,
   "modelPickerGuard": true,
@@ -30,13 +26,12 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 101,
+  "pass": 69,
   "fail": 0,
   "failures": [],
   "blocked": [
-    "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）",
-    "[锚点] headerCorner 取样 — 会话页死循环连坐，该锚点无法取样（Chromium 对照确认 DOM 在）"
+    "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）"
   ],
-  "sourceHash": "c7ffbe11d74d95f6bc1080cbd32a16ac81255b4142711209475ee34f10d3666d",
-  "finishedAt": "2026-10-28T15:44:11.723Z"
+  "sourceHash": "94a7f16815630945b0b5ca5236e26b9ad1d7e7bfed370f6504216c0e8b6f8868",
+  "finishedAt": "2026-10-30T15:57:25.438Z"
 }
