@@ -1170,6 +1170,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '.dMHGga_session,',
             '[class*="dMHGga_root"],',
             '.dMHGga_panel,',
+            '[data-sidebar-right-open],',
             '.YdIzba_header,',
             '[class*="YdIzba_root"],',
             '[data-dockkit-surface],',
@@ -1213,14 +1214,16 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '    opacity: 1 !important;',
             '    pointer-events: auto !important;',
             '  }',
-            '  .dMHGga_panel {',
+            '  .dMHGga_panel,',
+            '  [data-sidebar-right-open] {',
             '    width: 100% !important;',
             '    height: 100% !important;',
             '    display: flex !important;',
             '    flex-direction: column !important;',
             '  }',
             '}',
-            '.dMHGga_panel[data-sidebar-right-open] {',
+            '.dMHGga_panel[data-sidebar-right-open],',
+            '[data-sidebar-right-open] {',
             '  pointer-events: auto !important;',
             '  z-index: 10040 !important;',
             '}',
@@ -2375,26 +2378,76 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               }
             }
 
+            // 2026-10-31 语音重复修复：原生改发「全量识别文本」，这里只替换自己插在
+            // 输入框末尾的那段实时文本（vVoiceLive），不再光标无脑追加——SFSpeech 回改
+            // 已识别内容时，旧增量协议会整段重插，同一句话重复多遍、顺序颠倒。
+            var vVoiceBase = null;
+            var vVoiceLive = '';
+            function voiceTextNodes(el) {
+              var out = []; var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+              var n; while ((n = w.nextNode())) { if (n.nodeValue && n.nodeValue.length > 0) out.push(n); }
+              return out;
+            }
+            function selectVoiceTail(el, n) {
+              var nodes = voiceTextNodes(el); if (!nodes.length) return null;
+              var total = 0, i; for (i = 0; i < nodes.length; i++) total += nodes[i].nodeValue.length;
+              if (n > total) n = total; if (n <= 0) return null;
+              var startOff = total - n, acc = 0, sN = null, sO = 0;
+              for (i = 0; i < nodes.length; i++) {
+                var len = nodes[i].nodeValue.length;
+                if (acc + len >= startOff) { sN = nodes[i]; sO = startOff - acc; break; }
+                acc += len;
+              }
+              if (!sN) return null;
+              var last = nodes[nodes.length - 1];
+              try { var r = document.createRange(); r.setStart(sN, sO); r.setEnd(last, last.nodeValue.length); return r; } catch (e) { return null; }
+            }
+            function moveVoiceCaretToEnd(el) {
+              try {
+                var nodes = voiceTextNodes(el); var r = document.createRange();
+                if (nodes.length) { var last = nodes[nodes.length - 1]; r.setStart(last, last.nodeValue.length); r.collapse(true); }
+                else { r.selectNodeContents(el); r.collapse(false); }
+                var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+              } catch (e) {}
+            }
+            function voiceInputEl() {
+              return document.querySelector('[class*="composerStack"] [class*="_input"]') ||
+                     document.querySelector('.uWtHQG_input') ||
+                     document.querySelector('[contenteditable="true"]') ||
+                     document.querySelector('textarea');
+            }
             window.__dshVoiceStateUpdate = function(active, text) {
               updateVoiceButtonState(active);
-              if (text && text.length > 0) {
-                var inputEl = document.querySelector('[class*="composerStack"] [class*="_input"]') ||
-                              document.querySelector('.uWtHQG_input') ||
-                              document.querySelector('[contenteditable="true"]') ||
-                              document.querySelector('textarea');
-                if (inputEl) {
-                  inputEl.focus();
-                  if (inputEl.isContentEditable || inputEl.getAttribute('contenteditable') === 'true') {
-                    document.execCommand('insertText', false, text);
-                  } else {
-                    var start = inputEl.selectionStart || inputEl.value.length;
-                    var end = inputEl.selectionEnd || inputEl.value.length;
-                    var val = inputEl.value || '';
-                    inputEl.value = val.substring(0, start) + text + val.substring(end);
-                    inputEl.selectionStart = inputEl.selectionEnd = start + text.length;
-                    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-                  }
+              if (active && (text === null || text === undefined)) {
+                // 听写开始：快照基线（textarea 路径用），实时段清零
+                var el0 = voiceInputEl();
+                vVoiceBase = el0 ? (el0.isContentEditable ? (el0.innerText || '') : (el0.value || '')) : '';
+                vVoiceLive = '';
+                return;
+              }
+              if (!active) { vVoiceBase = null; vVoiceLive = ''; return; }
+              if (!text || !text.length) return;
+              var inputEl = voiceInputEl();
+              if (!inputEl) return;
+              if (inputEl.isContentEditable || inputEl.getAttribute('contenteditable') === 'true') {
+                // contenteditable（Lexical 输入框）：选中自己插过的尾部实时段 → 原位改写
+                inputEl.focus();
+                var sel = window.getSelection();
+                var replaced = false;
+                if (vVoiceLive && vVoiceLive.length > 0) {
+                  var range = selectVoiceTail(inputEl, vVoiceLive.length);
+                  if (range) { sel.removeAllRanges(); sel.addRange(range); replaced = true; }
                 }
+                if (!replaced) moveVoiceCaretToEnd(inputEl);
+                document.execCommand('insertText', false, String(text));
+                vVoiceLive = String(text);
+              } else {
+                // textarea：基线 + 全量实时文本 整体重写
+                inputEl.focus();
+                inputEl.value = (vVoiceBase || '') + String(text);
+                inputEl.selectionStart = inputEl.selectionEnd = inputEl.value.length;
+                inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                vVoiceLive = String(text);
               }
             };
 
@@ -2981,15 +3034,20 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 } catch (e1) {}
               }
               function fixAll() { fixLevel(document.documentElement); fixLevel(document.body); }
-              // 🔴 R39③：深层容器毒写就地回写 —— 只动内联带 --dsh-statusbar 且值偏离原生的元素
+              // 🔴 R39③：深层容器毒写就地回写 —— 只动内联带状态栏三变量且值偏离原生的元素。
+              //   R50 补漏：原版深层只回写 --dsh-statusbar 一个变量，DSH 换版后抽屉切换时机若把
+              //   --dsh-sb-native / --dsh-topshift 毒到深层容器，panel 兜底链读容器内联错值 →
+              //   首帧偏低 → 守卫恢复后上跳。按需回写（元素没写的变量绝不补写，防改变布局）。
               function fixDeep(el) {
                 try {
                   if (!el || !el.style || el === document.documentElement || el === document.body) return;
-                  var s = el.style.getPropertyValue('--dsh-statusbar');
-                  if (!s) return;
                   var n = nativeVal(); if (!(n > 0)) return;
-                  var cur = parseFloat(s);
+                  var cur = parseFloat(el.style.getPropertyValue('--dsh-statusbar'));
                   if (!isNaN(cur) && Math.abs(cur - n) >= 0.5) el.style.setProperty('--dsh-statusbar', n + 'px');
+                  var natN = parseFloat(el.style.getPropertyValue('--dsh-sb-native'));
+                  if (!isNaN(natN) && Math.abs(natN - n) >= 0.5) el.style.setProperty('--dsh-sb-native', n + 'px');
+                  var curTs = parseFloat(el.style.getPropertyValue('--dsh-topshift'));
+                  if (!isNaN(curTs) && Math.abs(curTs - tsVal()) >= 0.5) el.style.setProperty('--dsh-topshift', tsVal() + 'px');
                 } catch (e3) {}
               }
               function boot() {
@@ -3003,7 +3061,9 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                     }
                     fixAll();
                   });
-                  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style'], subtree: true });
+                  // R50：盯住右栏开合属性 —— 抽屉切换正是 DSH 毒写状态栏变量的高发时机，
+                  // 属性一变同微任务先恢复三变量，渲染帧里永远只见正确值（零跳变窗口）。
+                  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'data-sidebar-right-open', 'data-sidebar-right-panel'], subtree: true });
                   var watchBody = function () {
                     if (document.body) { fixAll(); }
                     else setTimeout(watchBody, 16);
@@ -4967,6 +5027,31 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                     if (__ov > 120) continue;
                     var __bcs = getComputedStyle(__el);
                     if (__bcs.display === 'none' || __bcs.visibility === 'hidden') continue;
+                    // 🔴 R51①（v2.1.7，老总 2026-10-31 真机：右抽屉滑出的页面整体左移出屏）：
+                    //   抽屉载体（rightbarCol/panel 全屏层）整个子树一律不钳。抽屉开合是
+                    //   CSS transition: transform .24s（translateX(105%)→none）动画，中途帧
+                    //   天然满足下面全部安全线（left 在屏内 / 宽=vw 不大于 / 纯位移矩阵 /
+                    //   ov≤120），守卫会在动画中途往抽屉页面级容器（paneBody/tabHost/guide）
+                    //   写 translateX(-N) !important；动画结束后 inline important 压过 CSS
+                    //   transform:none → 页面永久左移，且下一轮 left<0 被①当「正常离屏」
+                    //   永不自愈（沙箱 _probe_r51_stress 开#8 实锤 paneBody 被写 -59.52px）。
+                    try {
+                      if (__el.closest && __el.closest('[class*="rightbarCol"],[data-sidebar-right-open],.dMHGga_panel,[data-sidebar-right-panel]')) continue;
+                    } catch (eR51a) {}
+                    // 🔴 R51②：动画进行中的元素（transform 过渡还没停）本轮旁观 ——
+                    //   getAnimations 只返回正在跑的过渡/动画，静止元素返回空，零误伤。
+                    var __fly51 = false;
+                    try {
+                      if (__el.getAnimations) {
+                        var __ans51 = __el.getAnimations();
+                        for (var __a51 = 0; __a51 < __ans51.length; __a51++) {
+                          var __tp51 = null;
+                          try { __tp51 = __ans51[__a51].transitionProperty; } catch (eR51b) {}
+                          if ((__tp51 && String(__tp51).indexOf('transform') >= 0) || __ans51[__a51].animationName) { __fly51 = true; break; }
+                        }
+                      }
+                    } catch (eR51c) {}
+                    if (__fly51) continue;
                     // ⑤ 只接受纯位移矩阵
                     var __bt = __bcs.transform;
                     var __btx = 0;
@@ -4998,7 +5083,47 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   for (var __hj = 0; __hj < __hits.length; __hj++) {
                     var __h = __hits[__hj];
                     __h[0].style.setProperty('transform', 'translateX(' + (__h[2] - __h[1]) + 'px)', 'important');
+                    try { __h[0].setAttribute('data-dsh-bleed', '1'); } catch (eR51d) {}
                   }
+                  // 🔴 R51③ 补偿可撤销（R45 血训：救援的终态必须可撤销，把补偿当永久资产必然过拉）：
+                  //   本守卫写过的元素（data-dsh-bleed 标记）每拍复查 —— 自然位已不再越界、
+                  //   或元素进了抽屉子树（本守卫的禁区）→ 撤掉补偿、摘掉标记。环境恢复即还原。
+                  try {
+                    var __mks51 = document.querySelectorAll('[data-dsh-bleed]');
+                    for (var __m51 = 0; __m51 < __mks51.length && __m51 < 40; __m51++) {
+                      var __me51 = __mks51[__m51];
+                      var __mtf51 = __me51.style.getPropertyValue('transform') || '';
+                      if (!__mtf51) { __me51.removeAttribute('data-dsh-bleed'); continue; }
+                      var __mtx51 = 0, __ms51 = __mtf51, __mk51;
+                      while ((__mk51 = __ms51.indexOf('translateX(')) >= 0) {
+                        var __mv51 = parseFloat(__ms51.substring(__mk51 + 11));
+                        if (!isNaN(__mv51)) __mtx51 += __mv51;
+                        __ms51 = __ms51.substring(__mk51 + 11);
+                      }
+                      var __mr51 = __me51.getBoundingClientRect();
+                      var __inD51 = false;
+                      try { __inD51 = !!(__me51.closest && __me51.closest('[class*="rightbarCol"],[data-sidebar-right-open],.dMHGga_panel,[data-sidebar-right-panel]')); } catch (eR51e) {}
+                      if (__inD51 || __mr51.right - __mtx51 <= __vw + 1) {
+                        __me51.style.removeProperty('transform');
+                        __me51.removeAttribute('data-dsh-bleed');
+                      }
+                    }
+                  } catch (eR51f) {}
+                  // 🔴 R51④ 旧毒自愈：v2.1.6(7) 及之前写入的毒位移没有标记可循 ——
+                  //   抽屉子树里「页面级宽容器（≥0.9vw）+ inline translateX + 视觉上还与视口相交」
+                  //   的组合只可能是本守卫历史误写（DSH 停泊非活动 pane 不用 inline transform，
+                  //   沙箱取证 tfs=[]；整块在屏外的停泊态不碰）。装机即自动清毒，无需重装系统。
+                  try {
+                    var __dw51 = document.querySelectorAll('[class*="rightbarCol"] [style*="translateX"], [data-sidebar-right-open] [style*="translateX"], .dMHGga_panel [style*="translateX"]');
+                    for (var __d51 = 0; __d51 < __dw51.length && __d51 < 24; __d51++) {
+                      var __de51 = __dw51[__d51];
+                      var __dr51 = __de51.getBoundingClientRect();
+                      if (__dr51.width < (window.innerWidth || 430) * 0.9) continue;
+                      if (__dr51.right <= 0 || __dr51.left >= (window.innerWidth || 430)) continue;
+                      __de51.style.removeProperty('transform');
+                      __de51.removeAttribute('data-dsh-bleed');
+                    }
+                  } catch (eR51g) {}
                   window.__dshBleedN = __hits.length;
                 }
               } catch (e) {}
@@ -9652,9 +9777,9 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 右缘长滑打开右侧抽屉，短滑拉出小鲸鱼
-            2. 会话里表格滑块不再被边缘手势卡住
-            3. 首次打开不再连旧地址，记住上次地址
+            1. 修复打开右侧抽屉页面整体偏移出屏
+            2. 修复语音输入文字重复出现且顺序颠倒
+            3. 回退按钮移出会话框放到卡片下方
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
@@ -10133,18 +10258,16 @@ extension ViewController: WKNavigationDelegate {
                 guard let self = self else { return }
                 if let result = result {
                     let fullText = result.bestTranscription.formattedString
-                    if fullText != self.lastRecognizedText {
-                        let delta: String
-                        if fullText.hasPrefix(self.lastRecognizedText) {
-                            delta = String(fullText.dropFirst(self.lastRecognizedText.count))
-                        } else {
-                            delta = fullText
-                        }
+                    // 2026-10-31 语音重复修复：协议从「增量」改为「全量」。
+                    // 旧逻辑发 delta（fullText 去掉上一次前缀），但 SFSpeech 会**回改**已识别
+                    // 内容（如「以后更新」→「以后更新了什么」→ 再改掉「了什么」），一旦
+                    // fullText 不再以旧前缀开头，delta 退化成整段全文；网页端又是光标处
+                    // 追加插入 → 同一句话重复多遍、顺序颠倒。现在每次回调都发完整识别
+                    // 文本，由网页端只替换自己插在输入框末尾的那段（见 __dshVoiceStateUpdate）。
+                    if !fullText.isEmpty && fullText != self.lastRecognizedText {
                         self.lastRecognizedText = fullText
-                        if !delta.isEmpty {
-                            DispatchQueue.main.async {
-                                self.notifyWebVoiceState(active: self.isDictating, text: delta)
-                            }
+                        DispatchQueue.main.async {
+                            self.notifyWebVoiceState(active: self.isDictating, text: fullText)
                         }
                     }
                 }

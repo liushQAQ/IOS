@@ -5,9 +5,9 @@ const { execSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const CONFIG_FILE = path.join(ROOT, '.codemagic_config.json');
-const BUILD_ID = process.argv[2] || '6ae22477ca2fbc11e229607c';
-const VERSION = '2.1.6';
-const BUILD_NUM = 7;
+const BUILD_ID = process.argv[2] || '6ae4bee361a3832df3ec93a8';
+const VERSION = '2.1.7';
+const BUILD_NUM = 8;
 
 if (!fs.existsSync(CONFIG_FILE)) {
   console.error('缺少配置文件');
@@ -65,7 +65,8 @@ async function run() {
   const destTipa = path.join(ROOT, 'releases', `DSHios-public-${VERSION}-${BUILD_NUM}.tipa`);
   
   console.log(`正在下载产物到 ${destTipa}...`);
-  execSync(`curl.exe -L -H "x-auth-token: ${config.apiToken}" "${art.url}" -o "${destTipa}"`, { stdio: 'inherit' });
+  if (fs.existsSync(destTipa)) fs.unlinkSync(destTipa);
+  execSync(`curl.exe -L --retry 12 --retry-delay 5 --retry-all-errors --connect-timeout 20 -H "x-auth-token: ${config.apiToken}" "${art.url}" -o "${destTipa}"`, { stdio: 'inherit' });
 
   // 计算 MD5
   const crypto = require('crypto');
@@ -80,7 +81,7 @@ async function run() {
     version: VERSION,
     build: BUILD_NUM,
     updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-    title: `v${VERSION}(${BUILD_NUM}) 右抽屉长滑手势+横滑表格修复+地址记忆`,
+    title: `v${VERSION}(${BUILD_NUM}) 修复抽屉页面偏移+语音重复+回退按钮迁移`,
     changelog: "1. 右缘长滑打开右侧抽屉，短滑拉出小鲸鱼\n2. 会话里表格滑块不再被边缘手势卡住\n3. 首次打开不再连旧地址，自动记住上次地址\n4. 提升本地连接与网页跳转安全校验\n5. 根治左侧边缘滑动手势时会话内容同步上下滑动\n6. 白屏与加载重试升级为一键清空本地脏缓存",
     tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     public_tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
@@ -95,7 +96,7 @@ async function run() {
   // 发布到 GitHub Release
   try {
     console.log('正在创建/更新 GitHub Release...');
-    execSync(`gh -R liushQAQ/IOS release create v${VERSION} "${destTipa}" "${latestJsonPath}" --title "v${VERSION}(${BUILD_NUM}) 右抽屉长滑手势+横滑表格修复+地址记忆" --notes "${latestInfo.changelog}"`, { stdio: 'inherit' });
+    execSync(`gh -R liushQAQ/IOS release create v${VERSION} "${destTipa}" "${latestJsonPath}" --title "v${VERSION}(${BUILD_NUM}) 修复抽屉页面偏移+语音重复+回退按钮迁移" --notes "${latestInfo.changelog}"`, { stdio: 'inherit' });
   } catch (e) {
     try {
       execSync(`gh -R liushQAQ/IOS release upload v${VERSION} "${destTipa}" "${latestJsonPath}" --clobber`, { stdio: 'inherit' });

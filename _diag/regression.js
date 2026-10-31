@@ -311,7 +311,7 @@ const A_COMPOSER = () => {
      —— 94 版就是靠停用 alignComposerButtons（它给每个按钮写 translateY(±Npx) !important）
      才把「浮在会话框上」的观感修掉。这里逐个数 inline 写入，写了一个就红。
      插件元素（dcc- / dsh-po / cm- / data-dsh-pos）不算原生，跳过。 */
-  const PLUGIN_RE = /dcc-|dsh-po|cm-stat|cm-bbox/;
+  const PLUGIN_RE = /dcc-|dsh-po|cm-stat|cm-bbox|dshp-/;
   const nativeTouched = [];
   boxes.forEach(({ b, label }) => {
     let isPlugin = false;
@@ -618,6 +618,15 @@ const A_PLUGIN_PAGE = () => {
         chk(comp.overlaps.length === 0, '[会话框] 底排按钮零横向重叠（v1.0.127）', comp.overlaps.length ? comp.overlaps.join(' | ') : '两两扫描 ' + comp.n + ' 个');
         chk(comp.spills.length === 0, '[会话框] 底排按钮不越出父容器', comp.spills.length ? comp.spills.join(' | ') : '');
         chk((comp.nativeTouched || []).length === 0, '[会话框] 原生按钮零干预（无 inline position/transform，不是悬浮）', (comp.nativeTouched || []).length ? comp.nativeTouched.join(' | ') : '零写入');
+        /* R51（v2.1.7，老总 2026-10-31 问「回退按钮哪里来的」）：dsh-purge 曾把 rewind
+           注册进黑名单 slot conversation.input.right（会话框底排工具行）。已迁
+           composer.dock（P2）；此断言钉死「composerStack 卡片矩形内不许再出现 dshp-rewind」。 */
+        const rewindInCard = await p.evaluate(() => {
+          const cardEl = document.querySelector('[class*="composerStack"] [class*="_card"]');
+          return cardEl ? cardEl.querySelectorAll('[class*="dshp-rewind"]').length : -1;
+        });
+        chk(rewindInCard === 0, '[会话框] dshp-rewind 不许回卡片（R51 已迁 composer.dock/tab 行）',
+          rewindInCard === -1 ? '卡片锚点未命中（记录不拦截）' : (rewindInCard ? '🔴 回退按钮又进卡片 ' + rewindInCard + ' 个' : '卡片内零 rewind 元素'));
       }
 
       /* v1.0.129 底排防挤爆（老总真机 18:41：撤回/重优 出现时发送钮被推出屏幕）：
@@ -1011,15 +1020,94 @@ const A_PLUGIN_PAGE = () => {
               r45b.noDb ? '🔴 找不到 header 内抽屉开关按钮' : (!r45b.hcFound ? '🔴 按钮不在 headerCorner 内' : (r45b.err ? ('异常 ' + r45b.err) : ('基线=' + r45b.baseRight + ' 注入后=' + r45b.right + ' tf=' + r45b.tf + ' attr=' + r45b.guardAttr + ' 撤除后=' + r45b.rightAfter + ' tf=' + r45b.tfAfter + ' vw=' + r45b.vw))));
           }
 
+          // —— R51 行为断言（v2.1.7(8)，老总 2026-10-31 真机：右抽屉滑出的页面整体左移出屏）——
+          // 根因 = R06 通用出血钳制 × 抽屉 CSS 开合动画（transition: transform .24s）竞态：
+          // 动画中途帧满足全部六条安全线 → 守卫往抽屉页面级容器写 translateX(-N)!important →
+          // 动画结束后 inline 压过 CSS transform:none → 页面永久左移且永不自愈。
+          // 修法三件套：①抽屉子树豁免 ②getAnimations 动画期旁观 ③data-dsh-bleed 标记可撤销
+          // + 旧毒自愈（抽屉内宽≈vw 容器上的 inline translateX 与视口相交即清）。
+          // 断言：抽屉开着往 paneBody 注入 v2.1.6(7) 同款毒位移 → 3 秒内必须被清掉；
+          //       闭态毒写同样必须被清（装机即自愈，老总设备不用重置）。
+          const r51b = await p.evaluate(async () => {
+            const out = {};
+            try {
+              /* 抽屉开合会重渲染 header —— 按钮引用每步必须重查（曾因复用旧引用
+                 点击落空、抽屉没重开，误判 heal 不清毒）。
+                 ⚠️ 选择器顺序：header 的 aria-label 开关优先，[data-sidebar-right-toggle]
+                 只兜底 —— 防 querySelector 按文档序命中面板内部开关（R38 铁律①同款坑）。 */
+              const qToggle = () => document.querySelector('header button[aria-label="打开右侧边栏"], header button[aria-label="收起右侧边栏"], [data-sidebar-right-toggle]');
+              const qCol = () => document.querySelector('[class*="rightbarCol"]');
+              const isOpen = () => {
+                const c = qCol();
+                return !!c && (c.getBoundingClientRect().left < (window.innerWidth / 2));
+              };
+              if (!qToggle()) { out.noBtn = true; return out; }
+              if (!isOpen()) { qToggle().click(); await new Promise(r2 => setTimeout(r2, 1400)); }
+              const col = qCol();
+              if (!col) { out.noCol = true; return out; }
+              const pane = col.querySelector('[class*="paneBody"]') || col.firstElementChild;
+              if (!pane) { out.noPane = true; return out; }
+              out.paneCls = String(pane.className).slice(0, 40);
+              pane.style.setProperty('transform', 'translateX(-59.5px)', 'important');
+              await new Promise(r2 => setTimeout(r2, 3000));
+              out.tfOpen = pane.style.transform || '(none)';
+              out.leftOpen = Math.round(pane.getBoundingClientRect().left);
+              // 关态再毒一次（模拟累计中毒的关态滞留），重开抽屉后必须照样清。
+              // ⚠️ 关抽屉时 React 可能卸载重建 pane 子树 —— 旧引用会失效（detached 节点
+              // 的 inline style 永远不会被 heal 看到），所以重开后必须重新查询。
+              //（heal 判据是「与视口相交才清」：关态面板整块在屏外不碰，开态立清）
+              const t1 = qToggle(); if (t1) t1.click();
+              await new Promise(r2 => setTimeout(r2, 1400));
+              const col2 = qCol();
+              const pane2 = col2 ? (col2.querySelector('[class*="paneBody"]') || col2.firstElementChild) : null;
+              if (pane2) pane2.style.setProperty('transform', 'translateX(-59.5px)', 'important');
+              const t2 = qToggle(); if (t2) t2.click();
+              await new Promise(r2 => setTimeout(r2, 3000));
+              const col3 = qCol();
+              const pane3 = col3 ? (col3.querySelector('[class*="paneBody"]') || col3.firstElementChild) : null;
+              out.tfClosed = pane3 ? (pane3.style.transform || '(none)') : 'pane-gone';
+              await new Promise(r2 => setTimeout(r2, 1000));
+              const t3 = qToggle(); if (t3 && isOpen()) t3.click();
+            } catch (e) { out.err = String(e).slice(0, 140); }
+            return out;
+          });
+          if (TO(r51b)) blocked('[抽屉·R51] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
+          else {
+            chk(!r51b.err && !r51b.noBtn && !r51b.noCol && !r51b.noPane
+              && (r51b.tfOpen === '(none)' || r51b.tfOpen === '')
+              && (r51b.tfClosed === '(none)' || r51b.tfClosed === '' || r51b.tfClosed === 'pane-gone'),
+              '[抽屉·R51] 开/关两态往抽屉页面容器注毒 translateX(-59.5px) → 3 秒内必须被自愈清零（bleed 守卫动画期误写=页面永久左移十犯根源）',
+              r51b.noBtn ? '🔴 找不到抽屉开关' : (r51b.noCol ? '🔴 找不到 rightbarCol' : (r51b.noPane ? '🔴 抽屉内找不到页面容器' : (r51b.err ? ('异常 ' + r51b.err) : ('开态tf=' + r51b.tfOpen + ' left=' + r51b.leftOpen + ' 关态tf=' + r51b.tfClosed)))));
+          }
+
           // —— R37 行为断言（v1.0.136(105)）：+ 号弹层伪关闭吞掉器 ——
           // 路由级拦截复刻 writer-held 失败路径（该 RPC 走页面层 fetch/XHR 包装器够不到的通道，
           // 只能在网络层拦）；真实 tap 打开 → 弹层必须存活 + 注入提示行；点外部必须正常关闭；
           // 解除拦截后必须恢复打开。三段任何一段红即吞掉器坏。
           let r37b = { keeper: false };
           try {
+            /* 2026-10-31：DSH 前端改版后，programmatic 选会话不再自动收起左抽屉（真机触摸路径仍收），
+               抽屉会话列表层盖住左下角 + 号命中 → tap 被吞、弹层时开时不开（时序抖动）。
+               按用户真实路径先收抽屉，再轮询等 + 号成为命中顶层（最多 6 秒，跨过收抽屉动画+重挂），
+               最后才取 + 坐标。场景 C 会自行重开侧边栏，不受影响。 */
+            await p.evaluate(() => { const g = document.querySelector('[aria-label="收起侧边栏"]'); if (g) g.click(); });
+            /* 2026-10-31 R37 复盘：+ 号选择器不许打头哈希类 —— DSH 换版后 VERcba_add 已漂移，
+               querySelector 先命中一个 0 尺寸陈旧元素（实测 rect=[0,0,0,0]），tap 点空气 → 弹层永不打开。
+               改为语义 aria-label 优先 + 必须非零尺寸（铁律 1：禁哈希类名锚点）。 */
+            await p.waitForFunction(() => {
+              const pl = document.querySelector('button[aria-label="添加文件或调用指令"]')
+                || Array.from(document.querySelectorAll('button')).find(b => (b.getAttribute('aria-label') || '').indexOf('添加') >= 0 && b.getBoundingClientRect().width >= 8);
+              if (!pl) return false;
+              const r = pl.getBoundingClientRect();
+              if (r.width < 8 || r.height < 8) return false;
+              const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+              return top === pl || !!(top && pl.contains(top));
+            }, null, { timeout: 6000 }).catch(() => {});
             const plusPos = await p.evaluate(() => {
-              const pl = document.querySelector('button[class*="VERcba_add"], button[aria-label="添加文件或调用指令"]');
+              const pl = document.querySelector('button[aria-label="添加文件或调用指令"]')
+                || Array.from(document.querySelectorAll('button')).find(b => (b.getAttribute('aria-label') || '').indexOf('添加') >= 0 && b.getBoundingClientRect().width >= 8);
               if (!pl) return null; const r = pl.getBoundingClientRect();
+              if (r.width < 8 || r.height < 8) return null;
               return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
             });
             if (!plusPos) { r37b.noPlus = true; }
@@ -1489,7 +1577,9 @@ const A_PLUGIN_PAGE = () => {
        文件工作区/停靠面板整体下移。守卫必须常驻（MutationObserver 微任务回写 + 300ms 兜底）。 */
     const sbGuard = /window\.__dshStatusBarGuard/.test(bundle)
       && /function setupDshStatusBarGuard\(\)/.test(bundle)
-      && /attributeFilter: \['style'\]/.test(bundle);
+      /* R50（2026-10-31）：attributeFilter 从 ['style'] 扩为 ['style', 两个抽屉属性]（刻意加强），
+         断言保留不变量「style 必须是过滤列表第一项」，容忍后续追加属性。 */
+      && /attributeFilter: \['style'/.test(bundle);
     chk(sbGuard,
       '[抽屉·R35b] --dsh-statusbar 值守卫在（MutationObserver 微任务回写 + html/body 双层盯防）',
       sbGuard ? '值守卫在' : '🔴 值守卫被删 → DSH 重写 75 后文件工作区/停靠面板整体下移复发');
@@ -1499,7 +1589,8 @@ const A_PLUGIN_PAGE = () => {
     const r39guardSrc = /window\.__dshSbMemory/.test(bundle)
       && /function fixDeep\(/.test(bundle)
       && /Math\.abs\(curTs - tsVal\(\)\)/.test(bundle)
-      && /attributeFilter: \['style'\], subtree: true/.test(bundle);
+      /* R50：subtree 盯防不变量 = 过滤列表 style 打头 + subtree: true，容忍列表追加属性。 */
+      && /attributeFilter: \['style'[^\]]*\], subtree: true/.test(bundle);
     chk(r39guardSrc,
       '[抽屉·R39] 守卫 v2（记忆冻结 + sb-native/topshift 三变量全恢复 + 全子树盯防深层毒写）',
       r39guardSrc ? '守卫 v2 在' : '🔴 守卫退化 → DSH 整段覆写/深层写 75 后文件工作区按钮下移 16pt 复发（真机 1.0.136 四犯实录）');
@@ -1572,6 +1663,17 @@ const A_PLUGIN_PAGE = () => {
     chk(r47src,
       '[顶栏·R47] headerCorner CSS 绝对定位兜底在（JS 通道死亡时按钮也绝不出屏）',
       r47src ? 'CSS 兜底在' : '🔴 CSS 兜底被删 → 真机 JS 死亡环境九犯复发（right=434>430）');
+    /* R51（v2.1.7）：右抽屉页面左移十犯 —— R06 通用出血钳制 × 抽屉 CSS 开合动画竞态。
+       静态锚点：抽屉子树豁免 + getAnimations 动画期旁观 + data-dsh-bleed 标记可撤销 + 旧毒自愈。 */
+    const r51src = /\[class\*="rightbarCol"\],\[data-sidebar-right-open\],\.dMHGga_panel,\[data-sidebar-right-panel\]/.test(bundle)
+      && /__el\.getAnimations/.test(bundle)
+      && /String\(__tp51\)\.indexOf\('transform'\) >= 0/.test(bundle)
+      && /setAttribute\('data-dsh-bleed', '1'\)/.test(bundle)
+      && /removeProperty\('transform'\);\s*\n\s*__me51\.removeAttribute\('data-dsh-bleed'\)/.test(bundle)
+      && /\[class\*="rightbarCol"\] \[style\*="translateX"\]/.test(bundle);
+    chk(r51src,
+      '[抽屉·R51] 出血钳制抽屉子树豁免 + 动画期旁观 + 标记可撤销 + 旧毒自愈（四件套）',
+      r51src ? 'R51 四件套全在' : '🔴 缺件 → 抽屉开合动画中途被写 translateX 页面永久左移复发（开#8 实锤 -59.52px）');
     /* R46（v1.0.142）：文案规范打包前机械校验（老总令：「更新说明和关于要尽量最大化精简，
        排序1-2-3-4-5-6序号对齐，靠左对齐，纳入打包前校验」）。
        校验三处：① 设置页更新日志卡：logContent 每条一行、序号 1..N 严格递增不重复、

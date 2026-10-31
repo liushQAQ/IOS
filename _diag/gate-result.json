@@ -1,18 +1,20 @@
 {
-  "version": "2.1.6",
+  "version": "2.1.7",
   "sizes": [
-    "430x932"
+    "430x932",
+    "393x852",
+    "375x812"
   ],
-  "startedAt": "2026-10-30T15:55:08.686Z",
-  "dshFingerprint": "9emkq5",
+  "startedAt": "2026-10-31T08:29:54.829Z",
+  "dshFingerprint": "1d5zyh",
   "dshAssets": 10,
   "domClasses": 0,
   "anchorTotal": 167,
   "anchorDead": 0,
-  "anchorCssAlive": 108,
-  "anchorResidue": 59,
-  "dshSheets": 218,
-  "ownSheets": 11,
+  "anchorCssAlive": 107,
+  "anchorResidue": 60,
+  "dshSheets": 215,
+  "ownSheets": 12,
   "anchorCritical": {
     "total": 12,
     "dead": []
@@ -26,12 +28,10 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 69,
+  "pass": 122,
   "fail": 0,
   "failures": [],
-  "blocked": [
-    "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）"
-  ],
-  "sourceHash": "94a7f16815630945b0b5ca5236e26b9ad1d7e7bfed370f6504216c0e8b6f8868",
-  "finishedAt": "2026-10-30T15:57:25.438Z"
+  "blocked": [],
+  "sourceHash": "52ddb81d46e7f91a2b0f727d18958e3315bb937a617c29d1177b1afe10a401ba",
+  "finishedAt": "2026-10-31T08:33:36.148Z"
 }

@@ -130,4 +130,8 @@
 
 > 🤝 本规程对 **DSH 侧 AI 同样生效**：DSH 有时也执行 iOS 打包（老总 2026-10-21 令），
 > 交接卡副本已放 DSH 工作区 E:\desktop\所有skill\deepseek-harness-desktop\AGENTS.md，双方必须遵守同一套禁令与流程。
-*最后更新：2026-10-26 · v1.0.142(待打包) R45 抽屉按钮八犯→代码重构：唯一守卫「自然位清零模型」（五层救援补丁 R35b/R38/R39/R43⑤/R44 全删——每个门限=漏网口；不变量=视觉 right≤vw−2 且 left≥0；natural 健康→清零一切 transform，越界→整体写目标值绝不累加；两拍稳定门挡动画误伤；闸门含旧门限回潮负断言）· v1.0.141(111) 已发（R44 视觉位救援；MD5 349b9b5c；真机复验仍八犯→R45）· v1.0.140(110) 已发（R43 六犯根治；MD5 badb54f3）· 🔴 网关 dsh-anywhere 缓存补丁因真机黑屏已回滚（_pcf=121b 击穿恢复；重上前必须过混载免疫验证）· 🔴 同一对象救援补丁超两层必须重构（R45 血训，全文见 REGRESSION.md R45）*
+*最后更新：2026-10-31 · v2.1.7(8 待打包) R51 抽屉页面左移十犯（R06 出血钳制×抽屉动画竞态：抽屉子树豁免+getAnimations 旁观+标记可撤销+旧毒自愈）· R50 三变量深层毒写收编 · 语音重复根治（SFSpeech 增量→全量协议）· R52 回退按钮=dsh-purge 黑名单 slot，已迁 composer.dock P2/宽屏 tab 行 P1（补丁留档 dsh-plugin-patches/dsh-purge-1.2.0-rewind-migration）· 闸门 122 绿/0 红 src=52ddb81d46e7 · 🔴 通用钳制类补丁对 CSS transition 动画天然失明，凡 transform transition 容器必须整树豁免或 getAnimations 旁观（全文见 REGRESSION.md R51）*
+
+## axs-ios-tweaks（2026-10-31）
+
+越狱 Theos `.deb` 工程生成 Skill，与本仓库 IPA/TIPA 打包无关。DSH skill 目录：`C:\Users\Administrator\.dsh\skills\axs-ios-tweaks\`。不要拿它给 DSHios 签名或侧载。
