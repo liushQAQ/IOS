@@ -82,7 +82,12 @@ async function run() {
     build: BUILD_NUM,
     updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
     title: `v${VERSION}(${BUILD_NUM}) 修复抽屉页面偏移+语音重复+回退按钮迁移`,
-    changelog: "1. 右缘长滑打开右侧抽屉，短滑拉出小鲸鱼\n2. 会话里表格滑块不再被边缘手势卡住\n3. 首次打开不再连旧地址，自动记住上次地址\n4. 提升本地连接与网页跳转安全校验\n5. 根治左侧边缘滑动手势时会话内容同步上下滑动\n6. 白屏与加载重试升级为一键清空本地脏缓存",
+    changelog: "1. 修复打开右侧抽屉页面整体偏移出屏
+2. 修复语音输入文字重复出现且顺序颠倒
+3. 回退按钮移出会话框放到卡片下方
+4. 右缘长滑打开右侧抽屉，短滑拉出小鲸鱼
+5. 会话里表格滑块不再被边缘手势卡住
+6. 首次打开不再连旧地址，自动记住上次地址",
     tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     public_tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     tipa_url_fallback: `https://github.com/liushQAQ/IOS/releases/download/v${VERSION}/DSHios-public-${VERSION}-${BUILD_NUM}.tipa`,
