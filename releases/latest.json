@@ -1,12 +1,12 @@
 {
-  "version": "2.1.11",
-  "build": 12,
+  "version": "2.1.12",
+  "build": 13,
   "updated_at": "2026-11-01 07:33:49",
-  "title": "v2.1.11(12) 发送键盘零闪现终极+抽屉顶栏稳定",
-  "changelog": "1. 修复点发送时键盘闪一下又收回\n2. 修复抽屉顶栏上移或下移\n3. 小鲸鱼短滑可在任意高度拉出\n4. 悬浮小鲸鱼恢复上一版滑动方式\n5. 修复打开抽屉顶栏微微下移\n6. 加固收起键盘点发送不弹键盘",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.11-12.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.11-12.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.11/DSHios-public-2.1.11-12.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.11",
+  "title": "v2.1.12(13) 鲸鱼换高度跟手+位置偏移修正",
+  "changelog": "1. 修复鲸鱼短滑换高度不跟手\n2. 修复鲸鱼出现位置偏移半截\n3. 修复点发送时键盘闪一下又收回\n4. 修复抽屉顶栏上移或下移\n5. 小鲸鱼短滑可在任意高度拉出\n6. 悬浮小鲸鱼恢复上一版滑动方式",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.12-13.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.12-13.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.12/DSHios-public-2.1.12-13.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.12",
   "md5": "40fab73327aba1d8b1f42ae6c3adf6e7"
 }

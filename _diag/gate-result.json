@@ -1,11 +1,11 @@
 {
-  "version": "2.1.11",
+  "version": "2.1.12",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-01T07:15:57.205Z",
+  "startedAt": "2026-11-01T13:26:09.066Z",
   "dshFingerprint": "n9oss2",
   "dshAssets": 10,
   "domClasses": 0,
@@ -32,6 +32,6 @@
   "fail": 0,
   "failures": [],
   "blocked": [],
-  "sourceHash": "18366a18035be344142e1e029bc4d6a71505c65f493902e2f864b048cfa3fd88",
-  "finishedAt": "2026-11-01T07:18:38.587Z"
+  "sourceHash": "c244df403e687c036f841d52c56a4c6c953c0bff027a2d33c367462c4be57664",
+  "finishedAt": "2026-11-01T13:29:38.548Z"
 }

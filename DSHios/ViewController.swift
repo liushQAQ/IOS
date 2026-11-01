@@ -9168,15 +9168,19 @@ function applySidebarInset() {
         self.setMenuExpanded(false, animated: false)
     }
 
-    /// 🔴 R58：小鲸鱼垂直位置跟手指（右缘手势全程跟随）。纵向任意高度都可以，
-    ///   只避开状态栏/底部手势条半颗按钮的距离；横向吸附右缘不动（老总 2026-11-01 定版）。
+    /// 🔴 R58+R60：小鲸鱼垂直位置跟手指。纵向任意高度都可以，只避开状态栏/底部手势条
+    ///   半颗按钮的距离；横向吸附右缘不动（老总 2026-11-01 定版）。
+    ///   🔴 R60 换算修正：centerY 锚在 **safeAreaLayoutGuide 中心**（真机 ≠ view 中心，
+    ///   差 (insets.top-insets.bottom)/2 ≈ 12.5pt，正是「滑动出来高度位置不对」），常量必须
+    ///   相对安全区中心换算，否则真机永远差半截。
     private func updateWhaleY(_ touchY: CGFloat) {
         guard let cy = menuCenterYConstraint else { return }
         let half = Self.menuButtonSide / 2
-        let minY = view.safeAreaInsets.top + half + 6
-        let maxY = view.bounds.height - view.safeAreaInsets.bottom - half - 6
+        let minY = view.safeAreaInsets.top + half + 4
+        let maxY = view.bounds.height - view.safeAreaInsets.bottom - half - 4
         let clampedY = min(max(touchY, minY), maxY)
-        cy.constant = clampedY - (view.bounds.height / 2)
+        let safeMidY = view.safeAreaInsets.top + (view.bounds.height - view.safeAreaInsets.top - view.safeAreaInsets.bottom) / 2
+        cy.constant = clampedY - safeMidY
     }
 
     /// 右屏幕边缘左滑唤醒手势：在屏幕右边缘任意高度向左滑，即可流畅拉出小鲸鱼悬浮按钮
@@ -9267,6 +9271,9 @@ function applySidebarInset() {
     /// 在按钮上左右拖动：跟手移动，松手后按位置决定展开或收起。
     ///
     /// 注意方向：按钮贴右缘，**向左滑（dx < 0）才是把它拉出来**，向右滑是推回屏外。
+    /// 🔴 R60（老总 2026-11-01「任意高度短滑不行」第二真因）：鲸鱼展开时从**鲸鱼本体**起滑
+    ///   的手势走的是本 pan（不是右缘 edgePan）——旧实现只有横向，纵向不跟 → 从鲸鱼上
+    ///   起滑换高度永远不生效。补：本 pan 全程垂直跟手（updateWhaleY），横向仍吸附右缘。
     @objc private func menuPanned(_ gesture: UIPanGestureRecognizer) {
         guard let constraint = menuTrailingConstraint else { return }
         let base = menuButtonExpanded
@@ -9276,11 +9283,14 @@ function applySidebarInset() {
         let lower = Self.menuExpandedConstant
         let upper = Self.menuCollapsedConstant
         switch gesture.state {
+        case .began:
+            menuAutoHideTimer?.invalidate()
+            menuAutoHideTimer = nil
         case .changed:
             let dx = gesture.translation(in: view).x
             constraint.constant = min(max(base + dx, lower), upper)
-            menuAutoHideTimer?.invalidate()
-            menuAutoHideTimer = nil
+            // 🔴 R60：纵向跟手指（从鲸鱼上起滑也能换高度）
+            updateWhaleY(gesture.location(in: view).y)
             view.layoutIfNeeded()
         case .ended, .cancelled, .failed:
             let dx = gesture.translation(in: view).x
@@ -9980,8 +9990,8 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 修复点发送时键盘闪一下又收回
-            2. 修复抽屉顶栏上移或下移
+            1. 修复鲸鱼短滑换高度不跟手
+            2. 修复鲸鱼出现位置偏移半截
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)

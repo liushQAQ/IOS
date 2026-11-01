@@ -130,7 +130,7 @@
 
 > 🤝 本规程对 **DSH 侧 AI 同样生效**：DSH 有时也执行 iOS 打包（老总 2026-10-21 令），
 > 交接卡副本已放 DSH 工作区 E:\desktop\所有skill\deepseek-harness-desktop\AGENTS.md，双方必须遵守同一套禁令与流程。
-*最后更新：2026-11-01 · v2.1.11(12 待打包) R59 发送键盘终极（pointerdown 最早布防+实例桩）+ 抽屉顶栏上移/下移根治（DSH absolute↔fixed 翻转→面板钉死 fixed，who2 实证零位移）· R58 鲸鱼右缘手势全程垂直跟手（X 吸附不动）· 🔴 「偶尔双向位移」先抓状态机翻转（position/包含块切换）钉死终态；fixed 元素不吃祖先 padding，钉完定位必查「谁还以为自己在管它的内边距」（全文见 REGRESSION.md R59）*
+*最后更新：2026-11-01 · v2.1.12(13 待打包) R60 鲸鱼「任意高度短滑不行」双真因（centerY 锚 safeArea 却按 view 中心换算恒偏 12.5pt + 鲸鱼本体起滑的 menuPanned 补纵向跟手）· 🔴 约束锚点与常量换算基准必须同一体；同一功能多条手势入口改跟手必须全改（全文见 REGRESSION.md R60）*
 
 ## axs-ios-tweaks（2026-10-31）
 
