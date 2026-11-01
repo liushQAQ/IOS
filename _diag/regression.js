@@ -636,7 +636,11 @@ const A_PLUGIN_PAGE = () => {
           const vw = window.innerWidth;
           const comp2 = document.querySelector('[class*="composerStack"]');
           const sc = document.querySelector('[class*="VERcba_standardControls"], [class*="standardControls"], [class*="trailing"]');
-          const cap = sc ? (sc.querySelector(':scope > div > div') || sc.querySelector(':scope > div') || sc) : null;
+          /* 2026-11-01：落点从 ':scope > div > div' 改为 trailing 本体 —— DSH 换版后旧嵌套
+             探路会落进模型选择器按钮内部，撬爆的是整张卡（顶排 dshp 芯片被顶出 vw +5，与
+             「撤回/重优挤爆发送钮」的原命题无关）。直接撬右侧控件组 trailing，flex 收缩
+             （shim 给的 flex:0 1 auto + min-width:0）接管，命题回归原位。 */
+          const cap = sc || null;
           if (!cap) {
             /* v1.0.131 口径：优化胶囊是 dsh-po- 插件动态挂载的。会话页死循环时插件整体未挂载
                → 属「无法校验」（同 pageHead 先例），不是补丁失效实证。
@@ -666,7 +670,22 @@ const A_PLUGIN_PAGE = () => {
           comp2.querySelectorAll('button').forEach(b => {
             const r = b.getBoundingClientRect();
             if (r.width < 4) return;
-            if (r.right > vw + 0.5) { over++; if (overSample.length < 3) overSample.push(((b.textContent || b.className || '').toString().slice(0, 10)) + ' +' + Math.round(r.right - vw)); }
+            if (r.right > vw + 0.5) {
+              over++;
+              if (overSample.length < 3) {
+                let row = b.parentElement, rowCls = '', rowDisp = '';
+                for (let i = 0; i < 4 && row; i++) { if ((getComputedStyle(row).display === 'flex' || getComputedStyle(row).display === 'grid') && row.getBoundingClientRect().width > 150) { rowCls = String(row.className).slice(0, 30); rowDisp = getComputedStyle(row).display; break; } row = row.parentElement; }
+                // 行内全部子元素几何 + flex（R56 终诊：到底谁不肯缩）
+                let kidsDump = '';
+                if (row) {
+                  kidsDump = Array.from(row.children).map(k => {
+                    const cs2 = getComputedStyle(k), r2 = k.getBoundingClientRect();
+                    return String(k.className).slice(0, 20) + ':' + cs2.flex + '/mw' + cs2.minWidth + '@' + Math.round(r2.left) + '..' + Math.round(r2.right);
+                  }).join(' | ');
+                }
+                overSample.push(((b.textContent || b.className || '').toString().slice(0, 10)) + ' +' + Math.round(r.right - vw) + ' w=' + rowCls + '(' + rowDisp + ') kids=[' + kidsDump + ']');
+              }
+            }
           });
           const send = Array.from(comp2.querySelectorAll('button')).find(b => (b.className || '').toString().includes('primary') || b.getAttribute('aria-label') === '发送消息');
           const box = document.getElementById('__gateFakeCapsule');
@@ -1078,6 +1097,36 @@ const A_PLUGIN_PAGE = () => {
               && (r51b.tfClosed === '(none)' || r51b.tfClosed === '' || r51b.tfClosed === 'pane-gone'),
               '[抽屉·R51] 开/关两态往抽屉页面容器注毒 translateX(-59.5px) → 3 秒内必须被自愈清零（bleed 守卫动画期误写=页面永久左移十犯根源）',
               r51b.noBtn ? '🔴 找不到抽屉开关' : (r51b.noCol ? '🔴 找不到 rightbarCol' : (r51b.noPane ? '🔴 抽屉内找不到页面容器' : (r51b.err ? ('异常 ' + r51b.err) : ('开态tf=' + r51b.tfOpen + ' left=' + r51b.leftOpen + ' 关态tf=' + r51b.tfClosed)))));
+          }
+
+          // —— R53 行为断言（v2.1.8(9)，老总 2026-11-01：抽屉打开顶栏偶尔下移跳一下）——
+          // 根因 = 状态栏值守卫只盯 attributes：DSH 新建的容器若**出生就带毒 inline**
+          //（--dsh-statusbar/--dsh-sb-native=75px）不会触发属性观察，要等 300ms 轮才清 →
+          // 首帧偏低再跳回 = 间歇下跳。修法 = childList + fixDeepTree 渲染前微任务整树预检。
+          // 断言：往抽屉里插入一个出生带毒的容器 → 1.5 秒内三变量必须被就位回写（59px）。
+          const r53b = await p.evaluate(async () => {
+            const out = {};
+            try {
+              const col = document.querySelector('[class*="rightbarCol"]') || document.body;
+              const el = document.createElement('div');
+              el.setAttribute('data-dsh-r53probe', '');
+              el.setAttribute('style', '--dsh-statusbar:75px; --dsh-sb-native:75px; --dsh-topshift:40px; padding-top:95px;');
+              el.style.height = '1px';
+              col.appendChild(el);
+              await new Promise(r2 => setTimeout(r2, 1500));
+              out.sb = el.style.getPropertyValue('--dsh-statusbar');
+              out.nat = el.style.getPropertyValue('--dsh-sb-native');
+              out.ts = el.style.getPropertyValue('--dsh-topshift');
+              out.ok = el.style.getPropertyValue('--dsh-sb-native') === '59px' && el.style.getPropertyValue('--dsh-statusbar') === '59px';
+              el.remove();
+            } catch (e) { out.err = String(e).slice(0, 140); }
+            return out;
+          });
+          if (TO(r53b)) blocked('[抽屉·R53] 行为断言', '会话页 30 秒无响应（DSH 前端死循环）');
+          else {
+            chk(!r53b.err && r53b.ok,
+              '[抽屉·R53] 出生带毒新节点（75px/40px inline）→ 1.5 秒内必须被渲染前预检回写 59px（间歇下跳根源）',
+              r53b.err ? ('异常 ' + r53b.err) : ('sb=' + r53b.sb + ' native=' + r53b.nat + ' ts=' + r53b.ts + '（期待 59px/59px/18px）'));
           }
 
           // —— R37 行为断言（v1.0.136(105)）：+ 号弹层伪关闭吞掉器 ——
@@ -1589,11 +1638,15 @@ const A_PLUGIN_PAGE = () => {
     const r39guardSrc = /window\.__dshSbMemory/.test(bundle)
       && /function fixDeep\(/.test(bundle)
       && /Math\.abs\(curTs - tsVal\(\)\)/.test(bundle)
-      /* R50：subtree 盯防不变量 = 过滤列表 style 打头 + subtree: true，容忍列表追加属性。 */
-      && /attributeFilter: \['style'[^\]]*\], subtree: true/.test(bundle);
+      /* R50：subtree 盯防不变量 = 过滤列表 style 打头 + subtree: true。
+         R53（2026-11-01）：childList 加入观察（新节点出生带毒渲染前清），容忍
+         filter 与 subtree 之间出现任意附加选项，但 style 打头 + subtree 收尾不变。 */
+      && /attributeFilter: \['style'[^\]]*\][^;]*subtree: true/.test(bundle)
+      && /childList: true, subtree: true/.test(bundle)
+      && /function fixDeepTree\(root\)/.test(bundle);
     chk(r39guardSrc,
-      '[抽屉·R39] 守卫 v2（记忆冻结 + sb-native/topshift 三变量全恢复 + 全子树盯防深层毒写）',
-      r39guardSrc ? '守卫 v2 在' : '🔴 守卫退化 → DSH 整段覆写/深层写 75 后文件工作区按钮下移 16pt 复发（真机 1.0.136 四犯实录）');
+      '[抽屉·R39/53] 守卫 v2（记忆冻结 + 三变量全恢复 + 全子树盯防 + 新节点携毒渲染前即清）',
+      r39guardSrc ? '守卫 v2+R53 在' : '🔴 守卫退化 → DSH 整段覆写/深层写 75/新节点带毒后抽屉顶栏下跳复发（真机 1.0.136 四犯 + 2.1.7 间歇下跳实录）');
     /* R38（v1.0.136）+ R39 救援 v2（v1.0.137）→ R45 唯一守卫（v1.0.142）：防出屏铁律重构。
        R45 废除「基准位重算 + 模糊稳态门 + 160 上限」三层旧门限（八犯证明每个门限都是漏网口），
        换成：header 限定不变 + 视觉右缘/左缘双向往限（vw-2 / 4）+ 两拍稳定即整体重算 +
@@ -1674,6 +1727,17 @@ const A_PLUGIN_PAGE = () => {
     chk(r51src,
       '[抽屉·R51] 出血钳制抽屉子树豁免 + 动画期旁观 + 标记可撤销 + 旧毒自愈（四件套）',
       r51src ? 'R51 四件套全在' : '🔴 缺件 → 抽屉开合动画中途被写 translateX 页面永久左移复发（开#8 实锤 -59.52px）');
+    /* R54（v2.1.8）：发送按钮键盘抑制器 —— 键盘收起态点发送，官方发完 focus 输入框导致
+       键盘弹出盖住回复。抑制器只在「点发送时键盘原本收起」的 400ms 窗口内 blur，
+       连续打字流（键盘原本开着）零干预。 */
+    const r54src = /window\.__dshSendBlurGuard/.test(bundle)
+      && /function setupSendBlurGuard\(\)/.test(bundle)
+      && /\[aria-label="发送消息"\]/.test(bundle)
+      && /addEventListener\('focusin'/.test(bundle)
+      && /suppressUntil/.test(bundle);
+    chk(r54src,
+      '[发送·R54] 键盘收起态点发送不弹键盘（focusin 同步 blur，打字流零干预）',
+      r54src ? '抑制器在' : '🔴 抑制器被删 → 收起键盘点发送时键盘弹出盖住回复复发');
     /* R46（v1.0.142）：文案规范打包前机械校验（老总令：「更新说明和关于要尽量最大化精简，
        排序1-2-3-4-5-6序号对齐，靠左对齐，纳入打包前校验」）。
        校验三处：① 设置页更新日志卡：logContent 每条一行、序号 1..N 严格递增不重复、

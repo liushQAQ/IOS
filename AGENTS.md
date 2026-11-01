@@ -130,7 +130,7 @@
 
 > 🤝 本规程对 **DSH 侧 AI 同样生效**：DSH 有时也执行 iOS 打包（老总 2026-10-21 令），
 > 交接卡副本已放 DSH 工作区 E:\desktop\所有skill\deepseek-harness-desktop\AGENTS.md，双方必须遵守同一套禁令与流程。
-*最后更新：2026-10-31 · v2.1.7(8 待打包) R51 抽屉页面左移十犯（R06 出血钳制×抽屉动画竞态：抽屉子树豁免+getAnimations 旁观+标记可撤销+旧毒自愈）· R50 三变量深层毒写收编 · 语音重复根治（SFSpeech 增量→全量协议）· R52 回退按钮=dsh-purge 黑名单 slot，已迁 composer.dock P2/宽屏 tab 行 P1（补丁留档 dsh-plugin-patches/dsh-purge-1.2.0-rewind-migration）· 闸门 122 绿/0 红 src=52ddb81d46e7 · 🔴 通用钳制类补丁对 CSS transition 动画天然失明，凡 transform transition 容器必须整树豁免或 getAnimations 旁观（全文见 REGRESSION.md R51）*
+*最后更新：2026-11-01 · v2.1.8(9 待打包) R53 抽屉顶栏间歇下跳（新节点出生带毒逃过属性观察→守卫补 childList 渲染前预检）· R54 收起键盘点发送不弹键盘（focusin 同步 blur）· R55 小鲸鱼自由拖放任意位置（跨启动记忆）· R56 收缩三件套误入 v1.0.131 停用的死代码块→迁主样式表 + dsh-purge 1.2.1 窄屏收缩合规 · 闸门 124 绿/0 红 src=dfe96518d861 · 🔴 往 CSS 块加规则前先确认它的 apply() 还活着（v1.0.131 停用过的块是坟墓，全文见 REGRESSION.md R56）*
 
 ## axs-ios-tweaks（2026-10-31）
 

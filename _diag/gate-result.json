@@ -1,17 +1,17 @@
 {
-  "version": "2.1.7",
+  "version": "2.1.8",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-10-31T08:29:54.829Z",
-  "dshFingerprint": "1d5zyh",
+  "startedAt": "2026-11-01T04:40:31.559Z",
+  "dshFingerprint": "by5s1y",
   "dshAssets": 10,
   "domClasses": 0,
-  "anchorTotal": 167,
+  "anchorTotal": 169,
   "anchorDead": 0,
-  "anchorCssAlive": 107,
+  "anchorCssAlive": 109,
   "anchorResidue": 60,
   "dshSheets": 215,
   "ownSheets": 12,
@@ -28,10 +28,10 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 122,
+  "pass": 124,
   "fail": 0,
   "failures": [],
   "blocked": [],
-  "sourceHash": "52ddb81d46e7f91a2b0f727d18958e3315bb937a617c29d1177b1afe10a401ba",
-  "finishedAt": "2026-10-31T08:33:36.148Z"
+  "sourceHash": "dfe96518d8612a91eb314714809ea5e90e3cf4e352f4f617d67b036640f6524e",
+  "finishedAt": "2026-11-01T04:43:26.076Z"
 }
