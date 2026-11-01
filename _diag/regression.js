@@ -1753,6 +1753,15 @@ const A_PLUGIN_PAGE = () => {
     chk(r57src,
       '[抽屉·R57] syncPanelNav 补 childList（抽屉列重挂载当拍写 padding，顶条不再迟到 19px）',
       r57src ? '挂载即写 in' : '🔴 观察器退化 → 重挂载路径顶条微微下移复发（2.1.7~2.1.8 三版实录）');
+    /* R59（v2.1.11）：抽屉面板 position 钉死 fixed（消灭 DSH 自身 absolute↔fixed 翻转位移）
+       + syncDrawerGeometry 写入名单补面板本体（fixed 后 col padding 不再作用于面板）。 */
+    const r59src = /\.dMHGga_panel\[data-sidebar-right-open="true"\],/.test(bundle)
+      && /\[data-sidebar-right-open="true"\] \{/.test(bundle)
+      && /position: fixed !important/.test(bundle)
+      && /data-sidebar-right-open\], \.dMHGga_panel\[data-sidebar-right-open\], \.dMHGga_session/.test(bundle);
+    chk(r59src,
+      '[抽屉·R59] 面板钉死 fixed + 写入名单补面板本体（absolute↔fixed 翻转位移根除）',
+      r59src ? 'R59 在' : '🔴 缺件 → 抽屉顶栏上移/下移（翻转位移）复发');
     /* R46（v1.0.142）：文案规范打包前机械校验（老总令：「更新说明和关于要尽量最大化精简，
        排序1-2-3-4-5-6序号对齐，靠左对齐，纳入打包前校验」）。
        校验三处：① 设置页更新日志卡：logContent 每条一行、序号 1..N 严格递增不重复、

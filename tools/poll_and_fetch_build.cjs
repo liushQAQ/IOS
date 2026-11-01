@@ -6,8 +6,8 @@ const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const CONFIG_FILE = path.join(ROOT, '.codemagic_config.json');
 const BUILD_ID = process.argv[2] || '6ae4bee361a3832df3ec93a8';
-const VERSION = '2.1.10';
-const BUILD_NUM = 11;
+const VERSION = '2.1.11';
+const BUILD_NUM = 12;
 
 if (!fs.existsSync(CONFIG_FILE)) {
   console.error('缺少配置文件');
@@ -81,8 +81,8 @@ async function run() {
     version: VERSION,
     build: BUILD_NUM,
     updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-    title: `v${VERSION}(${BUILD_NUM}) 鲸鱼任意高度拉出+发送键盘零闪现`,
-    changelog: "1. 小鲸鱼短滑可在任意高度拉出\n2. 修复点发送时键盘闪一下又收回\n3. 悬浮小鲸鱼恢复上一版滑动方式\n4. 修复打开抽屉顶栏微微下移\n5. 加固收起键盘点发送不弹键盘\n6. 修复打开抽屉时顶栏偶尔下移跳一下",
+    title: `v${VERSION}(${BUILD_NUM}) 发送键盘零闪现终极+抽屉顶栏稳定`,
+    changelog: "1. 修复点发送时键盘闪一下又收回\n2. 修复抽屉顶栏上移或下移\n3. 小鲸鱼短滑可在任意高度拉出\n4. 悬浮小鲸鱼恢复上一版滑动方式\n5. 修复打开抽屉顶栏微微下移\n6. 加固收起键盘点发送不弹键盘",
     tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     public_tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     tipa_url_fallback: `https://github.com/liushQAQ/IOS/releases/download/v${VERSION}/DSHios-public-${VERSION}-${BUILD_NUM}.tipa`,

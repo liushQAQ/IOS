@@ -1245,6 +1245,16 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '    display: flex !important;',
             '    flex-direction: column !important;',
             '  }',
+            '  /* 🔴 R59（v2.1.11，老总 2026-11-01：抽屉顶栏「会上移或者下移」）：DSH 自己会把',
+            '     打开的面板在 position:absolute ↔ fixed 之间翻转（沙箱实测 t+60ms absolute →',
+            '     t+1.5s fixed），包含块一换整块内容位移，方向随状态而变。钉死 fixed：开抽屉',
+            '     期间面板恒等于视口，翻转无位移可言。合上时面板随 col 的 translateX 出屏',
+            '     （transformed 祖先即 fixed 的包含块，不会穿出），动画期同理跟随 col。 */',
+            '  .dMHGga_panel[data-sidebar-right-open="true"],',
+            '  [data-sidebar-right-open="true"] {',
+            '    position: fixed !important;',
+            '    inset: 0 !important;',
+            '  }',
             '}',
             '.dMHGga_panel[data-sidebar-right-open],',
             '[data-sidebar-right-open] {',
@@ -2738,7 +2748,10 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 // 🔴 R49（老总令：开始这排状态栏高一点）：全屏面板直接贴顶 y=0，不扣减会话页 topshift，
                 //   增加顶部安全边距至 nh + 20px（即 nh + 6 + 14），避让灵动岛与系统时间不顶头。
                 var pad = (nh + 6 + 14) + 'px';
-                var cols = document.querySelectorAll('[class*="rightbarCol"], .CZPbNW_rightbarCol, [class*="sidebarCol"], .CZPbNW_sidebarCol');
+                // 🔴 R59 补位（老总 2026-11-01：顶栏上移/下移反复）：R59 把面板钉死 fixed 后，
+                //   面板以视口定位、col 的内联 padding 不再作用于它 —— 写入名单必须补面板本体
+                //   （含属性未落位阶段），挂载当拍直接写在面板上，首帧即 79。
+                var cols = document.querySelectorAll('[class*="rightbarCol"], .CZPbNW_rightbarCol, [class*="sidebarCol"], .CZPbNW_sidebarCol, [data-sidebar-right-open], .dMHGga_panel[data-sidebar-right-open], .dMHGga_session');
                 for (var gi = 0; gi < cols.length; gi++) {
                   var gc = cols[gi];
                   if (gc.style.getPropertyValue('padding-top') !== pad) {
@@ -3124,18 +3137,18 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               boot();
             })();
 
-            // 🔴 R54（v2.1.8 引入；v2.1.9 加固 1200ms+三连 blur；🔴 v2.1.10 再进阶——老总
-            //   2026-11-01 真机「还是会拉起来键盘动作，然后秒收起来」）：blur 兜底改变不了
-            //   键盘动画已经启动的事实 —— 必须让**聚焦本身不发生**。收起键盘态点发送后，
-            //   在抑制窗内给 HTMLElement.prototype.focus 打桩：任何对输入框的程序化 focus
-            //   直接 no-op（键盘动画无从启动），窗口结束原样还原；focusin 同步 blur 与
-            //   三连主动 blur 保留作双保险（防绕过 prototype 的聚焦路径）。
-            //   用户手指点输入框的聚焦走浏览器内部通道不经 .focus()，完全不受影响。
+            // 🔴 R54（v2.1.8 引入 → v2.1.9 加固 → v2.1.10 focus 打桩 → 🔴 v2.1.11 终版——老总
+            //   2026-11-01 真机「还是会闪烁一下键盘」）：打桩仍晚于键盘动画启动的唯一窗口 =
+            //   布防时机。现在把布防提前到 **pointerdown 捕获段**（早于一切官方处理器）：
+            //   键盘收起态按住发送的那一刻，抑制窗 + prototype 桩 + 实例桩同时就位——
+            //   之后任何 handler 里的 focus() 都是真 no-op，键盘动画无从启动。
+            //   实例桩兜底：万一 Lexical/运行时替换过 prototype.focus，实例自有属性照样拦。
+            //   用户手指点输入框走浏览器内部聚焦通道不经 .focus()，零影响。
             (function setupSendBlurGuard() {
               if (window.__dshSendBlurGuard) return;
               window.__dshSendBlurGuard = true;
               var hadFocus = false, suppressUntil = 0;
-              var focusPatched = false, origFocus = null;
+              var focusPatched = false, origFocus = null, stubbed = [];
               function isInput(el) {
                 if (!el || !el.tagName) return false;
                 var tag = el.tagName.toLowerCase();
@@ -3154,6 +3167,15 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   if (el && isInput(el)) el.blur();
                 } catch (eB) {}
               }
+              function unpatchAll() {
+                try { if (origFocus) HTMLElement.prototype.focus = origFocus; } catch (eU1) {}
+                origFocus = null;
+                for (var i = 0; i < stubbed.length; i++) {
+                  try { stubbed[i].el.focus = stubbed[i].fn; } catch (eU2) {}
+                }
+                stubbed = [];
+                focusPatched = false;
+              }
               function patchFocus() {
                 if (focusPatched) return;
                 focusPatched = true;
@@ -3163,27 +3185,39 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                     try { if (Date.now() < suppressUntil && isInput(this)) return; } catch (eF) {}
                     return origFocus.apply(this, arguments);
                   };
-                  setTimeout(function () {
-                    try { if (origFocus) HTMLElement.prototype.focus = origFocus; } catch (eU) {}
-                    focusPatched = false;
-                  }, 1500);
                 } catch (eP) { focusPatched = false; }
+                try {
+                  var inputs = document.querySelectorAll('[class*="composerStack"] [contenteditable="true"], [class*="composerStack"] textarea, [class*="composerStack"] input:not([type="button"]):not([type="submit"])');
+                  for (var ii = 0; ii < inputs.length && ii < 8; ii++) {
+                    var el = inputs[ii];
+                    if (el.__dshOrigFocus) continue;
+                    el.__dshOrigFocus = el.focus;
+                    el.focus = function () { try { if (Date.now() < suppressUntil) return; } catch (eF2) {} return el.__dshOrigFocus.apply(this, arguments); };
+                    stubbed.push({ el: el, fn: el.__dshOrigFocus });
+                  }
+                } catch (eI) {}
+                setTimeout(unpatchAll, 1500);
+              }
+              function arm() {
+                suppressUntil = Date.now() + 1200;
+                patchFocus();
+                setTimeout(activeBlur, 120);
+                setTimeout(activeBlur, 400);
+                setTimeout(activeBlur, 900);
               }
               document.addEventListener('pointerdown', function (e) {
                 try {
                   if (!hitSend(e)) { hadFocus = false; return; }
                   hadFocus = isInput(document.activeElement);
+                  // 🔴 v2.1.11：布防提前到 pointerdown（原在 click，晚于官方 pointer 类处理器）
+                  if (!hadFocus) arm();
                 } catch (e1) { hadFocus = false; }
               }, true);
               document.addEventListener('click', function (e) {
                 try {
                   if (!hitSend(e)) return;
                   if (hadFocus) return;
-                  suppressUntil = Date.now() + 1200;
-                  patchFocus();
-                  setTimeout(activeBlur, 120);
-                  setTimeout(activeBlur, 400);
-                  setTimeout(activeBlur, 900);
+                  arm();
                 } catch (e2) {}
               }, true);
               document.addEventListener('focusin', function (e) {
@@ -9946,8 +9980,8 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 小鲸鱼短滑可在任意高度拉出
-            2. 修复点发送时键盘闪一下又收回
+            1. 修复点发送时键盘闪一下又收回
+            2. 修复抽屉顶栏上移或下移
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
