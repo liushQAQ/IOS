@@ -6,8 +6,8 @@ const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const CONFIG_FILE = path.join(ROOT, '.codemagic_config.json');
 const BUILD_ID = process.argv[2] || '6ae4bee361a3832df3ec93a8';
-const VERSION = '2.1.9';
-const BUILD_NUM = 10;
+const VERSION = '2.1.10';
+const BUILD_NUM = 11;
 
 if (!fs.existsSync(CONFIG_FILE)) {
   console.error('缺少配置文件');
@@ -81,8 +81,8 @@ async function run() {
     version: VERSION,
     build: BUILD_NUM,
     updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-    title: `v${VERSION}(${BUILD_NUM}) 抽屉悬浮球回退+顶栏微移终诊+发送键盘加固`,
-    changelog: "1. 悬浮小鲸鱼恢复上一版滑动方式\n2. 修复打开抽屉顶栏微微下移\n3. 加固收起键盘点发送不弹键盘\n4. 修复打开抽屉时顶栏偶尔下移跳一下\n5. 修复收起键盘点发送时键盘弹出\n6. 悬浮小鲸鱼可拖到屏幕任意位置",
+    title: `v${VERSION}(${BUILD_NUM}) 鲸鱼任意高度拉出+发送键盘零闪现`,
+    changelog: "1. 小鲸鱼短滑可在任意高度拉出\n2. 修复点发送时键盘闪一下又收回\n3. 悬浮小鲸鱼恢复上一版滑动方式\n4. 修复打开抽屉顶栏微微下移\n5. 加固收起键盘点发送不弹键盘\n6. 修复打开抽屉时顶栏偶尔下移跳一下",
     tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     public_tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     tipa_url_fallback: `https://github.com/liushQAQ/IOS/releases/download/v${VERSION}/DSHios-public-${VERSION}-${BUILD_NUM}.tipa`,
@@ -96,7 +96,7 @@ async function run() {
   // 发布到 GitHub Release
   try {
     console.log('正在创建/更新 GitHub Release...');
-    execSync(`gh -R liushQAQ/IOS release create v${VERSION} "${destTipa}" "${latestJsonPath}" --title "v${VERSION}(${BUILD_NUM}) 抽屉悬浮球回退+顶栏微移终诊+发送键盘加固" --notes "${latestInfo.changelog}"`, { stdio: 'inherit' });
+    execSync(`gh -R liushQAQ/IOS release create v${VERSION} "${destTipa}" "${latestJsonPath}" --title "v${VERSION}(${BUILD_NUM}) 鲸鱼任意高度拉出+发送键盘零闪现" --notes "${latestInfo.changelog}"`, { stdio: 'inherit' });
   } catch (e) {
     try {
       execSync(`gh -R liushQAQ/IOS release upload v${VERSION} "${destTipa}" "${latestJsonPath}" --clobber`, { stdio: 'inherit' });

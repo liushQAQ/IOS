@@ -1,11 +1,11 @@
 {
-  "version": "2.1.9",
+  "version": "2.1.10",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-01T05:43:59.960Z",
+  "startedAt": "2026-11-01T06:33:11.197Z",
   "dshFingerprint": "n9oss2",
   "dshAssets": 10,
   "domClasses": 0,
@@ -28,12 +28,10 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 123,
+  "pass": 125,
   "fail": 0,
   "failures": [],
-  "blocked": [
-    "[抽屉·R35b] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）"
-  ],
-  "sourceHash": "d26ce88e4c3688ae4144768d17b4f492249a57606d1b0c6a6fe69b2281cda5da",
-  "finishedAt": "2026-11-01T05:48:29.864Z"
+  "blocked": [],
+  "sourceHash": "9ba23e3e4a47a8ba96220787dd8f5013ba7a41684737d52bd0a9f1d87bf13e64",
+  "finishedAt": "2026-11-01T06:36:25.468Z"
 }

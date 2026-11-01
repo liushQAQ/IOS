@@ -1735,10 +1735,13 @@ const A_PLUGIN_PAGE = () => {
       && /\[aria-label\*="发送"\]/.test(bundle)
       && /addEventListener\('focusin'/.test(bundle)
       && /suppressUntil/.test(bundle)
-      && /setTimeout\(activeBlur, 900\)/.test(bundle);
+      && /setTimeout\(activeBlur, 900\)/.test(bundle)
+      /* v2.1.10：focus 打桩（键盘动画根本不启动，治「弹一下又秒收」） */
+      && /HTMLElement\.prototype\.focus/.test(bundle)
+      && /function patchFocus\(\)/.test(bundle);
     chk(r54src,
-      '[发送·R54] 键盘收起态点发送不弹键盘（focusin 同步 blur + 三连兜底，打字流零干预）',
-      r54src ? '抑制器 v2 在' : '🔴 抑制器被删/退化 → 收起键盘点发送时键盘弹出盖住回复复发');
+      '[发送·R54] 键盘收起态点发送不弹键盘（focus 打桩阻聚焦 + focusin 同步 blur + 三连兜底）',
+      r54src ? '抑制器 v3 在' : '🔴 抑制器退化 → 收起键盘点发送键盘「弹一下又秒收」复发');
     /* R57（v2.1.9）：抽屉顶条「微微下移一下」终诊 —— syncPanelNav 观察器只盯属性，
        DSH 开抽屉走「重挂载新列」路径时不产生属性变化 → 内联 padding-top 等 300ms 环才补
        → 顶条迟到 ~19px（真机 DSH 初始 75 基准 → 79，微微 3~4px）。修法 = 观察器补

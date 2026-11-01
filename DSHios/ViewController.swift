@@ -31,6 +31,8 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
     private var menuButton: UIButton!
     /// 悬浮按钮的右缘约束：constant 越小越靠右，收起态为负值（把按钮推出屏幕外）。
     private var menuTrailingConstraint: NSLayoutConstraint!
+    /// 🔴 R58：centerY 约束常驻引用（右缘手势全程跟手指高度，不再只在 began 取一次）
+    private var menuCenterYConstraint: NSLayoutConstraint!
     private var navigationTimer: Timer?
     private var pathMonitor: NWPathMonitor?
     private var hasLoadedOnce = false
@@ -3122,17 +3124,18 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               boot();
             })();
 
-            // 🔴 R54（v2.1.8 引入，v2.1.9 加固——老总 2026-11-01 真机「还是点发送会弹出键盘」）：
-            //   键盘收起态点「发送」，DSH 官方发完把输入框重新 focus（桌面端习惯），真机键盘
-            //   立刻弹出盖住刚发出的回复。v2.1.8 的 400ms focusin 窗口真机没兜住（DSH 聚焦
-            //   时机可能晚于 400ms，或走二次聚焦）。加固：①窗口 400→1200ms；②focusin 同步
-            //   blur 之外，点击后 120/400/900ms 三次主动 blur 兜底；③命中面放宽到
-            //   aria-label 含「发送」/ _primary / composerStack 内最后一个圆形按钮。
-            //   原本就开着键盘（连续打字流）完全不动官方行为。
+            // 🔴 R54（v2.1.8 引入；v2.1.9 加固 1200ms+三连 blur；🔴 v2.1.10 再进阶——老总
+            //   2026-11-01 真机「还是会拉起来键盘动作，然后秒收起来」）：blur 兜底改变不了
+            //   键盘动画已经启动的事实 —— 必须让**聚焦本身不发生**。收起键盘态点发送后，
+            //   在抑制窗内给 HTMLElement.prototype.focus 打桩：任何对输入框的程序化 focus
+            //   直接 no-op（键盘动画无从启动），窗口结束原样还原；focusin 同步 blur 与
+            //   三连主动 blur 保留作双保险（防绕过 prototype 的聚焦路径）。
+            //   用户手指点输入框的聚焦走浏览器内部通道不经 .focus()，完全不受影响。
             (function setupSendBlurGuard() {
               if (window.__dshSendBlurGuard) return;
               window.__dshSendBlurGuard = true;
               var hadFocus = false, suppressUntil = 0;
+              var focusPatched = false, origFocus = null;
               function isInput(el) {
                 if (!el || !el.tagName) return false;
                 var tag = el.tagName.toLowerCase();
@@ -3151,6 +3154,21 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   if (el && isInput(el)) el.blur();
                 } catch (eB) {}
               }
+              function patchFocus() {
+                if (focusPatched) return;
+                focusPatched = true;
+                try {
+                  origFocus = HTMLElement.prototype.focus;
+                  HTMLElement.prototype.focus = function () {
+                    try { if (Date.now() < suppressUntil && isInput(this)) return; } catch (eF) {}
+                    return origFocus.apply(this, arguments);
+                  };
+                  setTimeout(function () {
+                    try { if (origFocus) HTMLElement.prototype.focus = origFocus; } catch (eU) {}
+                    focusPatched = false;
+                  }, 1500);
+                } catch (eP) { focusPatched = false; }
+              }
               document.addEventListener('pointerdown', function (e) {
                 try {
                   if (!hitSend(e)) { hadFocus = false; return; }
@@ -3162,6 +3180,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   if (!hitSend(e)) return;
                   if (hadFocus) return;
                   suppressUntil = Date.now() + 1200;
+                  patchFocus();
                   setTimeout(activeBlur, 120);
                   setTimeout(activeBlur, 400);
                   setTimeout(activeBlur, 900);
@@ -9085,14 +9104,16 @@ function applySidebarInset() {
         self.menuTrailingConstraint = button.trailingAnchor.constraint(
             equalTo: view.safeAreaLayoutGuide.trailingAnchor,
             constant: Self.menuCollapsedConstant)
+        // 🔴 R58：centerY 常驻引用，供右缘手势全程跟手指高度
+        self.menuCenterYConstraint = button.centerYAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.centerYAnchor, constant: -56)
         NSLayoutConstraint.activate([
             button.widthAnchor.constraint(equalToConstant: Self.menuButtonSide),
             button.heightAnchor.constraint(equalToConstant: Self.menuButtonSide),
             self.menuTrailingConstraint,
             // 竖直位置比正中略高：首启 hero 页的输入卡大约在 y=410 起，
             // 上移 56pt 后把手完全落在它上方，不与输入框/发送键抢触点。
-            button.centerYAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.centerYAnchor, constant: -56)
+            self.menuCenterYConstraint
         ])
 
         let pan = UIPanGestureRecognizer(target: self, action: #selector(menuPanned(_:)))
@@ -9113,6 +9134,17 @@ function applySidebarInset() {
         self.setMenuExpanded(false, animated: false)
     }
 
+    /// 🔴 R58：小鲸鱼垂直位置跟手指（右缘手势全程跟随）。纵向任意高度都可以，
+    ///   只避开状态栏/底部手势条半颗按钮的距离；横向吸附右缘不动（老总 2026-11-01 定版）。
+    private func updateWhaleY(_ touchY: CGFloat) {
+        guard let cy = menuCenterYConstraint else { return }
+        let half = Self.menuButtonSide / 2
+        let minY = view.safeAreaInsets.top + half + 6
+        let maxY = view.bounds.height - view.safeAreaInsets.bottom - half - 6
+        let clampedY = min(max(touchY, minY), maxY)
+        cy.constant = clampedY - (view.bounds.height / 2)
+    }
+
     /// 右屏幕边缘左滑唤醒手势：在屏幕右边缘任意高度向左滑，即可流畅拉出小鲸鱼悬浮按钮
     @objc private func rightEdgePanned(_ gesture: UIScreenEdgePanGestureRecognizer) {
         guard let button = menuButton, let constraint = menuTrailingConstraint else { return }
@@ -9120,20 +9152,8 @@ function applySidebarInset() {
         case .began:
             menuAutoHideTimer?.invalidate()
             menuAutoHideTimer = nil
-            // 随着手指高度略微调整小鲸鱼按钮垂直位置，贴合用户手指，体验极佳
-            let touchY = gesture.location(in: view).y
-            let safeTop = view.safeAreaInsets.top + 60
-            let safeBottom = view.bounds.height - view.safeAreaInsets.bottom - 100
-            let clampedY = min(max(touchY, safeTop), safeBottom)
-
-            // 找到 centerY 约束并动态更新
-            for c in view.constraints {
-                if (c.firstItem === button && c.firstAttribute == .centerY) ||
-                   (c.secondItem === button && c.secondAttribute == .centerY) {
-                    c.constant = clampedY - (view.bounds.height / 2)
-                    break
-                }
-            }
+            // 🔴 R58：起手即跟手指高度
+            updateWhaleY(gesture.location(in: view).y)
             view.layoutIfNeeded()
         case .changed:
             let translationX = gesture.translation(in: view).x // 向左滑 translationX < 0
@@ -9144,7 +9164,10 @@ function applySidebarInset() {
                 view.layoutIfNeeded()
                 break
             }
-            // 短滑：从收起态逐渐拉向展开态
+            // 🔴 R58（老总 2026-11-01：纵向高度任意位置短滑都可以）：滑动全程垂直跟手指，
+            //   不再只在 began 取一次高度（之前从屏幕下部起滑会跟不上，被钳在离底 100pt）。
+            updateWhaleY(gesture.location(in: view).y)
+            // 短滑：从收起态逐渐拉向展开态（横向吸附右缘不动）
             let base = Self.menuCollapsedConstant
             let targetConstant = max(Self.menuExpandedConstant, base + translationX)
             constraint.constant = targetConstant
@@ -9923,9 +9946,8 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 悬浮小鲸鱼恢复上一版滑动方式
-            2. 修复打开抽屉顶栏微微下移
-            3. 加固收起键盘点发送不弹键盘
+            1. 小鲸鱼短滑可在任意高度拉出
+            2. 修复点发送时键盘闪一下又收回
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
