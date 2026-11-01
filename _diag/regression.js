@@ -1727,17 +1727,29 @@ const A_PLUGIN_PAGE = () => {
     chk(r51src,
       '[抽屉·R51] 出血钳制抽屉子树豁免 + 动画期旁观 + 标记可撤销 + 旧毒自愈（四件套）',
       r51src ? 'R51 四件套全在' : '🔴 缺件 → 抽屉开合动画中途被写 translateX 页面永久左移复发（开#8 实锤 -59.52px）');
-    /* R54（v2.1.8）：发送按钮键盘抑制器 —— 键盘收起态点发送，官方发完 focus 输入框导致
-       键盘弹出盖住回复。抑制器只在「点发送时键盘原本收起」的 400ms 窗口内 blur，
-       连续打字流（键盘原本开着）零干预。 */
+    /* R54（v2.1.8 引入，v2.1.9 加固）：发送按钮键盘抑制器 —— 键盘收起态点发送，官方发完
+       focus 输入框导致键盘弹出盖住回复。v2.1.9 加固：窗口 400→1200ms + 120/400/900ms
+       主动 blur 三连兜底 + 命中面放宽（aria-label*发送 / _primary / trailing 末钮）。 */
     const r54src = /window\.__dshSendBlurGuard/.test(bundle)
       && /function setupSendBlurGuard\(\)/.test(bundle)
-      && /\[aria-label="发送消息"\]/.test(bundle)
+      && /\[aria-label\*="发送"\]/.test(bundle)
       && /addEventListener\('focusin'/.test(bundle)
-      && /suppressUntil/.test(bundle);
+      && /suppressUntil/.test(bundle)
+      && /setTimeout\(activeBlur, 900\)/.test(bundle);
     chk(r54src,
-      '[发送·R54] 键盘收起态点发送不弹键盘（focusin 同步 blur，打字流零干预）',
-      r54src ? '抑制器在' : '🔴 抑制器被删 → 收起键盘点发送时键盘弹出盖住回复复发');
+      '[发送·R54] 键盘收起态点发送不弹键盘（focusin 同步 blur + 三连兜底，打字流零干预）',
+      r54src ? '抑制器 v2 在' : '🔴 抑制器被删/退化 → 收起键盘点发送时键盘弹出盖住回复复发');
+    /* R57（v2.1.9）：抽屉顶条「微微下移一下」终诊 —— syncPanelNav 观察器只盯属性，
+       DSH 开抽屉走「重挂载新列」路径时不产生属性变化 → 内联 padding-top 等 300ms 环才补
+       → 顶条迟到 ~19px（真机 DSH 初始 75 基准 → 79，微微 3~4px）。修法 = 观察器补
+       childList，抽屉列挂载当拍（微任务渲染前）即写 padding。 */
+    const r57src = /var obs = new MutationObserver\(function \(muts\) {/.test(bundle)
+      && /var drawerMounted = false, attrHit = false;/.test(bundle)
+      && /nc\.indexOf\('rightbarCol'\) >= 0 \|\| nc\.indexOf\('sidebarCol'\) >= 0/.test(bundle)
+      && /data-sidebar-right-open', 'data-sidebar-right-panel'\], childList: true, subtree: true/.test(bundle);
+    chk(r57src,
+      '[抽屉·R57] syncPanelNav 补 childList（抽屉列重挂载当拍写 padding，顶条不再迟到 19px）',
+      r57src ? '挂载即写 in' : '🔴 观察器退化 → 重挂载路径顶条微微下移复发（2.1.7~2.1.8 三版实录）');
     /* R46（v1.0.142）：文案规范打包前机械校验（老总令：「更新说明和关于要尽量最大化精简，
        排序1-2-3-4-5-6序号对齐，靠左对齐，纳入打包前校验」）。
        校验三处：① 设置页更新日志卡：logContent 每条一行、序号 1..N 严格递增不重复、

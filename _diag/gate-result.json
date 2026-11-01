@@ -1,17 +1,17 @@
 {
-  "version": "2.1.8",
+  "version": "2.1.9",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-01T04:40:31.559Z",
-  "dshFingerprint": "by5s1y",
+  "startedAt": "2026-11-01T05:43:59.960Z",
+  "dshFingerprint": "n9oss2",
   "dshAssets": 10,
   "domClasses": 0,
-  "anchorTotal": 169,
+  "anchorTotal": 170,
   "anchorDead": 0,
-  "anchorCssAlive": 109,
+  "anchorCssAlive": 110,
   "anchorResidue": 60,
   "dshSheets": 215,
   "ownSheets": 12,
@@ -28,10 +28,12 @@
   "r36GestureGuard": true,
   "modelDockGuard": true,
   "ok": true,
-  "pass": 124,
+  "pass": 123,
   "fail": 0,
   "failures": [],
-  "blocked": [],
-  "sourceHash": "dfe96518d8612a91eb314714809ea5e90e3cf4e352f4f617d67b036640f6524e",
-  "finishedAt": "2026-11-01T04:43:26.076Z"
+  "blocked": [
+    "[抽屉·R35b] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）"
+  ],
+  "sourceHash": "d26ce88e4c3688ae4144768d17b4f492249a57606d1b0c6a6fe69b2281cda5da",
+  "finishedAt": "2026-11-01T05:48:29.864Z"
 }

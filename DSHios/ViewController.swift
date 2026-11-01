@@ -30,8 +30,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
     private var errorDetailLabel: UILabel!
     private var menuButton: UIButton!
     /// 悬浮按钮的右缘约束：constant 越小越靠右，收起态为负值（把按钮推出屏幕外）。
-    private var menuCenterXConstraint: NSLayoutConstraint!
-    private var menuCenterYConstraint: NSLayoutConstraint!
+    private var menuTrailingConstraint: NSLayoutConstraint!
     private var navigationTimer: Timer?
     private var pathMonitor: NWPathMonitor?
     private var hasLoadedOnce = false
@@ -3123,13 +3122,13 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               boot();
             })();
 
-            // 🔴 R54（v2.1.8，老总 2026-11-01：发送按钮为啥还要弹出键盘）：键盘收起态
-            //   直接点「发送」（OCR/语音回填后、或收起键盘后补发），DSH 官方发送完会把
-            //   输入框重新 focus（桌面端习惯），真机键盘立刻弹出、盖住刚发出的回复。
-            //   修法：pointerdown 捕获阶段记下「点发送那一刻键盘开没开」（activeElement
-            //   是否输入框）；若原本是收起的，随后 400ms 内任何输入框 focusin 都同步
-            //   blur —— 键盘根本不弹。原本就开着（连续打字流）完全不动官方行为。
-            //   锚点只用语义 aria-label（发送消息）+ composerStack 内 _primary 兜底。
+            // 🔴 R54（v2.1.8 引入，v2.1.9 加固——老总 2026-11-01 真机「还是点发送会弹出键盘」）：
+            //   键盘收起态点「发送」，DSH 官方发完把输入框重新 focus（桌面端习惯），真机键盘
+            //   立刻弹出盖住刚发出的回复。v2.1.8 的 400ms focusin 窗口真机没兜住（DSH 聚焦
+            //   时机可能晚于 400ms，或走二次聚焦）。加固：①窗口 400→1200ms；②focusin 同步
+            //   blur 之外，点击后 120/400/900ms 三次主动 blur 兜底；③命中面放宽到
+            //   aria-label 含「发送」/ _primary / composerStack 内最后一个圆形按钮。
+            //   原本就开着键盘（连续打字流）完全不动官方行为。
             (function setupSendBlurGuard() {
               if (window.__dshSendBlurGuard) return;
               window.__dshSendBlurGuard = true;
@@ -3143,8 +3142,14 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 try {
                   var t = e.target;
                   if (!t || !t.closest) return null;
-                  return t.closest('[aria-label="发送消息"], [class*="composerStack"] button[class*="_primary"]');
+                  return t.closest('[aria-label*="发送"], [class*="composerStack"] button[class*="_primary"], [class*="composerStack"] [class*="trailing"] button:last-of-type');
                 } catch (e0) { return null; }
+              }
+              function activeBlur() {
+                try {
+                  var el = document.activeElement;
+                  if (el && isInput(el)) el.blur();
+                } catch (eB) {}
               }
               document.addEventListener('pointerdown', function (e) {
                 try {
@@ -3156,7 +3161,10 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 try {
                   if (!hitSend(e)) return;
                   if (hadFocus) return;
-                  suppressUntil = Date.now() + 400;
+                  suppressUntil = Date.now() + 1200;
+                  setTimeout(activeBlur, 120);
+                  setTimeout(activeBlur, 400);
+                  setTimeout(activeBlur, 900);
                 } catch (e2) {}
               }, true);
               document.addEventListener('focusin', function (e) {
@@ -3164,7 +3172,6 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   if (Date.now() > suppressUntil) return;
                   if (isInput(e.target)) {
                     e.target.blur();
-                    suppressUntil = 0;
                   }
                 } catch (e3) {}
               }, true);
@@ -3409,11 +3416,39 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               }
             }
 
-            var obs = new MutationObserver(syncPanelNav);
+            // 🔴 R57（v2.1.9，老总 2026-11-01「顶栏还是微微下移」终诊）：观察器原来只盯属性 ——
+            //   DSH 开抽屉走「重挂载新列」路径时，data-sidebar-right-open 早已在新节点上、
+            //   不产生属性变化 → syncPanelNav 不触发 → 内联 padding-top(79px) 要等 300ms 环
+            //   才补上 → 顶条从 DSH 初始位（真机 ~76，其自身 --dsh-statusbar=75 基准）掉到
+            //   79 =「微微下移一下」，间歇出现（重挂载路径才中）。补 childList：抽屉列一挂载
+            //   **当拍**就跑 syncDrawerGeometry（微任务、渲染前），首帧即终值，跳动根除。
+            var obs = new MutationObserver(function (muts) {
+              var drawerMounted = false, attrHit = false;
+              try {
+                for (var mi = 0; mi < muts.length; mi++) {
+                  var mm = muts[mi];
+                  if (mm.type === 'attributes') { attrHit = true; continue; }
+                  if (mm.type !== 'childList' || !mm.addedNodes || !mm.addedNodes.length) continue;
+                  for (var ni = 0; ni < mm.addedNodes.length; ni++) {
+                    var nn = mm.addedNodes[ni];
+                    if (nn.nodeType !== 1) continue;
+                    var nc = (typeof nn.className === 'string') ? nn.className : '';
+                    if (nc.indexOf('rightbarCol') >= 0 || nc.indexOf('sidebarCol') >= 0 ||
+                        (nn.querySelector && nn.querySelector('[class*="rightbarCol"],[class*="sidebarCol"]'))) {
+                      drawerMounted = true; break;
+                    }
+                  }
+                  if (drawerMounted) break;
+                }
+              } catch (eM) {}
+              if (drawerMounted) { try { syncDrawerGeometry(); } catch (eD) {} }
+              if (attrHit || drawerMounted) syncPanelNav();
+            });
             // document.body 此刻可能尚未创建，同样需要等待就绪（v1.0.70 修复）
             function observeBody() {
               if (!document.body) { setTimeout(observeBody, 16); return; }
-              obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel'] });
+              // 🔴 R57：childList 一并盯住（抽屉列重挂载当拍即写 padding，见上方注释）
+              obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel'], childList: true, subtree: true });
             }
             observeBody();
             setInterval(syncPanelNav, 300);
@@ -8649,12 +8684,6 @@ function applySidebarInset() {
         // 状态栏高度随机型变化（无刘海 20pt、刘海 47pt、灵动岛 59pt），
         // 把系统给的真实值下发给页面，顶栏按它留白，不写死像素。
         publishStatusBarHeight()
-        // 🔴 R55：旋转/安全区变化时悬浮球按新屏幕重新钳回屏内（记住的常量是相对
-        //    屏幕中心的偏移，转屏后中心变了必须再钳一次，防止整颗停在屏外）。
-        if menuButton != nil {
-            clampMenuPosition()
-            view.layoutIfNeeded()
-        }
     }
 
     /// 把状态栏高度下发给页内脚本。
@@ -9019,10 +9048,14 @@ function applySidebarInset() {
     /// 右缘悬浮菜单按钮（半透明、可滑动、不用自动隐藏）。
     ///
     /// 旧实现把它钉死在右下角 40×40，正好压在页面的输入框/发送键上，点不动（用户报障）。
-    /// v1.0.74~2.1.7 改成「从右缘滑出」：X 永远被 trailing 约束钉在右缘，只能沿边横移。
-    /// 🔴 R55（v2.1.8，老总 2026-11-01「悬浮按钮不是任意位置可以滑动出来吗，咋成了固定」）：
-    ///   改为**真悬浮球** —— 中心点双约束（centerX/centerY），拖到屏幕任意位置就停在哪，
-    ///   位置跨启动记忆；自动隐藏只淡出不再拖回右缘；右缘短滑仍在手指高度拉出，长滑开抽屉。
+    /// 现在改成「从右缘滑出」：
+    /// - 收起态只露出 `menuCollapsedPeek` 宽的一条把手，几乎不占页面热区；
+    /// - 手指在按钮上左右拖动可跟手展开/收起（`UIPanGestureRecognizer`），点一下也能切换；
+    /// - 展开后静置 `menuAutoHideDelay` 秒自动收起，不遮挡页面；
+    /// - 选右缘是因为 iOS 的「侧滑返回」手势占用左缘，放左缘会和系统手势打架。
+    /// 🔴 R57（v2.1.9，老总 2026-11-01 令「回退上个版本」）：v2.1.8 的自由拖放抢占了右缘
+    ///   出抽屉手势、长滑把悬浮球拖到屏中间还不回弹 —— 本文件整段回退到 v2.1.7 黄金基线
+    ///   （trailing 钉右缘 + 两档滑出 + 3 秒自动收起），一行不动。
     private func setupMenuButton() {
         let button = UIButton(type: .custom)
         // 彻底消除任何投影或多重图层错位：单体透明圆角容器，绝不产生双重圆
@@ -9033,7 +9066,7 @@ function applySidebarInset() {
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(menuTapped), for: .touchUpInside)
         button.accessibilityLabel = "DSH 菜单"
-        button.accessibilityHint = "可拖动悬浮球：拖到任意位置，点按打开菜单"
+        button.accessibilityHint = "向左滑出或点击打开菜单"
 
         // 装载 16 帧 DeepSeek Q 萌小胖鲸高清循环动画
         let animFrames = Self.createAnimatedFatWhaleFrames()
@@ -9049,20 +9082,18 @@ function applySidebarInset() {
 
         view.addSubview(button)
 
-        // 🔴 R55：中心点双约束（相对 view 而非 safeArea，允许贴边停靠，安全区在钳制里管）
-        //   默认位置：右缘竖直居中偏上（对齐旧观感），有记忆位置则恢复上次拖放点。
-        let half = Self.menuButtonSide / 2
-        let defaultX = view.bounds.width - half - 6
-        let defaultY = view.bounds.height / 2 + view.safeAreaInsets.top / 2 - view.safeAreaInsets.bottom / 2 - 56
-        self.menuCenterXConstraint = button.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: defaultX - view.bounds.width / 2)
-        self.menuCenterYConstraint = button.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: defaultY - view.bounds.height / 2)
+        self.menuTrailingConstraint = button.trailingAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.trailingAnchor,
+            constant: Self.menuCollapsedConstant)
         NSLayoutConstraint.activate([
             button.widthAnchor.constraint(equalToConstant: Self.menuButtonSide),
             button.heightAnchor.constraint(equalToConstant: Self.menuButtonSide),
-            self.menuCenterXConstraint,
-            self.menuCenterYConstraint
+            self.menuTrailingConstraint,
+            // 竖直位置比正中略高：首启 hero 页的输入卡大约在 y=410 起，
+            // 上移 56pt 后把手完全落在它上方，不与输入框/发送键抢触点。
+            button.centerYAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.centerYAnchor, constant: -56)
         ])
-        restoreMenuPosition()
 
         let pan = UIPanGestureRecognizer(target: self, action: #selector(menuPanned(_:)))
         button.addGestureRecognizer(pan)
@@ -9082,74 +9113,74 @@ function applySidebarInset() {
         self.setMenuExpanded(false, animated: false)
     }
 
-    /// 右屏幕边缘左滑唤醒手势：在屏幕右边缘任意高度向左滑，即可流畅拉出小鲸鱼悬浮按钮。
-    /// 🔴 R55：短滑把悬浮球从**当前位置**跟手拉出（X 跟手指、Y 跟起点高度）；
-    ///   长滑（≥52pt）让路给右侧抽屉，悬浮球停在原地淡化。
+    /// 右屏幕边缘左滑唤醒手势：在屏幕右边缘任意高度向左滑，即可流畅拉出小鲸鱼悬浮按钮
     @objc private func rightEdgePanned(_ gesture: UIScreenEdgePanGestureRecognizer) {
-        guard let button = menuButton, let cx = menuCenterXConstraint, let cy = menuCenterYConstraint else { return }
-        struct EdgeCtx { static var startX: CGFloat = 0; static var armed = false }
+        guard let button = menuButton, let constraint = menuTrailingConstraint else { return }
         switch gesture.state {
         case .began:
             menuAutoHideTimer?.invalidate()
             menuAutoHideTimer = nil
-            // 跟手指高度：悬浮球垂直位置贴合手指起点，体验极佳
+            // 随着手指高度略微调整小鲸鱼按钮垂直位置，贴合用户手指，体验极佳
             let touchY = gesture.location(in: view).y
-            let safeTop = view.safeAreaInsets.top + Self.menuButtonSide / 2 + 8
-            let safeBottom = view.bounds.height - view.safeAreaInsets.bottom - Self.menuButtonSide / 2 - 8
-            cy.constant = min(max(touchY, safeTop), safeBottom) - (view.bounds.height / 2)
-            EdgeCtx.startX = cx.constant
-            EdgeCtx.armed = true
+            let safeTop = view.safeAreaInsets.top + 60
+            let safeBottom = view.bounds.height - view.safeAreaInsets.bottom - 100
+            let clampedY = min(max(touchY, safeTop), safeBottom)
+
+            // 找到 centerY 约束并动态更新
+            for c in view.constraints {
+                if (c.firstItem === button && c.firstAttribute == .centerY) ||
+                   (c.secondItem === button && c.secondAttribute == .centerY) {
+                    c.constant = clampedY - (view.bounds.height / 2)
+                    break
+                }
+            }
             view.layoutIfNeeded()
         case .changed:
             let translationX = gesture.translation(in: view).x // 向左滑 translationX < 0
-            // 长滑（≥52pt）留给右侧面板：悬浮球停在原地、淡化示意，不再跟手。
+            // 长滑（≥52pt）留给右侧面板：小鲸鱼不再跟着出来，停在收起态。
             if translationX < -52 {
-                button.alpha = 0.30
+                constraint.constant = Self.menuCollapsedConstant
+                button.alpha = 0.20
                 view.layoutIfNeeded()
-                return
+                break
             }
-            // 短滑：从当前位置向左跟手拉出（不越过左半屏）
-            if EdgeCtx.armed {
-                let half = Self.menuButtonSide / 2
-                let minX = view.safeAreaInsets.left + half + 2
-                let maxX = view.bounds.width - view.safeAreaInsets.right - half - 2
-                cx.constant = min(max(EdgeCtx.startX + translationX, minX - view.bounds.width / 2), maxX - view.bounds.width / 2)
-            }
+            // 短滑：从收起态逐渐拉向展开态
+            let base = Self.menuCollapsedConstant
+            let targetConstant = max(Self.menuExpandedConstant, base + translationX)
+            constraint.constant = targetConstant
             let progress = min(1.0, max(0.0, -translationX / (Self.menuButtonSide)))
-            button.alpha = 0.35 + (progress * 0.60)
+            button.alpha = 0.20 + (progress * 0.70)
             view.layoutIfNeeded()
         case .ended, .cancelled:
             let translationX = gesture.translation(in: view).x
             let velocityX = gesture.velocity(in: view).x
-            // 两档：长滑（≥52pt）打开右侧面板，悬浮球停在原地；
-            // 短滑（≥12pt）拉出悬浮球并记住新位置。
+            // 两档：长滑（≥52pt）打开右侧面板，小鲸鱼弹回收起；
+            // 短滑（≥12pt）维持原行为，拉出小鲸鱼。
             if translationX < -52 {
-                setMenuExpanded(true, animated: true)
+                setMenuExpanded(false, animated: true)
                 webView?.evaluateJavaScript(
                     "(function(){var b=document.querySelector('header button[aria-label=\"打开右侧边栏\"], button[aria-label=\"打开右侧边栏\"], [data-sidebar-right-expand=\"true\"], [data-sidebar-right-toggle]');if(b)b.click();})();",
                     completionHandler: nil)
             } else if translationX < -12 || velocityX < -200 {
-                clampMenuPosition()
-                saveMenuPosition()
                 setMenuExpanded(true, animated: true)
             } else {
-                clampMenuPosition()
-                saveMenuPosition()
                 setMenuExpanded(false, animated: true)
             }
-            EdgeCtx.armed = false
         default:
             break
         }
     }
 
-    /// 收起 / 展开悬浮按钮。🔴 R55：位置归位置、状态归状态 —— 展开/收起只改透明度，
-    /// 绝不再把悬浮球拖回右缘（拖到哪就停在哪，静置 3 秒淡出到 35%）。
+    /// 收起 / 展开悬浮按钮。收起态隐藏一半（22pt 在屏内），透明度 20%，3 秒后自动隐藏。
     private func setMenuExpanded(_ expanded: Bool, animated: Bool) {
-        guard let button = menuButton else { return }
+        guard let button = menuButton, let constraint = menuTrailingConstraint else { return }
         menuButtonExpanded = expanded
-        // 用户要求：悬浮球拖哪停哪；静置自动淡出（收起 0.35 / 展开 0.95）
-        let targetAlpha: CGFloat = expanded ? 0.95 : 0.35
+        let constant = expanded
+            ? Self.menuExpandedConstant
+            : Self.menuCollapsedConstant
+        constraint.constant = constant
+        // 用户要求：收起态半屏隐藏一半，透明度 20%；展开态清晰可见 0.90
+        let targetAlpha: CGFloat = expanded ? 0.90 : 0.20
 
         let apply = {
             button.alpha = targetAlpha
@@ -9168,7 +9199,7 @@ function applySidebarInset() {
         menuAutoHideTimer?.invalidate()
         menuAutoHideTimer = nil
         if expanded {
-            // 展开后静置 3 秒自动淡出（原地淡出，不再移动位置）
+            // 用户要求：展开后 3 秒自动隐藏一半
             menuAutoHideTimer = Timer.scheduledTimer(
                 withTimeInterval: Self.menuAutoHideDelay, repeats: false) { [weak self] _ in
                 self?.setMenuExpanded(false, animated: true)
@@ -9176,57 +9207,31 @@ function applySidebarInset() {
         }
     }
 
-    /// 🔴 R55：把悬浮球中心钳在屏幕安全区内（贴边停靠允许，绝不出屏半颗）。
-    private func clampMenuPosition() {
-        guard let cx = menuCenterXConstraint, let cy = menuCenterYConstraint else { return }
-        let half = Self.menuButtonSide / 2
-        let minX = view.safeAreaInsets.left + half + 2
-        let maxX = view.bounds.width - view.safeAreaInsets.right - half - 2
-        let minY = view.safeAreaInsets.top + half + 4
-        let maxY = view.bounds.height - view.safeAreaInsets.bottom - half - 4
-        cx.constant = min(max(cx.constant, minX - view.bounds.width / 2), maxX - view.bounds.width / 2)
-        cy.constant = min(max(cy.constant, minY - view.bounds.height / 2), maxY - view.bounds.height / 2)
-    }
-
-    /// 🔴 R55：悬浮球位置跨启动记忆（拖到哪，下次启动还在哪）。
-    private static let menuPositionKeyX = "DSHios.menuCenterX"
-    private static let menuPositionKeyY = "DSHios.menuCenterY"
-
-    private func saveMenuPosition() {
-        guard let cx = menuCenterXConstraint, let cy = menuCenterYConstraint else { return }
-        UserDefaults.standard.set(Double(cx.constant), forKey: Self.menuPositionKeyX)
-        UserDefaults.standard.set(Double(cy.constant), forKey: Self.menuPositionKeyY)
-    }
-
-    private func restoreMenuPosition() {
-        guard let cx = menuCenterXConstraint, let cy = menuCenterYConstraint else { return }
-        let ux = UserDefaults.standard.double(forKey: Self.menuPositionKeyX)
-        let uy = UserDefaults.standard.double(forKey: Self.menuPositionKeyY)
-        guard ux != 0 || uy != 0 else { return }
-        cx.constant = ux
-        cy.constant = uy
-        clampMenuPosition()
-    }
-
-    /// 在按钮上拖动：🔴 R55 自由拖放 —— X/Y 双向跟手，松手停在原地并记忆，
-    /// 不再吸附右缘、不再有「按位移决定展开/收起」的回弹。
+    /// 在按钮上左右拖动：跟手移动，松手后按位置决定展开或收起。
+    ///
+    /// 注意方向：按钮贴右缘，**向左滑（dx < 0）才是把它拉出来**，向右滑是推回屏外。
     @objc private func menuPanned(_ gesture: UIPanGestureRecognizer) {
-        guard menuButton != nil, let cx = menuCenterXConstraint, let cy = menuCenterYConstraint else { return }
+        guard let constraint = menuTrailingConstraint else { return }
+        let base = menuButtonExpanded
+            ? Self.menuExpandedConstant
+            : Self.menuCollapsedConstant
+        // 约束值的合法区间：[展开值(小), 收起值(大)]。
+        let lower = Self.menuExpandedConstant
+        let upper = Self.menuCollapsedConstant
         switch gesture.state {
-        case .began:
+        case .changed:
+            let dx = gesture.translation(in: view).x
+            constraint.constant = min(max(base + dx, lower), upper)
             menuAutoHideTimer?.invalidate()
             menuAutoHideTimer = nil
-        case .changed:
-            let d = gesture.translation(in: view)
-            cx.constant += d.x
-            cy.constant += d.y
-            gesture.setTranslation(.zero, in: view)
-            clampMenuPosition()
             view.layoutIfNeeded()
         case .ended, .cancelled, .failed:
-            clampMenuPosition()
-            saveMenuPosition()
-            setMenuExpanded(true, animated: true)
+            let dx = gesture.translation(in: view).x
+            let velocity = gesture.velocity(in: view).x
+            // 左滑过半、或左滑速度够快 → 展开；否则收起。
+            let threshold = Self.menuButtonSide / 2
+            let expand = (dx < -threshold) || (velocity < -400)
+            setMenuExpanded(expand, animated: true)
         default:
             break
         }
@@ -9918,9 +9923,9 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 修复打开抽屉时顶栏偶尔下移跳一下
-            2. 修复收起键盘点发送时键盘弹出
-            3. 悬浮小鲸鱼可拖到屏幕任意位置
+            1. 悬浮小鲸鱼恢复上一版滑动方式
+            2. 修复打开抽屉顶栏微微下移
+            3. 加固收起键盘点发送不弹键盘
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
