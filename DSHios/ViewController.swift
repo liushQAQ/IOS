@@ -1449,6 +1449,98 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  overscroll-behavior: contain !important;',
             '  box-sizing: border-box !important;',
             '}',
+            '/* 🔴 R61（v2.1.13）：插件悬浮面板/Dock/弹窗在移动端避让状态栏与全屏防出屏自适应 */',
+            '@media (max-width: 1023px) {',
+            '  .dshp-dock,',
+            '  [class*="dshp-dock"],',
+            '  [class*="rt-dock"],',
+            '  [class*="rt-full"],',
+            '  .aYQbCq_panel,',
+            '  [class*="aYQbCq_panel"],',
+            '  [class*="ActivityPanel_panel"],',
+            '  [class*="activityPanel"],',
+            '  [data-agent-teams-panel],',
+            '  [data-plugin-dock],',
+            '  [data-plugin-panel] {',
+            '    position: fixed !important;',
+            '    top: max(56px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 10px)) !important;',
+            '    bottom: max(16px, calc(env(safe-area-inset-bottom, 16px) + 8px)) !important;',
+            '    left: 10px !important;',
+            '    right: 10px !important;',
+            '    width: calc(100vw - 20px) !important;',
+            '    max-width: calc(100vw - 20px) !important;',
+            '    min-width: 0 !important;',
+            '    height: auto !important;',
+            '    max-height: calc(100vh - max(56px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 10px)) - max(16px, calc(env(safe-area-inset-bottom, 16px) + 8px))) !important;',
+            '    max-height: calc(100dvh - max(56px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 10px)) - max(16px, calc(env(safe-area-inset-bottom, 16px) + 8px))) !important;',
+            '    margin: 0 !important;',
+            '    transform: none !important;',
+            '    box-sizing: border-box !important;',
+            '    border-radius: 14px !important;',
+            '    z-index: 10050 !important;',
+            '    overflow: hidden !important;',
+            '    display: flex !important;',
+            '    flex-direction: column !important;',
+            '  }',
+            '  .dshp-dock[data-open="0"],',
+            '  [class*="dshp-dock"][data-open="0"] {',
+            '    display: none !important;',
+            '  }',
+            '  .dshp-dock-head,',
+            '  [class*="dshp-dock-head"] {',
+            '    min-height: 38px !important;',
+            '    padding: 8px 12px !important;',
+            '    box-sizing: border-box !important;',
+            '    flex-shrink: 0 !important;',
+            '    cursor: default !important;',
+            '  }',
+            '  .dshp-dock-tabs,',
+            '  [class*="dshp-dock-tabs"] {',
+            '    flex-shrink: 0 !important;',
+            '    box-sizing: border-box !important;',
+            '  }',
+            '  .dshp-dock-body,',
+            '  [class*="dshp-dock-body"],',
+            '  .aYQbCq_body,',
+            '  [class*="aYQbCq_body"] {',
+            '    flex: 1 1 auto !important;',
+            '    min-height: 0 !important;',
+            '    overflow-y: auto !important;',
+            '    -webkit-overflow-scrolling: touch !important;',
+            '    overscroll-behavior: contain !important;',
+            '    box-sizing: border-box !important;',
+            '  }',
+            '  .dshp-dock-body > *,',
+            '  .dshp-dock-body .dshp-panel,',
+            '  .dshp-dock-body .dshp-root,',
+            '  [class*="dshp-dock-body"] > * {',
+            '    max-height: none !important;',
+            '    overflow-y: visible !important;',
+            '    box-sizing: border-box !important;',
+            '  }',
+            '  .dshp-dock-body .dshp-panel {',
+            '    padding: 12px !important;',
+            '  }',
+            '  .dshp-dock-resize,',
+            '  .dshp-dock-resize-l,',
+            '  .dshp-dock-resize-r,',
+            '  .dshp-dock-resize-b,',
+            '  [class*="dock-resize"],',
+            '  [class*="panelResize"] {',
+            '    display: none !important;',
+            '  }',
+            '  .dshp-auth-modal,',
+            '  .dshp-modal,',
+            '  [class*="dshp-auth-modal"],',
+            '  [class*="dshp-modal"] {',
+            '    max-width: calc(100vw - 24px) !important;',
+            '    max-height: calc(100vh - max(56px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 10px)) - 32px) !important;',
+            '    max-height: calc(100dvh - max(56px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 10px)) - 32px) !important;',
+            '    box-sizing: border-box !important;',
+            '    overflow-y: auto !important;',
+            '    -webkit-overflow-scrolling: touch !important;',
+            '  }',
+            '}',
             '/* 4. 暗黑模式按钮与交互控件对比度强化（老总铁律：杜绝灰白底+白字看不清） */',
             'body[data-ds-dark-theme] .NwyCaq_option,',
             'body[data-ds-dark-theme] [class*="NwyCaq_option"],',
@@ -5729,6 +5821,90 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               }
             } catch (e) {}
           }
+          // 🔴 R61（v2.1.13）：移动端插件悬浮面板/Dock/弹窗防出屏通用钳制
+          // 老总报障：顶栏点击插件 dsh purge，弹出页面超出屏幕范围（顶栏插入状态栏、
+          // 左右出血、底栏不可见不可滚），其他插件同理。
+          // 真凶：桌面插件悬浮窗口使用固定像素坐标（top:48px/width:620px/height:640px/
+          // transform 等内联样式），移动端直接穿过灵动岛/状态栏，溢出屏幕，且内部容器
+          // overflow:hidden 导致无法滚动到下方的操作按钮。
+          // 解法：运行时动态扫描所有插件悬浮窗口，强力钳回安全视口内；激活内部容器
+          // 惯性平滑滚动；同时顺手把脱缰跑回会话框卡片内的 dshp-rewind 驱赶回 dock 行。
+          function fixFloatingPluginDocks() {
+            try {
+              var vw = window.innerWidth || 430;
+              var vh = window.innerHeight || 932;
+              if (vw > 1023) return;
+              var sb = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0)
+                ? window.__dshNativeStatusBar
+                : (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar')) || 54);
+              var topSafe = Math.max(56, sb + 10);
+              var bottomSafe = 24;
+
+              var docks = document.querySelectorAll('.dshp-dock, [class*="dshp-dock"], [class*="rt-dock"], [class*="rt-full"], .aYQbCq_panel, [class*="aYQbCq_panel"], [class*="ActivityPanel_panel"], [class*="activityPanel"]');
+              for (var i = 0; i < docks.length; i++) {
+                var d = docks[i];
+                if (!d || d.nodeType !== 1) continue;
+                if (d.getAttribute('data-open') === '0') continue;
+                var dcs = null;
+                try { dcs = getComputedStyle(d); } catch (eCs) { continue; }
+                if (dcs.display === 'none' || dcs.visibility === 'hidden') continue;
+
+                d.style.setProperty('position', 'fixed', 'important');
+                d.style.setProperty('top', topSafe + 'px', 'important');
+                d.style.setProperty('left', '10px', 'important');
+                d.style.setProperty('right', '10px', 'important');
+                d.style.setProperty('bottom', bottomSafe + 'px', 'important');
+                d.style.setProperty('width', (vw - 20) + 'px', 'important');
+                d.style.setProperty('max-width', (vw - 20) + 'px', 'important');
+                d.style.setProperty('min-width', '0', 'important');
+                d.style.setProperty('height', 'auto', 'important');
+                d.style.setProperty('max-height', (vh - topSafe - bottomSafe) + 'px', 'important');
+                d.style.setProperty('transform', 'none', 'important');
+                d.style.setProperty('box-sizing', 'border-box', 'important');
+                d.style.setProperty('border-radius', '14px', 'important');
+                d.style.setProperty('overflow', 'hidden', 'important');
+                d.style.setProperty('z-index', '10050', 'important');
+
+                var bodies = d.querySelectorAll('.dshp-dock-body, [class*="dshp-dock-body"], .aYQbCq_body, [class*="aYQbCq_body"]');
+                for (var b = 0; b < bodies.length; b++) {
+                  var bd = bodies[b];
+                  bd.style.setProperty('overflow-y', 'auto', 'important');
+                  bd.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
+                  bd.style.setProperty('overscroll-behavior', 'contain', 'important');
+                  bd.style.setProperty('flex', '1 1 auto', 'important');
+                  bd.style.setProperty('min-height', '0', 'important');
+                }
+
+                var panels = d.querySelectorAll('.dshp-panel, .dshp-root');
+                for (var p = 0; p < panels.length; p++) {
+                  var pn = panels[p];
+                  pn.style.setProperty('max-height', 'none', 'important');
+                  pn.style.setProperty('overflow-y', 'visible', 'important');
+                }
+
+                var resizers = d.querySelectorAll('.dshp-dock-resize, .dshp-dock-resize-l, .dshp-dock-resize-r, .dshp-dock-resize-b, [class*="dock-resize"]');
+                for (var r = 0; r < resizers.length; r++) {
+                  resizers[r].style.setProperty('display', 'none', 'important');
+                }
+              }
+
+              // 保护会话框卡片：如果 dshp-rewind 被误插入卡片内，自动搬迁至 dock 流
+              try {
+                var cardEl = document.querySelector('[class*="composerStack"] [class*="_card"]');
+                if (cardEl) {
+                  var rws = cardEl.querySelectorAll('.dshp-rewind, [class*="dshp-rewind"]');
+                  for (var ri = 0; ri < rws.length; ri++) {
+                    var rwEl = rws[ri];
+                    var wrap = (rwEl.closest && rwEl.closest('.dshp-rewind-wrap')) || rwEl;
+                    var dockEl = document.querySelector('[class*="composerStack"] [class*="dock"]');
+                    if (dockEl && !dockEl.contains(wrap)) {
+                      dockEl.appendChild(wrap);
+                    }
+                  }
+                }
+              } catch (eRw) {}
+            } catch (e) {}
+          }
           /* 🔴 v1.0.124：DSH 电脑端自带的「费用计量」浮层卡片 .cm-peak-alert 是间歇出现的
              （峰时 / 平价提醒）。它 position:fixed + z-index:9999 + 宽 406px 横跨整屏，
              一旦出现就把抽屉底部「余额 / 今日 / 平价 / 账号行」整片盖住，
@@ -6012,6 +6188,7 @@ function applySidebarInset() {
             try { fixTopChrome(); } catch (e) {}
             try { fixFabRows(); } catch (e) {}
             try { fixOverlayOverflow(); } catch (e) {}
+            try { fixFloatingPluginDocks(); } catch (e) {}
             try { if (window.__dshMobilePolishRun) window.__dshMobilePolishRun(); } catch (e) {}
             // 🔴 v1.0.123：出血钳制不能只靠 MutationObserver 驱动 —— 页面静止不变化时
             //   一次都不会再跑，刚进页面那一下的出血就一直留在屏幕上（老总看到的就是这个）。
@@ -6026,6 +6203,7 @@ function applySidebarInset() {
                   try { fixFabRows(); } catch (e) {}
                   try { fixComposerClamp(); } catch (e) {}
                   try { fixOverlayOverflow(); } catch (e) {}
+                  try { fixFloatingPluginDocks(); } catch (e) {}
                 }, 3000);
               }
             } catch (e) {}
@@ -9990,8 +10168,8 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 修复鲸鱼短滑换高度不跟手
-            2. 修复鲸鱼出现位置偏移半截
+            1. 修复顶栏插件弹出页面超出屏幕范围
+            2. 修复鲸鱼短滑换高度不跟手
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)

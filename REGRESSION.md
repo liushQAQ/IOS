@@ -768,6 +768,21 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
   2. **鲸鱼本体起滑不跟纵向**：鲸鱼展开时从它身上起滑的手势走 `menuPanned`（不是右缘 edgePan），旧实现只有横向——从鲸鱼上换高度永远不生效。修：menuPanned 的 changed 段补 `updateWhaleY`（纵向全程跟手，横向仍吸附右缘）。
 - **验证**：原生层闸门测不到，老总真机验收；钳制上下限同步收紧到半颗+4pt（全高度可用）。
 - **教训**：①**约束锚点与常量换算基准必须同一体**（safeArea 锚配 safe 中心、view 锚配 view 中心），混用 = 恒定偏移且模拟器/预览看不出来；②同一功能两条手势入口（edge 全屏 + 组件本体）改跟手逻辑必须**两条一起改**，漏一条就是「有时行有时不行」。
+
+### R61 顶栏插件弹出页面超出屏幕范围与不可滚动根治（v2.1.13(14) 根治，2026-11-03）
+
+- **症状**（老总 2026-11-03 实测报障配双真机图）：「顶栏点击插件 dsh purge，弹出页面超出屏幕范围，其他插件也有这种。」
+- **真因分析**：
+  1. **桌面固定坐标与移动端安全区冲突**：桌面端插件悬浮窗口（如 dsh-purge 的 `.dshp-dock`、dsh-agent-teams 的 `.aYQbCq_panel` 等）设计为桌面浮动可拖拽组件，使用写死像素内联坐标（`top: 48px; left: ...; width: 620px; height: 640px;`）。移动端（iPhone 14 Pro Max 等）状态栏与灵动岛高度达 54~59pt，`top: 48px` 导致面板头部（`dshp-dock-head`）直接插入状态栏，与系统时钟、电池信息重合，遮挡收起按钮与面板标题；
+  2. **桌面硬编码宽度在窄屏溢出**：桌面插件固定宽度 620px 或 min-width: 380px，在 375/393/430 窄屏下天然超出可视区域或贴死边缘出血；
+  3. **内部容器缺少滚动链导致下部操作按钮被物理截断**：`dshp-dock-body` 声明了 `overflow: hidden`，而其内部 `.dshp-panel` 未设置独立滚动，导致 64 项补丁列表与底部「应用 / 回滚 / 卸载」关键按钮被硬截断在半屏，且完全无法向下滚动触达。
+- **解法（CSS 与 JS 双通道自适应）**：
+  1. **移动端专用浮动面板安全视口约束**：在 `@media (max-width: 1023px)` 下，对所有插件悬浮 Dock、浮动 Panel（`.dshp-dock`、`[class*="dshp-dock"]`、`[class*="rt-dock"]`、`.aYQbCq_panel`、`[class*="ActivityPanel"]` 等）强制 `position: fixed !important; top: max(56px, sb+10px) !important; bottom: max(16px, env(bottom)+8px) !important; left: 10px !important; right: 10px !important; width: calc(100vw - 20px) !important; max-height: calc(100vh - ...) !important; transform: none !important;`，彻底消除顶出状态栏与左右出血；
+  2. **激活内部惯性平滑滚动**：`.dshp-dock-body` 强制 `flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important;`，子面板解除高度限制并交由 body 统揽滚动，底部操作按钮完全可滑出；
+  3. **隐藏无效的手动缩放把柄**：`.dshp-dock-resize*` 一律 `display: none !important;`；
+  4. **运行时守护与卡片防回潮兜底**：`fixFloatingPluginDocks()` 动态监测浮动面板并强力钳回，并自动把误入输入框卡片的 `dshp-rewind` 驱赶回 dock 行。
+- **验证**：`_diag/regression.js` 增加 `[插件浮层·R61]` 守卫断言；三尺寸闸门全部放行。
+- **教训**：桌面插件注入 Web 视图时常假定大屏与鼠标拖拽，移动端适配必须以「全屏居中卡片 / 底部半屏抽屉」为基准主动收编位置与尺寸，绝不可放任写死 inline 像素坐标穿透。
 ## 三、校验 SOP（每个新版本出包前必做）
 
 
@@ -871,6 +886,7 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 1.0.142 | 112 | `40264363082` | **R45 抽屉按钮出屏八犯 → 代码重构：唯一守卫「自然位清零模型」（五层救援补丁 R35b/R38/R39/R43⑤/R44 全删）+ R46 文案规范纳入打包前校验**（更新说明 18 大条→一行式 ≤40 字、序号 1..N、显式左对齐、badge 动态版本；闸门 `[文案·R46]` 解析 Swift 源机械校验）；闸门 116 绿/0 红；凭证 src=`f5b7c605fb1b`；MD5 `9b032e721e55fd53cf91f14a6da7ca75`；⚠️ 老总真机复验：「13 个后台任务」长标题会话默认出屏（九犯）→ R47 |
 | 1.0.143 | 待打包 | 待打包 | **R47 九犯根治（真凶两层：①R35~R45 十版防出屏全写在 JS 守卫里，真机 JS 通道会整体死亡（R42 实锤环境），CSS-only 探针实测 right=434>430 默认出屏；②R45 残留两拍稳定门被真机胶囊流式变宽卡死——R39 同款坑）——修法：headerCorner 整簇 CSS absolute right:2px 钉标题行右缘（脱离 flex 流，JS 死也绝不出屏）+ 守卫删两拍门每拍幂等直写目标值** + 源锚点 `[顶栏·R47]` 三特征 + `[抽屉·R45/47]` 负锚点（计时器回潮即红）；CSS-only/抖动/全量三探针全过；更新说明/关于文案同步 1..19 |
 | 2.1.6 | 7 | Codemagic `6ae4bee361a3832df3ec93a8` | 右抽屉长滑手势（短滑鲸鱼/长滑抽屉）+ 横滑表格豁免 + 地址记忆 + 安全加固；⚠️ 老总真机验收报：抽屉顶栏上移/按钮跑天上（R50）、页面左右偏移（R51）、语音重复、回退按钮来源（R52） |
+| 2.1.13 | 14 | 待打包 | **R61 顶栏插件弹出页面超出屏幕范围与不可滚动根治（移动端专用安全视口 fixed 约束 + 内部容器 overflow 触摸滚动 + 运行时钳制与卡片防回潮兜底）** + 闸门 [插件浮层·R61] 守卫 |
 | 2.1.12 | 13 | 待打包 | **R60 鲸鱼「任意高度短滑不行」双真因（centerY 锚 safeArea 却按 view 中心换算=恒偏 12.5pt；鲸鱼本体起滑走 menuPanned 只有横向不跟纵向→补 updateWhaleY）** |
 | 2.1.11 | 12 | Codemagic `6ae6e821d17cb6c507b48d0a` | **R59 发送键盘终极（布防提前 pointerdown 捕获段+实例级 focus 桩）+ 抽屉顶栏上移/下移根治（DSH absolute↔fixed 翻转→面板钉死 fixed+写入名单补面板本体；who2 实证 t+60ms 即终值零位移）** + 闸门 [抽屉·R59] 锚点 |
 | 2.1.10 | 11 | Codemagic `6ae6de1fe52575a0edefbaf1` | **R58 鲸鱼拉出高度不对+发送键盘「弹一下又秒收」根治（鲸鱼 centerY 常驻引用+右缘手势全程垂直跟手+全高度钳制、X 吸附不动；R54 终版=prototype.focus 打桩阻聚焦，键盘动画根本不启动）** + 闸门 R54 锚点升 v3 |

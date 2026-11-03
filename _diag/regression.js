@@ -1886,6 +1886,20 @@ const A_PLUGIN_PAGE = () => {
   }
   GATE.modelDockGuard = true;
 
+  /* R61（v2.1.13）：插件悬浮面板/Dock/弹窗在移动端避让状态栏与全屏防出屏自适应守卫 */
+  {
+    const bundle = APP_JS;
+    const r61css = /\.dshp-dock/.test(bundle)
+      && /\.aYQbCq_panel/.test(bundle)
+      && /position:\s*fixed\s*!important/.test(bundle);
+    const r61js = /function fixFloatingPluginDocks\(\)/.test(bundle)
+      && /fixFloatingPluginDocks/.test(bundle);
+    chk(r61css && r61js,
+      '[插件浮层·R61] 移动端避让状态栏 + 全屏防出屏约束 + 惯性滚动在',
+      (r61css && r61js) ? 'CSS 规则与运行时钳制双通道全在' : '🔴 守卫被删 → 顶栏点击插件面板出屏/遮挡状态栏复发');
+  }
+  GATE.pluginFloatingDockGuard = true;
+
 
   console.log(' 结果: ' + PASS + ' 绿 / ' + FAIL + ' 红 / ' + BLOCKED.length + ' 项无法校验');
   if (BLOCKED.length) {
