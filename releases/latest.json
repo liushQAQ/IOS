@@ -1,12 +1,12 @@
 {
-  "version": "2.1.12",
-  "build": 13,
-  "updated_at": "2026-11-01 13:37:56",
-  "title": "v2.1.12(13) 鲸鱼换高度跟手+位置偏移修正",
-  "changelog": "1. 修复鲸鱼短滑换高度不跟手\n2. 修复鲸鱼出现位置偏移半截\n3. 修复点发送时键盘闪一下又收回\n4. 修复抽屉顶栏上移或下移\n5. 小鲸鱼短滑可在任意高度拉出\n6. 悬浮小鲸鱼恢复上一版滑动方式",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.12-13.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.12-13.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.12/DSHios-public-2.1.12-13.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.12",
-  "md5": "fbb989d17ef1cbf106e5c353e069ddaa"
+  "version": "2.1.13",
+  "build": 14,
+  "updated_at": "2026-11-03 12:55:22",
+  "title": "v2.1.13(14) 顶栏插件弹出页面防出屏与通用卡片自适应",
+  "changelog": "1. 修复顶栏插件弹出页面超出屏幕范围\n2. 修复鲸鱼短滑换高度不跟手\n3. 修复鲸鱼出现位置偏移半截\n4. 修复点发送时键盘闪一下又收回\n5. 修复抽屉顶栏上移或下移\n6. 小鲸鱼短滑可在任意高度拉出",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.13-14.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.13-14.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.13/DSHios-public-2.1.13-14.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.13",
+  "md5": "6f170f893b3a089191ffb30d151f7e1c"
 }
