@@ -1449,7 +1449,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  overscroll-behavior: contain !important;',
             '  box-sizing: border-box !important;',
             '}',
-            '/* 🔴 R61（v2.1.13）：插件悬浮面板/Dock/弹窗在移动端避让状态栏与全屏防出屏自适应 */',
+            '/* 🔴 R61（v2.1.13）：插件悬浮面板/Dock/弹窗/浮动卡片移动端避让状态栏与全屏防出屏通用约束 */',
             '@media (max-width: 1023px) {',
             '  .dshp-dock,',
             '  [class*="dshp-dock"],',
@@ -1461,7 +1461,21 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  [class*="activityPanel"],',
             '  [data-agent-teams-panel],',
             '  [data-plugin-dock],',
-            '  [data-plugin-panel] {',
+            '  [data-plugin-panel],',
+            '  [data-plugin-modal],',
+            '  [data-plugin-floating],',
+            '  [class*="floating-dock"],',
+            '  [class*="floatingDock"],',
+            '  [class*="floatingPanel"],',
+            '  [class*="floating-panel"],',
+            '  [class*="floatingCard"],',
+            '  [class*="floating-card"],',
+            '  [class*="dock-card"],',
+            '  [class*="dockCard"],',
+            '  [class*="overlayLayer"] > [class*="panel"]:not([class*="sidebarCol"]):not([class*="rightbarCol"]),',
+            '  [class*="overlayLayer"] > [class*="card"]:not([class*="composerStack"] *),',
+            '  [class*="overlay"] > [class*="panel"]:not([class*="sidebarCol"]):not([class*="rightbarCol"]),',
+            '  [class*="overlay"] > [class*="card"]:not([class*="composerStack"] *) {',
             '    position: fixed !important;',
             '    top: max(56px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 10px)) !important;',
             '    bottom: max(16px, calc(env(safe-area-inset-bottom, 16px) + 8px)) !important;',
@@ -1481,6 +1495,13 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '    overflow: hidden !important;',
             '    display: flex !important;',
             '    flex-direction: column !important;',
+            '  }',
+            '  /* 通用卡片与弹层内部容器防溢出，激活平滑触摸滚动并禁止内容截断不可触达 */',
+            '  .dshp-dock, [class*="dshp-dock"], [class*="rt-dock"], [class*="rt-full"],',
+            '  .aYQbCq_panel, [class*="aYQbCq_panel"], [class*="ActivityPanel_panel"], [class*="activityPanel"],',
+            '  [data-plugin-dock], [data-plugin-panel] {',
+            '    overflow-wrap: break-word !important;',
+            '    word-break: break-word !important;',
             '  }',
             '  .dshp-dock[data-open="0"],',
             '  [class*="dshp-dock"][data-open="0"] {',
@@ -1532,8 +1553,9 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  .dshp-auth-modal,',
             '  .dshp-modal,',
             '  [class*="dshp-auth-modal"],',
-            '  [class*="dshp-modal"] {',
-            '    max-width: calc(100vw - 24px) !important;',
+            '  [class*="dshp-modal"],',
+            '  [data-plugin-modal] {',
+            '    max-width: calc(100vw - 20px) !important;',
             '    max-height: calc(100vh - max(56px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 10px)) - 32px) !important;',
             '    max-height: calc(100dvh - max(56px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 10px)) - 32px) !important;',
             '    box-sizing: border-box !important;',
@@ -5821,14 +5843,14 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               }
             } catch (e) {}
           }
-          // 🔴 R61（v2.1.13）：移动端插件悬浮面板/Dock/弹窗防出屏通用钳制
+          // 🔴 R61（v2.1.13）：移动端插件悬浮面板/Dock/弹窗/浮动卡片防出屏通用几何与属性双通道钳制
           // 老总报障：顶栏点击插件 dsh purge，弹出页面超出屏幕范围（顶栏插入状态栏、
-          // 左右出血、底栏不可见不可滚），其他插件同理。
-          // 真凶：桌面插件悬浮窗口使用固定像素坐标（top:48px/width:620px/height:640px/
-          // transform 等内联样式），移动端直接穿过灵动岛/状态栏，溢出屏幕，且内部容器
-          // overflow:hidden 导致无法滚动到下方的操作按钮。
-          // 解法：运行时动态扫描所有插件悬浮窗口，强力钳回安全视口内；激活内部容器
-          // 惯性平滑滚动；同时顺手把脱缰跑回会话框卡片内的 dshp-rewind 驱赶回 dock 行。
+          // 左右出血、底栏不可见不可滚），其他类似插件也要做这种预防，禁止任何卡片内容溢出屏幕。
+          // 解法：双通道兜底：
+          // 1. 语义选择器遍历：包含已知与通配插件卡片/面板/Dock；
+          // 2. 几何全局动态扫描：在移动端，任何非抽屉、非输入框、非顶栏的 fixed/absolute 浮动元素，
+          //    若其宽度超屏、或左右超出、或侵入状态栏顶部、或底部超出视口，一律自动钳制回安全视口，
+          //    并把内部滚动容器设为可平滑滚动，坚决杜绝任何卡片与内容被物理截断！
           function fixFloatingPluginDocks() {
             try {
               var vw = window.innerWidth || 430;
@@ -5840,7 +5862,8 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               var topSafe = Math.max(56, sb + 10);
               var bottomSafe = 24;
 
-              var docks = document.querySelectorAll('.dshp-dock, [class*="dshp-dock"], [class*="rt-dock"], [class*="rt-full"], .aYQbCq_panel, [class*="aYQbCq_panel"], [class*="ActivityPanel_panel"], [class*="activityPanel"]');
+              // 通道一：选择器定向收拢
+              var docks = document.querySelectorAll('.dshp-dock, [class*="dshp-dock"], [class*="rt-dock"], [class*="rt-full"], .aYQbCq_panel, [class*="aYQbCq_panel"], [class*="ActivityPanel_panel"], [class*="activityPanel"], [data-plugin-dock], [data-plugin-panel], [data-agent-teams-panel]');
               for (var i = 0; i < docks.length; i++) {
                 var d = docks[i];
                 if (!d || d.nodeType !== 1) continue;
@@ -5887,6 +5910,43 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   resizers[r].style.setProperty('display', 'none', 'important');
                 }
               }
+
+              // 通道二：全屏浮动卡片/面板几何防出屏巡检（禁止任何卡片内容溢出屏幕）
+              try {
+                var candidates = document.querySelectorAll('[class*="overlayLayer"] > div, body > div > [class*="card"], body > div > [class*="panel"], [data-dockkit-surface]');
+                for (var cIdx = 0; cIdx < candidates.length; cIdx++) {
+                  var cand = candidates[cIdx];
+                  if (!cand || cand.nodeType !== 1) continue;
+                  // 严格豁免名单：不伤及抽屉、顶栏、输入框、灯箱
+                  if (cand.closest && (cand.closest('[class*="sidebarCol"]') || cand.closest('[class*="rightbarCol"]') || cand.closest('[data-sidebar-right-open]') || cand.closest('[class*="composerStack"]') || cand.closest('[class*="header"]'))) continue;
+                  if (cand.getAttribute('role') === 'dialog' && cand.querySelector('img')) continue; // R33 豁免大图
+                  var ccs = null;
+                  try { ccs = getComputedStyle(cand); } catch (eCc) { continue; }
+                  if (ccs.display === 'none' || ccs.visibility === 'hidden') continue;
+                  if (ccs.position !== 'fixed' && ccs.position !== 'absolute') continue;
+
+                  var cr = cand.getBoundingClientRect();
+                  // 顶部越界侵入状态栏判定
+                  if (cr.top < topSafe && cr.height > 100 && cr.width > 200) {
+                    cand.style.setProperty('top', topSafe + 'px', 'important');
+                    cand.style.setProperty('max-height', (vh - topSafe - bottomSafe) + 'px', 'important');
+                  }
+                  // 水平出屏判定
+                  if (cr.right > vw || cr.left < 0 || cr.width > vw) {
+                    cand.style.setProperty('left', '10px', 'important');
+                    cand.style.setProperty('right', '10px', 'important');
+                    cand.style.setProperty('width', (vw - 20) + 'px', 'important');
+                    cand.style.setProperty('max-width', (vw - 20) + 'px', 'important');
+                    cand.style.setProperty('box-sizing', 'border-box', 'important');
+                  }
+                  // 底部被截断判定
+                  if (cr.bottom > vh && cr.top >= 0) {
+                    cand.style.setProperty('max-height', (vh - cr.top - bottomSafe) + 'px', 'important');
+                    cand.style.setProperty('overflow-y', 'auto', 'important');
+                    cand.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
+                  }
+                }
+              } catch (eCand) {}
 
               // 保护会话框卡片：如果 dshp-rewind 被误插入卡片内，自动搬迁至 dock 流
               try {
