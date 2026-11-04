@@ -1,15 +1,15 @@
 {
-  "version": "2.1.15",
+  "version": "2.1.16",
   "sizes": [
     "430x932"
   ],
-  "startedAt": "2026-11-04T09:00:22.077Z",
-  "dshFingerprint": "3mkx14",
+  "startedAt": "2026-11-04T10:49:25.341Z",
+  "dshFingerprint": "v30ou2",
   "dshAssets": 10,
   "domClasses": 0,
-  "anchorTotal": 194,
+  "anchorTotal": 190,
   "anchorDead": 0,
-  "anchorCssAlive": 120,
+  "anchorCssAlive": 116,
   "anchorResidue": 74,
   "dshSheets": 214,
   "ownSheets": 12,
@@ -31,6 +31,6 @@
   "fail": 0,
   "failures": [],
   "blocked": [],
-  "sourceHash": "b623b91a5c02a0ba571b95a9c4ec4a6fbca3a065a7ac4ea8941756fea4380c7c",
-  "finishedAt": "2026-11-04T09:02:49.588Z"
+  "sourceHash": "47eccd0e608c5d42ac1b3e975c2c41d1256e05049e5aa6ecf8c902aa0855e08b",
+  "finishedAt": "2026-11-04T10:51:52.845Z"
 }

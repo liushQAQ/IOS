@@ -1449,14 +1449,10 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  overscroll-behavior: contain !important;',
             '  box-sizing: border-box !important;',
             '}',
-            '/* 🔴 R61（v2.1.13）：插件悬浮面板/Dock/弹窗/浮动卡片移动端避让状态栏与全屏防出屏通用约束 */',
+            '/* 🔴 R61（v2.1.13/2.1.16 根治）：插件悬浮面板与弹窗卡片自适应（绝不强制撑满全屏，只约束最大尺寸防出屏） */',
             '@media (max-width: 1023px) {',
             '  .dshp-dock,',
-            '  [class*="dshp-dock"],',
-            '  [class*="rt-dock"],',
-            '  [class*="rt-full"],',
             '  .aYQbCq_panel,',
-            '  [class*="aYQbCq_panel"],',
             '  [class*="ActivityPanel_panel"],',
             '  [class*="activityPanel"],',
             '  [data-agent-teams-panel],',
@@ -1477,17 +1473,17 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  [class*="overlay"] > [class*="panel"]:not([class*="sidebarCol"]):not([class*="rightbarCol"]),',
             '  [class*="overlay"] > [class*="card"]:not([class*="composerStack"] *) {',
             '    position: fixed !important;',
-            '    top: max(84px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 48px)) !important;',
-            '    bottom: max(16px, calc(env(safe-area-inset-bottom, 16px) + 8px)) !important;',
+            '    top: max(60px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 12px)) !important;',
+            '    bottom: auto !important;',
             '    left: 10px !important;',
             '    right: 10px !important;',
-            '    width: calc(100vw - 20px) !important;',
+            '    width: auto !important;',
             '    max-width: calc(100vw - 20px) !important;',
             '    min-width: 0 !important;',
             '    height: auto !important;',
-            '    max-height: calc(100vh - max(56px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 10px)) - max(16px, calc(env(safe-area-inset-bottom, 16px) + 8px))) !important;',
-            '    max-height: calc(100dvh - max(56px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 10px)) - max(16px, calc(env(safe-area-inset-bottom, 16px) + 8px))) !important;',
-            '    margin: 0 !important;',
+            '    max-height: calc(100vh - max(60px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 12px)) - 24px) !important;',
+            '    max-height: calc(100dvh - max(60px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 12px)) - 24px) !important;',
+            '    margin: 0 auto !important;',
             '    transform: none !important;',
             '    box-sizing: border-box !important;',
             '    border-radius: 14px !important;',
@@ -1496,71 +1492,72 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '    display: flex !important;',
             '    flex-direction: column !important;',
             '  }',
-            '  /* 通用卡片与弹层内部容器防溢出，激活平滑触摸滚动并禁止内容截断不可触达 */',
-            '  .dshp-dock, [class*="dshp-dock"], [class*="rt-dock"], [class*="rt-full"],',
-            '  .aYQbCq_panel, [class*="aYQbCq_panel"], [class*="ActivityPanel_panel"], [class*="activityPanel"],',
-            '  [data-plugin-dock], [data-plugin-panel] {',
+            '  /* 通用卡片内部文本自动折行，绝不出屏 */',
+            '  .dshp-dock, .aYQbCq_panel, [class*="ActivityPanel_panel"], [class*="activityPanel"], [data-plugin-dock], [data-plugin-panel] {',
             '    overflow-wrap: break-word !important;',
             '    word-break: break-word !important;',
             '  }',
+            '  /* 关闭或隐藏状态强制生效，彻底清除 */',
             '  .dshp-dock[data-open="0"],',
-            '  [class*="dshp-dock"][data-open="0"] {',
+            '  .dshp-dock[data-hide="1"],',
+            '  .dsh-closed-card,',
+            '  [data-open="0"]:not([class*="tab"]),',
+            '  [data-hide="1"] {',
             '    display: none !important;',
             '  }',
-            '  .dshp-dock-head,',
-            '  [class*="dshp-dock-head"] {',
-            '    height: 44px !important;',
-            '    min-height: 44px !important;',
-            '    max-height: 44px !important;',
-            '    padding: 6px 14px !important;',
-            '    box-sizing: border-box !important;',
-            '    flex-shrink: 0 !important;',
+            '  /* 插件原生头部栏：固定单行高度，标题在左、收起在右，100% 在屏内露出 */',
+            '  .dshp-dock > .dshp-dock-head,',
+            '  .dshp-dock-head {',
             '    display: flex !important;',
-            '    flex-direction: row !important;',
+            '    position: relative !important;',
+            '    width: 100% !important;',
+            '    height: 40px !important;',
+            '    min-height: 40px !important;',
+            '    max-height: 40px !important;',
+            '    padding: 0 12px !important;',
+            '    box-sizing: border-box !important;',
             '    align-items: center !important;',
             '    justify-content: space-between !important;',
-            '    background: #202022 !important;',
-            '    border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;',
+            '    flex-shrink: 0 !important;',
+            '    background: rgba(30, 30, 32, 0.95) !important;',
+            '    border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;',
             '    border-radius: 14px 14px 0 0 !important;',
-            '    z-index: 200 !important;',
-            '    pointer-events: auto !important;',
+            '    z-index: 10 !important;',
             '  }',
-            '  .dshp-dock-head b,',
-            '  [class*="dshp-dock-head"] b {',
-            '    font-size: 15px !important;',
+            '  .dshp-dock-head b {',
+            '    font-size: 14px !important;',
             '    font-weight: 600 !important;',
             '    color: #f2f2f7 !important;',
             '    display: inline-block !important;',
             '    visibility: visible !important;',
             '  }',
-            '  .dshp-dock-head button,',
-            '  [class*="dshp-dock-head"] button {',
+            '  .dshp-dock-head button {',
             '    display: inline-flex !important;',
             '    align-items: center !important;',
             '    justify-content: center !important;',
             '    visibility: visible !important;',
             '    opacity: 1 !important;',
-            '    height: 32px !important;',
-            '    min-height: 32px !important;',
-            '    padding: 0 14px !important;',
-            '    font-size: 14px !important;',
+            '    height: 28px !important;',
+            '    min-height: 28px !important;',
+            '    padding: 0 12px !important;',
+            '    font-size: 13px !important;',
             '    font-weight: 600 !important;',
             '    color: #ffffff !important;',
-            '    background: #3a3a3c !important;',
+            '    background: #2c2c2e !important;',
             '    border: 1px solid rgba(255, 255, 255, 0.28) !important;',
-            '    border-radius: 8px !important;',
+            '    border-radius: 6px !important;',
             '    cursor: pointer !important;',
             '    flex-shrink: 0 !important;',
             '    pointer-events: auto !important;',
-            '    z-index: 210 !important;',
             '  }',
-            '  .dshp-dock-tabs,',
-            '  [class*="dshp-dock-tabs"] {',
+            '  .dshp-dock-tabs {',
+            '    display: flex !important;',
+            '    position: relative !important;',
+            '    width: 100% !important;',
             '    flex-shrink: 0 !important;',
             '    box-sizing: border-box !important;',
             '  }',
             '  .dshp-dock-body,',
-            '  [class*="dshp-dock-body"],',
             '  .aYQbCq_body,',
             '  [class*="aYQbCq_body"] {',
             '    flex: 1 1 auto !important;',
@@ -1572,8 +1569,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  }',
             '  .dshp-dock-body > *,',
             '  .dshp-dock-body .dshp-panel,',
-            '  .dshp-dock-body .dshp-root,',
-            '  [class*="dshp-dock-body"] > * {',
+            '  .dshp-dock-body .dshp-root {',
             '    max-height: none !important;',
             '    overflow-y: visible !important;',
             '    box-sizing: border-box !important;',
@@ -1604,9 +1600,10 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  /* 通用浮动弹出卡片/面板右上角强制悬浮关闭按钮 */',
             '  .dsh-floating-card-close {',
             '    position: absolute !important;',
-            '    top: 8px !important;',
-            '    right: 12px !important;',
+            '    top: 6px !important;',
+            '    right: 8px !important;',
             '    left: auto !important;',
+            '    bottom: auto !important;',
             '    width: 28px !important;',
             '    height: 28px !important;',
             '    min-width: 28px !important;',
@@ -1616,23 +1613,25 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '    display: flex !important;',
             '    align-items: center !important;',
             '    justify-content: center !important;',
-            '    background: rgba(44, 44, 46, 0.88) !important;',
-            '    border: 1px solid rgba(255, 255, 255, 0.22) !important;',
+            '    background: rgba(44, 44, 46, 0.92) !important;',
+            '    border: 1px solid rgba(255, 255, 255, 0.25) !important;',
             '    border-radius: 999px !important;',
             '    color: #ffffff !important;',
-            '    font-size: 16px !important;',
+            '    font-size: 15px !important;',
+            '    font-weight: bold !important;',
             '    line-height: 1 !important;',
             '    cursor: pointer !important;',
-            '    z-index: 10060 !important;',
-            '    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;',
+            '    z-index: 10080 !important;',
+            '    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;',
             '    backdrop-filter: blur(8px) !important;',
             '    -webkit-backdrop-filter: blur(8px) !important;',
             '    user-select: none !important;',
             '    -webkit-tap-highlight-color: transparent !important;',
+            '    pointer-events: auto !important;',
             '  }',
             '  .dsh-floating-card-close:active {',
             '    transform: scale(0.92) !important;',
-            '    background: rgba(58, 58, 60, 0.95) !important;',
+            '    background: rgba(58, 58, 60, 0.98) !important;',
             '  }',
             '}',
             '/* 4. 暗黑模式按钮与交互控件对比度强化（老总铁律：杜绝灰白底+白字看不清） */',
@@ -5931,36 +5930,90 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               var sb = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0)
                 ? window.__dshNativeStatusBar
                 : (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar')) || 54);
-              var topSafe = Math.max(84, sb + 48);
+              var topSafe = Math.max(60, sb + 12);
               var bottomSafe = 24;
 
-              // 通道一：选择器定向收拢
-              var docks = document.querySelectorAll('.dshp-dock, [class*="dshp-dock"], [class*="rt-dock"], [class*="rt-full"], .aYQbCq_panel, [class*="aYQbCq_panel"], [class*="ActivityPanel_panel"], [class*="activityPanel"], [data-plugin-dock], [data-plugin-panel], [data-agent-teams-panel]');
+              function bindCardClose(card) {
+                if (!card || card.nodeType !== 1) return;
+                if (card.querySelector('.dsh-floating-card-close')) return;
+
+                var closeBtn = document.createElement('button');
+                closeBtn.className = 'dsh-floating-card-close';
+                closeBtn.type = 'button';
+                closeBtn.setAttribute('aria-label', '关闭');
+                closeBtn.innerHTML = '✕';
+
+                function handleCardDismiss(e) {
+                  if (e) {
+                    try { e.preventDefault(); } catch(eP) {}
+                    try { e.stopPropagation(); } catch(eS) {}
+                  }
+                  // 1. 触发卡片自带的“收起/关闭”按钮
+                  var innerClose = card.querySelector('.dshp-dock-head button, button[aria-label*="关"], button[aria-label*="close" i], [class*="close"], [data-action*="close"]');
+                  if (innerClose && innerClose !== closeBtn && typeof innerClose.click === 'function') {
+                    try { innerClose.click(); } catch(eClk) {}
+                  }
+                  // 2. 触发顶栏的对应开关按钮（针对 dsh-purge 等 toggle 式插件）
+                  try {
+                    var topTab = document.querySelector('.dshp-tab-btn.on, .dshp-hero-chip button.on');
+                    if (topTab && typeof topTab.click === 'function') {
+                      topTab.click();
+                    }
+                  } catch(eTop) {}
+                  // 3. 强制隐藏当前卡片及所属遮罩
+                  card.style.setProperty('display', 'none', 'important');
+                  card.setAttribute('data-open', '0');
+                  card.setAttribute('data-hide', '1');
+                  card.classList.add('dsh-closed-card');
+                  var pMask = card.closest('[class*="overlayLayer"], .dshp-auth-mask, [class*="modalMask"]');
+                  if (pMask && pMask !== document.body) {
+                    pMask.style.setProperty('display', 'none', 'important');
+                    pMask.setAttribute('data-open', '0');
+                  }
+                }
+
+                closeBtn.addEventListener('click', handleCardDismiss, true);
+                closeBtn.addEventListener('touchend', handleCardDismiss, true);
+
+                var headEl = card.querySelector('.dshp-dock-head, [class*="dock-head"]');
+                if (headEl && headEl.parentNode === card) {
+                  headEl.appendChild(closeBtn);
+                } else {
+                  card.appendChild(closeBtn);
+                }
+              }
+
+              // 通道一：选择器定向收拢（只针对根面板，绝不匹配任何内部子节点）
+              var docks = document.querySelectorAll('.dshp-dock, .aYQbCq_panel, [class*="ActivityPanel_panel"], [class*="activityPanel"], [data-plugin-dock], [data-plugin-panel], [data-agent-teams-panel]');
               for (var i = 0; i < docks.length; i++) {
                 var d = docks[i];
                 if (!d || d.nodeType !== 1) continue;
-                if (d.getAttribute('data-open') === '0') continue;
+                if (d.getAttribute('data-open') === '0' || d.getAttribute('data-hide') === '1' || d.classList.contains('dsh-closed-card')) {
+                  d.style.setProperty('display', 'none', 'important');
+                  continue;
+                }
                 var dcs = null;
                 try { dcs = getComputedStyle(d); } catch (eCs) { continue; }
                 if (dcs.display === 'none' || dcs.visibility === 'hidden') continue;
 
                 d.style.setProperty('position', 'fixed', 'important');
                 d.style.setProperty('top', topSafe + 'px', 'important');
+                d.style.setProperty('bottom', 'auto', 'important');
                 d.style.setProperty('left', '10px', 'important');
                 d.style.setProperty('right', '10px', 'important');
-                d.style.setProperty('bottom', bottomSafe + 'px', 'important');
-                d.style.setProperty('width', (vw - 20) + 'px', 'important');
+                d.style.setProperty('width', 'auto', 'important');
                 d.style.setProperty('max-width', (vw - 20) + 'px', 'important');
                 d.style.setProperty('min-width', '0', 'important');
                 d.style.setProperty('height', 'auto', 'important');
                 d.style.setProperty('max-height', (vh - topSafe - bottomSafe) + 'px', 'important');
+                d.style.setProperty('margin', '0 auto', 'important');
                 d.style.setProperty('transform', 'none', 'important');
                 d.style.setProperty('box-sizing', 'border-box', 'important');
                 d.style.setProperty('border-radius', '14px', 'important');
                 d.style.setProperty('overflow', 'hidden', 'important');
                 d.style.setProperty('z-index', '10050', 'important');
 
-                var bodies = d.querySelectorAll('.dshp-dock-body, [class*="dshp-dock-body"], .aYQbCq_body, [class*="aYQbCq_body"]');
+                var bodies = d.querySelectorAll('.dshp-dock-body, .aYQbCq_body, [class*="aYQbCq_body"]');
                 for (var b = 0; b < bodies.length; b++) {
                   var bd = bodies[b];
                   bd.style.setProperty('overflow-y', 'auto', 'important');
@@ -5976,60 +6029,8 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   pn.style.setProperty('max-height', 'none', 'important');
                   pn.style.setProperty('overflow-y', 'visible', 'important');
                 }
-                var headBtns = d.querySelectorAll('.dshp-dock-head button, [class*="dshp-dock-head"] button');
-                for (var hb = 0; hb < headBtns.length; hb++) {
-                  var hBtn = headBtns[hb];
-                  hBtn.style.setProperty('display', 'inline-flex', 'important');
-                  hBtn.style.setProperty('visibility', 'visible', 'important');
-                  hBtn.style.setProperty('opacity', '1', 'important');
-                  hBtn.style.setProperty('color', '#ffffff', 'important');
-                  hBtn.style.setProperty('background', '#2c2c2e', 'important');
-                  hBtn.style.setProperty('border', '1px solid rgba(255, 255, 255, 0.25)', 'important');
-                  hBtn.style.setProperty('border-radius', '8px', 'important');
-                  hBtn.style.setProperty('padding', '4px 10px', 'important');
-                }
 
-                // 🔴 通用弹窗与Dock卡片自动补齐右上角关闭按钮
-                try {
-                  if (!d.querySelector('.dsh-floating-card-close')) {
-                    var hasCloseD = false;
-                    var dBtns = d.querySelectorAll('button, [role="button"]');
-                    for (var dbi = 0; dbi < dBtns.length; dbi++) {
-                      var deb = dBtns[dbi];
-                      var dtxt = (deb.textContent || '').trim();
-                      var daria = (deb.getAttribute('aria-label') || '').trim();
-                      var dtitle = (deb.getAttribute('title') || '').trim();
-                      var dcls = (deb.className || '').toString();
-                      if (/收起|关闭|取消|close|dismiss/i.test(dtxt) || /收起|关闭|取消|close|dismiss/i.test(daria) || /收起|关闭|取消|close|dismiss/i.test(dtitle) || /close/i.test(dcls)) {
-                        var debs = null;
-                        try { debs = getComputedStyle(deb); } catch (eDeb) {}
-                        if (debs && debs.display !== 'none' && debs.visibility !== 'hidden' && debs.opacity !== '0') {
-                          hasCloseD = true;
-                          break;
-                        }
-                      }
-                    }
-                    if (!hasCloseD) {
-                      var cBtnD = document.createElement('button');
-                      cBtnD.className = 'dsh-floating-card-close';
-                      cBtnD.type = 'button';
-                      cBtnD.setAttribute('aria-label', '关闭');
-                      cBtnD.innerHTML = '✕';
-                      cBtnD.onclick = function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        var inClose = d.querySelector('.dshp-dock-head button, [class*="dshp-dock-head"] button, button[aria-label*="关"], button[aria-label*="close" i], [class*="close"], [data-action*="close"]');
-                        if (inClose && typeof inClose.click === 'function') {
-                          try { inClose.click(); } catch(eClk) {}
-                        }
-                        d.style.setProperty('display', 'none', 'important');
-                        d.setAttribute('data-open', '0');
-                      };
-                      d.style.setProperty('position', 'fixed', 'important');
-                      d.appendChild(cBtnD);
-                    }
-                  }
-                } catch (eBtnD) {}
+                bindCardClose(d);
 
                 var resizers = d.querySelectorAll('.dshp-dock-resize, .dshp-dock-resize-l, .dshp-dock-resize-r, .dshp-dock-resize-b, [class*="dock-resize"]');
                 for (var r = 0; r < resizers.length; r++) {
@@ -6037,87 +6038,38 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 }
               }
 
-              // 通道二：全屏浮动卡片/面板几何防出屏巡检（禁止任何卡片内容溢出屏幕）
+              // 通道二：全屏浮动卡片/面板几何防出屏巡检（排除子面板与普通卡片）
               try {
-                var candidates = document.querySelectorAll('[class*="overlayLayer"] > div, body > div > [class*="card"], body > div > [class*="panel"], [data-dockkit-surface]');
+                var candidates = document.querySelectorAll('[class*="overlayLayer"] > div, body > div > [class*="card"]:not([class*="composerStack"] *), [data-dockkit-surface]');
                 for (var cIdx = 0; cIdx < candidates.length; cIdx++) {
                   var cand = candidates[cIdx];
                   if (!cand || cand.nodeType !== 1) continue;
-                  // 严格豁免名单：不伤及抽屉、顶栏、输入框、灯箱
-                  if (cand.closest && (cand.closest('[class*="sidebarCol"]') || cand.closest('[class*="rightbarCol"]') || cand.closest('[data-sidebar-right-open]') || cand.closest('[class*="composerStack"]') || cand.closest('[class*="header"]'))) continue;
-                  if (cand.getAttribute('role') === 'dialog' && cand.querySelector('img')) continue; // R33 豁免大图
+                  if (cand.getAttribute('data-open') === '0' || cand.getAttribute('data-hide') === '1' || cand.classList.contains('dsh-closed-card')) {
+                    cand.style.setProperty('display', 'none', 'important');
+                    continue;
+                  }
+                  if (cand.closest && (cand.closest('.dshp-dock') || cand.closest('[class*="sidebarCol"]') || cand.closest('[class*="rightbarCol"]') || cand.closest('[data-sidebar-right-open]') || cand.closest('[class*="composerStack"]') || cand.closest('[class*="header"]'))) continue;
+                  if (cand.getAttribute('role') === 'dialog' && cand.querySelector('img')) continue;
                   var ccs = null;
                   try { ccs = getComputedStyle(cand); } catch (eCc) { continue; }
                   if (ccs.display === 'none' || ccs.visibility === 'hidden') continue;
                   if (ccs.position !== 'fixed' && ccs.position !== 'absolute') continue;
 
                   var cr = cand.getBoundingClientRect();
-                  // 顶部越界侵入状态栏判定
                   if (cr.top < topSafe && cr.height > 100 && cr.width > 200) {
                     cand.style.setProperty('top', topSafe + 'px', 'important');
-                    cand.style.setProperty('max-height', (vh - topSafe - bottomSafe) + 'px', 'important');
                   }
-                  // 水平出屏判定
                   if (cr.right > vw || cr.left < 0 || cr.width > vw) {
                     cand.style.setProperty('left', '10px', 'important');
                     cand.style.setProperty('right', '10px', 'important');
-                    cand.style.setProperty('width', (vw - 20) + 'px', 'important');
+                    cand.style.setProperty('width', 'auto', 'important');
                     cand.style.setProperty('max-width', (vw - 20) + 'px', 'important');
                     cand.style.setProperty('box-sizing', 'border-box', 'important');
                   }
-                  // 底部被截断判定
-                  if (cr.bottom > vh && cr.top >= 0) {
-                    cand.style.setProperty('max-height', (vh - cr.top - bottomSafe) + 'px', 'important');
-                    cand.style.setProperty('overflow-y', 'auto', 'important');
-                    cand.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
-                  }
+                  cand.style.setProperty('bottom', 'auto', 'important');
+                  cand.style.setProperty('max-height', (vh - topSafe - bottomSafe) + 'px', 'important');
 
-                  // 🔴 通用弹窗卡片自动补齐右上角关闭按钮
-                  try {
-                    if (!cand.querySelector('.dsh-floating-card-close')) {
-                      // 检查卡片内部是否已有可见且可点击的关闭/收起/X按钮
-                      var hasClose = false;
-                      var existingBtns = cand.querySelectorAll('button, [role="button"]');
-                      for (var bi = 0; bi < existingBtns.length; bi++) {
-                        var eb = existingBtns[bi];
-                        var txt = (eb.textContent || '').trim();
-                        var aria = (eb.getAttribute('aria-label') || '').trim();
-                        var title = (eb.getAttribute('title') || '').trim();
-                        var cls = (eb.className || '').toString();
-                        if (/收起|关闭|取消|close|dismiss/i.test(txt) || /收起|关闭|取消|close|dismiss/i.test(aria) || /收起|关闭|取消|close|dismiss/i.test(title) || /close/i.test(cls)) {
-                          var ebs = null;
-                          try { ebs = getComputedStyle(eb); } catch (eEb) {}
-                          if (ebs && ebs.display !== 'none' && ebs.visibility !== 'hidden' && ebs.opacity !== '0') {
-                            hasClose = true;
-                            break;
-                          }
-                        }
-                      }
-                      if (!hasClose) {
-                        var closeBtn = document.createElement('button');
-                        closeBtn.className = 'dsh-floating-card-close';
-                        closeBtn.type = 'button';
-                        closeBtn.setAttribute('aria-label', '关闭');
-                        closeBtn.innerHTML = '✕';
-                        closeBtn.onclick = function(e) {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          // 尝试优先触发卡片自带的关闭行为
-                          var closeTarget = cand.querySelector('.dshp-dock-head button, [class*="dshp-dock-head"] button, button[aria-label*="关"], button[aria-label*="close" i], [class*="close"], [data-action*="close"]');
-                          if (closeTarget && typeof closeTarget.click === 'function') {
-                            try { closeTarget.click(); } catch(eClk) {}
-                          }
-                          cand.style.setProperty('display', 'none', 'important');
-                          cand.setAttribute('data-open', '0');
-                          try {
-                            if (window.__ModuleLoader__ && typeof window.__dshClosePurgeDock === 'function') window.__dshClosePurgeDock();
-                          } catch(ePlg) {}
-                        };
-                        cand.style.setProperty('position', 'fixed', 'important');
-                        cand.appendChild(closeBtn);
-                      }
-                    }
-                  } catch (eBtn) {}
+                  bindCardClose(cand);
                 }
               } catch (eCand) {}
 
@@ -6138,12 +6090,6 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               } catch (eRw) {}
             } catch (e) {}
           }
-          /* 🔴 v1.0.124：DSH 电脑端自带的「费用计量」浮层卡片 .cm-peak-alert 是间歇出现的
-             （峰时 / 平价提醒）。它 position:fixed + z-index:9999 + 宽 406px 横跨整屏，
-             一旦出现就把抽屉底部「余额 / 今日 / 平价 / 账号行」整片盖住，
-             连我们注入的设置齿轮也被压住 —— 实测 elementFromPoint 在齿轮中心命中的是
-             cm-peak-alert-actions 而不是齿轮，点「设置」直接点空。
-             它属于 DSH 原生内容，不能删；只在抽屉打开期间临时收起，抽屉关掉立刻还原。 */
           function guardPeakAlert() {
             try {
               var alerts = document.querySelectorAll('.cm-peak-alert');
@@ -10401,8 +10347,8 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 修复插件弹出卡片头部遮挡与关闭生效
-            2. 所有弹出式卡片增加通用关闭按钮
+            1. 根治插件卡片占满全屏与关闭失效
+            2. 插件面板按内容自适应并保留收起按钮
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
