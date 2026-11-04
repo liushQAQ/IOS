@@ -1,12 +1,12 @@
 {
-  "version": "2.1.16",
-  "build": 135,
-  "updated_at": "2026-11-04 19:00:00",
-  "title": "v2.1.16(135) 根除插件面板全屏占满、恢复原生头部与多事件穿透关闭",
-  "changelog": "1. 彻底清除通配选择器污染，插件卡片绝不再撑满全屏\n2. 面板按内容自适应尺寸，原生头部与收起按钮 100% 在屏内露出\n3. 关闭按钮同时绑定 click 与 touchend，状态深度穿透闭环触发\n4. 修复顶栏插件弹出页面超出屏幕范围",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.16-135.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.16-135.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.16/DSHios-public-2.1.16-135.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.16",
-  "md5": "bac9454945aa06333fb242b228182dd3"
+  "version": "2.1.17",
+  "build": 136,
+  "updated_at": "2026-11-05 01:10:00",
+  "title": "v2.1.17(136) 面板重开自动清标记 + 多面板同开精准关闭",
+  "changelog": "1. 修复插件面板关闭后重开可能不显示（✕ 关闭标记在重开信号时自动清除）\n2. 修复同时开多个插件面板时可能关错（✕ 按面板标题精准匹配顶栏芯片）\n3. 根治插件弹窗全屏占满与关闭按钮失效 (2.1.16)\n4. 修复插件弹出卡片头部遮挡与关闭按钮失效 (2.1.15)",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.17-136.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.17-136.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.17/DSHios-public-2.1.17-136.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.17",
+  "md5": "6647b34abd97fb7c178f71e487a6afb5"
 }
