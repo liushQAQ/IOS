@@ -1588,6 +1588,38 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '    overflow-y: auto !important;',
             '    -webkit-overflow-scrolling: touch !important;',
             '  }',
+            '  /* 通用浮动弹出卡片/面板右上角强制悬浮关闭按钮 */',
+            '  .dsh-floating-card-close {',
+            '    position: absolute !important;',
+            '    top: 8px !important;',
+            '    right: 8px !important;',
+            '    width: 28px !important;',
+            '    height: 28px !important;',
+            '    min-width: 28px !important;',
+            '    min-height: 28px !important;',
+            '    padding: 0 !important;',
+            '    margin: 0 !important;',
+            '    display: flex !important;',
+            '    align-items: center !important;',
+            '    justify-content: center !important;',
+            '    background: rgba(44, 44, 46, 0.88) !important;',
+            '    border: 1px solid rgba(255, 255, 255, 0.22) !important;',
+            '    border-radius: 999px !important;',
+            '    color: #ffffff !important;',
+            '    font-size: 16px !important;',
+            '    line-height: 1 !important;',
+            '    cursor: pointer !important;',
+            '    z-index: 10060 !important;',
+            '    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;',
+            '    backdrop-filter: blur(8px) !important;',
+            '    -webkit-backdrop-filter: blur(8px) !important;',
+            '    user-select: none !important;',
+            '    -webkit-tap-highlight-color: transparent !important;',
+            '  }',
+            '  .dsh-floating-card-close:active {',
+            '    transform: scale(0.92) !important;',
+            '    background: rgba(58, 58, 60, 0.95) !important;',
+            '  }',
             '}',
             '/* 4. 暗黑模式按钮与交互控件对比度强化（老总铁律：杜绝灰白底+白字看不清） */',
             'body[data-ds-dark-theme] .NwyCaq_option,',
@@ -5943,6 +5975,50 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   hBtn.style.setProperty('padding', '4px 10px', 'important');
                 }
 
+                // 🔴 通用弹窗与Dock卡片自动补齐右上角关闭按钮
+                try {
+                  if (!d.querySelector('.dsh-floating-card-close')) {
+                    var hasCloseD = false;
+                    var dBtns = d.querySelectorAll('button, [role="button"]');
+                    for (var dbi = 0; dbi < dBtns.length; dbi++) {
+                      var deb = dBtns[dbi];
+                      var dtxt = (deb.textContent || '').trim();
+                      var daria = (deb.getAttribute('aria-label') || '').trim();
+                      var dtitle = (deb.getAttribute('title') || '').trim();
+                      var dcls = (deb.className || '').toString();
+                      if (/收起|关闭|取消|close|dismiss/i.test(dtxt) || /收起|关闭|取消|close|dismiss/i.test(daria) || /收起|关闭|取消|close|dismiss/i.test(dtitle) || /close/i.test(dcls)) {
+                        var debs = null;
+                        try { debs = getComputedStyle(deb); } catch (eDeb) {}
+                        if (debs && debs.display !== 'none' && debs.visibility !== 'hidden' && debs.opacity !== '0') {
+                          hasCloseD = true;
+                          break;
+                        }
+                      }
+                    }
+                    if (!hasCloseD) {
+                      var cBtnD = document.createElement('button');
+                      cBtnD.className = 'dsh-floating-card-close';
+                      cBtnD.type = 'button';
+                      cBtnD.setAttribute('aria-label', '关闭');
+                      cBtnD.innerHTML = '✕';
+                      cBtnD.onclick = function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var inClose = d.querySelector('button[aria-label*="关"], button[aria-label*="close" i], [class*="close"], [data-action*="close"]');
+                        if (inClose && typeof inClose.click === 'function') {
+                          inClose.click();
+                        }
+                        setTimeout(function() {
+                          d.style.setProperty('display', 'none', 'important');
+                          d.setAttribute('data-open', '0');
+                        }, 20);
+                      };
+                      d.style.setProperty('position', 'fixed', 'important');
+                      d.appendChild(cBtnD);
+                    }
+                  }
+                } catch (eBtnD) {}
+
                 var resizers = d.querySelectorAll('.dshp-dock-resize, .dshp-dock-resize-l, .dshp-dock-resize-r, .dshp-dock-resize-b, [class*="dock-resize"]');
                 for (var r = 0; r < resizers.length; r++) {
                   resizers[r].style.setProperty('display', 'none', 'important');
@@ -5983,6 +6059,53 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                     cand.style.setProperty('overflow-y', 'auto', 'important');
                     cand.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
                   }
+
+                  // 🔴 通用弹窗卡片自动补齐右上角关闭按钮
+                  try {
+                    if (!cand.querySelector('.dsh-floating-card-close')) {
+                      // 检查卡片内部是否已有可见且可点击的关闭/收起/X按钮
+                      var hasClose = false;
+                      var existingBtns = cand.querySelectorAll('button, [role="button"]');
+                      for (var bi = 0; bi < existingBtns.length; bi++) {
+                        var eb = existingBtns[bi];
+                        var txt = (eb.textContent || '').trim();
+                        var aria = (eb.getAttribute('aria-label') || '').trim();
+                        var title = (eb.getAttribute('title') || '').trim();
+                        var cls = (eb.className || '').toString();
+                        if (/收起|关闭|取消|close|dismiss/i.test(txt) || /收起|关闭|取消|close|dismiss/i.test(aria) || /收起|关闭|取消|close|dismiss/i.test(title) || /close/i.test(cls)) {
+                          var ebs = null;
+                          try { ebs = getComputedStyle(eb); } catch (eEb) {}
+                          if (ebs && ebs.display !== 'none' && ebs.visibility !== 'hidden' && ebs.opacity !== '0') {
+                            hasClose = true;
+                            break;
+                          }
+                        }
+                      }
+                      if (!hasClose) {
+                        var closeBtn = document.createElement('button');
+                        closeBtn.className = 'dsh-floating-card-close';
+                        closeBtn.type = 'button';
+                        closeBtn.setAttribute('aria-label', '关闭');
+                        closeBtn.innerHTML = '✕';
+                        closeBtn.onclick = function(e) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          // 尝试优先触发卡片自带的关闭行为
+                          var innerClose = cand.querySelector('button[aria-label*="关"], button[aria-label*="close" i], [class*="close"], [data-action*="close"]');
+                          if (innerClose && typeof innerClose.click === 'function') {
+                            innerClose.click();
+                          }
+                          // 双重兜底：若自带关闭未起效，直接隐藏卡片
+                          setTimeout(function() {
+                            cand.style.setProperty('display', 'none', 'important');
+                            cand.setAttribute('data-open', '0');
+                          }, 20);
+                        };
+                        cand.style.setProperty('position', 'fixed', 'important');
+                        cand.appendChild(closeBtn);
+                      }
+                    }
+                  } catch (eBtn) {}
                 }
               } catch (eCand) {}
 
@@ -10266,8 +10389,8 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 修复顶栏插件弹出页面超出屏幕范围
-            2. 修复鲸鱼短滑换高度不跟手
+            1. 所有弹出式卡片增加通用关闭按钮
+            2. 修复顶栏插件弹出页面超出屏幕范围
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)

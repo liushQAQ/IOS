@@ -1,9 +1,9 @@
 {
-  "version": "2.1.13",
+  "version": "2.1.14",
   "sizes": [
     "430x932"
   ],
-  "startedAt": "2026-11-04T03:50:48.285Z",
+  "startedAt": "2026-11-04T06:32:11.131Z",
   "dshFingerprint": "2ohsww",
   "dshAssets": 10,
   "domClasses": 0,
@@ -31,6 +31,6 @@
   "fail": 0,
   "failures": [],
   "blocked": [],
-  "sourceHash": "8107e968b9cd447f40c2efff80dd0cd5987a796c4857722bebe3d1e0b50a170f",
-  "finishedAt": "2026-11-04T03:53:12.528Z"
+  "sourceHash": "4fef1225ca4694895b4140324582aeb37e3489e5a9eaff84081c8441d388fe0b",
+  "finishedAt": "2026-11-04T06:34:05.036Z"
 }
