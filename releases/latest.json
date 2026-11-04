@@ -1,12 +1,12 @@
 {
-  "version": "2.1.15",
-  "build": 134,
-  "updated_at": "2026-11-04 17:55:00",
-  "title": "v2.1.15(134) 彻底下移插件面板完全露出原生收起按钮与关闭联动",
-  "changelog": "1. 插件面板顶部彻底下移至顶栏下方，完全露出原生收起按钮\n2. 头部收起按钮实体化高亮，点击立即触发内置关闭逻辑\n3. 所有弹出式卡片自动增加通用关闭按钮\n4. 修复顶栏插件弹出页面超出屏幕范围",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.15-134.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.15-134.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.15/DSHios-public-2.1.15-134.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.15",
-  "md5": "1470fc6e577c8222c46a0a879521eb34"
+  "version": "2.1.16",
+  "build": 135,
+  "updated_at": "2026-11-04 19:00:00",
+  "title": "v2.1.16(135) 根除插件面板全屏占满、恢复原生头部与多事件穿透关闭",
+  "changelog": "1. 彻底清除通配选择器污染，插件卡片绝不再撑满全屏\n2. 面板按内容自适应尺寸，原生头部与收起按钮 100% 在屏内露出\n3. 关闭按钮同时绑定 click 与 touchend，状态深度穿透闭环触发\n4. 修复顶栏插件弹出页面超出屏幕范围",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.16-135.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.16-135.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.16/DSHios-public-2.1.16-135.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.16",
+  "md5": "bac9454945aa06333fb242b228182dd3"
 }
