@@ -1900,6 +1900,28 @@ const A_PLUGIN_PAGE = () => {
   }
   GATE.pluginFloatingDockGuard = true;
 
+  /* R62/R63/R64（v2.1.17）：弹窗关闭闭环 + 精确根节点 + 重开清标记守卫 */
+  {
+    const bundle = APP_JS;
+    const noWildcard = !/\[class\*="dshp-dock"\]/.test(bundle);
+    const dualEvt = /addEventListener\('click', handleCardDismiss/.test(bundle)
+      && /addEventListener\('touchend', handleCardDismiss/.test(bundle);
+    const closeCss = /dsh-closed-card/.test(bundle) && /\[data-open="0"\]/.test(bundle);
+    const autoBtn = /function bindCardClose\(/.test(bundle) && /dsh-floating-card-close/.test(bundle);
+    chk(noWildcard && dualEvt && closeCss && autoBtn,
+      '[弹窗关闭·R62/63] 精确根节点 + 双事件关闭闭环 + 悬浮关闭钮 + 关闭态强制 CSS 在',
+      (noWildcard && dualEvt && closeCss && autoBtn) ? '四件套全在' : '🔴 守卫被删 → 弹窗全屏占满/关闭失效复发（R62/R63）');
+    const reopenGuard = /function clearCloseMarkers\(/.test(bundle)
+      && /function reopenSignal\(/.test(bundle)
+      && /function chipOnForTitle\(/.test(bundle)
+      && /data-dsh-closed/.test(bundle);
+    chk(reopenGuard,
+      '[面板重开·R64] 重开清标记守卫在（data-open=1 或同标题芯片复开即清 dsh-closed-card）',
+      reopenGuard ? '重开清标记在' : '🔴 守卫被删 → 常驻挂载面板「关了打不开」复发（R64）');
+  }
+  GATE.r63PanelCloseGuard = true;
+  GATE.r64ReopenGuard = true;
+
 
   console.log(' 结果: ' + PASS + ' 绿 / ' + FAIL + ' 红 / ' + BLOCKED.length + ' 项无法校验');
   if (BLOCKED.length) {
