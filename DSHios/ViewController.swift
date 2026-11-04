@@ -1477,7 +1477,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  [class*="overlay"] > [class*="panel"]:not([class*="sidebarCol"]):not([class*="rightbarCol"]),',
             '  [class*="overlay"] > [class*="card"]:not([class*="composerStack"] *) {',
             '    position: fixed !important;',
-            '    top: max(56px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 10px)) !important;',
+            '    top: max(84px, calc(var(--dsh-sb-native, var(--dsh-statusbar, 54px)) + 48px)) !important;',
             '    bottom: max(16px, calc(env(safe-area-inset-bottom, 16px) + 8px)) !important;',
             '    left: 10px !important;',
             '    right: 10px !important;',
@@ -1509,18 +1509,29 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  }',
             '  .dshp-dock-head,',
             '  [class*="dshp-dock-head"] {',
-            '    min-height: 38px !important;',
-            '    padding: 8px 12px !important;',
+            '    height: 44px !important;',
+            '    min-height: 44px !important;',
+            '    max-height: 44px !important;',
+            '    padding: 6px 14px !important;',
             '    box-sizing: border-box !important;',
             '    flex-shrink: 0 !important;',
-            '    cursor: default !important;',
             '    display: flex !important;',
+            '    flex-direction: row !important;',
             '    align-items: center !important;',
             '    justify-content: space-between !important;',
-            '    background: rgba(30, 30, 32, 0.95) !important;',
-            '    border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;',
+            '    background: #202022 !important;',
+            '    border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;',
             '    border-radius: 14px 14px 0 0 !important;',
-            '    z-index: 10 !important;',
+            '    z-index: 200 !important;',
+            '    pointer-events: auto !important;',
+            '  }',
+            '  .dshp-dock-head b,',
+            '  [class*="dshp-dock-head"] b {',
+            '    font-size: 15px !important;',
+            '    font-weight: 600 !important;',
+            '    color: #f2f2f7 !important;',
+            '    display: inline-block !important;',
+            '    visibility: visible !important;',
             '  }',
             '  .dshp-dock-head button,',
             '  [class*="dshp-dock-head"] button {',
@@ -1529,17 +1540,19 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '    justify-content: center !important;',
             '    visibility: visible !important;',
             '    opacity: 1 !important;',
-            '    min-width: 52px !important;',
-            '    min-height: 30px !important;',
-            '    padding: 4px 10px !important;',
-            '    font-size: 13px !important;',
+            '    height: 32px !important;',
+            '    min-height: 32px !important;',
+            '    padding: 0 14px !important;',
+            '    font-size: 14px !important;',
             '    font-weight: 600 !important;',
             '    color: #ffffff !important;',
-            '    background: #2c2c2e !important;',
-            '    border: 1px solid rgba(255, 255, 255, 0.25) !important;',
+            '    background: #3a3a3c !important;',
+            '    border: 1px solid rgba(255, 255, 255, 0.28) !important;',
             '    border-radius: 8px !important;',
             '    cursor: pointer !important;',
             '    flex-shrink: 0 !important;',
+            '    pointer-events: auto !important;',
+            '    z-index: 210 !important;',
             '  }',
             '  .dshp-dock-tabs,',
             '  [class*="dshp-dock-tabs"] {',
@@ -1592,7 +1605,8 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  .dsh-floating-card-close {',
             '    position: absolute !important;',
             '    top: 8px !important;',
-            '    right: 8px !important;',
+            '    right: 12px !important;',
+            '    left: auto !important;',
             '    width: 28px !important;',
             '    height: 28px !important;',
             '    min-width: 28px !important;',
@@ -5917,7 +5931,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               var sb = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0)
                 ? window.__dshNativeStatusBar
                 : (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-statusbar')) || 54);
-              var topSafe = Math.max(56, sb + 10);
+              var topSafe = Math.max(84, sb + 48);
               var bottomSafe = 24;
 
               // 通道一：选择器定向收拢
@@ -6004,14 +6018,12 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                       cBtnD.onclick = function(e) {
                         e.preventDefault();
                         e.stopPropagation();
-                        var inClose = d.querySelector('button[aria-label*="关"], button[aria-label*="close" i], [class*="close"], [data-action*="close"]');
+                        var inClose = d.querySelector('.dshp-dock-head button, [class*="dshp-dock-head"] button, button[aria-label*="关"], button[aria-label*="close" i], [class*="close"], [data-action*="close"]');
                         if (inClose && typeof inClose.click === 'function') {
-                          inClose.click();
+                          try { inClose.click(); } catch(eClk) {}
                         }
-                        setTimeout(function() {
-                          d.style.setProperty('display', 'none', 'important');
-                          d.setAttribute('data-open', '0');
-                        }, 20);
+                        d.style.setProperty('display', 'none', 'important');
+                        d.setAttribute('data-open', '0');
                       };
                       d.style.setProperty('position', 'fixed', 'important');
                       d.appendChild(cBtnD);
@@ -6091,15 +6103,15 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                           e.preventDefault();
                           e.stopPropagation();
                           // 尝试优先触发卡片自带的关闭行为
-                          var innerClose = cand.querySelector('button[aria-label*="关"], button[aria-label*="close" i], [class*="close"], [data-action*="close"]');
-                          if (innerClose && typeof innerClose.click === 'function') {
-                            innerClose.click();
+                          var closeTarget = cand.querySelector('.dshp-dock-head button, [class*="dshp-dock-head"] button, button[aria-label*="关"], button[aria-label*="close" i], [class*="close"], [data-action*="close"]');
+                          if (closeTarget && typeof closeTarget.click === 'function') {
+                            try { closeTarget.click(); } catch(eClk) {}
                           }
-                          // 双重兜底：若自带关闭未起效，直接隐藏卡片
-                          setTimeout(function() {
-                            cand.style.setProperty('display', 'none', 'important');
-                            cand.setAttribute('data-open', '0');
-                          }, 20);
+                          cand.style.setProperty('display', 'none', 'important');
+                          cand.setAttribute('data-open', '0');
+                          try {
+                            if (window.__ModuleLoader__ && typeof window.__dshClosePurgeDock === 'function') window.__dshClosePurgeDock();
+                          } catch(ePlg) {}
                         };
                         cand.style.setProperty('position', 'fixed', 'important');
                         cand.appendChild(closeBtn);
@@ -10389,8 +10401,8 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 所有弹出式卡片增加通用关闭按钮
-            2. 修复顶栏插件弹出页面超出屏幕范围
+            1. 修复插件弹出卡片头部遮挡与关闭生效
+            2. 所有弹出式卡片增加通用关闭按钮
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
