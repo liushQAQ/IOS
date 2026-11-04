@@ -1,12 +1,12 @@
 {
-  "version": "2.1.13",
-  "build": 14,
-  "updated_at": "2026-11-03 12:55:22",
-  "title": "v2.1.13(14) 顶栏插件弹出页面防出屏与通用卡片自适应",
-  "changelog": "1. 修复顶栏插件弹出页面超出屏幕范围\n2. 修复鲸鱼短滑换高度不跟手\n3. 修复鲸鱼出现位置偏移半截\n4. 修复点发送时键盘闪一下又收回\n5. 修复抽屉顶栏上移或下移\n6. 小鲸鱼短滑可在任意高度拉出",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.13-14.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.13-14.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.13/DSHios-public-2.1.13-14.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.13",
-  "md5": "6f170f893b3a089191ffb30d151f7e1c"
+  "version": "2.1.14",
+  "build": 131,
+  "updated_at": "2026-11-04 15:45:00",
+  "title": "v2.1.14(131) 所有弹出式卡片自动增加通用关闭按钮与层级强化",
+  "changelog": "1. 所有弹出式卡片自动增加通用关闭按钮\n2. 修复顶栏插件弹出页面超出屏幕范围\n3. 修复鲸鱼短滑换高度不跟手\n4. 修复鲸鱼出现位置偏移半截\n5. 修复点发送时键盘闪一下又收回",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.14-131.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.14-131.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.14/DSHios-public-2.1.14-131.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.14",
+  "md5": "e274d9da714c822228f50d03dd14a360"
 }
