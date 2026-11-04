@@ -1,12 +1,10 @@
 {
   "version": "2.1.13",
   "sizes": [
-    "430x932",
-    "393x852",
-    "375x812"
+    "430x932"
   ],
-  "startedAt": "2026-11-03T11:48:54.739Z",
-  "dshFingerprint": "jvln6p",
+  "startedAt": "2026-11-04T03:50:48.285Z",
+  "dshFingerprint": "2ohsww",
   "dshAssets": 10,
   "domClasses": 0,
   "anchorTotal": 194,
@@ -29,12 +27,10 @@
   "modelDockGuard": true,
   "pluginFloatingDockGuard": true,
   "ok": true,
-  "pass": 124,
+  "pass": 93,
   "fail": 0,
   "failures": [],
-  "blocked": [
-    "[抽屉·R39] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）"
-  ],
-  "sourceHash": "97b75e95388c6552ce250ce5ea634f45ead28702344e1ed30ac1a12ebf8e018e",
-  "finishedAt": "2026-11-03T11:54:05.362Z"
+  "blocked": [],
+  "sourceHash": "8107e968b9cd447f40c2efff80dd0cd5987a796c4857722bebe3d1e0b50a170f",
+  "finishedAt": "2026-11-04T03:53:12.528Z"
 }

@@ -1514,6 +1514,32 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '    box-sizing: border-box !important;',
             '    flex-shrink: 0 !important;',
             '    cursor: default !important;',
+            '    display: flex !important;',
+            '    align-items: center !important;',
+            '    justify-content: space-between !important;',
+            '    background: rgba(30, 30, 32, 0.95) !important;',
+            '    border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;',
+            '    border-radius: 14px 14px 0 0 !important;',
+            '    z-index: 10 !important;',
+            '  }',
+            '  .dshp-dock-head button,',
+            '  [class*="dshp-dock-head"] button {',
+            '    display: inline-flex !important;',
+            '    align-items: center !important;',
+            '    justify-content: center !important;',
+            '    visibility: visible !important;',
+            '    opacity: 1 !important;',
+            '    min-width: 52px !important;',
+            '    min-height: 30px !important;',
+            '    padding: 4px 10px !important;',
+            '    font-size: 13px !important;',
+            '    font-weight: 600 !important;',
+            '    color: #ffffff !important;',
+            '    background: #2c2c2e !important;',
+            '    border: 1px solid rgba(255, 255, 255, 0.25) !important;',
+            '    border-radius: 8px !important;',
+            '    cursor: pointer !important;',
+            '    flex-shrink: 0 !important;',
             '  }',
             '  .dshp-dock-tabs,',
             '  [class*="dshp-dock-tabs"] {',
@@ -5903,6 +5929,18 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   var pn = panels[p];
                   pn.style.setProperty('max-height', 'none', 'important');
                   pn.style.setProperty('overflow-y', 'visible', 'important');
+                }
+                var headBtns = d.querySelectorAll('.dshp-dock-head button, [class*="dshp-dock-head"] button');
+                for (var hb = 0; hb < headBtns.length; hb++) {
+                  var hBtn = headBtns[hb];
+                  hBtn.style.setProperty('display', 'inline-flex', 'important');
+                  hBtn.style.setProperty('visibility', 'visible', 'important');
+                  hBtn.style.setProperty('opacity', '1', 'important');
+                  hBtn.style.setProperty('color', '#ffffff', 'important');
+                  hBtn.style.setProperty('background', '#2c2c2e', 'important');
+                  hBtn.style.setProperty('border', '1px solid rgba(255, 255, 255, 0.25)', 'important');
+                  hBtn.style.setProperty('border-radius', '8px', 'important');
+                  hBtn.style.setProperty('padding', '4px 10px', 'important');
                 }
 
                 var resizers = d.querySelectorAll('.dshp-dock-resize, .dshp-dock-resize-l, .dshp-dock-resize-r, .dshp-dock-resize-b, [class*="dock-resize"]');

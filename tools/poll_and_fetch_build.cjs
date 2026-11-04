@@ -5,9 +5,9 @@ const { execSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const CONFIG_FILE = path.join(ROOT, '.codemagic_config.json');
-const BUILD_ID = process.argv[2] || '6ae4bee361a3832df3ec93a8';
-const VERSION = '2.1.12';
-const BUILD_NUM = 13;
+const BUILD_ID = process.argv[2] || '6ae9d74629333872aee4f8bf';
+const VERSION = '2.1.13';
+const BUILD_NUM = 14;
 
 if (!fs.existsSync(CONFIG_FILE)) {
   console.error('缺少配置文件');
@@ -81,8 +81,8 @@ async function run() {
     version: VERSION,
     build: BUILD_NUM,
     updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-    title: `v${VERSION}(${BUILD_NUM}) 鲸鱼换高度跟手+位置偏移修正`,
-    changelog: "1. 修复鲸鱼短滑换高度不跟手\n2. 修复鲸鱼出现位置偏移半截\n3. 修复点发送时键盘闪一下又收回\n4. 修复抽屉顶栏上移或下移\n5. 小鲸鱼短滑可在任意高度拉出\n6. 悬浮小鲸鱼恢复上一版滑动方式",
+    title: `v${VERSION}(${BUILD_NUM}) 顶栏插件弹出页面防出屏与通用卡片自适应`,
+    changelog: "1. 修复顶栏插件弹出页面超出屏幕范围\n2. 修复鲸鱼短滑换高度不跟手\n3. 修复鲸鱼出现位置偏移半截\n4. 修复点发送时键盘闪一下又收回\n5. 修复抽屉顶栏上移或下移\n6. 小鲸鱼短滑可在任意高度拉出",
     tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     public_tipa_url: `https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-${VERSION}-${BUILD_NUM}.tipa?m=gh-proxy.com`,
     tipa_url_fallback: `https://github.com/liushQAQ/IOS/releases/download/v${VERSION}/DSHios-public-${VERSION}-${BUILD_NUM}.tipa`,
