@@ -1,12 +1,12 @@
 {
-  "version": "2.1.14",
-  "build": 131,
-  "updated_at": "2026-11-04 15:45:00",
-  "title": "v2.1.14(131) 所有弹出式卡片自动增加通用关闭按钮与层级强化",
-  "changelog": "1. 所有弹出式卡片自动增加通用关闭按钮\n2. 修复顶栏插件弹出页面超出屏幕范围\n3. 修复鲸鱼短滑换高度不跟手\n4. 修复鲸鱼出现位置偏移半截\n5. 修复点发送时键盘闪一下又收回",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.14-131.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.14-131.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.14/DSHios-public-2.1.14-131.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.14",
-  "md5": "e274d9da714c822228f50d03dd14a360"
+  "version": "2.1.15",
+  "build": 134,
+  "updated_at": "2026-11-04 17:55:00",
+  "title": "v2.1.15(134) 彻底下移插件面板完全露出原生收起按钮与关闭联动",
+  "changelog": "1. 插件面板顶部彻底下移至顶栏下方，完全露出原生收起按钮\n2. 头部收起按钮实体化高亮，点击立即触发内置关闭逻辑\n3. 所有弹出式卡片自动增加通用关闭按钮\n4. 修复顶栏插件弹出页面超出屏幕范围",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.15-134.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.15-134.tipa?m=gh-proxy.com",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.15/DSHios-public-2.1.15-134.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.15",
+  "md5": "1470fc6e577c8222c46a0a879521eb34"
 }
