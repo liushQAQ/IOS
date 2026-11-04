@@ -5953,12 +5953,18 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   if (innerClose && innerClose !== closeBtn && typeof innerClose.click === 'function') {
                     try { innerClose.click(); } catch(eClk) {}
                   }
-                  // 2. 触发顶栏的对应开关按钮（针对 dsh-purge 等 toggle 式插件）
+                  // 2. 触发顶栏的对应开关按钮（R64：按标题匹配芯片，禁盲目点第一个 .on 关错面板）
                   try {
-                    var topTab = document.querySelector('.dshp-tab-btn.on, .dshp-hero-chip button.on');
-                    if (topTab && typeof topTab.click === 'function') {
-                      topTab.click();
+                    var onChips = document.querySelectorAll('.dshp-tab-btn.on, .dshp-hero-chip button.on');
+                    var headB2 = card.querySelector('.dshp-dock-head b, .dshp-dock-head strong');
+                    var tt2 = headB2 ? (headB2.textContent || '').trim() : '';
+                    var chipHit = null;
+                    for (var ci3 = 0; ci3 < onChips.length; ci3++) {
+                      var ct3 = (onChips[ci3].textContent || '').trim();
+                      if (tt2 && ct3 && (ct3 === tt2 || ct3.indexOf(tt2) !== -1 || tt2.indexOf(ct3) !== -1)) { chipHit = onChips[ci3]; break; }
                     }
+                    if (!chipHit && card.classList.contains('dshp-dock') && onChips.length === 1) chipHit = onChips[0];
+                    if (chipHit && typeof chipHit.click === 'function') chipHit.click();
                   } catch(eTop) {}
                   // 3. 强制隐藏当前卡片及所属遮罩
                   card.style.setProperty('display', 'none', 'important');
@@ -5969,6 +5975,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   if (pMask && pMask !== document.body) {
                     pMask.style.setProperty('display', 'none', 'important');
                     pMask.setAttribute('data-open', '0');
+                    pMask.setAttribute('data-dsh-closed', '1');
                   }
                 }
 
@@ -5983,12 +5990,51 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 }
               }
 
+              // 🔴 R64(v2.1.17)：重开即清标记 —— ✕ 关闭写入的 dsh-closed-card/data-hide/内联 display
+              //   必须在插件重新打开时清除，否则常驻挂载型面板会「关了打不开、刷新才恢复」。
+              //   重开信号：① React 把 data-open 翻回 '1'；② 顶栏同标题芯片重新处于 .on。
+              function chipOnForTitle(card) {
+                try {
+                  var headB = card.querySelector('.dshp-dock-head b, .dshp-dock-head strong');
+                  var tt = headB ? (headB.textContent || '').trim() : '';
+                  if (!tt) return false;
+                  var chips = document.querySelectorAll('.dshp-tab-btn.on, .dshp-hero-chip button.on');
+                  for (var ci2 = 0; ci2 < chips.length; ci2++) {
+                    var ct = (chips[ci2].textContent || '').trim();
+                    if (ct && (ct === tt || ct.indexOf(tt) !== -1 || tt.indexOf(ct) !== -1)) return true;
+                  }
+                } catch (eCh2) {}
+                return false;
+              }
+              function clearCloseMarkers(el) {
+                try {
+                  el.classList.remove('dsh-closed-card');
+                  el.removeAttribute('data-hide');
+                  el.removeAttribute('data-dsh-closed');
+                  el.style.removeProperty('display');
+                  var mk = el.closest ? el.closest('[data-dsh-closed="1"]') : null;
+                  if (mk && mk !== el && mk !== document.body) {
+                    mk.style.removeProperty('display');
+                    mk.removeAttribute('data-dsh-closed');
+                  }
+                } catch (eCl2) {}
+              }
+              function reopenSignal(el) {
+                try {
+                  if (el.getAttribute('data-open') === '1') return true;
+                  if (el.classList.contains('dshp-dock') && chipOnForTitle(el)) return true;
+                } catch (eRs2) {}
+                return false;
+              }
+
               // 通道一：选择器定向收拢（只针对根面板，绝不匹配任何内部子节点）
               var docks = document.querySelectorAll('.dshp-dock, .aYQbCq_panel, [class*="ActivityPanel_panel"], [class*="activityPanel"], [data-plugin-dock], [data-plugin-panel], [data-agent-teams-panel]');
               for (var i = 0; i < docks.length; i++) {
                 var d = docks[i];
                 if (!d || d.nodeType !== 1) continue;
-                if (d.getAttribute('data-open') === '0' || d.getAttribute('data-hide') === '1' || d.classList.contains('dsh-closed-card')) {
+                if ((d.classList.contains('dsh-closed-card') || d.getAttribute('data-hide') === '1') && reopenSignal(d)) {
+                  clearCloseMarkers(d);
+                } else if (d.getAttribute('data-open') === '0' || d.getAttribute('data-hide') === '1' || d.classList.contains('dsh-closed-card')) {
                   d.style.setProperty('display', 'none', 'important');
                   continue;
                 }
@@ -6044,7 +6090,9 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 for (var cIdx = 0; cIdx < candidates.length; cIdx++) {
                   var cand = candidates[cIdx];
                   if (!cand || cand.nodeType !== 1) continue;
-                  if (cand.getAttribute('data-open') === '0' || cand.getAttribute('data-hide') === '1' || cand.classList.contains('dsh-closed-card')) {
+                  if ((cand.classList.contains('dsh-closed-card') || cand.getAttribute('data-hide') === '1') && reopenSignal(cand)) {
+                    clearCloseMarkers(cand);
+                  } else if (cand.getAttribute('data-open') === '0' || cand.getAttribute('data-hide') === '1' || cand.classList.contains('dsh-closed-card')) {
                     cand.style.setProperty('display', 'none', 'important');
                     continue;
                   }
@@ -10347,8 +10395,8 @@ function applySidebarInset() {
             \(deviceInfo)
 
             【本版要点】
-            1. 根治插件卡片占满全屏与关闭失效
-            2. 插件面板按内容自适应并保留收起按钮
+            1. 修复插件面板关闭后重开可能不显示
+            2. 修复多面板同开时可能关错面板
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
