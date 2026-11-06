@@ -1002,11 +1002,20 @@ final class ConnectionGuideViewController: UIViewController {
         let step1 = createStepCard(
             badge: "步骤 1",
             title: "电脑端安装插件（主推 dsh-anywhere / 备选 dsh-pocket）",
-            detail: "【首选方案 dsh-anywhere】支持多台手机与 iPad 同时在线访问与无缝切换：\n开源地址：https://github.com/liushQAQ/dsh-anywhere\n安装命令（务必带 github: 前缀，直接装本仓库）：",
+            detail: "【首选方案 dsh-anywhere】支持多台手机与 iPad 同时在线访问与无缝切换：\n开源仓库与说明见下方按钮，安装命令（务必带 github: 前缀，直接装本仓库）：",
             code: "pnpm add github:liushQAQ/dsh-anywhere",
             tip: "【备选方案 dsh-pocket】若仅需单设备轻量访问，可安装社区备选（npm 上的 dsh-pocket，作者 shaobeichen）：\ndsh plugin --profile web add dsh-pocket -w"
         )
         stack.addArrangedSubview(step1)
+
+        // 地址一律用按钮承载，禁止把裸 URL 塞进说明文本伪装成链接（点不开的假链接）。
+        let repoButton = UIButton(type: .system)
+        repoButton.setTitle("🌐 打开 dsh-anywhere 开源仓库（GitHub）", for: .normal)
+        repoButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        repoButton.contentHorizontalAlignment = .left
+        repoButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        repoButton.addTarget(self, action: #selector(openDshAnywhereRepo), for: .touchUpInside)
+        stack.addArrangedSubview(repoButton)
 
         // 步骤二：开启多端访问并查看地址
         let step2 = createStepCard(
@@ -1052,6 +1061,11 @@ final class ConnectionGuideViewController: UIViewController {
         dismiss(animated: true) { [weak self] in
             self?.onOpenInputURL?()
         }
+    }
+
+    @objc private func openDshAnywhereRepo() {
+        guard let url = URL(string: "https://github.com/liushQAQ/dsh-anywhere") else { return }
+        UIApplication.shared.open(url)
     }
 
     @objc private func copyCommandTapped(_ sender: UIButton) {

@@ -796,6 +796,20 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - **回归防御**：`_diag/regression.js` 新增 `[弹窗关闭·R62/63]`（通配选择器保持清零 + 双事件闭环 + 悬浮钮 + 关闭态 CSS 四件套）与 `[面板重开·R64]`（clearCloseMarkers/reopenSignal/chipOnForTitle/data-dsh-closed 四特征）断言。
 - **教训**：**强制隐藏必须配套「重开即清」**——往共享 DOM 节点写死任何隐藏标记前，先想清楚谁负责在状态翻转时把它擦掉；只写不擦的标记 = 给未来埋「关了打不开」的死锁。
 
+### R65 关于页「开源仓库」地址指向错误项目 + 纯文本不可点击（2026-11-06）
+
+- **症状**（老总反馈）：关于弹窗里写 `https://github.com/liushQAQ/IOS`，别人打开看到的是另一个项目（ios-mcp-agent），根本找不到 DSHios；且该地址只是纯文本，看着像链接但点不动。
+- **真因**：`liushQAQ/IOS` 仓库**默认分支是 main**，main 上是另一个项目（ios-mcp-agent，README 指向 `liush734530963/ios-mcp-agent-public`）；DSHios 源码在 **personal 分支**，安装包在 **Releases**。关于页直接指向仓库根 = 指错内容。UIAlertController 的 message 只能显示纯文本，iOS 不会把其中 URL 变成可点击链接，所以出现「高亮/像链接但点不开」。
+- **解法**：
+  1. **治本**：把 `liushQAQ/IOS` 仓库默认分支从 `main` 切到 `personal`（`gh api -X PATCH repos/liushQAQ/IOS -f default_branch=personal`），并把仓库 About 的描述改成「DeepSeek Harness iOS 客户端」、Website 指向 `releases/latest` —— 这样别人打开仓库根地址看到的就是 DSHios 本尊（2026-11-06 已执行并核验 README 解析到 personal）；
+  2. 关于页地址改为两个有效入口：`https://github.com/liushQAQ/IOS/tree/personal`（源码）与 `https://github.com/liushQAQ/IOS/releases/latest`（发布包）；
+  3. message 内不再摆任何裸 URL 或半截域名，只写「地址见下方按钮」，避免假链接观感；
+  4. 新增可点击按钮（顺序按国内可用性排）：`🚀 检查更新 / 下载最新包（国内免代理）`、`⚡ 发布页国内镜像`（gh-proxy 页面代理，实测 200；ghfast 对 HTML 页面不稳定，只用于 raw/直链）、`📦 安装包发布页`、`🌐 源码仓库（personal 分支）`，全部走 `UIApplication.shared.open`；
+  5. 连接教程页的 `dsh-anywhere` 裸 URL 同样改为真实按钮，禁止说明文本里再出现假链接；
+  6. README 顶部补「正确入口」表，并把过时的他人隧道示例地址换成占位符。
+- **回归防御**：关于页任何「地址类」说明必须同时满足三条：① 指向的 URL 打开后能看到 DSHios 内容（禁止指向错误分支；默认分支已锁 personal，若有人改回 main 立即复发）；② 必须是 `UIAlertAction`/按钮等真实可点击控件，禁止把裸 URL 塞进 `UIAlertController.message` 当链接用；③ 面向国内网络必须有一条免代理路径（镜像发布页或 App 内镜像下载），禁止只给裸 GitHub 链接。
+- **教训**：**仓库地址≠仓库根**——多分支仓库对外的"说明入口"必须落到正确分支或 Releases；iOS 原生弹窗不解析链接，要点击就放按钮；国内环境 `github.com` 网页直连会被重置，入口必须带镜像兜底。
+
 ### R62 所有弹出式卡片/面板全屏占满且缺失关闭按钮根治（v2.1.14(15) 根治，2026-11-04）
 
 - **症状**（老总 2026-11-04 实测反馈）：「占满全页，一个关闭按钮都没有。所有卡片都是，所有这种弹出式卡片都要增加关闭按钮。」

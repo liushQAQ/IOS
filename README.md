@@ -8,6 +8,20 @@
 
 从零开发的 DeepSeek Harness 移动客户端（iOS 16+）。采用与 Hermes Studio 一致的方案：**原生 Swift + WKWebView 薄壳**，加载 DSH 的 web UI，不重写任何客户端业务逻辑。
 
+## 📥 下载与源码入口
+
+> 国内网络直连 `github.com` 经常被重置（打不开是常态，不是仓库问题），**请优先点国内镜像**。
+> 仓库默认分支已切到 `personal`，打开仓库根地址就是本项目。
+
+| 用途 | 地址 |
+|---|---|
+| ⚡ 安装包发布页（国内镜像，推荐） | <https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/latest> |
+| 📦 安装包发布页（GitHub 原站） | <https://github.com/liushQAQ/IOS/releases/latest> |
+| 🌐 本 App 源码（personal 分支） | <https://github.com/liushQAQ/IOS/tree/personal> |
+| 更新元数据（国内加速） | <https://ghfast.top/https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json> |
+
+> App 内「关于」页与「检查更新」均已内置同款国内免代理通道，GitHub 打不开也能升级。
+
 > 证书、签名、Apple Developer 账号由你自己搞定，本工程只提供完整源码 + 在线编译配置。
 
 ## 工作原理
@@ -19,7 +33,7 @@ http://<host>:<port>/dsh/?password=<密码>&token=<token>
 ```
 
 - 局域网直连：`http://192.168.x.x:3081/dsh/`
-- 公网/隧道：`http://cn-hk-bgp-4.ofalias.net:47027/dsh/?password=...&token=...`
+- 公网/隧道：`https://<你的公网域名或隧道地址>/dsh/?password=...&token=...`（请填自己的地址，不要使用他人示例）
 - 已内置 ATS 豁免（明文 HTTP + WKWebView 均允许任意加载），iOS 16 下可直接访问 http。
 
 ## 目录结构

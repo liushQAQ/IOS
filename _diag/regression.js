@@ -1807,6 +1807,30 @@ const A_PLUGIN_PAGE = () => {
         '[文案·R46] 更新说明/关于：序号1..N递增·每条≤40字·显式左对齐·badge动态版本·要点≤3条',
         logErrs.length ? '🔴 ' + logErrs.slice(0, 4).join('；') : '文案规范全过（日志 ' + (mLog ? mLog[1].split(/\r?\n/).filter(s => s.trim()).length : 0) + ' 条）');
     }
+    /* R65（2026-11-06）：关于页地址防复发 —— 必须指向 personal 分支 / Releases，
+       禁止指向仓库默认分支根（main 上是另一个项目），且必须给国内免代理入口；message 禁摆裸 URL。 */
+    {
+      const vcSrc65 = fs.readFileSync(path.join(DIR, '..', 'DSHios', 'ViewController.swift'), 'utf8');
+      const errs65 = [];
+      if (!/projectRepoURL\s*=\s*"https:\/\/github\.com\/liushQAQ\/IOS\/tree\/personal"/.test(vcSrc65)) errs65.push('源码入口未指向 personal 分支');
+      if (!/projectReleasesURL\s*=\s*"https:\/\/github\.com\/liushQAQ\/IOS\/releases\/latest"/.test(vcSrc65)) errs65.push('发布页入口缺失');
+      if (!/projectReleasesMirrorURL\s*=\s*"https:\/\/gh-proxy\.com\/https:\/\/github\.com\/liushQAQ\/IOS\/releases\/latest"/.test(vcSrc65)) errs65.push('国内镜像发布页缺失');
+      if (!/addAction\(UIAlertAction\(title: "🚀 检查更新 \/ 下载最新包（国内免代理）"/.test(vcSrc65)) errs65.push('国内免代理下载按钮缺失');
+      const iAbout = vcSrc65.indexOf('private func showAbout()');
+      const iOpen = vcSrc65.indexOf('private static func openExternalURL');
+      if (iAbout < 0 || iOpen <= iAbout) errs65.push('showAbout 区间未找到');
+      else {
+        const aboutSrc = vcSrc65.slice(iAbout, iOpen);
+        const mm = aboutSrc.match(/message: """([\s\S]*?)"""/);
+        if (!mm) errs65.push('关于页 message 块未找到');
+        else if (/https?:\/\//.test(mm[1])) errs65.push('message 内出现裸 URL（假链接）');
+        if (!/Self\.openExternalURL\(Self\.projectRepoURL\)/.test(aboutSrc)) errs65.push('源码仓库按钮未接真实打开动作');
+        if (!/Self\.openExternalURL\(Self\.projectReleasesMirrorURL\)/.test(aboutSrc)) errs65.push('镜像发布页按钮未接真实打开动作');
+      }
+      chk(errs65.length === 0,
+        '[关于·R65] 地址有效（personal/Releases/国内镜像）+ 全部按钮真实可点 + message 无裸 URL',
+        errs65.length ? '🔴 ' + errs65.join('；') : '入口与可点击性全过');
+    }
     /* R37（v1.0.136）：+ 号弹层伪关闭吞掉器 —— 回合运行中 commands/list 被写句柄门闩拒绝，
        前端在 reducer 路径直接置回关闭（无任何关闭回调）。守卫必须常驻，删掉即复发。 */
     const r37src = /window\.__dshTriggerMenuKeeper/.test(bundle)

@@ -10379,6 +10379,14 @@ function applySidebarInset() {
         present(nav, animated: true)
     }
 
+    /// 仓库默认分支已切到 personal（DSHios 源码分支），根地址即可直达本项目；
+    /// 发布包在 Releases。GitHub 在中国大陆经常直连不通，所以同时提供国内镜像入口。
+    /// 关于页的铁律：地址只能由按钮承载 —— UIAlertController.message 里的裸 URL 点不动，
+    /// 看着像链接却是死的，一律禁止。
+    private static let projectRepoURL = "https://github.com/liushQAQ/IOS/tree/personal"
+    private static let projectReleasesURL = "https://github.com/liushQAQ/IOS/releases/latest"
+    private static let projectReleasesMirrorURL = "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/latest"
+
     /// 关于：版本号原生可见（读 Info.plist，回退到编译期常量）
     private func showAbout() {
         let info = Bundle.main.infoDictionary
@@ -10389,7 +10397,8 @@ function applySidebarInset() {
             title: "DeepSeek Harness iOS",
             message: """
             版本：\(version) (\(build))
-            开源仓库：https://github.com/liushQAQ/IOS
+            源码与安装包地址统一放在下方按钮，点一下直接打开。
+            GitHub 直连打不开时，请用「国内镜像发布页」或「检查更新 / 下载最新包」，全程免代理。
 
             【设备环境信息】
             \(deviceInfo)
@@ -10400,11 +10409,28 @@ function applySidebarInset() {
             """,
             preferredStyle: .alert)
         Self.alignAlertMessageLeft(alert)
+        alert.addAction(UIAlertAction(title: "🚀 检查更新 / 下载最新包（国内免代理）", style: .default) { [weak self] _ in
+            self?.checkForAppUpdates(manual: true)
+        })
+        alert.addAction(UIAlertAction(title: "⚡ 发布页国内镜像（GitHub 打不开时用）", style: .default) { _ in
+            Self.openExternalURL(Self.projectReleasesMirrorURL)
+        })
+        alert.addAction(UIAlertAction(title: "📦 安装包发布页（GitHub Releases）", style: .default) { _ in
+            Self.openExternalURL(Self.projectReleasesURL)
+        })
+        alert.addAction(UIAlertAction(title: "🌐 源码仓库（personal 分支）", style: .default) { _ in
+            Self.openExternalURL(Self.projectRepoURL)
+        })
         alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
             self?.openConnectionGuide()
         })
         alert.addAction(UIAlertAction(title: "好", style: .cancel))
         present(alert, animated: true)
+    }
+
+    private static func openExternalURL(_ string: String) {
+        guard let url = URL(string: string) else { return }
+        UIApplication.shared.open(url)
     }
 
     // MARK: - Loading

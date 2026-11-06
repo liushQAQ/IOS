@@ -101,6 +101,17 @@
 发布产物：`releases/`（全历史保留，严禁覆盖）；在线清单：`releases/latest.json`（App 内检测更新读它）。
 统计网关源码：`E:\desktop\所有skill\dsh-stat\stat_server.py`（9071，Tailscale Funnel 8443 对外）。
 
+🔴 **对外地址铁律（2026-11-06 老总令，防「外网打不开」复发）**：
+1. `public_tipa_url` **必须是任何外网设备都能直接打开的公开地址**（现用
+   `https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v<ver>/DSHios-public-<ver>-<build>.tipa`），
+   **严禁填 `*.ts.net` 等 Tailscale 私有域名**——统计网关地址只能放 `tipa_url`，不能冒充公开地址。
+2. 任何对外「说明」里的地址必须指向正确内容：源码用 `/tree/personal`，安装包用 `/releases/latest`；
+   **禁止指向仓库根**（默认 main 分支是另一个项目 ios-mcp-agent）。
+3. 说明文案里**禁止摆裸 URL 冒充链接**；iOS 弹窗只认按钮，地址一律做成 `UIAlertAction` / `UIButton`。
+4. 必须保留至少一条国内免代理路径（`gh-proxy.com` 镜像发布页 / App 内「检查更新·下载最新包」）。
+   镜像页实测：`gh-proxy.com` 可代理 Releases 页面（200）；`ghfast.top` 只稳用于 raw / release 直链，别拿它开 HTML 页。
+5. 关于页改动后跑闸门，`[关于·R65]` 断言会机械拦截「地址回退 / 裸 URL 回潮」。
+
 🔴 **顶栏 / 会话框布局铁律（2026-10-23 老总令，永久）**：
 1. **顶栏每多一个模块，必须重新分配一次宽度**。凡是「给谁让位」的留白，一律走
    `--dsh-head-right` 这类**实测变量 + 兜底默认值**，严禁写死像素（`right: 96px` 这类
