@@ -17,6 +17,7 @@
 		A100000000000000000000B8 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000A9 /* InfoPlist.strings */; };
 		A100000000000000000000BC /* QRAddressScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000AC /* QRAddressScanner.swift */; };
 		A100000000000000000000BD /* FeedbackViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000AD /* FeedbackViewController.swift */; };
+		A100000000000000000000BE /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000AE /* AboutViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +32,7 @@
 		A100000000000000000000A9 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		A100000000000000000000AC /* QRAddressScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRAddressScanner.swift; sourceTree = "<group>"; };
 		A100000000000000000000AD /* FeedbackViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackViewController.swift; sourceTree = "<group>"; };
+		A100000000000000000000AE /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
 		A100000000000000000000A8 /* DSHios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DSHios.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -62,6 +64,7 @@
 				A100000000000000000000A3 /* ViewController.swift */,
 				A100000000000000000000A4 /* SettingsViewController.swift */,
 				A100000000000000000000AD /* FeedbackViewController.swift */,
+				A100000000000000000000AE /* AboutViewController.swift */,
 				A100000000000000000000AA /* DSHConnectionManager.swift */,
 				A100000000000000000000AC /* QRAddressScanner.swift */,
 				A100000000000000000000A5 /* Info.plist */,
@@ -164,6 +167,7 @@
 				A100000000000000000000B3 /* ViewController.swift in Sources */,
 				A100000000000000000000B4 /* SettingsViewController.swift in Sources */,
 				A100000000000000000000BD /* FeedbackViewController.swift in Sources */,
+				A100000000000000000000BE /* AboutViewController.swift in Sources */,
 				A100000000000000000000B5 /* DSHConnectionManager.swift in Sources */,
 				A100000000000000000000BC /* QRAddressScanner.swift in Sources */,
 			);
@@ -300,7 +304,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1.17;
+				MARKETING_VERSION = 2.1.18;
 				PRODUCT_BUNDLE_IDENTIFIER = com.deepseek.harness.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -323,7 +327,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1.17;
+				MARKETING_VERSION = 2.1.18;
 				PRODUCT_BUNDLE_IDENTIFIER = com.deepseek.harness.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

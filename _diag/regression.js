@@ -1791,7 +1791,9 @@ const A_PLUGIN_PAGE = () => {
       if (!/badgeLabel\.text = "更新日志 \(v\\\(AppDelegate\.Version\.marketing\)\)"/.test(setSrc)) logErrs.push('badge 版本未动态化（禁止写死）');
       if (!/titleLabel\.textAlignment = \.left/.test(setSrc)) logErrs.push('更新说明标题缺显式左对齐');
       if (!/contentLabel\.textAlignment = \.left/.test(setSrc)) logErrs.push('更新说明正文缺显式左对齐');
-      const mAbout = vcSrc46.match(/【本版要点[^\n]*\n([\s\S]*?)"""/);
+      let aboutSrc46 = '';
+      try { aboutSrc46 = fs.readFileSync(path.join(DIR, '..', 'DSHios', 'AboutViewController.swift'), 'utf8'); } catch (e) { aboutSrc46 = ''; }
+      const mAbout = aboutSrc46.match(/【本版要点[^\n]*\n([\s\S]*?)"""/);
       if (!mAbout) logErrs.push('关于页本版要点未找到');
       else {
         const abItems = mAbout[1].split(/\r?\n/).map(s => s.trim()).filter(Boolean);
@@ -1807,28 +1809,35 @@ const A_PLUGIN_PAGE = () => {
         '[文案·R46] 更新说明/关于：序号1..N递增·每条≤40字·显式左对齐·badge动态版本·要点≤3条',
         logErrs.length ? '🔴 ' + logErrs.slice(0, 4).join('；') : '文案规范全过（日志 ' + (mLog ? mLog[1].split(/\r?\n/).filter(s => s.trim()).length : 0) + ' 条）');
     }
-    /* R65（2026-11-06）：关于页地址防复发 —— 必须指向 personal 分支 / Releases，
-       禁止指向仓库默认分支根（main 上是另一个项目），且必须给国内免代理入口；message 禁摆裸 URL。 */
+    /* R65（2026-11-06，v2.1.18 修订）：关于页地址防复发 —— 必须指向 Releases，
+       禁止指向仓库默认分支根（main 上是另一个项目），必须给国内免代理入口；
+       地址必须在正文里以 .link 属性高亮且点击直跳 Safari（不再用弹窗承载裸 URL）。 */
     {
       const vcSrc65 = fs.readFileSync(path.join(DIR, '..', 'DSHios', 'ViewController.swift'), 'utf8');
       const errs65 = [];
       if (!/projectRepoURL\s*=\s*"https:\/\/github\.com\/liushQAQ\/IOS\/tree\/personal"/.test(vcSrc65)) errs65.push('源码入口未指向 personal 分支');
       if (!/projectReleasesURL\s*=\s*"https:\/\/github\.com\/liushQAQ\/IOS\/releases\/latest"/.test(vcSrc65)) errs65.push('发布页入口缺失');
       if (!/projectReleasesMirrorURL\s*=\s*"https:\/\/gh-proxy\.com\/https:\/\/github\.com\/liushQAQ\/IOS\/releases\/latest"/.test(vcSrc65)) errs65.push('国内镜像发布页缺失');
-      if (!/addAction\(UIAlertAction\(title: "🚀 检查更新 \/ 下载最新包（国内免代理）"/.test(vcSrc65)) errs65.push('国内免代理下载按钮缺失');
-      const iAbout = vcSrc65.indexOf('private func showAbout()');
-      const iOpen = vcSrc65.indexOf('private static func openExternalURL');
-      if (iAbout < 0 || iOpen <= iAbout) errs65.push('showAbout 区间未找到');
-      else {
-        const aboutSrc = vcSrc65.slice(iAbout, iOpen);
-        const mm = aboutSrc.match(/message: """([\s\S]*?)"""/);
-        if (!mm) errs65.push('关于页 message 块未找到');
-        else if (/https?:\/\//.test(mm[1])) errs65.push('message 内出现裸 URL（假链接）');
-        if (!/Self\.openExternalURL\(Self\.projectRepoURL\)/.test(aboutSrc)) errs65.push('源码仓库按钮未接真实打开动作');
-        if (!/Self\.openExternalURL\(Self\.projectReleasesMirrorURL\)/.test(aboutSrc)) errs65.push('镜像发布页按钮未接真实打开动作');
+
+      let aboutSrc65 = '';
+      try { aboutSrc65 = fs.readFileSync(path.join(DIR, '..', 'DSHios', 'AboutViewController.swift'), 'utf8'); } catch (e) { errs65.push('AboutViewController.swift 缺失'); }
+      if (aboutSrc65) {
+        // 1) 地址只允许来自外部注入的常量，正文里禁止硬编码裸 URL（否则就是假链接回潮）
+        if (/https?:\/\//.test(aboutSrc65)) errs65.push('关于页正文硬编码了裸 URL（假链接，须由常量注入）');
+        // 2) 地址必须用 .link 属性渲染 + 高亮样式，点击交给系统跳 Safari
+        if (!/\.link:\s*url/.test(aboutSrc65)) errs65.push('地址未以 .link 属性渲染（点不动）');
+        if (!/linkTextAttributes/.test(aboutSrc65)) errs65.push('地址缺高亮样式（linkTextAttributes）');
+        if (!/UIColor\.systemBlue/.test(aboutSrc65)) errs65.push('地址未高亮成链接色');
+        // 3) showAbout 必须注入三个真实地址，点击必须走系统打开
+        if (!/repoURLString:\s*Self\.projectRepoURL/.test(vcSrc65)) errs65.push('源码仓库未接入关于页');
+        if (!/releasesURLString:\s*Self\.projectReleasesURL/.test(vcSrc65)) errs65.push('发布页未接入关于页');
+        if (!/mirrorURLString:\s*Self\.projectReleasesMirrorURL/.test(vcSrc65)) errs65.push('国内镜像未接入关于页');
+        if (!/UIApplication\.shared\.open\(url/.test(aboutSrc65)) errs65.push('点击地址未调用系统打开（Safari）');
+        // 4) 国内免代理下载入口必须仍在（v2.1.18 起按钮由关于页承载）
+        if (!/检查更新 \/ 下载最新包（国内免代理）/.test(aboutSrc65)) errs65.push('国内免代理下载按钮缺失');
       }
       chk(errs65.length === 0,
-        '[关于·R65] 地址有效（personal/Releases/国内镜像）+ 全部按钮真实可点 + message 无裸 URL',
+        '[关于·R65] 地址有效（personal/Releases/国内镜像）+ 正文高亮可点直跳 Safari + 无裸 URL 假链接',
         errs65.length ? '🔴 ' + errs65.join('；') : '入口与可点击性全过');
     }
     /* R37（v1.0.136）：+ 号弹层伪关闭吞掉器 —— 回合运行中 commands/list 被写句柄门闩拒绝，

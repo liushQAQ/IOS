@@ -10387,45 +10387,24 @@ function applySidebarInset() {
     private static let projectReleasesURL = "https://github.com/liushQAQ/IOS/releases/latest"
     private static let projectReleasesMirrorURL = "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/latest"
 
-    /// 关于：版本号原生可见（读 Info.plist，回退到编译期常量）
+    /// 关于（v2.1.18 起改为独立页面）：
+    /// 老总令「关于说明改这个地址，高亮可以打开直接跳转 Safari」——
+    /// 地址在正文里高亮（.link 属性），点击由系统直接跳 Safari，不再用弹窗承载。
+    /// 地址常量仍是本文件的 projectReleasesURL / projectReleasesMirrorURL / projectRepoURL，
+    /// 严禁在任何页面硬编码裸 URL（[关于·R65] 机械拦截地址回退与假链接回潮）。
     private func showAbout() {
-        let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? AppDelegate.Version.marketing
-        let build = info?["CFBundleVersion"] as? String ?? AppDelegate.Version.build
-        let deviceInfo = Self.getDeviceInfoSummary()
-        let alert = UIAlertController(
-            title: "DeepSeek Harness iOS",
-            message: """
-            版本：\(version) (\(build))
-            源码与安装包地址统一放在下方按钮，点一下直接打开。
-            GitHub 直连打不开时，请用「国内镜像发布页」或「检查更新 / 下载最新包」，全程免代理。
-
-            【设备环境信息】
-            \(deviceInfo)
-
-            【本版要点】
-            1. 修复插件面板关闭后重开可能不显示
-            2. 修复多面板同开时可能关错面板
-            """,
-            preferredStyle: .alert)
-        Self.alignAlertMessageLeft(alert)
-        alert.addAction(UIAlertAction(title: "🚀 检查更新 / 下载最新包（国内免代理）", style: .default) { [weak self] _ in
+        let about = AboutViewController(releasesURLString: Self.projectReleasesURL,
+                                       mirrorURLString: Self.projectReleasesMirrorURL,
+                                       repoURLString: Self.projectRepoURL)
+        about.onCheckUpdate = { [weak self] in
             self?.checkForAppUpdates(manual: true)
-        })
-        alert.addAction(UIAlertAction(title: "⚡ 发布页国内镜像（GitHub 打不开时用）", style: .default) { _ in
-            Self.openExternalURL(Self.projectReleasesMirrorURL)
-        })
-        alert.addAction(UIAlertAction(title: "📦 安装包发布页（GitHub Releases）", style: .default) { _ in
-            Self.openExternalURL(Self.projectReleasesURL)
-        })
-        alert.addAction(UIAlertAction(title: "🌐 源码仓库（personal 分支）", style: .default) { _ in
-            Self.openExternalURL(Self.projectRepoURL)
-        })
-        alert.addAction(UIAlertAction(title: "连接教程与更新说明", style: .default) { [weak self] _ in
+        }
+        about.onOpenGuide = { [weak self] in
             self?.openConnectionGuide()
-        })
-        alert.addAction(UIAlertAction(title: "好", style: .cancel))
-        present(alert, animated: true)
+        }
+        let nav = UINavigationController(rootViewController: about)
+        nav.modalPresentationStyle = .pageSheet
+        present(nav, animated: true)
     }
 
     private static func openExternalURL(_ string: String) {
