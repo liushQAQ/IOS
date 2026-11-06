@@ -6,7 +6,7 @@ final class AboutViewController: UIViewController {
     private let safeModeButton = UIButton(type: .system)
     private let repoButton = UIButton(type: .system)
 
-    /// 真实可外网访问的开源主页（旧地址 liush734530963/ios-mcp-agent-public 为 404，已废弃）
+    /// 真实可外网访问的开源主页（旧地址指向不存在账号，GitHub 返回 404，已废弃）
     private let repoURLString = "https://github.com/liushQAQ/IOS"
 
     override func viewDidLoad() {
@@ -49,7 +49,7 @@ final class AboutViewController: UIViewController {
         🌟 最新更新日志 (v1.0.12)
         ==============================
         【关于页地址修正 + 可点击打开】
-        1. 修正开源地址：原「liush734530963/ios-mcp-agent-public」为无效地址（GitHub 返回 404，
+        1. 修正开源地址：原地址指向不存在的账号（GitHub 返回 404，
            外网任何人打开都是 Page not found），现统一为真实仓库：
            https://github.com/liushQAQ/IOS
         2. 关于页正文里的地址不再做成高亮链接样式（不高亮、不变蓝、不带下划线），
