@@ -15,6 +15,7 @@
 
 | 用途 | 地址 |
 |---|---|
+| 🚪 仓库主页（国内免代理直接打开） | <https://gh-proxy.com/https://github.com/liushQAQ/IOS> |
 | ⚡ 安装包发布页（国内镜像，推荐） | <https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/latest> |
 | 📦 安装包发布页（GitHub 原站） | <https://github.com/liushQAQ/IOS/releases/latest> |
 | 🌐 本 App 源码（personal 分支） | <https://github.com/liushQAQ/IOS/tree/personal> |
