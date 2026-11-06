@@ -2,9 +2,9 @@ name: Build unsigned IPA (Public Clean Edition)
 
 on:
   workflow_dispatch:
-  # 安全合规：彻底关闭 push 自动触发，杜绝短时间内并发高频挤占 macOS 免费算力导致账号风控
-  # push:
-  #   branches: [ main, master, personal ]
+  # 临时诊断（2026-11-06）：手动触发被 GitHub 秒取消，改用 push 触发验证是否账号级风控
+  push:
+    branches: [ personal ]
 
 jobs:
   build:
