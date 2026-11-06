@@ -96,7 +96,7 @@ final class AboutViewController: UIViewController {
                                                  background: .secondarySystemGroupedBackground,
                                                  titleColor: .label,
                                                  action: #selector(openRepoTapped)))
-        stack.addArrangedSubview(makeActionButton(title: "第一次用？先看连接教程",
+        stack.addArrangedSubview(makeActionButton(title: "连接教程与更新说明",
                                                  background: .secondarySystemGroupedBackground,
                                                  titleColor: .label,
                                                  action: #selector(openGuideTapped)))

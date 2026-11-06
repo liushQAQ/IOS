@@ -962,7 +962,7 @@ final class ConnectionGuideViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "怎么把手机连上电脑"
+        title = "连接说明与教程"
         view.backgroundColor = .systemBackground
 
         navigationItem.rightBarButtonItem = UIBarButtonItem(
@@ -993,7 +993,7 @@ final class ConnectionGuideViewController: UIViewController {
 
         // 头部卡片：主推自研 dsh-anywhere，备选 dsh-pocket
         let headerBox = createCardView(
-            title: "先说结论：连 dsh-anywhere，几台设备一起用也不打架",
+            title: "💡 首选：dsh-anywhere 超级连接枢纽（支持多设备无缝协同）",
             desc: "我自己日常就是这么连的，手机、iPad、电脑同时开同一个会话，谁也不用等谁。\n• 多开不踢线：几台设备同时在线，消息同步着走，不会互相挤掉。\n• 锁屏回来还在：切后台一两分钟再回来，基本自己就接上了，不用手忙脚乱重连。\n• 不藏东西：代码全在仓库里，没有塞任何私人地址或密码。\n\n只有一台手机偶尔用的话，dsh-pocket 也够，看步骤 1 的备选。"
         )
         stack.addArrangedSubview(headerBox)
@@ -1001,7 +1001,7 @@ final class ConnectionGuideViewController: UIViewController {
         // 步骤一：电脑端安装插件（主推 dsh-anywhere，备选 dsh-pocket）
         let step1 = createStepCard(
             badge: "步骤 1",
-            title: "先在电脑上把插件装上",
+            title: "电脑端安装插件（主推 dsh-anywhere / 备选 dsh-pocket）",
             detail: "推荐 dsh-anywhere，我自用的就是它：仓库和说明在下面按钮里。\n命令照抄即可，但 github: 前缀千万别省 —— 省了会装到 npm 上同名的另一个东西，完全不是这个。",
             code: "pnpm add github:liushQAQ/dsh-anywhere",
             tip: "只连一台设备、图省事的话，用社区的 dsh-pocket 也行（作者 shaobeichen）：\ndsh plugin --profile web add dsh-pocket -w"
@@ -1020,7 +1020,7 @@ final class ConnectionGuideViewController: UIViewController {
         // 步骤二：开启多端访问并查看地址
         let step2 = createStepCard(
             badge: "步骤 2",
-            title: "电脑这边把服务跑起来",
+            title: "多台手机/Pad 同时访问与无缝切换",
             detail: "1. 启动 DSH，端口统一走 3083 一个口子就好\n2. 界面上会显示局域网地址和二维码，手机要连的就是它\n3. 几台设备同时开同一个会话，各看各的，消息实时同步\n4. 想在外面用就挂 Cloudflare 或自己的穿透，重启后地址不会变",
             code: nil,
             tip: "锁屏回来连不上，是最常见的抱怨。我做了自动恢复；真卡住了点一下悬浮球的「刷新」，比杀进程重开快得多。"
@@ -1030,7 +1030,7 @@ final class ConnectionGuideViewController: UIViewController {
         // 步骤三：手机端连接
         let step3 = createStepCard(
             badge: "步骤 3",
-            title: "最后在手机上连上来",
+            title: "在 iPhone 上扫码或填入连接",
             detail: "1. 手机和电脑连同一个 WiFi（或者用公网地址）\n2. 最省事：右上角「扫码」，扫电脑上的二维码，地址自动填好\n3. 也可以「手动输入地址…」，填完点「加载」\n4. 地址会记住，登录态也留着，下次打开直接进",
             code: nil,
             tip: "第一次连不上，九成是端口没通或者被防火墙挡了，不是 App 的毛病 —— 先去确认 3083 通不通。"
@@ -1229,7 +1229,7 @@ final class ConnectionGuideViewController: UIViewController {
         hBadge.axis = .horizontal
 
         let titleLabel = UILabel()
-        titleLabel.text = "这版改了什么"
+        titleLabel.text = "更新说明"
         titleLabel.font = .preferredFont(forTextStyle: .headline)
         titleLabel.textColor = .label
         titleLabel.numberOfLines = 0
