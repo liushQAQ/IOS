@@ -1,12 +1,12 @@
 {
-  "version": "2.1.16",
-  "build": 135,
-  "updated_at": "2026-11-04 19:00:00",
-  "title": "v2.1.16(135) 根除插件面板全屏占满、恢复原生头部与多事件穿透关闭",
-  "changelog": "1. 彻底清除通配选择器污染，插件卡片绝不再撑满全屏\n2. 面板按内容自适应尺寸，原生头部与收起按钮 100% 在屏内露出\n3. 关闭按钮同时绑定 click 与 touchend，状态深度穿透闭环触发\n4. 修复顶栏插件弹出页面超出屏幕范围",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.16-135.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.16-135.tipa?m=gh-proxy.com",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.16/DSHios-public-2.1.16-135.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.16",
-  "md5": "bac9454945aa06333fb242b228182dd3"
+  "version": "2.1.18",
+  "build": 20,
+  "updated_at": "2026-11-06 12:21:00",
+  "title": "v2.1.18(20) 关于页改独立页面，开源地址可直跳浏览器",
+  "changelog": "1. 关于页改成独立页面，开源地址可点开直跳浏览器 (2.1.18)\n2. 打不开时自动给镜像地址，长按可复制 (2.1.18)\n3. 说明文案精简，去掉 AI 腔 (2.1.18)\n4. 修复插件面板关闭后重开可能不显示 (2.1.17)\n5. 同时开多个插件面板不再关错 (2.1.17)\n6. 根治插件弹窗全屏占满与关闭按钮失效 (2.1.16)",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.18-20.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.1.18/DSHios-public-2.1.18-20.tipa",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.18/DSHios-public-2.1.18-20.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.18",
+  "md5": "8e03ad65ede587b536579b9513118281"
 }
