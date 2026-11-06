@@ -4,6 +4,10 @@ final class AboutViewController: UIViewController {
     private let crashLabel = UILabel()
     private let crashButton = UIButton(type: .system)
     private let safeModeButton = UIButton(type: .system)
+    private let repoButton = UIButton(type: .system)
+
+    /// 真实可外网访问的开源主页（旧地址 liush734530963/ios-mcp-agent-public 为 404，已废弃）
+    private let repoURLString = "https://github.com/liushQAQ/IOS"
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -30,8 +34,8 @@ final class AboutViewController: UIViewController {
         text.text = """
         手机助手 (ios-mcp-agent)
         版本：v\(version) (Build \(build))
-        开发者：liush（GitHub: liush734530963）
-        开源主页：https://github.com/liush734530963/ios-mcp-agent-public
+        开发者：liush（GitHub: liushQAQ）
+        开源主页：https://github.com/liushQAQ/IOS
 
         【功能原理与环境边界】
         1. 越狱设备（已装 iOS-MCP 8090 端口）：
@@ -42,7 +46,17 @@ final class AboutViewController: UIViewController {
            - 针对夜间挂机无法输锁屏密码的问题，内置「纯黑伪熄屏(0亮度)」模式，绕过真锁屏，次日自动恢复亮度并打开应用。
 
         ==============================
-        🌟 最新更新日志 (v1.0.11)
+        🌟 最新更新日志 (v1.0.12)
+        ==============================
+        【关于页地址修正 + 可点击打开】
+        1. 修正开源地址：原「liush734530963/ios-mcp-agent-public」为无效地址（GitHub 返回 404，
+           外网任何人打开都是 Page not found），现统一为真实仓库：
+           https://github.com/liushQAQ/IOS
+        2. 关于页正文里的地址不再做成高亮链接样式（不高亮、不变蓝、不带下划线），
+           改为下方独立的「打开开源主页」按钮：点击直接在浏览器打开，长按可复制链接。
+
+        ==============================
+        🌟 历史重要更新 (v1.0.11)
         ==============================
         【iPad 兼容与闪退专项修复】
         1. 修复 iPad 上大量按钮一点就闪退：
@@ -78,6 +92,19 @@ final class AboutViewController: UIViewController {
         3. 若为纯巨魔未越狱设备，无需安装 iOS-MCP，可直接进入右上角「定时/工作流」使用系统外观切换、软注销与伪熄屏打卡。
         """
 
+        // 开源主页按钮：中性文字样式（不高亮成蓝色链接），但点击即在浏览器打开
+        repoButton.setTitle("🌐 打开开源主页  github.com/liushQAQ/IOS", for: .normal)
+        repoButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+        repoButton.titleLabel?.numberOfLines = 2
+        repoButton.titleLabel?.textAlignment = .center
+        repoButton.setTitleColor(.label, for: .normal)
+        repoButton.backgroundColor = .secondarySystemBackground
+        repoButton.layer.cornerRadius = 10
+        repoButton.translatesAutoresizingMaskIntoConstraints = false
+        repoButton.addTarget(self, action: #selector(openRepo), for: .touchUpInside)
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(copyRepo(_:)))
+        repoButton.addGestureRecognizer(longPress)
+
         // 崩溃诊断面板
         crashLabel.numberOfLines = 0
         crashLabel.font = .systemFont(ofSize: 13)
@@ -109,6 +136,7 @@ final class AboutViewController: UIViewController {
         checkUpdateButton.addTarget(self, action: #selector(checkUpdateTapped), for: .touchUpInside)
 
         content.addSubview(text)
+        content.addSubview(repoButton)
         content.addSubview(crashLabel)
         content.addSubview(crashButton)
         content.addSubview(safeModeButton)
@@ -130,7 +158,12 @@ final class AboutViewController: UIViewController {
             text.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 14),
             text.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -14),
 
-            crashLabel.topAnchor.constraint(equalTo: text.bottomAnchor, constant: 12),
+            repoButton.topAnchor.constraint(equalTo: text.bottomAnchor, constant: 12),
+            repoButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            repoButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            repoButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+
+            crashLabel.topAnchor.constraint(equalTo: repoButton.bottomAnchor, constant: 14),
             crashLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             crashLabel.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
 
@@ -208,5 +241,30 @@ final class AboutViewController: UIViewController {
 
     @objc private func checkUpdateTapped() {
         AppUpdateManager.shared.checkForUpdates(manual: true)
+    }
+
+    // MARK: - 开源主页
+
+    @objc private func openRepo() {
+        guard let url = URL(string: repoURLString) else { return }
+        UIApplication.shared.open(url, options: [:]) { [weak self] ok in
+            guard !ok else { return }
+            UIPasteboard.general.string = self?.repoURLString
+            let alert = UIAlertController(title: "无法打开浏览器",
+                                          message: "链接已复制，可粘贴到 Safari 打开：\n\(self?.repoURLString ?? "")",
+                                          preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "好", style: .default))
+            if let self = self { self.presentAlertSafely(alert) }
+        }
+    }
+
+    @objc private func copyRepo(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        UIPasteboard.general.string = repoURLString
+        let alert = UIAlertController(title: "链接已复制",
+                                      message: repoURLString,
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "好", style: .default))
+        presentAlertSafely(alert)
     }
 }
