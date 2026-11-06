@@ -96,7 +96,7 @@ final class AboutViewController: UIViewController {
                                                  background: .secondarySystemGroupedBackground,
                                                  titleColor: .label,
                                                  action: #selector(openRepoTapped)))
-        stack.addArrangedSubview(makeActionButton(title: "连接教程与更新说明",
+        stack.addArrangedSubview(makeActionButton(title: "第一次用？先看连接教程",
                                                  background: .secondarySystemGroupedBackground,
                                                  titleColor: .label,
                                                  action: #selector(openGuideTapped)))
@@ -104,6 +104,14 @@ final class AboutViewController: UIViewController {
                                                  background: .secondarySystemGroupedBackground,
                                                  titleColor: .secondaryLabel,
                                                  action: #selector(closeTapped)))
+
+        let footer = UILabel()
+        footer.text = "这东西是我自己每天在用的，哪儿别扭直接说，我改。"
+        footer.font = .preferredFont(forTextStyle: .footnote)
+        footer.textColor = .tertiaryLabel
+        footer.textAlignment = .left
+        footer.numberOfLines = 0
+        stack.addArrangedSubview(footer)
     }
 
     /// 地址说明区：地址以 .link 属性渲染 —— 系统自带蓝色高亮，点击由系统直接跳 Safari
@@ -123,7 +131,7 @@ final class AboutViewController: UIViewController {
 
         let body = NSMutableAttributedString()
         let bodyFont = UIFont.preferredFont(forTextStyle: .body)
-        body.append(NSAttributedString(string: "开源地址（点一下直接跳转 Safari）：\n", attributes: [
+        body.append(NSAttributedString(string: "项目就在这儿，点一下直接用 Safari 打开：\n", attributes: [
             .font: UIFont.preferredFont(forTextStyle: .subheadline),
             .foregroundColor: UIColor.secondaryLabel
         ]))
@@ -133,7 +141,7 @@ final class AboutViewController: UIViewController {
                 .link: url
             ]))
         }
-        body.append(NSAttributedString(string: "\n\nGitHub 直连打不开时，请点下方「检查更新 / 下载最新包」，国内全程免代理。", attributes: [
+        body.append(NSAttributedString(string: "\n\n打不开多半是墙的事，不是链接坏了 —— 下面有一键镜像，一样下得到包。", attributes: [
             .font: UIFont.preferredFont(forTextStyle: .footnote),
             .foregroundColor: UIColor.secondaryLabel
         ]))
@@ -155,9 +163,9 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 关于页地址改为可点击，点击直接跳 Safari
-        2. 地址统一指向 Releases 发布页，避免死链
-        3. 国内镜像入口保留，GitHub 打不开也能下载
+        1. 关于页重写，地址点了就跳 Safari
+        2. 地址只指 Releases，不再给死链
+        3. 连不上 GitHub 就走国内镜像
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)
@@ -229,10 +237,10 @@ final class AboutViewController: UIViewController {
             guard !ok else { return }
             // 跳转失败兜底：复制链接并提示（镜像地址一并给出，保证任何网络环境都能下载）
             UIPasteboard.general.string = string
-            let alert = UIAlertController(title: "无法打开浏览器",
-                                          message: "链接已复制：\n\(string)\n\n国内镜像：\n\(self.mirrorURLString)",
+            let alert = UIAlertController(title: "浏览器没打开",
+                                          message: "链接我先复制好了：\n\(string)\n\n实在打不开就用镜像：\n\(self.mirrorURLString)",
                                           preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "复制镜像地址", style: .default) { _ in
+            alert.addAction(UIAlertAction(title: "镜像也复制一下", style: .default) { _ in
                 UIPasteboard.general.string = self.mirrorURLString
             })
             alert.addAction(UIAlertAction(title: "好", style: .cancel))

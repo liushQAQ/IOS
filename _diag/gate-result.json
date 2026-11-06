@@ -5,7 +5,7 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-06T02:54:22.519Z",
+  "startedAt": "2026-11-06T03:05:47.018Z",
   "dshFingerprint": "qnpfjx",
   "dshAssets": 10,
   "domClasses": 0,
@@ -41,5 +41,5 @@
     "[锚点] headerCorner 取样 — 会话页死循环连坐，该锚点无法取样（Chromium 对照确认 DOM 在）"
   ],
   "sourceHash": "3b008a5c55c05c9065e5d10b8fc4f85e025ccf4117cdecabe5bc2dbd9027094e",
-  "finishedAt": "2026-11-06T02:57:24.066Z"
+  "finishedAt": "2026-11-06T03:08:55.583Z"
 }
