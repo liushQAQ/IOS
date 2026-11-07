@@ -133,9 +133,17 @@ enum ServiceStore {
     ///   原模板混入了三个「开发者本机专有服务」（57890 WorkBuddy 账号切换 / 9009 端口仪表盘 / 8210 本地 TTS），
     ///   任何陌生玩家装上后首屏都会看到 3 个永远连不上的条目 —— 属于特殊性污染，已移除。
     ///   已安装用户沙盒里已保存的条目（含老用户自己加的）一律保留，不做删除；此处只影响全新安装的初始模板。
+    ///
+    /// 🔴 v2.1.19：新增 ZCode 远程页条目。
+    ///   ZCode 桌面端自带「手机远程控制」网页（官方源 zcode.z.ai/remote/v4），本 App 就是一个
+    ///   WKWebView 壳，天然能打开它；但官方页在 iOS 16.3 会白屏（ES2023 语法），所以推荐走
+    ///   本机的 zcode-rc-gateway（默认 3090 端口，入口 /rc 带缓存击穿），它会把页面改写成
+    ///   老系统可执行的等价代码。没搭这个网关的人删掉本条即可，不影响 DSH 主控。
     static let defaults: [ServiceItem] = [
         ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.1.100:3083/",
-                    note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil)
+                    note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
+        ServiceItem(name: "ZCode 远程（局域网）", url: "http://192.168.1.100:3090/rc",
+                    note: "ZCode 手机页·需先在本机运行 zcode-rc-gateway，不用可删", resolverURL: nil)
     ]
 
     /// 双轨读取（Documents/dsh_user_data/services_v1.json + UserDefaults），带初始化锁。

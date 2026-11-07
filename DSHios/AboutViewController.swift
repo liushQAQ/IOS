@@ -163,9 +163,9 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 关于页重写，地址点了就跳 Safari
-        2. 地址只指 Releases，不再给死链
-        3. 连不上 GitHub 就走国内镜像
+        1. 服务列表新增 ZCode 远程页入口
+        2. 手机可直连电脑端 DSH 与 ZCode
+        3. iOS 16.3 起全版本可正常打开
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)
