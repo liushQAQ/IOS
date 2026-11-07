@@ -721,7 +721,7 @@ final class SettingsViewController: UIViewController {
         }
         // v2.1.21 备用线路：逗号/顿号/分号分隔，不限条数；主线路连不上时自动按顺序兜底
         alert.addTextField { tf in
-            tf.placeholder = "备用线路（可选，逗号分隔不限条数，中英文逗号皆可）"
+            tf.placeholder = "备用线路（可选，英文逗号,分隔，不限条数）"
             tf.text = existing?.item.fallbacks?.joined(separator: ", ")
             tf.autocorrectionType = .no
             tf.autocapitalizationType = .none
@@ -739,9 +739,9 @@ final class SettingsViewController: UIViewController {
                 url = "http://" + url
             }
             let note = alert.textFields?[2].text?.trimmingCharacters(in: .whitespaces)
-            // v2.1.21：备用线路不限条数；分隔符中英文逗号、顿号、分号、换行全部支持（消除输入法歧义）
+            // v2.1.21：备用线路不限条数；分隔符只认英文逗号（规则唯一，杜绝歧义）
             var fallbacks: [String] = []
-            let separators = CharacterSet(charactersIn: ",，、;；\n\r")
+            let separators = CharacterSet(charactersIn: ",")
             for raw in (alert.textFields?[3].text ?? "").components(separatedBy: separators) {
                 var f = raw.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !f.isEmpty else { continue }
@@ -1410,7 +1410,7 @@ final class ConnectionGuideViewController: UIViewController {
         //   ④ 闸门 [文案·R46] 机械校验：序号断链 / 超长 / 缺左对齐 = 红条禁打包。
         let logContent = """
 1. 服务配置一键分享给别的手机，免重复配 (2.1.21)
-2. 备用线路不限条数，中英文逗号都认 (2.1.21)
+2. 备用线路不限条数，用英文逗号分隔 (2.1.21)
 3. 服务连不上自动换备用线路，不用手动切 (2.1.20)
 4. 服务编辑里可填最多 4 条备用线路 (2.1.20)
 5. 服务列表内置 ZCode 手机页入口 (2.1.19)
