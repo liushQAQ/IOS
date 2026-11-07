@@ -165,7 +165,7 @@ final class AboutViewController: UIViewController {
         【本版要点】
         1. 服务列表新增 ZCode 远程页入口
         2. 手机可直连电脑端 DSH 与 ZCode
-        3. iOS 16.3 起全版本可正常打开
+        3. iOS 16.3 及以上可正常打开
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)
