@@ -136,10 +136,11 @@ enum ServiceStore {
     ///
     /// 🔴 新增 ZCode 远程页条目（随下次打包生效）。
     ///   ZCode 桌面端自带「手机远程控制」网页（官方源 zcode.z.ai/remote/v4），本 App 就是一个
-    ///   WKWebView 壳，天然能打开它；但官方页在 iOS 16.3 会白屏（ES2023 语法），所以推荐走
+    ///   WKWebView 壳，天然能打开它；但官方页在 iOS 16.3 会白屏（ES2023 语法），所以只能走
     ///   本机的 zcode-rc-gateway（默认 3090 端口，入口 /rc 带缓存击穿），它会把页面改写成
-    ///   老系统可执行的等价代码。没搭这个网关的人删掉本条即可，不影响 DSH 主控；
-    ///   只装了 dsh-anywhere 插件的话，改用 http://<电脑IP>:3083/remote/v4 也能开。
+    ///   老系统可执行的等价代码。没搭这个网关的人删掉本条即可，不影响 DSH 主控。
+    ///   ⛔ 不要拿 3083 顶替：3083 缺 /rc 缓存逃生口、缺 viewport-fit=cover、缺免登录注入，
+    ///      这三样恰好是 16.3 卡在黑底 Z 启动壳的全部成因（真机复现过）。
     static let defaults: [ServiceItem] = [
         ServiceItem(name: "DSH 主控（局域网）", url: "http://192.168.1.100:3083/",
                     note: "局域网·请修改为你的电脑局域网IP", resolverURL: nil),
@@ -1050,9 +1051,9 @@ final class ConnectionGuideViewController: UIViewController {
         let step4 = createStepCard(
             badge: "步骤 4",
             title: "手机上看 ZCode 桌面端（可选，不影响 DSH）",
-            detail: "1. 电脑端开着官方 ZCode 桌面端，插件装好就有现成入口，手机直接打开下面的地址\n2. 想让顶栏不压状态栏、输入框不贴屏底，再起 zcode-rc-gateway，把 3083 换成 3090/rc\n3. 服务列表点「ZCode 远程（局域网）」，把 IP 改成自己电脑的即可\n4. 第一次必须在电脑端点一次「生成远程二维码」，手机扫一次，之后长期有效",
-            code: "http://<电脑IP>:3083/remote/v4",
-            tip: "真机验过 iOS 16.3 及以上（16.3 / 16.6 两台）。ZCode 桌面端保持官方原版，不要改它；长期入口别用官方那条带 sid 的地址，被手机缓存过就修不到了。"
+            detail: "1. 电脑端开着官方 ZCode 桌面端，插件装好后再起 zcode-rc-gateway（插件仓库 install.mjs 一条命令）\n2. 手机只开下面的地址，入口固定是 3090/rc；别用 3083，它没有 /rc 缓存逃生口，16.3 会卡在启动壳\n3. 服务列表点「ZCode 远程（局域网）」，把 IP 改成自己电脑的即可\n4. 第一次必须在电脑端点一次「生成远程二维码」，手机扫一次，之后长期有效",
+            code: "http://<电脑IP>:3090/rc",
+            tip: "真机验过 iOS 16.3 及以上（16.3 / 16.6 两台）。ZCode 桌面端保持官方原版，不要改它；入口只用 3090/rc，带 sid 的旧地址被手机缓存过就修不到了。"
         )
         stack.addArrangedSubview(step4)
 

@@ -163,7 +163,7 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 服务列表新增 ZCode 远程页入口
+        1. 服务列表新增 ZCode 远程页入口（固定 :3090/rc）
         2. 手机可直连电脑端 DSH 与 ZCode
         3. iOS 16.3 及以上可正常打开
         """
