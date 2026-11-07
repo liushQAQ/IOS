@@ -46,7 +46,7 @@ App 是薄壳 WKWebView，**同一份 App 既能连 DSH，也能开 ZCode 桌面
 
 | 项 | 说明 |
 |---|---|
-| 需要装什么 | 本 App + 电脑端 `dsh-anywhere-hub` 插件（`pnpm add github:liushQAQ/dsh-anywhere-hub`；包名本项目独有，npm 上无同名包）+ 插件自带的 `zcode-rc` 网关（`npx zcode-rc --target <目录> --task`，只服务 ZCode，入口 `:3090/rc`） |
+| 需要装什么 | 本 App + 电脑端 `dsh-anywhere-hub` 插件（`pnpm add github:liushQAQ/dsh-anywhere-hub`；包名本项目独有，npm 上无同名包）+ 插件自带的 `zcode-rc` 网关（`npx zcode-rc --target <目录> --task`，入口 `:3090/rc`）。网关是通用的：ZCode 是第一个接入的 Web 上游，以后加新平台只改源站地址，不换插件 |
 | ZCode 桌面端 | 保持**官方原版**，一个字不改；改过就连不上官方中继 |
 | 电脑端 DSH | 不用额外装，插件本身就是 DSH 的插件 |
 | 兼容下限 | 真机验过 **iOS 16.3 及以上**（16.3 / 16.6 两台）。16.0–16.2、iOS 15 理论上被同一套垫片覆盖，未真机验证 |
