@@ -8,16 +8,23 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    # 2026-11-07：macos-14 已被 GitHub 下线（作业秒取消，注解 "The configuration
+    # 'macos-14-arm64-us-default' is not supported"）。改用 macos-latest 跟随官方在售镜像，
+    # 避免镜像退役后再次秒挂。
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Select Xcode
         run: |
-          if [ -d "/Applications/Xcode_16.4.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.4.app
+          # 优先 16.x（与历史构建一致），找不到就退回镜像自带默认 Xcode
+          CAND="$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -n "$CAND" ]; then
+            echo "using $CAND"
+            sudo xcode-select -s "$CAND"
           elif [ -d "/Applications/Xcode.app" ]; then
+            echo "using /Applications/Xcode.app"
             sudo xcode-select -s /Applications/Xcode.app
           fi
           xcodebuild -version
