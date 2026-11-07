@@ -1001,26 +1001,26 @@ final class ConnectionGuideViewController: UIViewController {
             stack.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -40)
         ])
 
-        // 头部卡片：主推自研 dsh-anywhere，备选 dsh-pocket
+        // 头部卡片：主推自研 dsh-anywhere-zcode，备选 dsh-pocket
         let headerBox = createCardView(
-            title: "💡 首选：dsh-anywhere 超级连接枢纽（支持多设备无缝协同）",
+            title: "💡 首选：dsh-anywhere-zcode 超级连接枢纽（支持多设备无缝协同）",
             desc: "我自己日常就是这么连的，手机、iPad、电脑同时开同一个会话，谁也不用等谁。\n• 多开不踢线：几台设备同时在线，消息同步着走，不会互相挤掉。\n• 锁屏回来还在：切后台一两分钟再回来，基本自己就接上了，不用手忙脚乱重连。\n• 不藏东西：代码全在仓库里，没有塞任何私人地址或密码。\n\n只有一台手机偶尔用的话，dsh-pocket 也够，看步骤 1 的备选。"
         )
         stack.addArrangedSubview(headerBox)
 
-        // 步骤一：电脑端安装插件（主推 dsh-anywhere，备选 dsh-pocket）
+        // 步骤一：电脑端安装插件（主推 dsh-anywhere-zcode，备选 dsh-pocket）
         let step1 = createStepCard(
             badge: "步骤 1",
-            title: "电脑端安装插件（主推 dsh-anywhere / 备选 dsh-pocket）",
-            detail: "推荐 dsh-anywhere，我自用的就是它：仓库和说明在下面按钮里。\n命令照抄即可，但 github: 前缀千万别省 —— 省了会装到 npm 上同名的另一个东西，完全不是这个。",
-            code: "pnpm add github:liushQAQ/dsh-anywhere",
+            title: "电脑端安装插件（主推 dsh-anywhere-zcode / 备选 dsh-pocket）",
+            detail: "推荐 dsh-anywhere-zcode，我自用的就是它：仓库和说明在下面按钮里。\n包名是我独有的，npm 上没有同名的，不会装错；命令照抄即可，github: 前缀别省。",
+            code: "pnpm add github:liushQAQ/dsh-anywhere-zcode",
             tip: "只连一台设备、图省事的话，用社区的 dsh-pocket 也行（作者 shaobeichen）：\ndsh plugin --profile web add dsh-pocket -w"
         )
         stack.addArrangedSubview(step1)
 
         // 地址一律用按钮承载，禁止把裸 URL 塞进说明文本伪装成链接（点不开的假链接）。
         let repoButton = UIButton(type: .system)
-        repoButton.setTitle("🌐 打开 dsh-anywhere 开源仓库（GitHub）", for: .normal)
+        repoButton.setTitle("🌐 打开 dsh-anywhere-zcode 开源仓库（GitHub）", for: .normal)
         repoButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
         repoButton.contentHorizontalAlignment = .left
         repoButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
@@ -1051,7 +1051,7 @@ final class ConnectionGuideViewController: UIViewController {
         let step4 = createStepCard(
             badge: "步骤 4",
             title: "手机上看 ZCode 桌面端（可选，不影响 DSH）",
-            detail: "1. 电脑端开着官方 ZCode 桌面端，插件装好后再起 zcode-rc-gateway（插件仓库 install.mjs 一条命令）\n2. 手机只开下面的地址，入口固定是 3090/rc；别用 3083，它没有 /rc 缓存逃生口，16.3 会卡在启动壳\n3. 服务列表点「ZCode 远程（局域网）」，把 IP 改成自己电脑的即可\n4. 第一次必须在电脑端点一次「生成远程二维码」，手机扫一次，之后长期有效",
+            detail: "1. 电脑端开着官方 ZCode 桌面端；插件 v1.1.0 起自带网关，一条命令即可：npx zcode-rc --target D:\\zcode-rc\\zcode-rc-gateway --task\n2. 手机只开下面的地址，入口固定是 3090/rc；别用 3083，它没有 /rc 缓存逃生口，16.3 会卡在启动壳\n3. 服务列表点「ZCode 远程（局域网）」，把 IP 改成自己电脑的即可\n4. 第一次必须在电脑端点一次「生成远程二维码」，手机扫一次，之后长期有效",
             code: "http://<电脑IP>:3090/rc",
             tip: "真机验过 iOS 16.3 及以上（16.3 / 16.6 两台）。ZCode 桌面端保持官方原版，不要改它；入口只用 3090/rc，带 sid 的旧地址被手机缓存过就修不到了。"
         )
@@ -1084,14 +1084,14 @@ final class ConnectionGuideViewController: UIViewController {
     }
 
     @objc private func openDshAnywhereRepo() {
-        guard let url = URL(string: "https://github.com/liushQAQ/dsh-anywhere") else { return }
+        guard let url = URL(string: "https://github.com/liushQAQ/dsh-anywhere-zcode") else { return }
         UIApplication.shared.open(url)
     }
 
     @objc private func copyCommandTapped(_ sender: UIButton) {
-        // 必须与卡片上展示的命令保持一致：带 github: 前缀直装本仓库，
-        // 不能写成裸包名 dsh-anywhere —— 该名字在 npm 上已被第三方占用（版本与功能完全不同）。
-        let codeText = "pnpm add github:liushQAQ/dsh-anywhere"
+        // 必须与卡片上展示的命令保持一致：带 github: 前缀直装本仓库。
+        // 包名 dsh-anywhere-zcode 是本项目独有命名（npm 上无同名包），不会再撞到别人的同名插件。
+        let codeText = "pnpm add github:liushQAQ/dsh-anywhere-zcode"
         UIPasteboard.general.string = codeText
         sender.setTitle("已复制", for: .normal)
         let feedback = UINotificationFeedbackGenerator()

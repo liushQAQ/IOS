@@ -46,7 +46,7 @@ App 是薄壳 WKWebView，**同一份 App 既能连 DSH，也能开 ZCode 桌面
 
 | 项 | 说明 |
 |---|---|
-| 需要装什么 | 本 App + 电脑端 `dsh-anywhere` 插件（`pnpm add github:liushQAQ/dsh-anywhere`，`github:` 前缀不能省，npm 上的同名包不是这个）+ 插件仓库自带的 `zcode-rc-gateway`（只服务 ZCode，入口 `:3090/rc`） |
+| 需要装什么 | 本 App + 电脑端 `dsh-anywhere-zcode` 插件（`pnpm add github:liushQAQ/dsh-anywhere-zcode`；包名本项目独有，npm 上无同名包）+ 插件自带的 `zcode-rc` 网关（`npx zcode-rc --target <目录> --task`，只服务 ZCode，入口 `:3090/rc`） |
 | ZCode 桌面端 | 保持**官方原版**，一个字不改；改过就连不上官方中继 |
 | 电脑端 DSH | 不用额外装，插件本身就是 DSH 的插件 |
 | 兼容下限 | 真机验过 **iOS 16.3 及以上**（16.3 / 16.6 两台）。16.0–16.2、iOS 15 理论上被同一套垫片覆盖，未真机验证 |
@@ -54,7 +54,7 @@ App 是薄壳 WKWebView，**同一份 App 既能连 DSH，也能开 ZCode 桌面
 ### 连接步骤
 
 1. 电脑端装好插件并启动 DSH，手机连同一个 Wi-Fi。
-2. 电脑端再起一个只服务 ZCode 的 `zcode-rc-gateway`（插件仓库里有 `install.mjs` 一条命令装好）。
+2. 电脑端再起一个只服务 ZCode 的 `zcode-rc` 网关（插件已内置：`npx zcode-rc --target D:\zcode-rc\zcode-rc-gateway --task`）。
 3. 手机打开：`http://<电脑IP>:3090/rc`（App 地址栏直接填，或用「扫码」）。
 4. 服务列表里已有「ZCode 远程（局域网）」预设，点它把 IP 换成自己的即可，不用记地址。
 5. **第一次必须在电脑端点一次「生成远程二维码」，手机扫一次**——`sid` 可长期复用，但 `mid` 是每次二维码里的一次性邀请，中继只认它，不扫码直接开会连不上。这是 ZCode 官方限制。
