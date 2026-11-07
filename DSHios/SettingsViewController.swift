@@ -10,7 +10,7 @@ struct ServiceItem: Codable, Equatable {
     var note: String?
     /// 外网入口专用：电脑端 token 每次重启都会变，先在局域网内向仪表盘换最新地址。
     var resolverURL: String?
-    /// 备用线路（可选，最多 4 条）：主线路连续 3 次连接失败后按顺序自动兜底切换（v2.1.20）。
+    /// 备用线路（可选，不限条数）：主线路连续 3 次连接失败后按顺序自动兜底切换（v2.1.20）。
     /// 外网/局域网不用手动切换 —— 例如主线路填 192.168.x.x:3090/rc，备用填 Tailscale 域名同名径。
     var fallbacks: [String]?
 
@@ -35,6 +35,13 @@ struct ServiceItem: Codable, Equatable {
         self.resolverURL = try? container.decodeIfPresent(String.self, forKey: .resolverURL)
         self.fallbacks = try? container.decodeIfPresent([String].self, forKey: .fallbacks)
     }
+}
+
+/// v2.1.21 服务配置分享载荷：多台手机免重复配置，微信/隔空投送/剪贴板皆可传。
+/// 导入端容错：带 dshShare 标记的包装格式优先，裸数组也认；解析失败的条目整条跳过，绝不半截写入。
+struct ServiceSharePayload: Codable {
+    let dshShare: Int
+    let services: [ServiceItem]
 }
 
 /// 跨版本防覆盖持久化中心：采用 Documents/dsh_user_data/ 物理文件 + UserDefaults 双轨互备存储。
@@ -370,7 +377,13 @@ final class SettingsViewController: UIViewController {
             style: .plain,
             target: self,
             action: #selector(scanTapped))
-        navigationItem.rightBarButtonItems = [scanItem, navigationItem.rightBarButtonItem!]
+        // v2.1.21 分享/导入：多台手机一次配平，免逐台重复填名称/地址/备用线路
+        let shareItem = UIBarButtonItem(
+            image: UIImage(systemName: "square.and.arrow.up"),
+            style: .plain,
+            target: self,
+            action: #selector(shareTapped))
+        navigationItem.rightBarButtonItems = [shareItem, scanItem, navigationItem.rightBarButtonItem!]
         let doneItem = UIBarButtonItem(
             barButtonSystemItem: .done, target: self, action: #selector(closeTapped))
         let helpItem = UIBarButtonItem(
@@ -550,6 +563,116 @@ final class SettingsViewController: UIViewController {
         }
     }
 
+    // MARK: - v2.1.21 服务配置分享 / 导入（多台手机免重复配置）
+
+    @objc private func shareTapped() {
+        let sheet = UIAlertController(title: "服务配置", message: nil, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "📤 分享全部服务配置", style: .default) { [weak self] _ in
+            self?.exportServicesTapped()
+        })
+        sheet.addAction(UIAlertAction(title: "📥 粘贴导入配置", style: .default) { [weak self] _ in
+            self?.importServicesTapped()
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        // iPad 的 actionSheet 必须给 anchor，否则直接崩；iPhone 不受影响。
+        if let pop = sheet.popoverPresentationController {
+            pop.sourceView = view
+            pop.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+        }
+        present(sheet, animated: true)
+    }
+
+    /// 导出：全部服务条目（含备用线路/备注/换票地址）打包成 JSON 文本，交系统分享面板
+    /// （微信、隔空投送、拷贝、存文件任选）。不含任何本地凭证，分享出去的只有连接配置。
+    private func exportServicesTapped() {
+        let items = ServiceStore.load()
+        guard !items.isEmpty else {
+            let a = UIAlertController(title: "还没有可分享的服务", message: "先添加至少一个服务条目", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "好", style: .cancel))
+            present(a, animated: true)
+            return
+        }
+        let payload = ServiceSharePayload(dshShare: 1, services: items)
+        guard let data = try? JSONEncoder().encode(payload),
+              let text = String(data: data, encoding: .utf8) else {
+            let a = UIAlertController(title: "导出失败", message: "配置编码异常", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "好", style: .cancel))
+            present(a, animated: true)
+            return
+        }
+        let board = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        // iPad popover 锚点
+        if let pop = board.popoverPresentationController {
+            pop.sourceView = view
+            pop.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+        }
+        present(board, animated: true)
+    }
+
+    /// 导入：粘贴分享文本 → 解析 → 逐条去重合并（URL 相同视为已存在，跳过）。
+    /// 只追加不覆盖，本机已有条目和登录状态一律不动。
+    private func importServicesTapped() {
+        let alert = UIAlertController(title: "粘贴导入配置",
+                                      message: "粘贴另一台手机分享的配置文本",
+                                      preferredStyle: .alert)
+        alert.addTextField { tf in
+            tf.placeholder = "粘贴 {\"dshShare\":1,...} 配置文本"
+            tf.autocorrectionType = .no
+            tf.autocapitalizationType = .none
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "导入", style: .default) { [weak self] _ in
+            guard let self,
+                  let raw = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty,
+                  let data = raw.data(using: .utf8) else { return }
+
+            var incoming: [ServiceItem] = []
+            if let p = try? JSONDecoder().decode(ServiceSharePayload.self, from: data), p.dshShare == 1 {
+                incoming = p.services
+            } else if let list = try? JSONDecoder().decode([ServiceItem].self, from: data) {
+                incoming = list          // 兼容裸数组格式
+            }
+            guard !incoming.isEmpty else {
+                let a = UIAlertController(title: "导入失败", message: "文本里没有可识别的服务配置", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "好", style: .cancel))
+                self.present(a, animated: true)
+                return
+            }
+
+            let norm: (String) -> String = { s in
+                var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !t.lowercased().hasPrefix("http://"), !t.lowercased().hasPrefix("https://") {
+                    t = "http://" + t
+                }
+                while t.count > 8 && t.hasSuffix("/") { t = String(t.dropLast()) }
+                return t.lowercased()
+            }
+            let existingURLs = Set(ServiceStore.load().map { norm($0.url) })
+            var added = 0
+            var skipped = 0
+            for item in incoming {
+                guard !item.url.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+                if existingURLs.contains(norm(item.url)) { skipped += 1; continue }
+                ServiceStore.add(item)
+                existingURLs.insert(norm(item.url))
+                added += 1
+            }
+            self.services = ServiceStore.load()
+            self.tableView.reloadData()
+            self.probeAll()
+            self.updateEmptyState()
+            let a = UIAlertController(title: "导入完成",
+                                      message: added == 0 && skipped > 0
+                                          ? "全部 \(skipped) 条都已存在，没有重复添加"
+                                          : "新增 \(added) 条，跳过已存在 \(skipped) 条",
+                                      preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "好", style: .cancel))
+            self.present(a, animated: true)
+        })
+        present(alert, animated: true)
+    }
+
     @objc private func addTapped() {
         presentEditor(nil)
     }
@@ -596,9 +719,9 @@ final class SettingsViewController: UIViewController {
             tf.text = existing?.item.note
             tf.autocorrectionType = .no
         }
-        // v2.1.20 备用线路：逗号分隔最多 4 条，主线路连不上时自动按顺序兜底（外出/局域网免手动切换）
+        // v2.1.21 备用线路：逗号/顿号/分号分隔，不限条数；主线路连不上时自动按顺序兜底
         alert.addTextField { tf in
-            tf.placeholder = "备用线路（可选，逗号分隔，最多4条）"
+            tf.placeholder = "备用线路（可选，逗号分隔不限条数，中英文逗号皆可）"
             tf.text = existing?.item.fallbacks?.joined(separator: ", ")
             tf.autocorrectionType = .no
             tf.autocapitalizationType = .none
@@ -616,16 +739,16 @@ final class SettingsViewController: UIViewController {
                 url = "http://" + url
             }
             let note = alert.textFields?[2].text?.trimmingCharacters(in: .whitespaces)
-            // v2.1.20：解析备用线路（逗号分隔），逐条补 scheme、去空、去重、最多 4 条
+            // v2.1.21：备用线路不限条数；分隔符中英文逗号、顿号、分号、换行全部支持（消除输入法歧义）
             var fallbacks: [String] = []
-            for raw in (alert.textFields?[3].text ?? "").split(separator: ",") {
-                var f = String(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+            let separators = CharacterSet(charactersIn: ",，、;；\n\r")
+            for raw in (alert.textFields?[3].text ?? "").components(separatedBy: separators) {
+                var f = raw.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !f.isEmpty else { continue }
                 if !f.lowercased().hasPrefix("http://"), !f.lowercased().hasPrefix("https://") {
                     f = "http://" + f
                 }
                 if !fallbacks.contains(f), f != url { fallbacks.append(f) }
-                if fallbacks.count >= 4 { break }
             }
             // 编辑已有条目时保留其换票地址（外网入口专用，用户改地址不改换票逻辑）。
             let item = ServiceItem(name: name, url: url,
@@ -1286,58 +1409,60 @@ final class ConnectionGuideViewController: UIViewController {
         //   ① 一条一行、序号从 1 严格递增不重复；② 每行 ≤ 40 字；③ 只写结果不写过程；
         //   ④ 闸门 [文案·R46] 机械校验：序号断链 / 超长 / 缺左对齐 = 红条禁打包。
         let logContent = """
-1. 服务连不上自动换备用线路，不用手动切 (2.1.20)
-2. 服务编辑里可填最多 4 条备用线路 (2.1.20)
-3. 服务列表内置 ZCode 手机页入口 (2.1.19)
-4. 教程页新增 ZCode 连接第 4 步 (2.1.19)
-5. 插件面板关掉再打开不再空白 (2.1.17)
-6. 同时开好几个面板，也不会关错了 (2.1.17)
-7. 插件弹窗不再顶满屏，关得掉了 (2.1.16)
-8. 弹窗卡片头部不再挡住关闭键 (2.1.15)
-9. 所有弹层都自带一个关闭键 (2.1.14)
-10. 顶栏弹层不再跑出屏幕外面 (2.1.13)
-11. 小鲸鱼短滑换高度，跟手了 (2.1.12)
-12. 小鲸鱼不再半截挂在边上 (2.1.12)
-13. 点发送时键盘不再闪一下又缩回 (2.1.11)
-14. 抽屉顶栏不再自己上下乱跳 (2.1.11)
-15. 小鲸鱼任意高度都能拉出来 (2.1.10)
-16. 键盘收着点发送，不再弹键盘 (2.1.10)
-17. 小鲸鱼手势回到顺手的那一版 (2.1.9)
-18. 开抽屉时顶栏轻微下移，修掉了 (2.1.9)
-19. 键盘收着点发送，这次稳了 (2.1.9)
-20. 开抽屉顶栏偶尔跳一下，没了 (2.1.8)
-21. 收起键盘再点发送，不弹键盘 (2.1.8)
-22. 小鲸鱼能拖到屏幕任何角落 (2.1.8)
-23. 右侧抽屉不再把整页挤出屏幕 (2.1.7)
-24. 语音输入不再重复、也不再错序 (2.1.7)
-25. 返回键从会话框里挪到卡片下面 (2.1.7)
-26. 右缘长滑开抽屉，短滑叫出鲸鱼 (2.1.6)
-27. 表格滑块不再被边缘手势抢走 (2.1.6)
-28. 记住上次地址，别再去连旧的 (2.1.6)
-29. 本地连接与网页跳转加了安全校验 (2.1.6)
-30. 左缘滑动不再带着整页上下跑 (2.1.5)
-31. 白屏重试改成一键清脏缓存 (2.1.5)
-32. 拍照识字的结果精准填回输入框 (2.1.4)
-33. 多端同步时归档会话不再错乱 (2.1.4)
-34. 新会话标题直接取你第一句话 (2.1.3)
-35. 左侧目录不再抖，也不再闪 (2.1.3)
-36. 右侧抽屉打开时右上三键不闪了 (2.1.3)
-37. 版本号显示和重复更新提示修好 (2.1.2)
-38. 切会话不再自动弹键盘挡屏 (2.1.1)
-39. 点重命名时目录不再压住输入框 (2.1.1)
-40. 发送键不再随模型名变短而左缩 (2.1)
-41. 拍照识字，文字自动填回输入框 (2.0)
-42. 后台保活防断连，完成给横幅 (2.0)
-43. 灵动岛小鲸鱼和锁屏实时活动 (2.0)
-44. 抽屉状态栏加高，避开灵动岛 (143)
-45. 开关抽屉回会话页，按钮不出屏 (142)
-46. 开始页顶栏被挡、假按钮排修掉 (140-141)
-47. 冷启动从 5.7MB 降到 0.2MB (139)
-48. 开始页顶栏出屏，这次摁死了 (138)
-49. 工作区按钮位置与多端同步一起修 (137)
-50. 会话框加号弹层不再闪退 (136)
-51. 抽屉按钮出屏，补了值守卫 (135-136)
-52. 左右滑手势收窄，不再误关误返 (135)
+1. 服务配置一键分享给别的手机，免重复配 (2.1.21)
+2. 备用线路不限条数，中英文逗号都认 (2.1.21)
+3. 服务连不上自动换备用线路，不用手动切 (2.1.20)
+4. 服务编辑里可填最多 4 条备用线路 (2.1.20)
+5. 服务列表内置 ZCode 手机页入口 (2.1.19)
+6. 教程页新增 ZCode 连接第 4 步 (2.1.19)
+7. 插件面板关掉再打开不再空白 (2.1.17)
+8. 同时开好几个面板，也不会关错了 (2.1.17)
+9. 插件弹窗不再顶满屏，关得掉了 (2.1.16)
+10. 弹窗卡片头部不再挡住关闭键 (2.1.15)
+11. 所有弹层都自带一个关闭键 (2.1.14)
+12. 顶栏弹层不再跑出屏幕外面 (2.1.13)
+13. 小鲸鱼短滑换高度，跟手了 (2.1.12)
+14. 小鲸鱼不再半截挂在边上 (2.1.12)
+15. 点发送时键盘不再闪一下又缩回 (2.1.11)
+16. 抽屉顶栏不再自己上下乱跳 (2.1.11)
+17. 小鲸鱼任意高度都能拉出来 (2.1.10)
+18. 键盘收着点发送，不再弹键盘 (2.1.10)
+19. 小鲸鱼手势回到顺手的那一版 (2.1.9)
+20. 开抽屉时顶栏轻微下移，修掉了 (2.1.9)
+21. 键盘收着点发送，这次稳了 (2.1.9)
+22. 开抽屉顶栏偶尔跳一下，没了 (2.1.8)
+23. 收起键盘再点发送，不弹键盘 (2.1.8)
+24. 小鲸鱼能拖到屏幕任何角落 (2.1.8)
+25. 右侧抽屉不再把整页挤出屏幕 (2.1.7)
+26. 语音输入不再重复、也不再错序 (2.1.7)
+27. 返回键从会话框里挪到卡片下面 (2.1.7)
+28. 右缘长滑开抽屉，短滑叫出鲸鱼 (2.1.6)
+29. 表格滑块不再被边缘手势抢走 (2.1.6)
+30. 记住上次地址，别再去连旧的 (2.1.6)
+31. 本地连接与网页跳转加了安全校验 (2.1.6)
+32. 左缘滑动不再带着整页上下跑 (2.1.5)
+33. 白屏重试改成一键清脏缓存 (2.1.5)
+34. 拍照识字的结果精准填回输入框 (2.1.4)
+35. 多端同步时归档会话不再错乱 (2.1.4)
+36. 新会话标题直接取你第一句话 (2.1.3)
+37. 左侧目录不再抖，也不再闪 (2.1.3)
+38. 右侧抽屉打开时右上三键不闪了 (2.1.3)
+39. 版本号显示和重复更新提示修好 (2.1.2)
+40. 切会话不再自动弹键盘挡屏 (2.1.1)
+41. 点重命名时目录不再压住输入框 (2.1.1)
+42. 发送键不再随模型名变短而左缩 (2.1)
+43. 拍照识字，文字自动填回输入框 (2.0)
+44. 后台保活防断连，完成给横幅 (2.0)
+45. 灵动岛小鲸鱼和锁屏实时活动 (2.0)
+46. 抽屉状态栏加高，避开灵动岛 (143)
+47. 开关抽屉回会话页，按钮不出屏 (142)
+48. 开始页顶栏被挡、假按钮排修掉 (140-141)
+49. 冷启动从 5.7MB 降到 0.2MB (139)
+50. 开始页顶栏出屏，这次摁死了 (138)
+51. 工作区按钮位置与多端同步一起修 (137)
+52. 会话框加号弹层不再闪退 (136)
+53. 抽屉按钮出屏，补了值守卫 (135-136)
+54. 左右滑手势收窄，不再误关误返 (135)
 """
 
         let contentLabel = UILabel()

@@ -163,8 +163,8 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 服务连不上自动换备用线路（最多4条）
-        2. 服务列表新增 ZCode 远程页入口（固定 :3090/rc）
+        1. 服务连不上自动换备用线路（不限条数）
+        2. 服务配置可一键分享给别的手机
         3. iOS 16.3 及以上可正常打开
         """
         textView.text = points

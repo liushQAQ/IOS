@@ -37,7 +37,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
     private var pathMonitor: NWPathMonitor?
     private var hasLoadedOnce = false
     // MARK: v2.1.20 线路兜底（自动切换备用线路 1-4）
-    /// 当前服务的线路链：[0]=主线路，[1..4]=备用线路。单线路服务链长 1，行为与旧版完全一致。
+    /// 当前服务的线路链：[0]=主线路，[1..]=备用线路（不限条数）。单线路服务链长 1，行为与旧版完全一致。
     private var failoverChain: [String] = []
     /// 当前生效线路下标（成功后保持，下次启动从记住的线路起步，避免每次都先撞 3 次坏线路）。
     private var failoverIndex: Int = 0
@@ -10554,8 +10554,7 @@ function applySidebarInset() {
             if !chain.contains(where: { $0.lowercased() == f.lowercased() }) {
                 chain.append(f)
             }
-            if chain.count >= 5 { break }   // 主线路 + 4 条备用封顶
-        }
+        }   // v2.1.21 备用线路不限条数（去重后全量入链）
         return chain
     }
 
