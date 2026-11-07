@@ -1046,7 +1046,17 @@ final class ConnectionGuideViewController: UIViewController {
         )
         stack.addArrangedSubview(step3)
 
-        // 步骤四：新增功能与体验说明（更新日志）
+        // 步骤四：ZCode 桌面端手机页（可选，与 DSH 互不影响）
+        let step4 = createStepCard(
+            badge: "步骤 4",
+            title: "手机上看 ZCode 桌面端（可选，不影响 DSH）",
+            detail: "1. 电脑端开着官方 ZCode 桌面端，插件装好就有现成入口，手机直接打开下面的地址\n2. 想让顶栏不压状态栏、输入框不贴屏底，再起 zcode-rc-gateway，把 3083 换成 3090/rc\n3. 服务列表点「ZCode 远程（局域网）」，把 IP 改成自己电脑的即可\n4. 第一次必须在电脑端点一次「生成远程二维码」，手机扫一次，之后长期有效",
+            code: "http://<电脑IP>:3083/remote/v4",
+            tip: "真机验过 iOS 16.3 及以上（16.3 / 16.6 两台）。ZCode 桌面端保持官方原版，不要改它；长期入口别用官方那条带 sid 的地址，被手机缓存过就修不到了。"
+        )
+        stack.addArrangedSubview(step4)
+
+        // 更新日志
         let updateCard = createUpdateLogCard()
         stack.addArrangedSubview(updateCard)
 
