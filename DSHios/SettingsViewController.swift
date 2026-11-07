@@ -648,7 +648,7 @@ final class SettingsViewController: UIViewController {
                 while t.count > 8 && t.hasSuffix("/") { t = String(t.dropLast()) }
                 return t.lowercased()
             }
-            let existingURLs = Set(ServiceStore.load().map { norm($0.url) })
+            var existingURLs = Set(ServiceStore.load().map { norm($0.url) })
             var added = 0
             var skipped = 0
             for item in incoming {
