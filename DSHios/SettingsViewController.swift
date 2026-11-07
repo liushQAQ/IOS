@@ -10,16 +10,20 @@ struct ServiceItem: Codable, Equatable {
     var note: String?
     /// 外网入口专用：电脑端 token 每次重启都会变，先在局域网内向仪表盘换最新地址。
     var resolverURL: String?
+    /// 备用线路（可选，最多 4 条）：主线路连续 3 次连接失败后按顺序自动兜底切换（v2.1.20）。
+    /// 外网/局域网不用手动切换 —— 例如主线路填 192.168.x.x:3090/rc，备用填 Tailscale 域名同名径。
+    var fallbacks: [String]?
 
     enum CodingKeys: String, CodingKey {
-        case name, url, note, resolverURL
+        case name, url, note, resolverURL, fallbacks
     }
 
-    init(name: String, url: String, note: String? = nil, resolverURL: String? = nil) {
+    init(name: String, url: String, note: String? = nil, resolverURL: String? = nil, fallbacks: [String]? = nil) {
         self.name = name
         self.url = url
         self.note = note
         self.resolverURL = resolverURL
+        self.fallbacks = fallbacks
     }
 
     /// 容错解码：即使未来版本增减字段或旧版格式不完整，也不会抛出解码异常导致覆盖用户已有配置
@@ -29,6 +33,7 @@ struct ServiceItem: Codable, Equatable {
         self.url = (try? container.decode(String.self, forKey: .url)) ?? ""
         self.note = try? container.decodeIfPresent(String.self, forKey: .note)
         self.resolverURL = try? container.decodeIfPresent(String.self, forKey: .resolverURL)
+        self.fallbacks = try? container.decodeIfPresent([String].self, forKey: .fallbacks)
     }
 }
 
@@ -591,6 +596,14 @@ final class SettingsViewController: UIViewController {
             tf.text = existing?.item.note
             tf.autocorrectionType = .no
         }
+        // v2.1.20 备用线路：逗号分隔最多 4 条，主线路连不上时自动按顺序兜底（外出/局域网免手动切换）
+        alert.addTextField { tf in
+            tf.placeholder = "备用线路（可选，逗号分隔，最多4条）"
+            tf.text = existing?.item.fallbacks?.joined(separator: ", ")
+            tf.autocorrectionType = .no
+            tf.autocapitalizationType = .none
+            tf.keyboardType = .URL
+        }
 
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self] _ in
@@ -603,10 +616,22 @@ final class SettingsViewController: UIViewController {
                 url = "http://" + url
             }
             let note = alert.textFields?[2].text?.trimmingCharacters(in: .whitespaces)
+            // v2.1.20：解析备用线路（逗号分隔），逐条补 scheme、去空、去重、最多 4 条
+            var fallbacks: [String] = []
+            for raw in (alert.textFields?[3].text ?? "").split(separator: ",") {
+                var f = String(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !f.isEmpty else { continue }
+                if !f.lowercased().hasPrefix("http://"), !f.lowercased().hasPrefix("https://") {
+                    f = "http://" + f
+                }
+                if !fallbacks.contains(f), f != url { fallbacks.append(f) }
+                if fallbacks.count >= 4 { break }
+            }
             // 编辑已有条目时保留其换票地址（外网入口专用，用户改地址不改换票逻辑）。
             let item = ServiceItem(name: name, url: url,
                                    note: (note?.isEmpty ?? true) ? nil : note,
-                                   resolverURL: existing?.item.resolverURL)
+                                   resolverURL: existing?.item.resolverURL,
+                                   fallbacks: fallbacks.isEmpty ? nil : fallbacks)
             if let existing {
                 ServiceStore.update(at: existing.index, with: item)
             } else {
@@ -1261,56 +1286,58 @@ final class ConnectionGuideViewController: UIViewController {
         //   ① 一条一行、序号从 1 严格递增不重复；② 每行 ≤ 40 字；③ 只写结果不写过程；
         //   ④ 闸门 [文案·R46] 机械校验：序号断链 / 超长 / 缺左对齐 = 红条禁打包。
         let logContent = """
-1. 服务列表内置 ZCode 手机页入口 (2.1.19)
-2. 教程页新增 ZCode 连接第 4 步 (2.1.19)
-3. 插件面板关掉再打开不再空白 (2.1.17)
-4. 同时开好几个面板，也不会关错了 (2.1.17)
-5. 插件弹窗不再顶满屏，关得掉了 (2.1.16)
-6. 弹窗卡片头部不再挡住关闭键 (2.1.15)
-7. 所有弹层都自带一个关闭键 (2.1.14)
-8. 顶栏弹层不再跑出屏幕外面 (2.1.13)
-9. 小鲸鱼短滑换高度，跟手了 (2.1.12)
-10. 小鲸鱼不再半截挂在边上 (2.1.12)
-11. 点发送时键盘不再闪一下又缩回 (2.1.11)
-12. 抽屉顶栏不再自己上下乱跳 (2.1.11)
-13. 小鲸鱼任意高度都能拉出来 (2.1.10)
-14. 键盘收着点发送，不再弹键盘 (2.1.10)
-15. 小鲸鱼手势回到顺手的那一版 (2.1.9)
-16. 开抽屉时顶栏轻微下移，修掉了 (2.1.9)
-17. 键盘收着点发送，这次稳了 (2.1.9)
-18. 开抽屉顶栏偶尔跳一下，没了 (2.1.8)
-19. 收起键盘再点发送，不弹键盘 (2.1.8)
-20. 小鲸鱼能拖到屏幕任何角落 (2.1.8)
-21. 右侧抽屉不再把整页挤出屏幕 (2.1.7)
-22. 语音输入不再重复、也不再错序 (2.1.7)
-23. 返回键从会话框里挪到卡片下面 (2.1.7)
-24. 右缘长滑开抽屉，短滑叫出鲸鱼 (2.1.6)
-25. 表格滑块不再被边缘手势抢走 (2.1.6)
-26. 记住上次地址，别再去连旧的 (2.1.6)
-27. 本地连接与网页跳转加了安全校验 (2.1.6)
-28. 左缘滑动不再带着整页上下跑 (2.1.5)
-29. 白屏重试改成一键清脏缓存 (2.1.5)
-30. 拍照识字的结果精准填回输入框 (2.1.4)
-31. 多端同步时归档会话不再错乱 (2.1.4)
-32. 新会话标题直接取你第一句话 (2.1.3)
-33. 左侧目录不再抖，也不再闪 (2.1.3)
-34. 右侧抽屉打开时右上三键不闪了 (2.1.3)
-35. 版本号显示和重复更新提示修好 (2.1.2)
-36. 切会话不再自动弹键盘挡屏 (2.1.1)
-37. 点重命名时目录不再压住输入框 (2.1.1)
-38. 发送键不再随模型名变短而左缩 (2.1)
-39. 拍照识字，文字自动填回输入框 (2.0)
-40. 后台保活防断连，完成给横幅 (2.0)
-41. 灵动岛小鲸鱼和锁屏实时活动 (2.0)
-42. 抽屉状态栏加高，避开灵动岛 (143)
-43. 开关抽屉回会话页，按钮不出屏 (142)
-44. 开始页顶栏被挡、假按钮排修掉 (140-141)
-45. 冷启动从 5.7MB 降到 0.2MB (139)
-46. 开始页顶栏出屏，这次摁死了 (138)
-47. 工作区按钮位置与多端同步一起修 (137)
-48. 会话框加号弹层不再闪退 (136)
-49. 抽屉按钮出屏，补了值守卫 (135-136)
-50. 左右滑手势收窄，不再误关误返 (135)
+1. 服务连不上自动换备用线路，不用手动切 (2.1.20)
+2. 服务编辑里可填最多 4 条备用线路 (2.1.20)
+3. 服务列表内置 ZCode 手机页入口 (2.1.19)
+4. 教程页新增 ZCode 连接第 4 步 (2.1.19)
+5. 插件面板关掉再打开不再空白 (2.1.17)
+6. 同时开好几个面板，也不会关错了 (2.1.17)
+7. 插件弹窗不再顶满屏，关得掉了 (2.1.16)
+8. 弹窗卡片头部不再挡住关闭键 (2.1.15)
+9. 所有弹层都自带一个关闭键 (2.1.14)
+10. 顶栏弹层不再跑出屏幕外面 (2.1.13)
+11. 小鲸鱼短滑换高度，跟手了 (2.1.12)
+12. 小鲸鱼不再半截挂在边上 (2.1.12)
+13. 点发送时键盘不再闪一下又缩回 (2.1.11)
+14. 抽屉顶栏不再自己上下乱跳 (2.1.11)
+15. 小鲸鱼任意高度都能拉出来 (2.1.10)
+16. 键盘收着点发送，不再弹键盘 (2.1.10)
+17. 小鲸鱼手势回到顺手的那一版 (2.1.9)
+18. 开抽屉时顶栏轻微下移，修掉了 (2.1.9)
+19. 键盘收着点发送，这次稳了 (2.1.9)
+20. 开抽屉顶栏偶尔跳一下，没了 (2.1.8)
+21. 收起键盘再点发送，不弹键盘 (2.1.8)
+22. 小鲸鱼能拖到屏幕任何角落 (2.1.8)
+23. 右侧抽屉不再把整页挤出屏幕 (2.1.7)
+24. 语音输入不再重复、也不再错序 (2.1.7)
+25. 返回键从会话框里挪到卡片下面 (2.1.7)
+26. 右缘长滑开抽屉，短滑叫出鲸鱼 (2.1.6)
+27. 表格滑块不再被边缘手势抢走 (2.1.6)
+28. 记住上次地址，别再去连旧的 (2.1.6)
+29. 本地连接与网页跳转加了安全校验 (2.1.6)
+30. 左缘滑动不再带着整页上下跑 (2.1.5)
+31. 白屏重试改成一键清脏缓存 (2.1.5)
+32. 拍照识字的结果精准填回输入框 (2.1.4)
+33. 多端同步时归档会话不再错乱 (2.1.4)
+34. 新会话标题直接取你第一句话 (2.1.3)
+35. 左侧目录不再抖，也不再闪 (2.1.3)
+36. 右侧抽屉打开时右上三键不闪了 (2.1.3)
+37. 版本号显示和重复更新提示修好 (2.1.2)
+38. 切会话不再自动弹键盘挡屏 (2.1.1)
+39. 点重命名时目录不再压住输入框 (2.1.1)
+40. 发送键不再随模型名变短而左缩 (2.1)
+41. 拍照识字，文字自动填回输入框 (2.0)
+42. 后台保活防断连，完成给横幅 (2.0)
+43. 灵动岛小鲸鱼和锁屏实时活动 (2.0)
+44. 抽屉状态栏加高，避开灵动岛 (143)
+45. 开关抽屉回会话页，按钮不出屏 (142)
+46. 开始页顶栏被挡、假按钮排修掉 (140-141)
+47. 冷启动从 5.7MB 降到 0.2MB (139)
+48. 开始页顶栏出屏，这次摁死了 (138)
+49. 工作区按钮位置与多端同步一起修 (137)
+50. 会话框加号弹层不再闪退 (136)
+51. 抽屉按钮出屏，补了值守卫 (135-136)
+52. 左右滑手势收窄，不再误关误返 (135)
 """
 
         let contentLabel = UILabel()

@@ -36,6 +36,21 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
     private var navigationTimer: Timer?
     private var pathMonitor: NWPathMonitor?
     private var hasLoadedOnce = false
+    // MARK: v2.1.20 线路兜底（自动切换备用线路 1-4）
+    /// 当前服务的线路链：[0]=主线路，[1..4]=备用线路。单线路服务链长 1，行为与旧版完全一致。
+    private var failoverChain: [String] = []
+    /// 当前生效线路下标（成功后保持，下次启动从记住的线路起步，避免每次都先撞 3 次坏线路）。
+    private var failoverIndex: Int = 0
+    /// 当前线路连续失败次数（同一线路累计 3 次 → 切下一条）。
+    private var failoverFails: Int = 0
+    /// 兜底重载期间保持链首的 DSH 归属标记（同一服务的镜像线路，页面归属一致）。
+    private var failoverMarkDSH: Bool = true
+    /// 同线路重试的延时任务句柄（新导航开始时撤销，防叠加）。
+    private var failoverRetryWork: DispatchWorkItem?
+    /// 轻提示条（线路切换过程对用户可见）。
+    private var failoverToast: UILabel?
+    /// 同一线路的最大尝试次数。
+    private let failoverMaxFails = 3
     /// 401 token 页自动换票重试的防重入标志（防止 didFinish→重载→didFinish 死循环）。
     private var isTokenRetryInFlight = false
     /// 3083 Pocket 握手自动重试防重入（503 握手页 → 清 cookie 重载一次）。
@@ -10476,6 +10491,18 @@ function applySidebarInset() {
             UserDefaults.standard.set(trimmed, forKey: "DSHios.mainDSHURL")
         }
 
+        // v2.1.20 线路兜底链：手动选服务/输地址 → 从主线路起步（index=0）；
+        // 兜底切换走 loadForFailover，不进这里，链状态不被重置。
+        // loadInitialURL 带入的「上次生效地址」若本身是备用线路，起点会对齐到它，
+        // 免去每次启动先撞 3 次已知坏线路。
+        failoverRetryWork?.cancel()
+        failoverRetryWork = nil
+        failoverMarkDSH = markAsDSHService
+        failoverChain = buildFailoverChain(for: finalString)
+        let canon = canonicalURLString(finalString)
+        failoverIndex = failoverChain.firstIndex(where: { $0.lowercased() == canon.lowercased() }) ?? 0
+        failoverFails = 0
+
         // 双轨固化存储，跨版本覆盖安装升级永不丢失当前使用的 URL
         UserDefaults.standard.set(trimmed, forKey: Keys.lastURL)
         UserDefaults.standard.set(trimmed, forKey: "DSHios.activeServiceURL")
@@ -10499,6 +10526,141 @@ function applySidebarInset() {
         // 注意：这里**不能**武装探测。webView.load 之后旧文档仍留在内存里（直到新响应提交），
         // 此刻探测 #root 会立刻命中旧页面导致提前显形，等于改动了 URL 切换的观感。
         // 正确时机是 didCommit（新文档已提交）——见 webView(_:didCommit:)。
+    }
+
+    // MARK: - v2.1.20 线路兜底引擎
+
+    /// 地址规范化：补 scheme、去多余尾斜杠（路径大小写不动），比较时再统一小写。
+    private func canonicalURLString(_ s: String) -> String {
+        var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !t.lowercased().hasPrefix("http://"), !t.lowercased().hasPrefix("https://") {
+            t = "http://" + t
+        }
+        while t.count > 8 && t.hasSuffix("/") { t = String(t.dropLast()) }
+        return t
+    }
+
+    /// 组装线路链：[主线路, 备1..备4]。按地址匹配服务条目取其 fallbacks；
+    /// 匹配不上（如手输的临时地址）就只有主线路一条，行为与旧版完全一致。
+    private func buildFailoverChain(for urlString: String) -> [String] {
+        let main = canonicalURLString(urlString)
+        var chain = [main]
+        let norm: (String) -> String = { [weak self] s in self?.canonicalURLString(s) ?? s }
+        let item = ServiceStore.load().first { it in
+            let iu = norm(it.url)
+            return iu.lowercased() == main.lowercased() || Self.sameEndpoint(iu, main)
+        }
+        for f in (item?.fallbacks ?? []).compactMap({ $0.isEmpty ? nil : norm($0) }) {
+            if !chain.contains(where: { $0.lowercased() == f.lowercased() }) {
+                chain.append(f)
+            }
+            if chain.count >= 5 { break }   // 主线路 + 4 条备用封顶
+        }
+        return chain
+    }
+
+    /// host+port+path 归一比较（容错「http://ip:3090/rc」与「ip:3090/rc」这类输入差异）。
+    private static func sameEndpoint(_ a: String, _ b: String) -> Bool {
+        guard let ua = URLComponents(string: a), let ub = URLComponents(string: b),
+              let ha = ua.host, let hb = ub.host else { return false }
+        return ha.lowercased() == hb.lowercased() && ua.port == ub.port && ua.path == ub.path
+    }
+
+    /// 兜底/重试专用加载：与 loadURLString 相同的状态清理，但**不碰**链状态
+    /// （chain/index/fails 由 handleLoadFailure 统一管理，这里重置会把切换进度抹掉）。
+    private func loadForFailover(_ raw: String) {
+        var final = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !final.lowercased().hasPrefix("http://"), !final.lowercased().hasPrefix("https://") {
+            final = "http://" + final
+        }
+        guard let url = URL(string: final) else { return }
+        isCurrentServiceDSH = failoverMarkDSH
+        if failoverMarkDSH {
+            dshServiceHost = url.host
+            UserDefaults.standard.set(final, forKey: "DSHios.mainDSHURL")
+        }
+        UserDefaults.standard.set(final, forKey: Keys.lastURL)
+        UserDefaults.standard.set(final, forKey: "DSHios.activeServiceURL")
+        DSHPersistenceCenter.saveLastURL(final)
+        hideError()
+        stopWhiteScreenDiagnostics()
+        stopEarlyRevealProbe()
+        revealFallbackWork?.cancel()
+        revealFallbackWork = nil
+        webErrors = []
+        terminateCount = 0
+        hasLoadedOnce = false
+        isTokenRetryInFlight = false
+        isPocketRetryInFlight = false
+        UIView.animate(withDuration: 0.12) { self.webView.alpha = 0 }
+        activityIndicator.startAnimating()
+        webView.load(URLRequest(url: url))
+    }
+
+    /// 加载失败统一入口（didFail / didFailProvisionalNavigation / 连接超时）。
+    /// 规范：同一线路累计 3 次失败 → 切下一条；链尽 → 停在错误浮层，下次手动重试从主线路开始。
+    /// 没配备用线路的服务（链长 1）维持旧版行为：失败直接弹错误浮层。
+    private func handleLoadFailure(_ detail: String) {
+        guard failoverChain.count > 1 else {
+            showError(detail: detail)
+            return
+        }
+        failoverRetryWork?.cancel()
+        failoverRetryWork = nil
+        failoverFails += 1
+        if failoverFails < failoverMaxFails {
+            // 第 2/3 次尝试：同一线路，隔 1 秒再发（避免连环轰炸）
+            let target = failoverChain[failoverIndex]
+            showToast("线路\(failoverIndex + 1)连接失败（\(failoverFails)/3），正在重试…")
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.loadForFailover(target)
+            }
+            failoverRetryWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+            return
+        }
+        failoverFails = 0
+        let next = failoverIndex + 1
+        if next < failoverChain.count {
+            failoverIndex = next
+            showToast("线路\(failoverIndex)不可用，自动切换到线路\(next + 1)…")
+            loadForFailover(failoverChain[next])
+        } else {
+            // 全链耗尽：给出终态说明，回退起点让手动重试从主线路开始
+            failoverIndex = 0
+            showError(detail: "全部 \(failoverChain.count) 条线路均连接失败（每条尝试 \(failoverMaxFails) 次）。\n\(detail)")
+        }
+    }
+
+    /// 顶部轻提示条：2.8s 自动消失，不挡操作。
+    private func showToast(_ text: String) {
+        failoverToast?.removeFromSuperview()
+        let bar = UILabel()
+        bar.text = text
+        bar.font = .preferredFont(forTextStyle: .footnote)
+        bar.textColor = .white
+        bar.backgroundColor = UIColor(white: 0, alpha: 0.75)
+        bar.textAlignment = .center
+        bar.numberOfLines = 0
+        bar.layer.cornerRadius = 10
+        bar.clipsToBounds = true
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(bar)
+        NSLayoutConstraint.activate([
+            bar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            bar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            bar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            bar.heightAnchor.constraint(greaterThanOrEqualToConstant: 32)
+        ])
+        failoverToast = bar
+        bar.alpha = 0
+        UIView.animate(withDuration: 0.2) { bar.alpha = 1 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) { [weak bar] in
+            UIView.animate(withDuration: 0.25, animations: { bar?.alpha = 0 }) { _ in
+                bar?.removeFromSuperview()
+            }
+        }
     }
 
     // MARK: - 联网即加载 (1.0.70 零干扰黄金逻辑)
@@ -10615,10 +10777,17 @@ function applySidebarInset() {
     /// 实测 DSH 已装插件 bundle 合计 11.5MB，慢机上解析执行要 20~40 秒，原 20 秒阈值必然误报。
     private func startNavigationTimeout() {
         navigationTimer?.invalidate()
-        navigationTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in
+        // v2.1.20：配了备用线路的服务用 5s 连接超时（5s×3 后自动切下一条）；
+        // 单线路服务维持 30s 原节奏，行为零变化。
+        let interval: TimeInterval = failoverChain.count > 1 ? 5 : 30
+        navigationTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
             guard let self, self.errorOverlay.isHidden else { return }
             self.activityIndicator.stopAnimating()
-            self.showError(detail: "连接超时：30 秒内未收到任何响应，请确认电脑端 DSH 在线、地址与端口正确")
+            if self.failoverChain.count > 1 {
+                self.handleLoadFailure("连接超时：\(Int(interval)) 秒内未收到任何响应")
+            } else {
+                self.showError(detail: "连接超时：\(Int(interval)) 秒内未收到任何响应，请确认电脑端 DSH 在线、地址与端口正确")
+            }
         }
     }
 
@@ -10689,6 +10858,9 @@ extension ViewController: WKNavigationDelegate {
         // v1.0.106：导航已提交（首字节已到、新文档已接手）——网络腿完成，取消连接超时保护，
         // 避免把后续纯客户端 JS 解析耗时（慢机上可达 30 秒）误报成"连接超时"。
         stopNavigationTimeout()
+        // v2.1.20：网络腿成功 = 当前线路可用，重置连续失败计数；
+        // failoverIndex 保持不动（记住线路），下次启动从它起步。
+        failoverFails = 0
         // v1.0.106：此刻起 #root 一定属于新文档，武装首屏探测，出首帧即显形，不再死等 didFinish。
         startEarlyRevealProbe()
     }
@@ -10803,13 +10975,15 @@ extension ViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         activityIndicator.stopAnimating()
         stopNavigationTimeout()
-        showError(detail: readableMessage(for: error))
+        // v2.1.20：统一走兜底引擎（没配备用线路的服务在引擎内直接回落为原 showError）
+        handleLoadFailure(readableMessage(for: error))
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         activityIndicator.stopAnimating()
         stopNavigationTimeout()
-        showError(detail: readableMessage(for: error))
+        // v2.1.20：连接阶段失败（DNS/超时/拒绝）——兜底切换的主入口
+        handleLoadFailure(readableMessage(for: error))
     }
 
     // MARK: - 原生语音输入（SFSpeechRecognizer + AVAudioEngine）
