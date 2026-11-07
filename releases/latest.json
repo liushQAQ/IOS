@@ -1,12 +1,12 @@
 {
-  "version": "2.1.19",
-  "build": 146,
-  "updated_at": "2026-11-07 23:38:00",
-  "title": "v2.1.19(146) 内置 ZCode 手机页入口，教程加连接步骤",
-  "changelog": "1. 服务列表内置 ZCode 手机页入口 (2.1.19)\n2. 教程页新增 ZCode 连接第 4 步 (2.1.19)\n3. 插件面板关掉再打开不再空白 (2.1.17)\n4. 同时开好几个面板，也不会关错了 (2.1.17)\n5. 插件弹窗不再顶满屏，关得掉了 (2.1.16)\n6. 弹窗卡片头部不再挡住关闭键 (2.1.15)",
-  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.19-146.tipa?m=gh-proxy.com",
-  "public_tipa_url": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.1.19/DSHios-public-2.1.19-146.tipa",
-  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.19/DSHios-public-2.1.19-146.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.19",
-  "md5": "3b06ae9e728fd4124ef696c18afa7dcb"
+  "version": "2.1.20",
+  "build": 147,
+  "updated_at": "2026-11-08 01:15:00",
+  "title": "v2.1.20(147) 服务连不上自动换备用线路，不用手动切",
+  "changelog": "1. 服务连不上自动换备用线路，不用手动切 (2.1.20)\n2. 服务编辑里可填最多 4 条备用线路 (2.1.20)\n3. 服务列表内置 ZCode 手机页入口 (2.1.19)\n4. 教程页新增 ZCode 连接第 4 步 (2.1.19)\n5. 插件面板关掉再打开不再空白 (2.1.17)\n6. 同时开好几个面板，也不会关错了 (2.1.17)",
+  "tipa_url": "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.1.20-147.tipa?m=gh-proxy.com",
+  "public_tipa_url": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.1.20/DSHios-public-2.1.20-147.tipa",
+  "tipa_url_fallback": "https://github.com/liushQAQ/IOS/releases/download/v2.1.20/DSHios-public-2.1.20-147.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.1.20",
+  "md5": "9db9e777af9b397367839625439cb936"
 }
