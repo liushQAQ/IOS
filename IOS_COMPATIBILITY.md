@@ -29,7 +29,7 @@
   1. **App 侧只探测、不改写**（改写只允许发生在代理层）；
   2. **grep 判定 lookbehind 不可信**（字符串同形文本误报），必须 `_diag/ast_audit.js`（acorn AST）；
   3. `node_modules/dsh-anywhere` 是符号链接指向源码仓库，改它=改源码，兜底靠 git；
-  4. 插件包名是 `dsh-anywhere-zcode`（本项目独有命名，npm 上无同名包），唯一安装方式 `pnpm add github:liushQAQ/dsh-anywhere-zcode`；插件实例 id 仍为 `dsh-anywhere`，配置键与数据目录不变。
+  4. 插件包名是 `dsh-anywhere-hub`（本项目独有命名，npm 上无同名包），唯一安装方式 `pnpm add github:liushQAQ/dsh-anywhere-hub`；插件实例 id 仍为 `dsh-anywhere`，配置键与数据目录不变。
 
 ### C2 🔴 iOS 14 / 15 ITP 隐私策略拦截（局域网 http 加载）
 - WKWebView 在低版本 iOS 上 ITP 会拦「跨域本地网络访问」，导致 3081/3083 局域网页加载异常。
