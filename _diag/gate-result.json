@@ -5,9 +5,9 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-08T04:35:19.571Z",
-  "dshFingerprint": "v1ikr4",
-  "dshAssets": 10,
+  "startedAt": "2026-11-08T11:11:19.353Z",
+  "dshFingerprint": "cvemtc",
+  "dshAssets": 11,
   "domClasses": 0,
   "anchorTotal": 190,
   "anchorDead": 0,
@@ -31,13 +31,12 @@
   "r63PanelCloseGuard": true,
   "r64ReopenGuard": true,
   "ok": true,
-  "pass": 125,
+  "pass": 112,
   "fail": 0,
   "failures": [],
   "blocked": [
-    "[抽屉·R35b] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）",
-    "[抽屉·R39] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）"
+    "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）"
   ],
-  "sourceHash": "9c4d7d08181c0e542c95e0588f101b7411dddad5cd33b4c008deca3b46ef037b",
-  "finishedAt": "2026-11-08T04:39:44.023Z"
+  "sourceHash": "695fba382d57ddd2c800252d761358dd2d8766dbcd5d6369f23ba87986567ef0",
+  "finishedAt": "2026-11-08T11:15:01.289Z"
 }

@@ -11212,10 +11212,13 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     }
 
     /// 国内 4G / WiFi 免代理极速实时镜像列表（排除 jsDelivr 等强缓存 CDN，确保获取到最新构建）
+    /// 🔴 2026-11-08 加固：第一候选改为自家统计网关（/dl/latest.json 服务器本地直出，
+    ///   不依赖任何镜像）；剔除已失效的 raw.gitmirror.com。候选并发请求取最快成功者，
+    ///   网关不可达的设备自动落后续镜像，互不拖慢。
     private static let updateMetadataMirrorURLs: [String] = [
+        "https://liu-gw.tail2a9309.ts.net:8443/dl/latest.json",
         "https://ghfast.top/https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json",
         "https://gh-proxy.com/https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json",
-        "https://raw.gitmirror.com/liushQAQ/IOS/personal/releases/latest.json",
         "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json"
     ]
 
