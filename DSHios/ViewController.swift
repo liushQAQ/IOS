@@ -11259,6 +11259,10 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         "https://raw.githubusercontent.com/liushQAQ/IOS/personal/releases/latest.json"
     ]
 
+    /// 固定别名：自家统计网关（Tailscale Funnel 公网可达）服务器本地直出「当前最新 tipa」。
+    /// 不随版本变化、不依赖任何第三方加速镜像；检查更新全部失败时用它兜底。
+    static let stableLatestTipaURL = "https://liu-gw.tail2a9309.ts.net:8443/dl/latest.tipa"
+
     /// 将 GitHub 原始 TIPA 下载地址转换为国内免代理高速镜像地址列表
     private static func mirrorCandidates(for rawURL: String) -> [String] {
         guard !rawURL.isEmpty else { return [] }
@@ -11325,6 +11329,8 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         var lastError: Error?
         /// 拿到 200 但内容解析不动时的实证文本（区分「网络断」和「元数据格式坏」）
         var lastDecodeDetail: String?
+        /// 每个更新源的实测结果（主机名 + 状态/错误），失败时直接摊给用户看，不再只报「网络中断」
+        var sourceNotes: [String] = []
         let total = mirrorURLs.count
         let ts = Int(Date().timeIntervalSince1970)
 
@@ -11337,6 +11343,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
             hasDispatched = true
             let decodeDetailSnapshot = lastDecodeDetail
             let errorSnapshot = lastError
+            let notesSnapshot = sourceNotes
             lock.unlock()
 
             DispatchQueue.main.async { [weak self] in
@@ -11348,8 +11355,19 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
                         let msg = decodeDetailSnapshot
                             ?? errorSnapshot?.localizedDescription
                             ?? "所有加速节点均未响应，请检查网络连接。"
-                        let alert = UIAlertController(title: "检查更新失败", message: "无法连接更新源：\(msg)", preferredStyle: .alert)
-                        alert.addAction(UIAlertAction(title: "确定", style: .default))
+                        let detail = notesSnapshot.prefix(4).joined(separator: "\n")
+                        let alert = UIAlertController(
+                            title: "检查更新失败",
+                            message: "无法连接更新源：\(msg)\n\n【各源实测】\n\(detail)",
+                            preferredStyle: .alert)
+                        // 🔴 2026-11-09：镜像全挂时的兜底 —— 固定别名 latest.tipa 由自家网关直出，
+                        //   不经过任何第三方镜像，浏览器下载后交给巨魔安装即可，永不依赖检查更新。
+                        alert.addAction(UIAlertAction(title: "🚀 浏览器下载最新包（必通）", style: .default) { _ in
+                            if let u = URL(string: Self.stableLatestTipaURL) {
+                                UIApplication.shared.open(u)
+                            }
+                        })
+                        alert.addAction(UIAlertAction(title: "确定", style: .cancel))
                         self.present(alert, animated: true)
                     }
                 }
@@ -11387,8 +11405,21 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
                     validInfo = decoded
                 }
 
+                let host = URL(string: urlStr)?.host ?? urlStr
+                let note: String
+                if let err = error {
+                    note = "\(host) → \(err.localizedDescription)"
+                } else if !isOK {
+                    note = "\(host) → HTTP \(httpStatus)"
+                } else if validInfo == nil {
+                    note = "\(host) → HTTP \(httpStatus) 内容解析失败"
+                } else {
+                    note = "\(host) → OK build=\(validInfo?.build ?? 0)"
+                }
+
                 lock.lock()
                 completedCount += 1
+                sourceNotes.append(note)
                 if let err = error { lastError = err }
                 // 200 却解不出来 = 元数据格式问题（例如 changelog 写成了数组），不是网络问题
                 if validInfo == nil, error == nil, isOK, let d = data,
