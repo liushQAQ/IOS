@@ -11209,6 +11209,43 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         /// 备用下载地址（可选）：主地址是自己搭的统计网关时，用它在网关不可达时兜底。
         let tipa_url_fallback: String?
         let release_url: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case version, build, title, changelog
+            case tipa_url, public_tipa_url, tipa_url_fallback, release_url
+        }
+
+        /// 🔴 2026-11-08 加固：元数据字段容错解码。
+        /// 真因：releases/latest.json 的 changelog 曾被写成字符串数组 ["a","b"]，
+        /// 而这里声明的是 String? → JSONDecoder 抛 typeMismatch → 整个对象解码失败
+        /// → 四个更新源全部被判失败 → 手机上「检查更新」永远检测不到新版本（或只报网络中断）。
+        /// 现约定：changelog 接受字符串或字符串数组（数组按换行拼接），build 接受数字或数字字符串，
+        /// 其余字段缺一个也不拖垮整体（各自独立 try?）。
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            version = (try? c.decode(String.self, forKey: .version)) ?? "0"
+            title = try? c.decode(String.self, forKey: .title)
+            tipa_url = try? c.decode(String.self, forKey: .tipa_url)
+            public_tipa_url = try? c.decode(String.self, forKey: .public_tipa_url)
+            tipa_url_fallback = try? c.decode(String.self, forKey: .tipa_url_fallback)
+            release_url = try? c.decode(String.self, forKey: .release_url)
+
+            if let n = try? c.decode(Int.self, forKey: .build) {
+                build = n
+            } else if let s = try? c.decode(String.self, forKey: .build) {
+                build = Int(s.trimmingCharacters(in: .whitespacesAndNewlines))
+            } else {
+                build = nil
+            }
+
+            if let s = try? c.decode(String.self, forKey: .changelog) {
+                changelog = s
+            } else if let arr = try? c.decode([String].self, forKey: .changelog) {
+                changelog = arr.joined(separator: "\n")
+            } else {
+                changelog = nil
+            }
+        }
     }
 
     /// 国内 4G / WiFi 免代理极速实时镜像列表（排除 jsDelivr 等强缓存 CDN，确保获取到最新构建）
@@ -11286,6 +11323,8 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         var completedCount = 0
         var hasDispatched = false
         var lastError: Error?
+        /// 拿到 200 但内容解析不动时的实证文本（区分「网络断」和「元数据格式坏」）
+        var lastDecodeDetail: String?
         let total = mirrorURLs.count
         let ts = Int(Date().timeIntervalSince1970)
 
@@ -11296,6 +11335,8 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
                 return
             }
             hasDispatched = true
+            let decodeDetailSnapshot = lastDecodeDetail
+            let errorSnapshot = lastError
             lock.unlock()
 
             DispatchQueue.main.async { [weak self] in
@@ -11304,7 +11345,9 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
                     if let valid = info {
                         self.handleFetchedReleaseInfo(valid, currentVer: currentVer, currentBuild: currentBuild, manual: manual)
                     } else if manual {
-                        let msg = lastError?.localizedDescription ?? "所有加速节点均未响应，请检查网络连接。"
+                        let msg = decodeDetailSnapshot
+                            ?? errorSnapshot?.localizedDescription
+                            ?? "所有加速节点均未响应，请检查网络连接。"
                         let alert = UIAlertController(title: "检查更新失败", message: "无法连接更新源：\(msg)", preferredStyle: .alert)
                         alert.addAction(UIAlertAction(title: "确定", style: .default))
                         self.present(alert, animated: true)
@@ -11337,9 +11380,9 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
 
             URLSession.shared.dataTask(with: req) { data, resp, error in
                 var validInfo: AppReleaseInfo?
-                if error == nil,
-                   let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode),
-                   let data = data,
+                let httpStatus = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                let isOK = (200...299).contains(httpStatus)
+                if error == nil, isOK, let data = data,
                    let decoded = try? JSONDecoder().decode(AppReleaseInfo.self, from: data) {
                     validInfo = decoded
                 }
@@ -11347,6 +11390,12 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
                 lock.lock()
                 completedCount += 1
                 if let err = error { lastError = err }
+                // 200 却解不出来 = 元数据格式问题（例如 changelog 写成了数组），不是网络问题
+                if validInfo == nil, error == nil, isOK, let d = data,
+                   String(data: d, encoding: .utf8) != nil {
+                    let head = String(decoding: d.prefix(160), as: UTF8.self)
+                    lastDecodeDetail = "更新源返回 HTTP \(httpStatus) 但内容无法解析：\(head)"
+                }
 
                 if let info = validInfo {
                     let incomingBuild = info.build ?? 0
