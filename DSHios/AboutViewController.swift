@@ -163,9 +163,9 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 服务连不上自动换备用线路（不限条数）
-        2. 服务配置可一键分享给别的手机
-        3. iOS 16.3 及以上可正常打开
+        1. 检查更新优先走自家服务器，不再只靠镜像
+        2. 更新失败逐个列出源的真实错误
+        3. 更新卡住时一键浏览器下载最新包
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)
