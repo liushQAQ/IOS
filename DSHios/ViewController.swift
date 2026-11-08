@@ -6,6 +6,7 @@ import Speech
 import AVFoundation
 import UserNotifications
 import Vision
+import CryptoKit
 #if canImport(ActivityKit)
 import ActivityKit
 #endif
@@ -11208,11 +11209,20 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         let public_tipa_url: String?
         /// 备用下载地址（可选）：主地址是自己搭的统计网关时，用它在网关不可达时兜底。
         let tipa_url_fallback: String?
+        /// 🔴 2026-11-09 R68：服务端下发的「多线路下载列表」（全球 CDN + 公益镜像 + 仓库直链，按推荐顺序）。
+        /// 真因：以前只有一条主地址，且主地址指向单一节点，玩家外网下载全挤在那一条上，
+        /// 节点被限速/抖动时整条下载就慢到几十 KB/s 甚至卡死。现在按此列表逐条尝试、谁快用谁。
+        let tipa_mirrors: [String]?
+        /// 包体字节数（可选）：用于进度条与「慢线路」判据；缺省时退回 HTTP 头里的长度。
+        let size_bytes: Int?
+        /// 包体 md5（可选）：下载完整后校验，防止镜像给错文件/截断文件装出坏包。
+        let md5: String?
         let release_url: String?
 
         private enum CodingKeys: String, CodingKey {
             case version, build, title, changelog
             case tipa_url, public_tipa_url, tipa_url_fallback, release_url
+            case tipa_mirrors, size_bytes, md5
         }
 
         /// 🔴 2026-11-08 加固：元数据字段容错解码。
@@ -11229,6 +11239,16 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
             public_tipa_url = try? c.decode(String.self, forKey: .public_tipa_url)
             tipa_url_fallback = try? c.decode(String.self, forKey: .tipa_url_fallback)
             release_url = try? c.decode(String.self, forKey: .release_url)
+            tipa_mirrors = try? c.decode([String].self, forKey: .tipa_mirrors)
+            md5 = try? c.decode(String.self, forKey: .md5)
+
+            if let n = try? c.decode(Int.self, forKey: .size_bytes) {
+                size_bytes = n
+            } else if let s = try? c.decode(String.self, forKey: .size_bytes) {
+                size_bytes = Int(s.trimmingCharacters(in: .whitespacesAndNewlines))
+            } else {
+                size_bytes = nil
+            }
 
             if let n = try? c.decode(Int.self, forKey: .build) {
                 build = n
@@ -11296,17 +11316,39 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         ]
     }
 
-    /// 把「主下载地址」与「备用地址」合成一条完整的候选链：
-    /// 主地址自己的镜像序列在前（例如统计网关就只有它自己），备用地址的镜像序列接在后面去重。
-    /// 这样「自己搭的统计网关」仍是第一顺位（下载计数不丢），网关不可达时自动兜底到公开仓库直链。
-    private static func candidateChain(primary: String, fallback: String?) -> [String] {
-        var out = mirrorCandidates(for: primary)
+    /// 把「服务端下发的多线路列表」+「主下载地址」+「备用地址」合成一条完整的候选链：
+    /// 顺序 = 服务端推荐顺序 → 主地址派生镜像 → 备用地址派生镜像，全程去重。
+    /// 🔴 2026-11-09 R68：`extra`（latest.json 的 tipa_mirrors）必须排最前 —— 里面是全球 CDN，
+    ///   同一份包由 CDN 边缘节点分发，不看任何单台机器的上行，玩家越多也不会互相拖慢。
+    /// 🔴 上次成功过的线路优先一次（同一台设备重装/换网时少走弯路），失败后自动退回推荐顺序。
+    private static let lastGoodTipaHostKey = "dsh.lastGoodTipaHost"
+
+    private static func candidateChain(primary: String, fallback: String?, extra: [String] = []) -> [String] {
+        var out: [String] = []
+        for u in extra where !u.isEmpty && !out.contains(u) {
+            out.append(u)
+        }
+        for u in mirrorCandidates(for: primary) where !out.contains(u) {
+            out.append(u)
+        }
         if let fb = fallback, !fb.isEmpty, fb != primary {
             for u in mirrorCandidates(for: fb) where !out.contains(u) {
                 out.append(u)
             }
         }
+        // 上次实测成功的线路提到第一位（仅提升，不删减任何候选）
+        if let good = UserDefaults.standard.string(forKey: lastGoodTipaHostKey), !good.isEmpty,
+           let idx = out.firstIndex(where: { URL(string: $0)?.host?.lowercased() == good }), idx > 0 {
+            let hit = out.remove(at: idx)
+            out.insert(hit, at: 0)
+        }
         return out
+    }
+
+    private static func rememberGoodTipaHost(_ urlString: String) {
+        if let host = URL(string: urlString)?.host?.lowercased(), !host.isEmpty {
+            UserDefaults.standard.set(host, forKey: lastGoodTipaHostKey)
+        }
     }
 
     func checkForAppUpdates(manual: Bool = false) {
@@ -11467,10 +11509,11 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
 
         let tipaURL = info.tipa_url ?? info.public_tipa_url ?? ""
         let tipaFallback = info.tipa_url_fallback
+        let mirrors = info.tipa_mirrors ?? []
 
         if hasNewVersion {
             presentNewVersionPrompt(info: info, currentVer: currentVer, currentBuild: currentBuild,
-                                    tipaURL: tipaURL, fallbackURL: tipaFallback)
+                                    tipaURL: tipaURL, fallbackURL: tipaFallback, mirrors: mirrors)
         } else if manual {
             let alert = UIAlertController(
                 title: "✅ 当前已是最新版本",
@@ -11478,7 +11521,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
                 preferredStyle: .alert)
             if !tipaURL.isEmpty {
                 alert.addAction(UIAlertAction(title: "🚀 重新下载并用巨魔安装 (免代理加速)", style: .default) { [weak self] _ in
-                    self?.downloadAndInstallTIPA(remoteURLString: tipaURL, fallbackURL: tipaFallback, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
+                    self?.downloadAndInstallTIPA(remoteURLString: tipaURL, fallbackURL: tipaFallback, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa", mirrors: mirrors, expectedMD5: info.md5)
                 })
             }
             alert.addAction(UIAlertAction(title: "好", style: .cancel))
@@ -11487,7 +11530,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     }
 
     private func presentNewVersionPrompt(info: AppReleaseInfo, currentVer: String, currentBuild: Int,
-                                         tipaURL: String, fallbackURL: String?) {
+                                         tipaURL: String, fallbackURL: String?, mirrors: [String]) {
         let remoteVer = info.version
         let remoteBuild = info.build ?? 0
         let notes = info.changelog ?? info.title ?? "包含最新的移动端布局优化与功能修复。"
@@ -11504,10 +11547,10 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
 
         if !tipaURL.isEmpty {
             alert.addAction(UIAlertAction(title: "🚀 极速下载并用巨魔安装 (推荐·零报错)", style: .default) { [weak self] _ in
-                self?.downloadAndInstallTIPA(remoteURLString: tipaURL, fallbackURL: fallbackURL, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa")
+                self?.downloadAndInstallTIPA(remoteURLString: tipaURL, fallbackURL: fallbackURL, filename: "DSHios-public-\(remoteVer)-\(remoteBuild).tipa", mirrors: mirrors, expectedMD5: info.md5)
             })
             alert.addAction(UIAlertAction(title: "⚡ 巨魔一键直连安装", style: .default) { [weak self] _ in
-                self?.installViaTrollStore(remoteURLString: tipaURL, fallbackURL: fallbackURL)
+                self?.installViaTrollStore(remoteURLString: tipaURL, fallbackURL: fallbackURL, mirrors: mirrors)
             })
         }
 
@@ -11537,8 +11580,8 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         walk(alert.view)
     }
 
-    func installViaTrollStore(remoteURLString: String, fallbackURL: String? = nil) {
-        let candidates = Self.candidateChain(primary: remoteURLString, fallback: fallbackURL)
+    func installViaTrollStore(remoteURLString: String, fallbackURL: String? = nil, mirrors: [String] = []) {
+        let candidates = Self.candidateChain(primary: remoteURLString, fallback: fallbackURL, extra: mirrors)
         guard !candidates.isEmpty else { return }
 
         // 巨魔直接打开 URL 遇到 301 重定向时会直接弹错 301；
@@ -11547,7 +11590,7 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
         //   「巨魔一键直连安装」整条路径就不可用（还没轮到下载通道兜底）。
         func probe(_ index: Int) {
             guard index < candidates.count, let reqURL = URL(string: candidates[index]) else {
-                downloadAndInstallTIPA(remoteURLString: remoteURLString, fallbackURL: fallbackURL, filename: "DSHios-public-latest.tipa")
+                downloadAndInstallTIPA(remoteURLString: remoteURLString, fallbackURL: fallbackURL, filename: "DSHios-public-latest.tipa", mirrors: mirrors)
                 return
             }
             // 🔴 v1.0.114：这里原来发 HEAD，但统计网关（dshstat/1.0）只实现了 GET，对 HEAD 直接回 501
@@ -11566,7 +11609,8 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
                     if reached {
                         self?.openTrollStoreInstall(target: finalTarget,
                                                     fallbackRemote: remoteURLString,
-                                                    fallbackURL: fallbackURL)
+                                                    fallbackURL: fallbackURL,
+                                                    mirrors: mirrors)
                     } else {
                         probe(index + 1)
                     }
@@ -11577,9 +11621,9 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
     }
 
     /// 用巨魔（或其分支 apple-magnifier）唤起安装；两个 scheme 都打不开时回落到 App 内极速下载。
-    private func openTrollStoreInstall(target: String, fallbackRemote: String, fallbackURL: String?) {
+    private func openTrollStoreInstall(target: String, fallbackRemote: String, fallbackURL: String?, mirrors: [String] = []) {
         guard let encoded = target.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            downloadAndInstallTIPA(remoteURLString: fallbackRemote, fallbackURL: fallbackURL, filename: "DSHios-public-latest.tipa")
+            downloadAndInstallTIPA(remoteURLString: fallbackRemote, fallbackURL: fallbackURL, filename: "DSHios-public-latest.tipa", mirrors: mirrors)
             return
         }
 
@@ -11602,26 +11646,64 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
 
         group.notify(queue: .main) { [weak self] in
             if !didOpen {
-                self?.downloadAndInstallTIPA(remoteURLString: fallbackRemote, fallbackURL: fallbackURL, filename: "DSHios-public-latest.tipa")
+                self?.downloadAndInstallTIPA(remoteURLString: fallbackRemote, fallbackURL: fallbackURL, filename: "DSHios-public-latest.tipa", mirrors: mirrors)
             }
         }
     }
 
-    private func downloadAndInstallTIPA(remoteURLString: String, fallbackURL: String? = nil, filename: String) {
-        let candidates = Self.candidateChain(primary: remoteURLString, fallback: fallbackURL)
+    /// 下载并安装 tipa。
+    /// 🔴 2026-11-09 R68（玩家外网下载太慢的真因与解法）：
+    ///   ① 真因 A —— 只有一条主地址：所有人都挤在同一个公益镜像节点上，节点一限速整批人跟着慢。
+    ///      解法：用服务端下发的 `tipa_mirrors` 多线路列表（全球 CDN 在前），下载时逐条试。
+    ///   ② 真因 B —— 老逻辑只在「报错 / 非 2xx」时换源，而慢线路不会报错，只会以几十 KB/s 爬，
+    ///      于是用户看到「进度条卡在 3%」半天不动。解法：加限速看门狗 —— 12 秒内没跑到 8%、
+    ///      或连续 8 秒一个字节没增加，立刻掐掉换下一条，并把这条拉黑一段时间。
+    ///   ③ 真因 C —— 镜像可能返回截断包/错包，装上去就是坏包。解法：下载完用 latest.json 的 md5 校验，
+    ///      不匹配直接丢弃换源，绝不把坏包交给巨魔。
+    private func downloadAndInstallTIPA(remoteURLString: String, fallbackURL: String? = nil, filename: String,
+                                        mirrors: [String] = [], expectedMD5: String? = nil) {
+        let candidates = Self.candidateChain(primary: remoteURLString, fallback: fallbackURL, extra: mirrors)
         guard !candidates.isEmpty else { return }
 
-        let progressAlert = UIAlertController(title: "正在加速下载最新包", message: "正在通过国内镜像下载 \(filename)…\n进度：0%", preferredStyle: .alert)
+        let progressAlert = UIAlertController(title: "正在下载最新包", message: "正在挑选最快线路…\n进度：0%", preferredStyle: .alert)
         present(progressAlert, animated: true)
 
         let destURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
         try? FileManager.default.removeItem(at: destURL)
 
+        // 慢线路黑名单：本轮内被看门狗掐掉的线路不再重试（同一网络下它大概率还是慢）
+        var deadHosts: Set<String> = []
+        // 记住「虽然慢但真的在下」的那条：万一所有线路都达不到速度门槛，最后用它硬着头皮下完，
+        // 绝不出现「每条都嫌慢 → 全部放弃 → 用户一个包都拿不到」。
+        var slowBestURL: String?
+        var slowBestBytes: Int64 = 0
+        var slowLastResortURL: String?
+        var currentTask: URLSessionDownloadTask?
+
+        func hostOf(_ s: String) -> String { (URL(string: s)?.host ?? "").lowercased() }
+
         func tryDownload(index: Int) {
-            guard index < candidates.count, let url = URL(string: candidates[index]) else {
+            var idx = index
+            // 跳过本轮已确认慢/挂的线路
+            while idx < candidates.count && deadHosts.contains(hostOf(candidates[idx])) {
+                idx += 1
+            }
+            guard idx < candidates.count, let url = URL(string: candidates[idx]) else {
+                // 所有线路都试过了：还有「慢但在下」的线路就硬着头皮下完，否则才报失败
+                if let best = slowBestURL, slowLastResortURL == nil, let bestIdx = candidates.firstIndex(of: best) {
+                    slowLastResortURL = best
+                    deadHosts.remove(hostOf(best))
+                    DispatchQueue.main.async {
+                        progressAlert.message = "线路都很慢，正在用相对最快的一条继续下…"
+                    }
+                    tryDownload(index: bestIdx)
+                    return
+                }
                 DispatchQueue.main.async {
                     progressAlert.dismiss(animated: true) { [weak self] in
-                        let alert = UIAlertController(title: "下载失败", message: "所有国内加速镜像节点均无法下载，请稍后重试。", preferredStyle: .alert)
+                        let alert = UIAlertController(title: "下载失败",
+                                                      message: "所有线路都试过了（共 \(candidates.count) 条）仍无法下载，请稍后重试或换个网络（WiFi ↔ 蜂窝）。",
+                                                      preferredStyle: .alert)
                         alert.addAction(UIAlertAction(title: "好", style: .default))
                         self?.present(alert, animated: true)
                     }
@@ -11629,39 +11711,125 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
                 return
             }
 
+            let currentURLString = candidates[idx]
+            let lineNo = idx + 1
             var observation: NSKeyValueObservation?
-            let task = URLSession.shared.downloadTask(with: url) { [weak self] localURL, resp, error in
+            var watchdog: Timer?
+            var lastBytes: Int64 = 0
+            var lastGrowth = Date()
+            let startedAt = Date()
+            var finished = false
+
+            func giveUp(reason: String) {
+                if finished { return }
+                finished = true
+                watchdog?.invalidate()
+                watchdog = nil
                 observation?.invalidate()
+                currentTask?.cancel()
+                if lastBytes > slowBestBytes {
+                    slowBestBytes = lastBytes
+                    slowBestURL = currentURLString
+                }
+                deadHosts.insert(hostOf(currentURLString))
+                DispatchQueue.main.async {
+                    progressAlert.message = "线路 \(lineNo) \(reason)，正在自动切换下一条…"
+                }
+                tryDownload(index: idx + 1)
+            }
+
+            let task = URLSession.shared.downloadTask(with: url) { [weak self] localURL, resp, error in
+                if finished { return }
+                finished = true
+                watchdog?.invalidate()
+                watchdog = nil
+                observation?.invalidate()
+
                 let statusOK = (resp as? HTTPURLResponse).map { (200...299).contains($0.statusCode) } ?? false
                 if error != nil || !statusOK || localURL == nil {
-                    // 当前镜像失败，自动无缝切换到下一个备用加速镜像
-                    tryDownload(index: index + 1)
+                    tryDownload(index: idx + 1)
                     return
                 }
                 guard let localURL = localURL else { return }
                 do {
                     try? FileManager.default.removeItem(at: destURL)
                     try FileManager.default.moveItem(at: localURL, to: destURL)
-                    DispatchQueue.main.async {
-                        progressAlert.dismiss(animated: true) {
-                            self?.openDownloadedTIPA(fileURL: destURL)
-                        }
-                    }
                 } catch {
-                    tryDownload(index: index + 1)
+                    tryDownload(index: idx + 1)
+                    return
+                }
+                // md5 校验：服务端给了指纹就必须对得上，否则视为坏包换源（绝不把截断包交给巨魔）
+                if let want = expectedMD5?.lowercased(), !want.isEmpty {
+                    let got = (try? Self.md5HexOfFile(destURL)) ?? ""
+                    if got != want {
+                        try? FileManager.default.removeItem(at: destURL)
+                        deadHosts.insert(hostOf(currentURLString))
+                        tryDownload(index: idx + 1)
+                        return
+                    }
+                }
+                Self.rememberGoodTipaHost(currentURLString)
+                DispatchQueue.main.async {
+                    progressAlert.dismiss(animated: true) {
+                        self?.openDownloadedTIPA(fileURL: destURL)
+                    }
                 }
             }
 
             observation = task.progress.observe(\.fractionCompleted) { progress, _ in
+                let got = progress.completedUnitCount
+                if got > lastBytes {
+                    lastBytes = got
+                    lastGrowth = Date()
+                }
                 DispatchQueue.main.async {
-                    let pct = Int(progress.fractionCompleted * 100)
-                    progressAlert.message = "正在通过国内免代理通道下载最新公开版…\n进度：\(pct)%"
+                    let pct = Int(max(0, min(1, progress.fractionCompleted)) * 100)
+                    progressAlert.message = "线路 \(lineNo)/\(candidates.count) 下载中…\n进度：\(pct)%（卡住会自动换线）"
                 }
             }
+
+            // 看门狗：慢就换，不等它自己超时（最后兜底那轮不再掐，否则会无限循环）
+            let isLastResort = (slowLastResortURL == currentURLString)
+            let timer = Timer(timeInterval: 1.0, repeats: true) { _ in
+                if finished || isLastResort { return }
+                let elapsed = Date().timeIntervalSince(startedAt)
+                if Date().timeIntervalSince(lastGrowth) >= 8 {
+                    giveUp(reason: "8 秒无数据")
+                    return
+                }
+                // 10 秒还没跑到 60 KB/s → 按这道门槛换线（4.9MB 的包 60KB/s 要 80 秒，太慢）
+                if elapsed >= 10 && Double(lastBytes) / elapsed < 60_000 {
+                    giveUp(reason: "速度过慢")
+                    return
+                }
+                if elapsed >= 180 {
+                    giveUp(reason: "超时")
+                }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            watchdog = timer
+            currentTask = task
             task.resume()
         }
 
         tryDownload(index: 0)
+    }
+
+    /// 文件 md5（十六进制小写）。用流式读取，避免 5MB 包整块读进内存。
+    private static func md5HexOfFile(_ url: URL) throws -> String {
+        guard let stream = InputStream(url: url) else { return "" }
+        stream.open()
+        defer { stream.close() }
+        var ctx = Insecure.MD5()
+        let bufSize = 64 * 1024
+        var buf = [UInt8](repeating: 0, count: bufSize)
+        while stream.hasBytesAvailable {
+            let n = stream.read(&buf, maxLength: bufSize)
+            if n < 0 { return "" }
+            if n == 0 { break }
+            ctx.update(data: Data(buf[0..<n]))
+        }
+        return ctx.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     private func openDownloadedTIPA(fileURL: URL) {
