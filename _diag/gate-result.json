@@ -5,7 +5,7 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-07T17:39:19.370Z",
+  "startedAt": "2026-11-08T04:35:19.571Z",
   "dshFingerprint": "v1ikr4",
   "dshAssets": 10,
   "domClasses": 0,
@@ -31,14 +31,13 @@
   "r63PanelCloseGuard": true,
   "r64ReopenGuard": true,
   "ok": true,
-  "pass": 124,
+  "pass": 125,
   "fail": 0,
   "failures": [],
   "blocked": [
     "[抽屉·R35b] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）",
-    "[抽屉·R38] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）",
     "[抽屉·R39] 行为断言 — 会话页 30 秒无响应（DSH 前端死循环）"
   ],
-  "sourceHash": "94b0322551f330be0d8a3c6f42569b99f8f45155f1585ab8c0c3f6e799f73018",
-  "finishedAt": "2026-11-07T17:44:08.598Z"
+  "sourceHash": "9c4d7d08181c0e542c95e0588f101b7411dddad5cd33b4c008deca3b46ef037b",
+  "finishedAt": "2026-11-08T04:39:44.023Z"
 }
