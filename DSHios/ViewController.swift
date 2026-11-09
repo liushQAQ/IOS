@@ -72,6 +72,12 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
     private var isKeyboardVisible = false
     /// 键盘遮挡高度（pt）。下发给页内脚本，让输入框滚到键盘正上方。
     private var keyboardOverlap: CGFloat = 0
+    /// 页内「键盘意图协议」是否就绪（网关补丁 mobilefix.js v33+ 暴露 `window.__zcrcKbWill`）。
+    /// 就绪时键盘避让改为「一次性换高 + 页内合成层滑行」，整页只重排一次；
+    /// 未就绪（补丁过旧 / 非 ZCode 页面）仍走逐帧动画，绝不改变别人的页面行为。
+    private var motionPatchReady = false
+    /// 键盘事件序号：快速连点（弹→收→弹）时，延迟换高的闭包必须作废，否则会把高度写回旧值。
+    private var kbEventSeq = 0
 
     // MARK: 整页滚动锁（v1.0.129）
     /// 页内探针确认「这是 DSH 主控页」的运行时标记。
@@ -8993,36 +8999,84 @@ function applySidebarInset() {
         isKeyboardVisible = overlap > 0
         keyboardOverlap = overlap
 
-        webViewBottomConstraint.constant = -overlap
-        view.setNeedsLayout()
-
         let kbStatusJS = "document.body && document.body.setAttribute('data-keyboard-open', '\(!isHide)');"
         webView.evaluateJavaScript(kbStatusJS) { _, _ in }
 
-        if isHide {
-            // 收起键盘：使用 0.32 秒高质感弹簧阻尼动画，优雅缓动下落，彻底消除骤降与生硬卡顿！
-            UIView.animate(
-                withDuration: 0.32,
-                delay: 0,
-                usingSpringWithDamping: 0.88,
-                initialSpringVelocity: 0.2,
-                options: [.curveEaseInOut, .allowUserInteraction, .beginFromCurrentState],
-                animations: {
+        // 🔴 R69/R71（v2.2.1）：键盘动效根治点（第四版，前三次都栽在同一处）。
+        //
+        // 为什么前三版都不行（实测结论，不是猜）：
+        //   · 页面外壳是 `flex h-dvh flex-col overflow-hidden`（页面包里查到的原类名），
+        //     任何「先缩短 WebView、再靠 transform 把输入框拖回去」的方案都会被这层 overflow 裁掉，
+        //     WebView 变矮后 508pt 以外的东西**原生层就画不出来** —— 所以必须让 WebView 在
+        //     动画期间保持原高，位移全部发生在「向屏幕上方」这一侧（永远不会被裁）。
+        //   · 逐帧改 WebView 高度 = 每帧一次整页重排（几百条消息 + 状态条），慢机单帧 20~40ms，
+        //     这就是老总说的「卡卡」。
+        //
+        // 现在的顺序（补丁页 kb-v9+/v34 就绪时）：
+        //   弹键盘：① 通知页面 `__zcrcKbWill(h, ms)` → 页面在合成层把输入区上滑 h（GPU，不重排）；
+        //          ② 系统键盘同时升起，两者同曲线同长，输入框一路贴着键盘；
+        //          ③ 键盘落定后 WebView 高度**一次性**换到终值（整页只重排这一下）。
+        //   收键盘：① 先把高度一次性还原（重排一次）；② 页面此刻用 transform 继续把输入区按在原位；
+        //          ③ `__zcrcKbWill(0, ms)` 合成层滑回底部。
+        // 老页面（补丁过旧 / 非 ZCode 页面）没有这套协议，仍走原来的逐帧动画，行为一点不变。
+        let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
+        let curveRaw = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7
+        let animDuration = max(duration, 0.12)
+        let kbMs = Int((animDuration * 1000).rounded())
+        let kbPx = Int(overlap.rounded())
+
+        if motionPatchReady {
+            kbEventSeq += 1
+            let seq = kbEventSeq
+            // ① 上锁：这段窗口里页面的 resize 兜底逻辑不许自己再起动画
+            webView.evaluateJavaScript(
+                "try{window.__zcrcKbHold&&window.__zcrcKbHold(\(kbMs));}catch(e){}",
+                completionHandler: nil)
+            if isHide {
+                // 收键盘：先一次性还原高度，页面在 resize 里把输入区按在原位（同步、paint 前）
+                UIView.performWithoutAnimation {
+                    self.webViewBottomConstraint.constant = 0
                     self.view.layoutIfNeeded()
-                },
-                completion: { [weak self] _ in
-                    self?.settleScrollAfterKeyboard()
-                })
-        } else {
-            let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
-            let curveRaw = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7
-            let options: UIView.AnimationOptions = [UIView.AnimationOptions(rawValue: curveRaw << 16), .beginFromCurrentState]
-            UIView.animate(withDuration: duration, delay: 0, options: options, animations: {
-                self.view.layoutIfNeeded()
-            }, completion: { [weak self] _ in
-                self?.settleScrollAfterKeyboard()
-            })
+                }
+                webView.evaluateJavaScript(
+                    "try{window.__zcrcKbWill(0,\(kbMs));}catch(e){}",
+                    completionHandler: nil)
+            } else {
+                // 弹键盘：先让页面开始上滑，键盘落定后再一次性换高
+                webView.evaluateJavaScript(
+                    "try{window.__zcrcKbWill(\(kbPx),\(kbMs));}catch(e){}",
+                    completionHandler: nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + animDuration + 0.02) { [weak self] in
+                    guard let self, self.kbEventSeq == seq else { return }
+                    UIView.performWithoutAnimation {
+                        self.webViewBottomConstraint.constant = -overlap
+                        self.view.layoutIfNeeded()
+                    }
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + animDuration + 0.06) { [weak self] in
+                guard let self, self.kbEventSeq == seq else { return }
+                self.settleScrollAfterKeyboard()
+            }
+            return
         }
+
+        webViewBottomConstraint.constant = -overlap
+        view.setNeedsLayout()
+        webView.evaluateJavaScript(
+            "try{window.__zcrcKbWill&&window.__zcrcKbWill(\(kbPx),\(kbMs));}catch(e){}",
+            completionHandler: nil)
+
+        // 收起键盘也走系统给的时长/曲线（原 0.32s 弹簧比系统慢 70ms，主观就是「回收慢半拍/发闷」）。
+        view.setNeedsLayout()
+        let options: UIView.AnimationOptions = [
+            UIView.AnimationOptions(rawValue: curveRaw << 16), .beginFromCurrentState, .allowUserInteraction
+        ]
+        UIView.animate(withDuration: animDuration, delay: 0, options: options, animations: {
+            self.view.layoutIfNeeded()
+        }, completion: { [weak self] _ in
+            self?.settleScrollAfterKeyboard()
+        })
     }
 
     /// 键盘动画收尾（v1.0.129）：DSH 页面把整页偏移钉回 0，并让页内按新视口高重排。
@@ -10457,6 +10511,38 @@ function applySidebarInset() {
     /// R40：进入后台的时刻。回前台时据此判断是否需要长后台冷恢复（>90s reload 兜底）
     private var backgroundedAtForResync: Date?
 
+    // MARK: - 补丁版本自愈（v2.2.1 / R70）
+
+    /// App 期望的网关注入补丁最低版本（对应 mobilefix.js 末尾的 window.__zcrcRev = 'vNN'）。
+    /// 页面里的版本比它旧（或根本没有）说明用户看的是后台挂了很久的旧页面 ——
+    /// 补丁改了也永远不会生效，这正是「明明改了还是毫无动画」的真因。
+    private static let expectedPatchRev = 34
+    private var didCheckPatchRev = false
+    private var lastPatchReloadAt = Date.distantPast
+
+    private func refreshStalePatchPageIfNeeded() {
+        guard !didCheckPatchRev else { return }
+        guard webView.url != nil, hasLoadedOnce else { return }
+        didCheckPatchRev = true
+        let js = """
+        (function(){try{
+          var p=(location.pathname||'');
+          if(p.indexOf('/rc')<0&&p.indexOf('/remote/v4')<0&&!window.__zcrcMotion) return 'skip';
+          return 'rev:'+(window.__zcrcRev||'');
+        }catch(e){return 'skip'}})()
+        """
+        webView.evaluateJavaScript(js) { [weak self] result, _ in
+            guard let self, let s = result as? String, s.hasPrefix("rev:") else { return }
+            let raw = String(s.dropFirst(4))
+            let n = Int(raw.replacingOccurrences(of: "v", with: "")) ?? 0
+            guard n < Self.expectedPatchRev else { return }
+            guard Date().timeIntervalSince(self.lastPatchReloadAt) > 120 else { return }
+            self.lastPatchReloadAt = Date()
+            NSLog("[zcrc] stale patch page rev=%@ < v%d → reload", raw, Self.expectedPatchRev)
+            self.webView.reload()
+        }
+    }
+
     @objc private func appDidEnterBackground() {
         if isDictating {
             stopVoiceDictation()
@@ -10700,6 +10786,9 @@ function applySidebarInset() {
                 completionHandler: nil)
         }
         backgroundedAtForResync = nil
+
+        // R70：老页面自愈 —— 网关补丁改过而页面还是旧的，检查更新式地强制重载一次。
+        refreshStalePatchPageIfNeeded()
     }
 
     /// 网络可达性监听：网络从无到有时自动加载，无需手动点刷新。
@@ -10882,6 +10971,11 @@ extension ViewController: WKNavigationDelegate {
         // 完成即隐藏错误层（meta-refresh 握手页二跳也会走到这里）
         hideError()
         hasLoadedOnce = true
+        // R71：页面每次加载完成都重新探一次补丁协议（网关补丁 mtime 热读，可能刚更新过）。
+        motionPatchReady = false
+        webView.evaluateJavaScript("typeof window.__zcrcKbWill === 'function'") { [weak self] ret, _ in
+            self?.motionPatchReady = (ret as? Bool) ?? false
+        }
         // 首屏下发一次状态栏高度：safeAreaInsets 可能在页面脚本注入之前就定了，
         // 不补这一次，顶栏会一直停在默认留白上。
         publishStatusBarHeight()
