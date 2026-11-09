@@ -1,9 +1,9 @@
 {
-  "version": "1.0.11",
-  "build": 82,
-  "title": "v1.0.11 iPad 闪退专项修复·actionSheet 锚点全收口·崩溃现场自诊断·通用设备族",
-  "changelog": "1. 修复 iPad 上很多按钮一点就闪退：iPad 会把 actionSheet 转成 popover，缺锚点即抛 NSInternalInconsistencyException 必崩（iPhone 不受影响），现已将全部 10 处 actionSheet 统一收口，自动补锚点并做呈现排队；\n2. 修复 iPad 上一打开就闪退：Documents 目录查询数组越界、3 处 URL 强制解包、通知监听改闭包式（明确主线程）、延迟步骤负值/NaN 运行时陷阱、表格与段选下标越界、定时引擎线程竞争与重复启动泄漏后台任务；\n3. 补齐 iPad 专用四方向并改为通用设备族，iPad 原生运行不再走兼容模式；\n4. 新增崩溃现场自诊断：未捕获异常自动落盘（含机型/iOS/界面类型/调用栈），启动标记残留即判闪退并自动进入安全模式保证 App 能打开，「关于」页可查看日志与退出安全模式。",
-  "tipa_url": "https://github.com/liushQAQ/IOS/releases/download/v1.0.11-mcp/ios-mcp-agent-public-1.0.11-82.tipa",
-  "public_tipa_url": "https://github.com/liushQAQ/IOS/releases/download/v1.0.11-mcp/ios-mcp-agent-public-1.0.11-82.tipa",
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.11-mcp"
+  "version": "1.0.13",
+  "build": 154,
+  "title": "v1.0.13 抖音/小红书搜索采集 + 点击灵敏度四层闭环（公开发版）",
+  "changelog": "1. 新增采集模式（抖音 / 小红书）：主界面一句话即可「搜索指定内容 → 逐条复制链接与文案 → 自动去重 → 结构化落盘」。抓链接走「分享 → 复制链接 → get_clipboard」，脚本从口令正则提短链（v.douyin.com / xhslink.com / xiaohongshu.com）；文案走 ocr_screen 读屏幕公开文字。结果以 JSON + CSV 落到 Documents/ios_mcp_data/，另写 collect-latest.json 便于查看；同一链接自动去重。采集模式由任务文本自动识别，不用命令、不用选模式；\n2. 默认保守的节流与保护（CollectGuard，enabled 可一键关闭）：步间随机停顿、阅读间歇、仅真人活跃时段、小时/日配额、单批次上限；命中「验证 / 滑块 / 操作频繁」立即停并退避，不硬点、不重试绕过；\n3. 机器在环自检熔断：连续多步画面无变化自动停本批次并落盘已采部分，全程零人工；\n4. 只读边界：仅采屏幕公开可见的标题 / 描述 / 分享链接，禁止发布、评论、点赞、关注；不注入进程、不 Hook、不回写平台；\n5. 点击灵敏度四层闭环（承接 11-09 未发版的修复）：tap_id 按 #编号 精确点 + 点前 get_element_at_point 反查；每步 before/after 元素树与前台 App diff 回灌；防重复签名 + 连续无变化强制换策略 + fail 先重规划；意图对齐块 + 结构化历史窗口 16 + max_tokens 1000 + 工具收敛 + 元素树空自动 describe_screen 兜底；\n6. 元素解析：ElementParser 保留全量元素并赋 #编号 + 控件类型，取消前 30 硬截（展示上限移到调用方 60）；\n7. 限制：本版对「不封号」只做概率压制，不给确定性保证；ios-mcp 的 get_clipboard / set_clipboard / describe_screen 真机首次使用需校准；本机 Windows 无 Xcode，编译验收由 CI（macOS runner）完成。",
+  "tipa_url": "https://github.com/liushQAQ/IOS/releases/download/v1.0.13-mcp/ios-mcp-agent-public-1.0.13-154.tipa",
+  "public_tipa_url": "https://github.com/liushQAQ/IOS/releases/download/v1.0.13-mcp/ios-mcp-agent-public-1.0.13-154.tipa",
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v1.0.13-mcp"
 }
