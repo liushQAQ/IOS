@@ -1,13 +1,17 @@
 import Foundation
 
 struct UIElementItem {
+    let id: Int          // 本屏清单 #编号（1-based），供 tap_id 精确点，2026-11-09 新增
     let label: String
     let x: Double
     let y: Double
+    let type: String     // 控件类型（button/cell/staticText/…），无则空串，2026-11-09 新增
 }
 
 enum ElementParser {
-    /// 将 ios-mcp 返回的树状结构递归拍平，提取所有带有效文字或中心坐标的控件
+    /// 将 ios-mcp 返回的树状结构递归拍平，提取所有带有效文字或中心坐标的控件。
+    /// 2026-11-09 四层修复：保留全量（截断由调用方按上限展示，不再在这里丢元素）、
+    /// 统一赋 #编号 + 类型，治「前 30 硬截导致目标消失 / 同名元素无法消歧」。
     static func parse(raw: String) -> [UIElementItem] {
         guard let data = raw.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) else {
@@ -27,12 +31,13 @@ enum ElementParser {
                 ?? (dict["value"] as? String)
                 ?? (dict["description"] as? String)
                 ?? ""
-            
+
             let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let center = extractCenter(from: dict) {
-                if !trimmed.isEmpty {
-                    items.append(UIElementItem(label: trimmed, x: center.x, y: center.y))
-                }
+            if let center = extractCenter(from: dict), !trimmed.isEmpty {
+                items.append(UIElementItem(id: items.count + 1,
+                                           label: trimmed,
+                                           x: center.x, y: center.y,
+                                           type: elementType(from: dict)))
             }
 
             for key in ["children", "childElements", "subelements", "elements", "windows"] {
@@ -47,6 +52,14 @@ enum ElementParser {
                 walk(node: item, items: &items)
             }
         }
+    }
+
+    /// 控件类型字段名各家不同，做兼容提取；取不到返回空串（清单里就不显示类型）。
+    private static func elementType(from dict: [String: Any]) -> String {
+        for key in ["type", "elementType", "role", "className", "class", "controlType"] {
+            if let s = dict[key] as? String, !s.isEmpty { return s }
+        }
+        return ""
     }
 
     private static func extractCenter(from dict: [String: Any]) -> (x: Double, y: Double)? {
