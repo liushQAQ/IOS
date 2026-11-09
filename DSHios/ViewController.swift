@@ -9245,10 +9245,11 @@ function applySidebarInset() {
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.scrollView.delegate = self
-        // 🔴 2026-11-08 老总令「不同模块背景颜色不统一」：WebView 恒定暗色。
-        //   页面主题多跟随 prefers-color-scheme（如 DSH 3083），App 壳/其他模块恒暗，
-        //   WebView 跟系统上报亮色时整页变亮 → 同 App 内一黑一白。此处强制 dark 统一。
-        webView.overrideUserInterfaceStyle = .dark
+        // 🟢 2026-11-09 老总令「App 不是自适应暗黑吗，白天模式哪里去了」：
+        //   撤回 11-08 的「WebView 恒暗」——改回跟随系统外观（白天白 / 夜里黑）。
+        //   页面侧同步撤回恒暗（网关 v31 种子 zcode-theme=system、插件 meta 改 light dark），
+        //   各模块仍同一套外观，不会再一黑一白。
+        webView.overrideUserInterfaceStyle = .unspecified
         // 彻底禁止 WKWebView 原生缩放手势与双击放大页面（除灯箱图片手势由 JS 专属接管）
         webView.scrollView.minimumZoomScale = 1.0
         webView.scrollView.maximumZoomScale = 1.0

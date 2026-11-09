@@ -1545,11 +1545,12 @@ final class FreeWebListViewController: UIViewController {
 
         // 2. 核心：绝对固定在底部的卡片容器（固定高度，严禁忽大忽小伸缩，零滚动！）
         containerView = UIView()
-        containerView.backgroundColor = UIColor(red: 0.11, green: 0.11, blue: 0.13, alpha: 0.98)
+        // 🟢 2026-11-09：弹层配色改系统语义色，随外观切换（原为写死深灰，浅色下会突兀）
+        containerView.backgroundColor = .secondarySystemBackground
         containerView.layer.cornerRadius = 24
         containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         containerView.layer.borderWidth = 0.5
-        containerView.layer.borderColor = UIColor(white: 1.0, alpha: 0.15).cgColor
+        containerView.layer.borderColor = UIColor.separator.cgColor
         containerView.layer.shadowColor = UIColor.black.cgColor
         containerView.layer.shadowOpacity = 0.5
         containerView.layer.shadowRadius = 25
@@ -1594,7 +1595,7 @@ final class FreeWebListViewController: UIViewController {
 
     private func setupHeader() {
         let grabber = UIView()
-        grabber.backgroundColor = UIColor(white: 0.35, alpha: 1.0)
+        grabber.backgroundColor = UIColor.tertiaryLabel
         grabber.layer.cornerRadius = 2.5
         grabber.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(grabber)
@@ -1619,7 +1620,7 @@ final class FreeWebListViewController: UIViewController {
 
         let closeBtn = UIButton(type: .system)
         closeBtn.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        closeBtn.tintColor = UIColor(white: 0.5, alpha: 1.0)
+        closeBtn.tintColor = UIColor.secondaryLabel
         closeBtn.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         closeBtn.translatesAutoresizingMaskIntoConstraints = false
         topBar.addSubview(closeBtn)
@@ -1752,15 +1753,15 @@ final class FreeWebListViewController: UIViewController {
         let cleanName = item.name.replacingOccurrences(of: #"^\d+\.\s*"#, with: "", options: .regularExpression)
 
         let card = UIView()
-        card.backgroundColor = UIColor(red: 0.16, green: 0.16, blue: 0.19, alpha: 0.95)
+        card.backgroundColor = .tertiarySystemBackground
         card.layer.cornerRadius = 10
         card.layer.borderWidth = isSaved ? 1.2 : 0.6
-        card.layer.borderColor = isSaved ? UIColor(red: 1.0, green: 0.62, blue: 0.04, alpha: 0.7).cgColor : UIColor(white: 1.0, alpha: 0.1).cgColor
+        card.layer.borderColor = isSaved ? UIColor(red: 1.0, green: 0.62, blue: 0.04, alpha: 0.7).cgColor : UIColor.separator.cgColor
 
         let nameLabel = UILabel()
         nameLabel.text = cleanName
         nameLabel.font = .systemFont(ofSize: 14.5, weight: .bold)
-        nameLabel.textColor = .white
+        nameLabel.textColor = .label
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(nameLabel)
 
@@ -1768,7 +1769,7 @@ final class FreeWebListViewController: UIViewController {
         let sub = item.subtitle.components(separatedBy: "·").first?.trimmingCharacters(in: .whitespaces) ?? item.subtitle
         subLabel.text = sub
         subLabel.font = .systemFont(ofSize: 11, weight: .regular)
-        subLabel.textColor = UIColor(white: 0.65, alpha: 1.0)
+        subLabel.textColor = .secondaryLabel
         subLabel.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(subLabel)
 
@@ -1778,7 +1779,7 @@ final class FreeWebListViewController: UIViewController {
             rightIcon.font = .systemFont(ofSize: 13)
         } else {
             rightIcon.text = "›"
-            rightIcon.textColor = UIColor(white: 0.45, alpha: 1.0)
+            rightIcon.textColor = .tertiaryLabel
             rightIcon.font = .systemFont(ofSize: 16, weight: .semibold)
         }
         rightIcon.translatesAutoresizingMaskIntoConstraints = false

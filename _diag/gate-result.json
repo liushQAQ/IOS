@@ -5,7 +5,7 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-08T17:42:07.926Z",
+  "startedAt": "2026-11-09T06:26:06.247Z",
   "dshFingerprint": "cvemtc",
   "dshAssets": 11,
   "domClasses": 0,
@@ -37,6 +37,6 @@
   "blocked": [
     "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）"
   ],
-  "sourceHash": "2f5e593700acacccd98ca7ba5dc5f0a8773bcae0629636ce181177b2e3cb5b6f",
-  "finishedAt": "2026-11-08T17:46:31.545Z"
+  "sourceHash": "f589f28cfc2218e3a3ff1b6993d0101ae338fe8233447093f6f17b7de5d32aa6",
+  "finishedAt": "2026-11-09T06:30:57.233Z"
 }

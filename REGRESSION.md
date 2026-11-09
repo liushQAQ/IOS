@@ -810,6 +810,22 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - **回归防御**：关于页任何「地址类」说明必须同时满足三条：① 指向的 URL 打开后能看到 DSHios 内容（禁止指向错误分支；默认分支已锁 personal，若有人改回 main 立即复发）；② 必须是 `UIAlertAction`/按钮等真实可点击控件，禁止把裸 URL 塞进 `UIAlertController.message` 当链接用；③ 面向国内网络必须有一条免代理路径（镜像发布页或 App 内镜像下载），禁止只给裸 GitHub 链接。
 - **教训**：**仓库地址≠仓库根**——多分支仓库对外的"说明入口"必须落到正确分支或 Releases；iOS 原生弹窗不解析链接，要点击就放按钮；国内环境 `github.com` 网页直连会被重置，入口必须带镜像兜底。
 
+### R68 全 App 恒暗、白天模式消失（2026-11-09 三次回归：为统一配色把「跟随系统」压成「只有暗」）
+
+- **症状**（老总反馈）：「app 不是自适应暗黑模式吗，白天模式哪里去了，咋只有暗黑了？」系统为浅色时，App 与页面依旧全黑。
+- **真因**（11-08 为修「不同模块背景一黑一白」做的三处硬压）：
+  1. `ViewController.swift` `webView.overrideUserInterfaceStyle = .dark` → WebView 内 `prefers-color-scheme` 永远 dark，页面无从得知系统外观；
+  2. 插件 `DEFAULT_INJECT` 注入 `<meta name="color-scheme" content="dark">` → 3083 页被声明为「只支持暗色」，UA 恒按暗解析；
+  3. 网关 `zcodeRcRewriteHtml` 缺声明时同样补 dark，且 ZCode 前端自身出厂主题是 `zai-dark`（`localStorage['zcode-theme']` 默认值）→ 与系统无关，任何时候都黑。
+- **解法**（改「统一」的实现方式，而不是取消统一）：
+  1. App：`overrideUserInterfaceStyle = .unspecified`，回到跟随系统；
+  2. 插件：注入 `<meta name="color-scheme" content="light dark">`，声明两种都支持，由 UA 按系统解析；
+  3. 网关 v31：页面缺声明时补 `light dark`；并在「用户从未选过主题」时播种 `localStorage['zcode-theme'] = 'system'`（选过则尊重用户）；ZCode 前端自带 light/dark 两套配色，无需改官方前端；
+  4. 弹层写死的深灰（`0.11/0.16`）+ 白字改系统语义色（`.secondarySystemBackground` / `.tertiarySystemBackground` / `.label` / `.secondaryLabel`），浅色下不再突兀。
+- **实测**：真 WebKit 同一 URL 双外观 —— `colorScheme=light` → `htmlBg rgb(248,248,248)`、`darkClass=false`、`meta=light`；`colorScheme=dark` → `rgb(22,22,22)`、`darkClass=true`；两侧 `pageerror 0`。
+- **回归防御**：① 任何「统一配色」只许统一**取值来源**（都跟随系统），严禁用「声明只支持暗色」来消除差异；② 页面侧禁止再出现 `content="dark"`；③ 发版前自检：把系统切浅色，App 壳 / 3083 / 3090 三处必须同时变白且无白字白底。
+- **教训**：用「压死一个维度」换来的整齐，等于把用户的选择权删掉了 —— 视觉统一应当同源，不应同色。
+
 ### R67 「检查更新」在真机上仍检测不到 150（2026-11-09 二次定位：镜像侧不可达 + 固定别名兜底）
 
 - **症状**：R66 修完（latest.json 已改回字符串、四个源本机 curl 全 200 且 build=150），老总手机上点「检查更新」仍然检测不到 2.1.21(150)。
