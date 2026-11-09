@@ -1,23 +1,23 @@
 {
-  "version": "2.2.0",
-  "build": 151,
-  "updated_at": "2026-11-09 03:35:00",
-  "title": "v2.2.0(151) 全球 CDN 分发",
-  "changelog": "下载改为全球 CDN 优先，不再挤在单个公益镜像上\n新增多线路备用下载，任一条慢/挂自动换下一条\n服务器地址只做最后兜底，玩家外网下载不看家里上行",
-  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.0/releases/DSHios-public-2.2.0-151.tipa",
-  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.0/releases/DSHios-public-2.2.0-151.tipa",
-  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.0/DSHios-public-2.2.0-151.tipa",
+  "version": "2.2.1",
+  "build": 152,
+  "updated_at": "2026-11-09 15:45:00",
+  "title": "v2.2.1(152) 键盘跟手 + 外观跟随系统",
+  "changelog": "会话框弹出/收回改为跟键盘同一条曲线，不再卡顿也不再慢半拍\n输入框不再悬空，紧贴键盘顶边\n恢复跟随系统外观：白天自动白、夜间自动黑，页面内手动选主题仍然优先\n旧页面自动更新：网关补丁升级后回前台自动重新加载一次",
+  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
+  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
+  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.1/DSHios-public-2.2.1-152.tipa",
   "tipa_mirrors": [
-    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.0/releases/DSHios-public-2.2.0-151.tipa",
-    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.0/releases/DSHios-public-2.2.0-151.tipa",
-    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.0/releases/DSHios-public-2.2.0-151.tipa",
-    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.0/DSHios-public-2.2.0-151.tipa",
-    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.0/releases/DSHios-public-2.2.0-151.tipa",
-    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.0/DSHios-public-2.2.0-151.tipa",
-    "https://github.com/liushQAQ/IOS/releases/download/v2.2.0/DSHios-public-2.2.0-151.tipa",
-    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.0-151.tipa"
+    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
+    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
+    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
+    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.1/DSHios-public-2.2.1-152.tipa",
+    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
+    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.1/DSHios-public-2.2.1-152.tipa",
+    "https://github.com/liushQAQ/IOS/releases/download/v2.2.1/DSHios-public-2.2.1-152.tipa",
+    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.1-152.tipa"
   ],
-  "size_bytes": 4912228,
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.0",
-  "md5": "683e8b109623e2a16f3b4c166539f8d2"
+  "size_bytes": 4927990,
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.1",
+  "md5": "623796f05a97aeaa10ed75ed0935a0db"
 }
