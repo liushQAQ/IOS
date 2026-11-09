@@ -1,10 +1,12 @@
 import UIKit
+import Foundation
 
 final class ViewController: UIViewController {
     private let input = UITextView()
     private let logView = UITextView()
     private let send = UIButton(type: .system)
     private let stop = UIButton(type: .system)
+    private let results = UIButton(type: .system)
     private var runner: AgentRunner?
     private let mcpBanner = UIView()
     private let mcpStatusLabel = UILabel()
@@ -48,8 +50,11 @@ final class ViewController: UIViewController {
         stop.setTitle("停止", for: .normal)
         stop.addTarget(self, action: #selector(halt), for: .touchUpInside)
         stop.isEnabled = false
+        results.setTitle("📋 采集结果", for: .normal)
+        results.titleLabel?.font = .boldSystemFont(ofSize: 16)
+        results.addTarget(self, action: #selector(showCollectResults), for: .touchUpInside)
 
-        let buttons = UIStackView(arrangedSubviews: [send, stop])
+        let buttons = UIStackView(arrangedSubviews: [send, stop, results])
         buttons.axis = .horizontal
         buttons.spacing = 16
         buttons.distribution = .fillEqually
@@ -239,6 +244,9 @@ final class ViewController: UIViewController {
                 self?.send.isEnabled = true
                 self?.stop.isEnabled = false
                 self?.runner = nil
+                if ["采集", "抓取", "链接", "文案", "抖音", "小红书"].contains(where: { task.contains($0) }) {
+                    self?.append("💡 点「📋 采集结果」查看 / 复制全部 / 分享文件，全程手机完成，不用电脑。")
+                }
             }
         }
     }
@@ -246,6 +254,84 @@ final class ViewController: UIViewController {
     @objc private func halt() {
         runner?.stop()
         BackgroundKeeper.shared.stop()
+    }
+
+    // MARK: - 采集结果：App 内查看 / 复制 / 分享（v1.0.14 全手机闭环，不依赖电脑）
+    private func collectDirURL() -> URL {
+        let fm = FileManager.default
+        let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory())
+        return docs.appendingPathComponent("ios_mcp_data", isDirectory: true)
+    }
+
+    /// 直接读 collect-latest.json，不依赖 AgentRunner 内的私有类型
+    private func readCollectedItems() -> [[String: String]] {
+        let url = collectDirURL().appendingPathComponent("collect-latest.json")
+        guard let data = try? Data(contentsOf: url),
+              let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
+            return []
+        }
+        return arr.compactMap { d in
+            guard let platform = d["platform"] as? String,
+                  let link = d["link"] as? String,
+                  let caption = d["caption"] as? String else { return nil }
+            return ["platform": platform, "link": link, "caption": caption]
+        }
+    }
+
+    private func formattedCollectList(_ items: [[String: String]]) -> String {
+        guard !items.isEmpty else { return "" }
+        var out = "共 \(items.count) 条采集结果\n"
+        for (i, it) in items.enumerated() {
+            let link = it["link"] ?? ""
+            out += "\n[\(i + 1)] \(it["platform"] ?? "")\n链接：\(link.isEmpty ? "（无链接）" : link)\n文案：\(it["caption"] ?? "")\n"
+        }
+        return out
+    }
+
+    @objc private func showCollectResults() {
+        let items = readCollectedItems()
+        guard !items.isEmpty else {
+            let alert = UIAlertController(
+                title: "📋 采集结果",
+                message: "暂无采集结果。\n\n在上方输入一句话即可开始，例如：\n「打开抖音搜索 XXX，抓取前 3 条的链接和文案」\n「小红书搜索 XXX，采集链接和文案」\n\n采完回来点本按钮，即可查看 / 复制 / 分享清单，全程手机、不用电脑。",
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "好", style: .default))
+            presentAlertSafely(alert)
+            return
+        }
+        let full = formattedCollectList(items)
+        let preview = full.count > 1200
+            ? String(full.prefix(1200)) + "\n…（完整清单请点「复制全部」或「分享文件」）"
+            : full
+        let alert = UIAlertController(title: "📋 采集结果（\(items.count) 条）", message: preview, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "复制全部", style: .default) { [weak self] _ in
+            UIPasteboard.general.string = self?.formattedCollectList(items) ?? full
+            let done = UIAlertController(title: "已复制", message: "\(items.count) 条清单已复制到剪贴板，可粘贴到备忘录 / 微信。", preferredStyle: .alert)
+            done.addAction(UIAlertAction(title: "好", style: .default))
+            self?.presentAlertSafely(done)
+        })
+        alert.addAction(UIAlertAction(title: "分享文件", style: .default) { [weak self] _ in
+            self?.shareCollectFiles()
+        })
+        alert.addAction(UIAlertAction(title: "关闭", style: .cancel))
+        presentAlertSafely(alert)
+    }
+
+    private func shareCollectFiles() {
+        let fm = FileManager.default
+        let dir = collectDirURL()
+        var urls: [URL] = []
+        let latest = dir.appendingPathComponent("collect-latest.json")
+        if fm.fileExists(atPath: latest.path) { urls.append(latest) }
+        if let names = try? fm.contentsOfDirectory(atPath: dir.path) {
+            let csvs = names.filter { $0.hasPrefix("collect-") && $0.hasSuffix(".csv") }.sorted()
+            if let last = csvs.last { urls.append(dir.appendingPathComponent(last)) }
+        }
+        guard !urls.isEmpty else { return }
+        let items: [Any] = urls
+        let act = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        presentAlertSafely(act)   // AlertCompat 已统一补 iPad popover 锚点
     }
 
     private func append(_ line: String) {

@@ -1,5 +1,17 @@
 # 更新日志 (Changelog)
 
+## [v1.0.14] - 2026-11-10
+
+### 📋 采集结果全在手机 App 上完成（不用电脑）
+
+- **新增「📋 采集结果」按钮**：采集完成后随时在 App 内查看每条的「平台 / 链接 / 文案」清单，读 `Documents/ios_mcp_data/collect-latest.json`，覆盖安装不丢。
+- **一键复制 / 分享**：「复制全部」把完整清单写入剪贴板（可粘贴到备忘录 / 微信）；「分享文件」把 `collect-latest.json` 与最新 `collect-*.csv` 交给 `UIActivityViewController` 发到微信、备忘录、文件 App。iPad 走 `presentAlertSafely` 统一补 popover 锚点，沿用 v1.0.11 兼容收口。
+- **日志直出清单**：`saveCollectResults` 落盘后逐条 `log` 回灌清单，不点按钮也能在日志区看到结果；采集任务结束时追加「点采集结果查看」引导。
+- **全链路手机闭环核对**：触发（主界面一句话 / CronEngine）→ 大脑（云 API，App「模型」页配置，手机直连）→ 驱动（手机本机 `127.0.0.1:8090` ios-mcp）→ 采集执行（App 内 OCR / 剪贴板）→ 结果查看 / 复制 / 分享（本版补齐）→ 安装更新（App 内按 build 号比对 `latest.json` 下载 tipa）。**不依赖电脑侧任何服务**；联动 / 反向长轮询 / 6068 回推 / 微信通道 / port-manager 均未进入主链路。
+- 采集逻辑、四层点击闭环、CollectGuard 节流风控、抖音 / 小红书 SOP 全部沿用 v1.0.13，未改动。
+
+> 限制：本机 Windows 无 Xcode，Swift 改动仅静态自审，编译验收由 CI（macOS runner）完成；「不封号」仍是概率压制，非确定性保证。
+
 ## [v1.0.13] - 2026-11-10
 
 ### 🧺 抖音 / 小红书搜索采集 + 点击灵敏度四层修复（公开发版）

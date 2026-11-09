@@ -647,6 +647,10 @@ final class AgentRunner {
         }
         let msg = "已落盘 \(collected.count) 条 → \(jsonURL.path)（+ \(csvURL.lastPathComponent) + collect-latest.json）"
         log("💾 【脚本实测】" + msg)
+        log("📋 【采集清单】共 \(collected.count) 条（App 内「采集结果」按钮可查看 / 复制 / 分享，全程不用电脑）：")
+        for (i, it) in collected.enumerated() {
+            log("  [\(i + 1)] \(it.platform) | \(it.link.isEmpty ? "(无链接)" : it.link) | \(it.caption)")
+        }
         return "【脚本实测】" + msg
     }
 
