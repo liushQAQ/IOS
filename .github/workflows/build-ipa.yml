@@ -1,16 +1,24 @@
-﻿name: Build unsigned IPA (Public Clean Edition)
+name: Build unsigned IPA (Public Clean Edition)
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+        run: |
+          # macos-14 retired; macos-latest follows supported image; prefer Xcode 16.x.
+          CAND="$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -n "$CAND" ]; then
+            echo "using $CAND"; sudo xcode-select -s "$CAND"
+          elif [ -d "/Applications/Xcode.app" ]; then
+            echo "using /Applications/Xcode.app"; sudo xcode-select -s /Applications/Xcode.app
+          fi
+          xcodebuild -version
 
       - name: Resolve version
         id: ver
