@@ -1,23 +1,23 @@
 {
-  "version": "2.2.1",
-  "build": 152,
-  "updated_at": "2026-11-09 15:45:00",
-  "title": "v2.2.1(152) 键盘跟手 + 外观跟随系统",
-  "changelog": "会话框弹出/收回改为跟键盘同一条曲线，不再卡顿也不再慢半拍\n输入框不再悬空，紧贴键盘顶边\n恢复跟随系统外观：白天自动白、夜间自动黑，页面内手动选主题仍然优先\n旧页面自动更新：网关补丁升级后回前台自动重新加载一次",
-  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
-  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
-  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.1/DSHios-public-2.2.1-152.tipa",
+  "version": "2.2.2",
+  "build": 157,
+  "updated_at": "2026-11-11 01:12:00",
+  "title": "v2.2.2(157) 键盘必弹根修 + 内容贴键盘顶",
+  "changelog": "修复待发送排队后点会话框键盘弹不出（keyboardDisplayRequiresUserAction 根修，程序化聚焦也能弹键盘）\n拆掉键盘上方系统辅助条，内容底栏直接贴住键盘顶边\n打包改用 KVC 赋值修复构建失败（build 156 教训）",
+  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.2/releases/DSHios-public-2.2.2-157.tipa",
+  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.2/releases/DSHios-public-2.2.2-157.tipa",
+  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.2/DSHios-public-2.2.2-157.tipa",
   "tipa_mirrors": [
-    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
-    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
-    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
-    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.1/DSHios-public-2.2.1-152.tipa",
-    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.1/releases/DSHios-public-2.2.1-152.tipa",
-    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.1/DSHios-public-2.2.1-152.tipa",
-    "https://github.com/liushQAQ/IOS/releases/download/v2.2.1/DSHios-public-2.2.1-152.tipa",
-    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.1-152.tipa"
+    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.2/releases/DSHios-public-2.2.2-157.tipa",
+    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.2/releases/DSHios-public-2.2.2-157.tipa",
+    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.2/releases/DSHios-public-2.2.2-157.tipa",
+    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.2/DSHios-public-2.2.2-157.tipa",
+    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.2/releases/DSHios-public-2.2.2-157.tipa",
+    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.2/DSHios-public-2.2.2-157.tipa",
+    "https://github.com/liushQAQ/IOS/releases/download/v2.2.2/DSHios-public-2.2.2-157.tipa",
+    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.2-157.tipa"
   ],
-  "size_bytes": 4927990,
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.1",
-  "md5": "623796f05a97aeaa10ed75ed0935a0db"
+  "size_bytes": 4928412,
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.2",
+  "md5": "54330f320e9dcfda39b5653a328e1d26"
 }
