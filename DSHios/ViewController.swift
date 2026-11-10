@@ -124,6 +124,18 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
         -menuTrailingInset
     }
 
+    /// 🔴 R73（v2.2.2）：移除 WKWebView 键盘上方的系统表单辅助条（↑↓完成，约 90px）。
+    ///   该条横在页面内容和键盘之间，小屏上把会话框顶离键盘顶一大截（老总令「还要下移」）。
+    ///   一次性把 inputAccessoryView 的实现换成空块；只影响外观层，不影响键盘/输入本身。
+    private static func dshRemoveFormAccessoryBar() {
+        struct Once { static var done = false }
+        if Once.done { return }
+        Once.done = true
+        guard let method = class_getInstanceMethod(WKWebView.self, Selector(("inputAccessoryView"))) else { return }
+        let block: @convention(block) (AnyObject) -> AnyObject? = { _ in nil }
+        method_setImplementation(method, imp_implementationWithBlock(block))
+    }
+
     private static func makeErrorBridge(owner: ViewController) -> WKScriptMessageHandler {
         return ErrorBridge { [weak owner] message in
             owner?.recordWebError(message)
@@ -9304,6 +9316,13 @@ function applySidebarInset() {
         //   页面侧同步撤回恒暗（网关 v31 种子 zcode-theme=system、插件 meta 改 light dark），
         //   各模块仍同一套外观，不会再一黑一白。
         webView.overrideUserInterfaceStyle = .unspecified
+        // 🟢 R72（v2.2.2）键盘必弹根修：WKWebView 默认只认「用户手势内同步 focus()」
+        //   （keyboardDisplayRequiresUserAction 默认 true），待发送排队后点会话框，
+        //   链路上任何一环吞掉聚焦键盘就永远不弹。关掉限制后页面/原生任何聚焦都弹键盘；
+        //   「点发送不弹键盘」的诉求由插件侧发送抑制兜底（v1.2.8 条件化抑制）。
+        webView.keyboardDisplayRequiresUserAction = false
+        // 🟢 R73（v2.2.2）：移除键盘上方系统辅助条（↑↓完成，约 90px），内容贴键盘顶。
+        Self.dshRemoveFormAccessoryBar()
         // 彻底禁止 WKWebView 原生缩放手势与双击放大页面（除灯箱图片手势由 JS 专属接管）
         webView.scrollView.minimumZoomScale = 1.0
         webView.scrollView.maximumZoomScale = 1.0
@@ -10516,7 +10535,7 @@ function applySidebarInset() {
     /// App 期望的网关注入补丁最低版本（对应 mobilefix.js 末尾的 window.__zcrcRev = 'vNN'）。
     /// 页面里的版本比它旧（或根本没有）说明用户看的是后台挂了很久的旧页面 ——
     /// 补丁改了也永远不会生效，这正是「明明改了还是毫无动画」的真因。
-    private static let expectedPatchRev = 34
+    private static let expectedPatchRev = 42
     private var didCheckPatchRev = false
     private var lastPatchReloadAt = Date.distantPast
 
