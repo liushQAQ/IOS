@@ -828,6 +828,7 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - **实测**：真 3083 页面排队 2 条 → 点别处收焦点 → 再点会话框 `TAP-RESULT focused=true`，pageerror 0；手机 .100 23:14/23:35 已回传 `DSHKB send hf=1` 信标。
 - **回归防御**：① 闸门必须含「排队 ≥2 条后 tap 会话框聚焦」探针；② 「点发送不弹键盘」的旧诉求由插件抑制兜底，不许在 App 层回改此开关；③ `expectedPatchRev` 每次打包对齐网关当前 REV（本次 34→42，落旧页面的手机回前台即自愈）。
 - **教训**：键盘弹不弹是三层合同（手势同步性 × 注入门控 × 抑制窗口），任何一层私改都会把别的层卡死——根修在系统开关，补强在页面手势。
+- **教训②（build 156 exit 65）**：`keyboardDisplayRequiresUserAction` 不是 WKWebView 公开属性，Swift 直接赋值 CI 必编译失败；唯一合法写法是 KVC `setValue(false, forKey:)`（iOS 14+ 实测可用）。本地闸门跑不起来时须 `NODE_PATH=本地大模型/node_modules node regression.js`。
 
 ### R71 外观跟随系统（v2.2.1 遗漏登记，2026-11-10 补录）
 

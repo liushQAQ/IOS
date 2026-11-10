@@ -9320,7 +9320,8 @@ function applySidebarInset() {
         //   （keyboardDisplayRequiresUserAction 默认 true），待发送排队后点会话框，
         //   链路上任何一环吞掉聚焦键盘就永远不弹。关掉限制后页面/原生任何聚焦都弹键盘；
         //   「点发送不弹键盘」的诉求由插件侧发送抑制兜底（v1.2.8 条件化抑制）。
-        webView.keyboardDisplayRequiresUserAction = false
+        //   该属性不是公开 API，直接赋值 CI 编译报 exit 65（build 156 教训），必须走 KVC。
+        webView.setValue(false, forKey: "keyboardDisplayRequiresUserAction")
         // 🟢 R73（v2.2.2）：移除键盘上方系统辅助条（↑↓完成，约 90px），内容贴键盘顶。
         Self.dshRemoveFormAccessoryBar()
         // 彻底禁止 WKWebView 原生缩放手势与双击放大页面（除灯箱图片手势由 JS 专属接管）
