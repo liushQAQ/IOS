@@ -1065,7 +1065,7 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.1.7 | 8 | Codemagic `6ae5a925326040564f8fd193` | **R51 右抽屉页面整体左移十犯根治（R06 出血钳制×抽屉动画竞态：抽屉子树豁免+getAnimations 动画期旁观+data-dsh-bleed 标记可撤销+旧毒自愈，压测 8 轮旧 1 中毒/新全零）+ R50 抽屉切换三变量深层毒写收编（fixDeep 三变量+observer 盯抽屉属性）+ 语音重复根治（SFSpeech 增量→全量协议：原生每次发完整识别文本，网页端只替换自己插的尾段——SFSpeech 回改旧内容时旧 delta 退化成整段重插=重复+乱序真因）+ R52 回退按钮插件迁移（dsh-purge 黑名单 slot→composer.dock P2/宽屏 tab 行 P1，菜单方向自适应）+ R37 闸门 + 号选择器换语义锚点（VERcba_add 哈希漂移命中 0 尺寸元素）** + 闸门 122 绿/0 红（R51 行为+源锚点、dshp-rewind 禁回卡片、PLUGIN_RE 补 dshp-）；凭证 src=`52ddb81d46e7`；更新说明/关于 1..30 |
 | 2.2.2 | 157 | Codemagic（R72/R73） | 键盘必弹根修（R72：页面侧 v1.2.8 实锤，**App 侧 KVC 未上真机**）+ 拆键盘辅助条（R73）；⚠️ 真机「安装即闪退」→ R74 |
 | 2.2.3 | 158 | GitHub CI `42939190659`（成功） | **R74 安装即闪退根治（真因=KVC `keyboardDisplayRequiresUserAction` 在部分 iOS 上无此键 → NSUnknownKeyException 启动即崩；解法=`responds(to: setter)` 守卫，无 setter 跳过）** + 版本文案 1..60 |
-| 2.2.4 | 159 | 待打包 | **R75 鲸鱼右缘竖滑唤出（UIScreenEdgePan 只认贴边横向起手 → 补 24pt 右缘条带竖向 pan：上下滑即唤出并全程跟手调高；横向短滑鲸鱼、长滑抽屉两档不变）** + 版本文案 1..61 |
+| 2.2.4 | 159 | GitHub CI `43073788190`（成功） | **R75 鲸鱼右缘竖滑唤出（UIScreenEdgePan 只认贴边横向起手 → 补 24pt 右缘条带竖向 pan：上下滑即唤出并全程跟手调高；横向短滑鲸鱼、长滑抽屉两档不变）** + 版本文案 1..61 |
 
 
 ## 七、闸门自身踩过的坑（复用必读）
