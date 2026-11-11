@@ -94,6 +94,12 @@
 - **取证方法**：网关 HTML 注入错误信标（window.onerror/unhandledrejection/console.error + 里程碑打点回传网关日志），真机零操作定位——本次即靠它拿到 `invalid group specifier name` 一锤定音。
 - **实现**：dsh-anywhere `proxy.mjs` `zcodeRcRegExpShimScript()`（v1.0.15，单测 11/11）；垫片为通用件，任何「改写代理 + 老引擎」组合直接复用。
 
+### C12 🔴 原生私有 KVC/私选：目标机无此键 = 启动闪退（R74，2026-11-11，v2.2.2(157) 真机实锤）
+- **症状**：v2.2.2(157) 安装后一点开就闪退（152 正常）。真因：`webView.setValue(false, forKey: "keyboardDisplayRequiresUserAction")` 在该机 iOS 的 WKWebView 上**无此键**（UIWebView 时代属性，从未进公开 API）→ `setValue:forUndefinedKey:` → `NSUnknownKeyException` → `viewDidLoad` 当场 SIGABRT。该行在 WKWebView 创建路径上，**每次启动必炸**。
+- **为什么 CI/闸门测不出**：KVC 按字符串运行期寻址，编译必过；闸门只测 WebKit 页面行为，原生层异常只有真机首启才暴露（铁律 1/4 命中）。
+- **兼容铁律**：① 任何 `setValue(_:forKey:)`/私有 selector 写法，前置 `responds(to: Selector(("set…:")))` 守卫，无键即跳过并降级到既有兜底路径；② 原生层 hack 改动 = 发版前**真机首启验证必做**（基准机 iOS 16.3），页面侧信标（DSHKB）不得给原生层背书；③ 对外文案/凭证里的「实测可用」必须注明实测载体（真机/沙箱/页面探针）。
+- **实现**：R74（v2.2.3(158)）`ViewController.swift` KVC 前置守卫；R72 原效在 setter 存在的 iOS 上保留，键盘必弹由插件 v1.2.8 手势同步聚焦兜底。R73 的 `method_setImplementation` 属类型安全写法（block 返回类型一致、`class_getInstanceMethod` 已有 nil 守卫），不动。
+
 ---
 
 ## 三、发版前兼容自检清单（照抄执行）
@@ -109,6 +115,7 @@
 □ 8. 修改了归属/加载逻辑？→ R18 红线自查
 □ 9. 版本四处同步（AppDelegate/Info.plist/VERSION/关于页文案）
 □ 10. 真机（iOS 16.3 基准机）装机验收，截图对拍
+□ 11. 原生私有 KVC/私选（setValue(forKey:)）已 responds(to:) 守卫 + 真机首启验证（C12）→ 保启动不闪退
 ```
 
 ---
