@@ -9321,7 +9321,14 @@ function applySidebarInset() {
         //   链路上任何一环吞掉聚焦键盘就永远不弹。关掉限制后页面/原生任何聚焦都弹键盘；
         //   「点发送不弹键盘」的诉求由插件侧发送抑制兜底（v1.2.8 条件化抑制）。
         //   该属性不是公开 API，直接赋值 CI 编译报 exit 65（build 156 教训），必须走 KVC。
-        webView.setValue(false, forKey: "keyboardDisplayRequiresUserAction")
+        // 🔴 R74（v2.2.3）安装闪退根修：该键是 UIWebView 时代属性，部分 iOS 的 WKWebView
+        //   根本没有这个键，直接 KVC → NSUnknownKeyException → viewDidLoad 当场闪退
+        //   （v2.2.2(157) 真机「安装即闪退」实锤；R72 教训②「iOS 14+ 实测可用」已被推翻——
+        //   当晚手机信标只验证了页面侧修复，App 侧 KVC 从未上过真机）。
+        //   只有 setter 真实存在才赋值；不存在就跳过，键盘弹不弹交给插件 v1.2.8 手势同步聚焦兜底。
+        if webView.responds(to: Selector(("setKeyboardDisplayRequiresUserAction:"))) {
+            webView.setValue(false, forKey: "keyboardDisplayRequiresUserAction")
+        }
         // 🟢 R73（v2.2.2）：移除键盘上方系统辅助条（↑↓完成，约 90px），内容贴键盘顶。
         Self.dshRemoveFormAccessoryBar()
         // 彻底禁止 WKWebView 原生缩放手势与双击放大页面（除灯箱图片手势由 JS 专属接管）
