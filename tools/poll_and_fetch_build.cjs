@@ -6,8 +6,8 @@ const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const CONFIG_FILE = path.join(ROOT, '.codemagic_config.json');
 const BUILD_ID = process.argv[2] || '6ae9d74629333872aee4f8bf';
-const VERSION = '2.2.3';
-const BUILD_NUM = 158;
+const VERSION = '2.2.4';
+const BUILD_NUM = 159;
 
 if (!fs.existsSync(CONFIG_FILE)) {
   console.error('缺少配置文件');
