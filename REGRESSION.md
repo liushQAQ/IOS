@@ -1052,7 +1052,7 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.1.8 | 9 | Codemagic `6ae6c40a91075b1ec47dd242` | R53 状态栏 childList 预检（部分生效，真机仍微微下移→R57）+ R54 发送键盘抑制 400ms（真机没兜住→2.1.9 加固）+ R55 小鲸鱼自由拖放（**真机三连翻车：抢手势/拖中不回弹/半隐藏丢失，老总令回退**）+ R56 闸门撬爆红根治（dsh-purge 1.2.1 收缩合规+收缩三件套迁活块+dock 换行收编）；MD5 `5dac829973cf8f42df465f1fa63b2963` | **R53 抽屉顶栏间歇下跳（新节点出生带毒逃过属性观察→守卫补 childList+fixDeepTree 渲染前预检）+ R54 收起键盘点发送不弹键盘（focusin 同步 blur，打字流零干预）+ R55 小鲸鱼自由拖放任意位置（中心点双约束+跨启动记忆+原地淡出）+ R56 闸门撬爆红根治（dsh-purge 芯片钉死不可收缩→插件 1.2.1+App 兜底；收缩三件套误入 v1.0.131 停用的死代码块→迁主样式表；R13 dock 换行哈希锚漂移收编语义规则）** + 闸门 124 绿/0 红；凭证 src=`dfe96518d861` |
 | 2.1.7 | 8 | Codemagic `6ae5a925326040564f8fd193` | **R51 右抽屉页面整体左移十犯根治（R06 出血钳制×抽屉动画竞态：抽屉子树豁免+getAnimations 动画期旁观+data-dsh-bleed 标记可撤销+旧毒自愈，压测 8 轮旧 1 中毒/新全零）+ R50 抽屉切换三变量深层毒写收编（fixDeep 三变量+observer 盯抽屉属性）+ 语音重复根治（SFSpeech 增量→全量协议：原生每次发完整识别文本，网页端只替换自己插的尾段——SFSpeech 回改旧内容时旧 delta 退化成整段重插=重复+乱序真因）+ R52 回退按钮插件迁移（dsh-purge 黑名单 slot→composer.dock P2/宽屏 tab 行 P1，菜单方向自适应）+ R37 闸门 + 号选择器换语义锚点（VERcba_add 哈希漂移命中 0 尺寸元素）** + 闸门 122 绿/0 红（R51 行为+源锚点、dshp-rewind 禁回卡片、PLUGIN_RE 补 dshp-）；凭证 src=`52ddb81d46e7`；更新说明/关于 1..30 |
 | 2.2.2 | 157 | Codemagic（R72/R73） | 键盘必弹根修（R72：页面侧 v1.2.8 实锤，**App 侧 KVC 未上真机**）+ 拆键盘辅助条（R73）；⚠️ 真机「安装即闪退」→ R74 |
-| 2.2.3 | 158 | 待打包 | **R74 安装即闪退根治（真因=KVC `keyboardDisplayRequiresUserAction` 在部分 iOS 上无此键 → NSUnknownKeyException 启动即崩；解法=`responds(to: setter)` 守卫，无 setter 跳过）** + 版本文案 1..60 |
+| 2.2.3 | 158 | GitHub CI `42939190659`（成功） | **R74 安装即闪退根治（真因=KVC `keyboardDisplayRequiresUserAction` 在部分 iOS 上无此键 → NSUnknownKeyException 启动即崩；解法=`responds(to: setter)` 守卫，无 setter 跳过）** + 版本文案 1..60 |
 
 
 ## 七、闸门自身踩过的坑（复用必读）
