@@ -101,6 +101,9 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
     private var menuButtonExpanded = false
     /// 展开后的自动收起计时器（「不用了自动隐藏」）。
     private var menuAutoHideTimer: Timer?
+    /// 🔴 R75：右缘条带竖滑手势（宽 rightStripWidth 全高）——沿右缘上下滑即可唤出/调高鲸鱼。
+    ///   UIScreenEdgePanGestureRecognizer 只认「贴死物理边缘 + 横向起手」，竖滑它不 begin。
+    private var rightStripPan: UIPanGestureRecognizer?
 
     /// 悬浮按钮边长（44pt 精致小巧圆形）。
     private static let menuButtonSide: CGFloat = 44
@@ -112,6 +115,8 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
     private static let menuTrailingInset: CGFloat = 10
     /// 展开后静置多久自动半隐藏（3 秒后自动隐藏一半）。
     private static let menuAutoHideDelay: TimeInterval = 3.0
+    /// 🔴 R75：右缘竖滑条带宽（从物理右缘往左）。条带内竖向主导的滑动即唤鲸、全程调高。
+    private static let rightStripWidth: CGFloat = 24
 
     /// 收起态右缘约束值：正值把按钮推出屏幕，只留 `menuCollapsedPeek` 宽在屏内。
     /// 约束语义是 `button.trailing = safeArea.trailing + constant`，
@@ -9671,6 +9676,18 @@ function applySidebarInset() {
         edgePan.cancelsTouchesInView = false
         view.addGestureRecognizer(edgePan)
 
+        // 🔴 R75（老总 2026-11-12「鲸鱼要在右侧屏幕任何滑动就出来，不能只按住图标拖」）：
+        //   UIScreenEdgePanGestureRecognizer 的系统机制要求起手贴死物理边缘且初始方向横向，
+        //   沿右缘竖滑它根本不 begin → 鲸鱼唤不出。补一条右缘条带竖向 pan：
+        //   起手在条带内、竖向位移占优即接管，鲸鱼全程跟手指高度并保持展开。
+        //   横向滑动仍归 edgePan（短滑鲸鱼/长滑抽屉两档），鲸鱼本体拖动仍归 menuPanned；
+        //   放行判定见 gestureRecognizerShouldBegin（不 begin 就不影响网页任何触摸）。
+        let stripPan = UIPanGestureRecognizer(target: self, action: #selector(rightStripPanned(_:)))
+        stripPan.cancelsTouchesInView = true
+        stripPan.delegate = self
+        view.addGestureRecognizer(stripPan)
+        self.rightStripPan = stripPan
+
         self.menuButton = button
         self.setMenuExpanded(false, animated: false)
     }
@@ -9806,6 +9823,28 @@ function applySidebarInset() {
             let threshold = Self.menuButtonSide / 2
             let expand = (dx < -threshold) || (velocity < -400)
             setMenuExpanded(expand, animated: true)
+        default:
+            break
+        }
+    }
+
+    /// 🔴 R75：右缘条带竖滑唤鲸。只有 shouldBegin 放行（条带内起手 + 竖向主导）才会进来：
+    ///   began 即展开并跟手指高度，changed 全程跟手；松手保持展开（3 秒后照旧自动收起）。
+    @objc private func rightStripPanned(_ gesture: UIPanGestureRecognizer) {
+        guard let button = menuButton, let constraint = menuTrailingConstraint else { return }
+        switch gesture.state {
+        case .began:
+            menuAutoHideTimer?.invalidate()
+            menuAutoHideTimer = nil
+            constraint.constant = Self.menuExpandedConstant
+            button.alpha = 0.90
+            updateWhaleY(gesture.location(in: view).y)
+            view.layoutIfNeeded()
+        case .changed:
+            updateWhaleY(gesture.location(in: view).y)
+            view.layoutIfNeeded()
+        case .ended, .cancelled:
+            setMenuExpanded(true, animated: true)
         default:
             break
         }
@@ -10919,6 +10958,25 @@ function applySidebarInset() {
 }
 
 // MARK: - WKNavigationDelegate
+
+// MARK: - 🔴 R75 右缘条带竖滑手势（方向放行判定）
+extension ViewController: UIGestureRecognizerDelegate {
+    /// 只对 rightStripPan 做放行判定（本文件其它手势均未设 delegate，不会走到这里）。
+    /// 三闸：① 起手在右缘条带内（物理右缘往左 rightStripWidth）；② 不在鲸鱼本体上
+    /// （那里归 menuPanned 管）；③ 竖向位移占优（横向让给 edgePan：短滑鲸鱼/长滑抽屉）。
+    /// 不放行 = 手势不 begin，网页自身触摸（滚动/点击/滑动）完全不受影响。
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === rightStripPan, let pan = gestureRecognizer as? UIPanGestureRecognizer else {
+            return true
+        }
+        guard menuButton != nil else { return false }
+        let loc = gestureRecognizer.location(in: view)
+        guard loc.x >= view.bounds.width - Self.rightStripWidth else { return false }
+        if let button = menuButton, button.convert(button.bounds, to: view).contains(loc) { return false }
+        let t = pan.translation(in: view)
+        return abs(t.y) > abs(t.x) && abs(t.y) >= 10
+    }
+}
 
 extension ViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView,
