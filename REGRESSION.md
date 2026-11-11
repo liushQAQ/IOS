@@ -810,6 +810,15 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - **回归防御**：关于页任何「地址类」说明必须同时满足三条：① 指向的 URL 打开后能看到 DSHios 内容（禁止指向错误分支；默认分支已锁 personal，若有人改回 main 立即复发）；② 必须是 `UIAlertAction`/按钮等真实可点击控件，禁止把裸 URL 塞进 `UIAlertController.message` 当链接用；③ 面向国内网络必须有一条免代理路径（镜像发布页或 App 内镜像下载），禁止只给裸 GitHub 链接。
 - **教训**：**仓库地址≠仓库根**——多分支仓库对外的"说明入口"必须落到正确分支或 Releases；iOS 原生弹窗不解析链接，要点击就放按钮；国内环境 `github.com` 网页直连会被重置，入口必须带镜像兜底。
 
+### R74 新版 App 安装即闪退（2026-11-11，v2.2.2(157) → v2.2.3(158) 根修）
+
+- **症状**：老总报告「新版本 dsh ios app 安装闪退」——v2.2.2(157) 安装后一点开就退出，前一版 152 正常。
+- **真因**：R72 的键盘根修 `webView.setValue(false, forKey: "keyboardDisplayRequiresUserAction")` 在该机 iOS 的 WKWebView 上**没有这个键**。`keyboardDisplayRequiresUserAction` 是 UIWebView 时代的属性，从未进过公开 API；目标类无 setter 无同名ivar 时 `setValue:forKey:` 走 `setValue:forUndefinedKey:` → `NSUnknownKeyException`（未捕获 ObjC 异常）→ `viewDidLoad` 里当场 SIGABRT。该行在 WKWebView 创建路径上，所以**每次启动必闪退**。
+- **归因链（为什么沙箱测不出）**：R72 教训②声称「iOS 14+ 实测可用」实为误判——当晚 23:14/23:35 的手机信标（DSHKB）只验证了**页面侧**插件 v1.2.8 的手势同步聚焦，157 是 01:12 才发的，**App 侧 KVC 从未上过真机**。闸门测的是 WebKit 页面行为，原生 Swift 层的 KVC 异常只有真机能暴露（铁律 1/4 再次命中）。
+- **解法（v2.2.3(158)）**：KVC 前加 `responds(to: Selector(("setKeyboardDisplayRequiresUserAction:")))` 守卫——setter 存在才赋值（老设备上 R72 原效保留）；不存在就跳过，键盘必弹交给插件 v1.2.8 手势同步聚焦兜底。R73 的 `method_setImplementation` 换 `inputAccessoryView` 实现属类型安全写法（block 返回类型与方法一致、`class_getInstanceMethod` 已有 nil 守卫），不动。
+- **回归防御**：① 任何 `setValue(_:forKey:)` 私有键写法，闸门前必须先过 `responds(to:)`；新 iOS 大版本发版前必须真机点开验证一次（原生层永远测不出，见铁律 1/4）；② 对外文案/凭证里的「实测可用」必须注明**实测载体**（真机/沙箱/页面探针），页面侧信标不能给原生层背书；③ 157 时代入的两层修复（R72/R73）从此分层记账：页面侧 v1.2.8 已实锤，App 侧 KVC 仅在 setter 存在的 iOS 上生效。
+- **教训**：「编译过 ≠ 运行得过，沙箱绿 ≠ 真机绿」在原生私有 API 上是必然事件——CI 只证明编译，KVC/私选这类运行期寻址只有目标机才知道答案。新的原生层 hack 一律 `responds(to:)` 守卫 + 真机首启验证双保险。
+
 ### R73 键盘上方系统辅助条把会话框顶离键盘一大截（2026-11-10「还要下移」）
 
 - **症状**：键盘弹出后，会话框（输入+状态条）与键盘辅助条之间留一大段黑空区；小屏（第三方键盘再加高）时输入框甚至被顶出页头。截图里空区约 250~500px。
@@ -828,7 +837,7 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - **实测**：真 3083 页面排队 2 条 → 点别处收焦点 → 再点会话框 `TAP-RESULT focused=true`，pageerror 0；手机 .100 23:14/23:35 已回传 `DSHKB send hf=1` 信标。
 - **回归防御**：① 闸门必须含「排队 ≥2 条后 tap 会话框聚焦」探针；② 「点发送不弹键盘」的旧诉求由插件抑制兜底，不许在 App 层回改此开关；③ `expectedPatchRev` 每次打包对齐网关当前 REV（本次 34→42，落旧页面的手机回前台即自愈）。
 - **教训**：键盘弹不弹是三层合同（手势同步性 × 注入门控 × 抑制窗口），任何一层私改都会把别的层卡死——根修在系统开关，补强在页面手势。
-- **教训②（build 156 exit 65）**：`keyboardDisplayRequiresUserAction` 不是 WKWebView 公开属性，Swift 直接赋值 CI 必编译失败；唯一合法写法是 KVC `setValue(false, forKey:)`（iOS 14+ 实测可用）。本地闸门跑不起来时须 `NODE_PATH=本地大模型/node_modules node regression.js`。
+- **教训②（build 156 exit 65 → R74 真机闪退二次修正）**：`keyboardDisplayRequiresUserAction` 不是 WKWebView 公开属性，Swift 直接赋值 CI 必编译失败（exit 65）；KVC `setValue(false, forKey:)` 能编译，但**部分 iOS 上该键根本不存在 → NSUnknownKeyException 启动闪退（R74）**。2026-11-11 定版写法：KVC 前必须 `responds(to: Selector(("setKeyboardDisplayRequiresUserAction:")))` 守卫，无 setter 即跳过。本条早期「iOS 14+ 实测可用」的说法有误——当时的信标只验证了页面侧修复，App 侧 KVC 未上过真机。
 
 ### R71 外观跟随系统（v2.2.1 遗漏登记，2026-11-10 补录）
 
@@ -1042,6 +1051,8 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.1.9 | 10 | Codemagic `6ae6d2d25be6d2e772807cab` | **R57 抽屉顶条微微下移终诊（syncPanelNav 只盯属性、重挂载路径逃过→补 childList 挂载当拍写 padding，采样实证首帧 79 终值零跳动）+ R54 加固（1200ms 窗口+三连主动 blur）+ 🔴 R55 整段回退 v2.1.7 黄金基线（老总令：2.1.8 自由拖放抢手势/长滑拖中不回弹/半隐藏丢失，真机三连翻车）** + 闸门锚点更新；R56 收缩合规保留 |
 | 2.1.8 | 9 | Codemagic `6ae6c40a91075b1ec47dd242` | R53 状态栏 childList 预检（部分生效，真机仍微微下移→R57）+ R54 发送键盘抑制 400ms（真机没兜住→2.1.9 加固）+ R55 小鲸鱼自由拖放（**真机三连翻车：抢手势/拖中不回弹/半隐藏丢失，老总令回退**）+ R56 闸门撬爆红根治（dsh-purge 1.2.1 收缩合规+收缩三件套迁活块+dock 换行收编）；MD5 `5dac829973cf8f42df465f1fa63b2963` | **R53 抽屉顶栏间歇下跳（新节点出生带毒逃过属性观察→守卫补 childList+fixDeepTree 渲染前预检）+ R54 收起键盘点发送不弹键盘（focusin 同步 blur，打字流零干预）+ R55 小鲸鱼自由拖放任意位置（中心点双约束+跨启动记忆+原地淡出）+ R56 闸门撬爆红根治（dsh-purge 芯片钉死不可收缩→插件 1.2.1+App 兜底；收缩三件套误入 v1.0.131 停用的死代码块→迁主样式表；R13 dock 换行哈希锚漂移收编语义规则）** + 闸门 124 绿/0 红；凭证 src=`dfe96518d861` |
 | 2.1.7 | 8 | Codemagic `6ae5a925326040564f8fd193` | **R51 右抽屉页面整体左移十犯根治（R06 出血钳制×抽屉动画竞态：抽屉子树豁免+getAnimations 动画期旁观+data-dsh-bleed 标记可撤销+旧毒自愈，压测 8 轮旧 1 中毒/新全零）+ R50 抽屉切换三变量深层毒写收编（fixDeep 三变量+observer 盯抽屉属性）+ 语音重复根治（SFSpeech 增量→全量协议：原生每次发完整识别文本，网页端只替换自己插的尾段——SFSpeech 回改旧内容时旧 delta 退化成整段重插=重复+乱序真因）+ R52 回退按钮插件迁移（dsh-purge 黑名单 slot→composer.dock P2/宽屏 tab 行 P1，菜单方向自适应）+ R37 闸门 + 号选择器换语义锚点（VERcba_add 哈希漂移命中 0 尺寸元素）** + 闸门 122 绿/0 红（R51 行为+源锚点、dshp-rewind 禁回卡片、PLUGIN_RE 补 dshp-）；凭证 src=`52ddb81d46e7`；更新说明/关于 1..30 |
+| 2.2.2 | 157 | Codemagic（R72/R73） | 键盘必弹根修（R72：页面侧 v1.2.8 实锤，**App 侧 KVC 未上真机**）+ 拆键盘辅助条（R73）；⚠️ 真机「安装即闪退」→ R74 |
+| 2.2.3 | 158 | 待打包 | **R74 安装即闪退根治（真因=KVC `keyboardDisplayRequiresUserAction` 在部分 iOS 上无此键 → NSUnknownKeyException 启动即崩；解法=`responds(to: setter)` 守卫，无 setter 跳过）** + 版本文案 1..60 |
 
 
 ## 七、闸门自身踩过的坑（复用必读）
