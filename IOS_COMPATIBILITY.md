@@ -98,7 +98,13 @@
 - **症状**：v2.2.2(157) 安装后一点开就闪退（152 正常）。真因：`webView.setValue(false, forKey: "keyboardDisplayRequiresUserAction")` 在该机 iOS 的 WKWebView 上**无此键**（UIWebView 时代属性，从未进公开 API）→ `setValue:forUndefinedKey:` → `NSUnknownKeyException` → `viewDidLoad` 当场 SIGABRT。该行在 WKWebView 创建路径上，**每次启动必炸**。
 - **为什么 CI/闸门测不出**：KVC 按字符串运行期寻址，编译必过；闸门只测 WebKit 页面行为，原生层异常只有真机首启才暴露（铁律 1/4 命中）。
 - **兼容铁律**：① 任何 `setValue(_:forKey:)`/私有 selector 写法，前置 `responds(to: Selector(("set…:")))` 守卫，无键即跳过并降级到既有兜底路径；② 原生层 hack 改动 = 发版前**真机首启验证必做**（基准机 iOS 16.3），页面侧信标（DSHKB）不得给原生层背书；③ 对外文案/凭证里的「实测可用」必须注明实测载体（真机/沙箱/页面探针）。
-- **实现**：R74（v2.2.3(158)）`ViewController.swift` KVC 前置守卫；R72 原效在 setter 存在的 iOS 上保留，键盘必弹由插件 v1.2.8 手势同步聚焦兜底。R73 的 `method_setImplementation` 属类型安全写法（block 返回类型一致、`class_getInstanceMethod` 已有 nil 守卫），不动。
+- **实现**：R74（v2.2.3(158)）`ViewController.swift` KVC 前置守卫；R72 原效在 setter 存在的 iOS 上保留，键盘必弹由插件 v1.2.8 手势同步聚焦兜底。R73 的 `method_setImplementation` 属类型安全写法（block 返回类型一致、`class_getInstanceMethod` 已有 nil 守卫），不动（R76 起返回值改零高空视图，见 C13）。
+
+### C13 🔴 WKWebView `inputAccessoryView` 置 nil：iOS 15/16 键盘事务间歇性中断（R76，2026-11-13）
+- **症状**：2.2.3/2.2.4 真机（iOS 16.3 基准机）键盘偶发「弹不出来 / 弹出来又被关闭」，与 R54 抑制窗盲区叠加后表现为「有时候」。
+- **真因**：R73 用 `method_setImplementation` 把 `inputAccessoryView` 换成返回 **nil** 的 block——WebKit 的键盘创建/恢复事务依赖 accessory 视图生命周期，nil 会间歇性把键盘弹出 abort（首启、blur→refocus 循环后高发）；nil 属 UIWebView 时代习惯，在 WKWebView 上是高危写法。
+- **兼容铁律**：① 要「无辅助条」外观一律返回**零高空 UIView**（`UIView(frame: .zero)`），严禁返回 nil；② 与 R54 抑制窗、R72 KVC 三层叠加时，任何一层改动都要对齐三层时间窗（R72 教训③）；③ 键盘类改动 = 真机「弹出 / 收起 / 排队流」三项验收。
+- **实现**：R76（v2.2.5(160)）`dshRemoveFormAccessoryBar` 改返回 `UIView(frame: .zero)`；R54 抑制器补用户手势 disarm（R76 条目）。
 
 ---
 
@@ -116,6 +122,7 @@
 □ 9. 版本四处同步（AppDelegate/Info.plist/VERSION/关于页文案）
 □ 10. 真机（iOS 16.3 基准机）装机验收，截图对拍
 □ 11. 原生私有 KVC/私选（setValue(forKey:)）已 responds(to:) 守卫 + 真机首启验证（C12）→ 保启动不闪退
+□ 12. inputAccessoryView 返回零高空 UIView 而非 nil（C13/R76）+ 抑制窗用户手势 disarm 在位 → 保键盘稳定弹出
 ```
 
 ---

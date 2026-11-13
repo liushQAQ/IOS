@@ -131,13 +131,16 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
 
     /// 🔴 R73（v2.2.2）：移除 WKWebView 键盘上方的系统表单辅助条（↑↓完成，约 90px）。
     ///   该条横在页面内容和键盘之间，小屏上把会话框顶离键盘顶一大截（老总令「还要下移」）。
-    ///   一次性把 inputAccessoryView 的实现换成空块；只影响外观层，不影响键盘/输入本身。
+    ///   一次性把 inputAccessoryView 的实现换成零高空视图；只影响外观层，不影响键盘/输入本身。
+    ///   🔴 R76（v2.2.5）：严禁返回 nil —— iOS 15/16 上 WebKit 的键盘创建/恢复事务依赖
+    ///   accessory 视图生命周期，nil 会间歇性把键盘弹出 abort（弹不出 / 弹了秒收，
+    ///   2.2.3 起真机偶发）；零高空 UIView 外观同样没有辅助条，键盘生命周期完整（C13）。
     private static func dshRemoveFormAccessoryBar() {
         struct Once { static var done = false }
         if Once.done { return }
         Once.done = true
         guard let method = class_getInstanceMethod(WKWebView.self, Selector(("inputAccessoryView"))) else { return }
-        let block: @convention(block) (AnyObject) -> AnyObject? = { _ in nil }
+        let block: @convention(block) (AnyObject) -> AnyObject? = { _ in UIView(frame: .zero) }
         method_setImplementation(method, imp_implementationWithBlock(block))
     }
 
@@ -3387,6 +3390,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               }
               function activeBlur() {
                 try {
+                  if (Date.now() > suppressUntil) return; // 🔴 R76：抑制窗解除（含用户手势 disarm）后 pending blur 一律哑火
                   var el = document.activeElement;
                   if (el && isInput(el)) el.blur();
                 } catch (eB) {}
@@ -3431,6 +3435,11 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               }
               document.addEventListener('pointerdown', function (e) {
                 try {
+                  // 🔴 R76（v2.2.5）用户手势一票否决：抑制窗活动期间手指点到输入框 = 立即解除抑制。
+                  //   v2.1.11 的 focusin 同步 blur 与三连主动 blur 分不清「页面自动重聚焦」和
+                  //   「用户点会话框」——R72 排队流（收起态点发送 → 1.2s 内点会话框）全程在窗内
+                  //   被误杀：键盘弹不出来 / 弹了秒收。用户手势命中即当场作废整个窗口。
+                  if (Date.now() < suppressUntil && isInput(e.target)) { suppressUntil = 0; unpatchAll(); }
                   if (!hitSend(e)) { hadFocus = false; return; }
                   hadFocus = isInput(document.activeElement);
                   // 🔴 v2.1.11：布防提前到 pointerdown（原在 click，晚于官方 pointer 类处理器）
@@ -3488,7 +3497,19 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               window.__dshLongBgResync = function () {
                 try {
                   window.dispatchEvent(new Event('online'));
-                  setTimeout(function () { try { location.reload(); } catch (e) {} }, 1500);
+                  // 🔴 R76（v2.2.5）：1.5s 强刷先给输入态让路——回前台立刻点会话框的用户，
+                  //   重载会把键盘连草稿一起带走（「弹出来又被关闭」的偶发源之一）。
+                  //   聚焦态 500ms 步进等最多 8s，脱离聚焦或到顶照刷；R40 主修（online 重同步先行）不变。
+                  var waited = 0;
+                  var kick = function () {
+                    var ae = null;
+                    try { ae = document.activeElement; } catch (eA) {}
+                    var typing = !!ae && !!ae.tagName && (String(ae.tagName).toLowerCase() === 'textarea' || String(ae.tagName).toLowerCase() === 'input' || ae.isContentEditable === true);
+                    if (!typing || waited >= 8000) { try { location.reload(); } catch (e) {} return; }
+                    waited += 500;
+                    setTimeout(kick, 500);
+                  };
+                  setTimeout(kick, 1500);
                   return 'reload';
                 } catch (e) { return 'err'; }
               };
