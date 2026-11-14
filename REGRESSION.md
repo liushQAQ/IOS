@@ -1082,7 +1082,7 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.2.2 | 157 | Codemagic（R72/R73） | 键盘必弹根修（R72：页面侧 v1.2.8 实锤，**App 侧 KVC 未上真机**）+ 拆键盘辅助条（R73）；⚠️ 真机「安装即闪退」→ R74 |
 | 2.2.3 | 158 | GitHub CI `42939190659`（成功） | **R74 安装即闪退根治（真因=KVC `keyboardDisplayRequiresUserAction` 在部分 iOS 上无此键 → NSUnknownKeyException 启动即崩；解法=`responds(to: setter)` 守卫，无 setter 跳过）** + 版本文案 1..60 |
 | 2.2.4 | 159 | GitHub CI `43073788190`（成功） | **R75 鲸鱼右缘竖滑唤出（UIScreenEdgePan 只认贴边横向起手 → 补 24pt 右缘条带竖向 pan：上下滑即唤出并全程跟手调高；横向短滑鲸鱼、长滑抽屉两档不变）** + 版本文案 1..61 |
-| 2.2.5 | 160 | 待打包（禁令中） | **R76 会话框键盘间歇性弹不出/弹出被收三层根治（R54/R59 抑制窗用户手势盲区→pointerdown 命中输入框立即 disarm + activeBlur 补 suppressUntil 前置检查；R73 inputAccessoryView nil→零高空 UIView 保 iOS15/16 键盘事务完整；R40 长后台 1.5s 强刷聚焦态让路 ≤8s）** + 版本文案 1..62 |
+| 2.2.5 | 160 | GitHub CI `43463898744`（成功，2026-11-14 已发） | **R76 会话框键盘间歇性弹不出/弹出被收三层根治（R54/R59 抑制窗用户手势盲区→pointerdown 命中输入框立即 disarm + activeBlur 补 suppressUntil 前置检查；R73 inputAccessoryView nil→零高空 UIView 保 iOS15/16 键盘事务完整；R40 长后台 1.5s 强刷聚焦态让路 ≤8s）** + 版本文案 1..62 |
 
 
 ## 七、闸门自身踩过的坑（复用必读）

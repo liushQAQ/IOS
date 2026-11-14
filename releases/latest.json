@@ -1,23 +1,23 @@
 {
-  "version": "2.2.4",
-  "build": 159,
-  "updated_at": "2026-11-12 02:08:32",
-  "title": "v2.2.4(159) 右缘滑唤鲸鱼 + 安装闪退根治延续",
-  "changelog": "1. 贴着屏幕右缘上下滑，鲸鱼直接唤出并跟手调高，不用再按住图标拖 (2.2.4)\n2. 修复安装后打开就闪退的问题：部分机型缺的键盘属性已加安全判断 (2.2.3)\n3. 键盘必弹根修继续生效：排队发送完再点会话框，键盘照样弹得出 (2.2.2)\n4. 拆掉键盘上方那条系统辅助条（↑↓完成），正文多出约一行空间 (2.2.2)\n5. 会话框弹出与收回跟键盘同一条曲线，输入框紧贴键盘顶边 (2.2.2)\n6. 恢复跟随系统外观：白天自动白、夜间自动黑，页面内手动选主题仍然优先",
-  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.4/releases/DSHios-public-2.2.4-159.tipa",
-  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.4/releases/DSHios-public-2.2.4-159.tipa",
-  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.4/DSHios-public-2.2.4-159.tipa",
+  "version": "2.2.5",
+  "build": 160,
+  "updated_at": "2026-11-14 09:52:32",
+  "title": "v2.2.5(160) 会话框键盘弹不出/被秒收三层根治",
+  "changelog": "1. 点会话框键盘「有时候弹不出来 / 弹出来又被关闭」主因根治：收键盘抑制窗加用户手势一票否决，抑制期间手指点到会话框当场解除 (2.2.5)\n2. 键盘辅助条移除改用零高度空视图，不再间歇性打断 iOS 15/16 键盘事务，随机弹不出/秒收根治 (2.2.5)\n3. 长后台回前台的 1.5 秒强刷给输入态让路：正在打字最多等 8 秒，草稿和键盘不再被连锅端 (2.2.5)\n4. 保留 2.2.4 全部修复：右缘滑唤鲸鱼、安装闪退根治、排队发送后键盘必弹、辅助条移除等",
+  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.5/releases/DSHios-public-2.2.5-160.tipa",
+  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.5/releases/DSHios-public-2.2.5-160.tipa",
+  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.5/DSHios-public-2.2.5-160.tipa",
   "tipa_mirrors": [
-    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.4/releases/DSHios-public-2.2.4-159.tipa",
-    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.4/releases/DSHios-public-2.2.4-159.tipa",
-    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.4/releases/DSHios-public-2.2.4-159.tipa",
-    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.4/DSHios-public-2.2.4-159.tipa",
-    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.4/releases/DSHios-public-2.2.4-159.tipa",
-    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.4/DSHios-public-2.2.4-159.tipa",
-    "https://github.com/liushQAQ/IOS/releases/download/v2.2.4/DSHios-public-2.2.4-159.tipa",
-    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.4-159.tipa"
+    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.5/releases/DSHios-public-2.2.5-160.tipa",
+    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.5/releases/DSHios-public-2.2.5-160.tipa",
+    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.5/releases/DSHios-public-2.2.5-160.tipa",
+    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.5/DSHios-public-2.2.5-160.tipa",
+    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.5/releases/DSHios-public-2.2.5-160.tipa",
+    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.5/DSHios-public-2.2.5-160.tipa",
+    "https://github.com/liushQAQ/IOS/releases/download/v2.2.5/DSHios-public-2.2.5-160.tipa",
+    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.5-160.tipa"
   ],
-  "size_bytes": 4929237,
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.4",
-  "md5": "eeb87f9a523c577c5ca54ec15bad6e0e"
+  "size_bytes": 4930559,
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.5",
+  "md5": "fc428d65a5127c3c851f593857fa7ec6"
 }
