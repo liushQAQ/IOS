@@ -714,7 +714,7 @@ final class SettingsViewController: UIViewController {
         present(scanner, animated: true)
     }
 
-    private func presentEditor(_ existing: (index: Int, item: ServiceItem)?, prefilledURL: String? = nil) {
+    private func presentEditor(_ existing: (index: Int, item: ServiceItem)?, prefilledURL: String? = nil, resume: (name: String, url: String, note: String)? = nil) {
         let alert = UIAlertController(
             title: existing == nil ? "添加服务" : "编辑服务",
             message: "名称、地址与备注",
@@ -729,29 +729,45 @@ final class SettingsViewController: UIViewController {
         // 🔴 v2.1.22：备用线路从「逗号分隔文本框」升级为「独立列表编辑」。
         //   用户在列表里逐条添加/删除/排序，每条带名称（默认 备用1/备用2…，可自定义），
         //   不再靠逗号/顿号/分号手写分隔。这里用一个可编辑草稿，主 Alert 关掉重开也不丢已输入内容。
-        draftFallbacks = existing?.item.fallbacks ?? []
+        if resume == nil { draftFallbacks = existing?.item.fallbacks ?? [] }
 
         alert.addTextField { tf in
             tf.placeholder = "名称（如：我的电脑）"
-            tf.text = existing?.item.name ?? suggestedName
+            tf.text = resume?.name ?? existing?.item.name ?? suggestedName
             tf.autocapitalizationType = .none
         }
         alert.addTextField { tf in
             tf.placeholder = "http://192.168.1.100:3083/"
-            tf.text = existing?.item.url ?? prefilledURL
+            tf.text = resume?.url ?? existing?.item.url ?? prefilledURL
             tf.autocapitalizationType = .none
             tf.autocorrectionType = .no
             tf.keyboardType = .URL
         }
         alert.addTextField { tf in
             tf.placeholder = "备注（可选，如：局域网·全权限）"
-            tf.text = existing?.item.note
+            tf.text = resume?.note ?? existing?.item.note
             tf.autocorrectionType = .no
         }
 
         // 备用线路管理入口：弹出独立列表编辑器（添加/删除/排序）。
+        // 🔴 v2.2.7 修复「加备用2/3保存后丢失」：主弹窗(UIAlertController)还开着时直接 present 列表编辑器，
+        //    会被 UIKit 隐式关掉主弹窗 → 用户永远点不到「保存」→ draftFallbacks 只有内存草稿没落盘。
+        //    改为：先把主弹窗收起，弹编辑器；完成后把主编辑弹窗(stcok 文本)恢复回来，由用户点最终「保存」落盘。
         alert.addAction(UIAlertAction(title: fallbackSummaryTitle, style: .default) { [weak self] _ in
-            self?.presentFallbackEditor(baseURL: alert.textFields?[1].text)
+            guard let self else { return }
+            let name = alert.textFields?[0].text?.trimmingCharacters(in: .whitespaces) ?? ""
+            let url = alert.textFields?[1].text?.trimmingCharacters(in: .whitespaces) ?? ""
+            let note = alert.textFields?[2].text?.trimmingCharacters(in: .whitespaces) ?? ""
+            self.dismiss(animated: true) { [weak self] in
+                guard let self else { return }
+                self.presentFallbackEditor(
+                    baseURL: url,
+                    afterDone: {
+                        self.presentEditor(existing,
+                                           prefilledURL: nil,
+                                           resume: (name: name, url: url, note: note))
+                    })
+            }
         })
 
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
@@ -792,15 +808,18 @@ final class SettingsViewController: UIViewController {
     }
 
     /// 打开备用线路列表编辑器（添加/删除/排序），编辑结果写回 draftFallbacks。
-    private func presentFallbackEditor(baseURL: String?) {
+    private func presentFallbackEditor(baseURL: String?, afterDone: (() -> Void)? = nil) {
         let editor = FallbackListEditorViewController(
             items: draftFallbacks,
             mainURLHint: baseURL,
             onDone: { [weak self] items in
                 self?.draftFallbacks = items
+                afterDone?()
             })
         let nav = UINavigationController(rootViewController: editor)
-        nav.modalPresentationStyle = .pageSheet
+        // v2.2.7：fullScreen 而非 pageSheet —— 交互式下滑会走 presentationControllerDidDismiss，
+        //    写回已完成，但 modal 撤销路径更稳；全屏也没有「下滑一半松开怪状态」。
+        nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
     }
 
@@ -1136,13 +1155,18 @@ final class FallbackListEditorViewController: UIViewController {
     }
 
     @objc private func doneTapped() {
-        // 回写统一走 onDone；返回前把已改的条目规范一遍（去重/补 http/剔除空）。
-        onDone(normalized())
-        dismiss(animated: true)
+        // 回写统一走 onDone；先 dismiss 完成再回写（避免写回里恢复主弹窗时仍处于 dismiss 中间态）。
+        dismiss(animated: true) { [weak self] in
+            self?.onDone(self?.normalized() ?? [])
+        }
     }
 
     @objc private func cancelTapped() {
-        dismiss(animated: true)
+        // v2.2.7：取消也回写并返回主编辑弹窗 —— 用户从主弹窗进来编辑备用线路，
+        //    列表页退出时必须回到主弹窗才能继续「保存」整个服务，否则编辑页一去不回。
+        dismiss(animated: true) { [weak self] in
+            self?.onDone(self?.normalized() ?? [])
+        }
     }
 
     /// 统一整理：补 http://，剔除空串/重复/与主地址相同的项；空名称自动补 备用N。
@@ -1771,69 +1795,70 @@ final class ConnectionGuideViewController: UIViewController {
         //   ① 一条一行、序号从 1 严格递增不重复；② 每行 ≤ 40 字；③ 只写结果不写过程；
         //   ④ 闸门 [文案·R46] 机械校验：序号断链 / 超长 / 缺左对齐 = 红条禁打包。
         let logContent = """
-1. 备用线路可加可删可排序，名字能改 (2.2.6)
-2. 会话框键盘偶尔弹不出或被收起，修了 (2.2.5)
-3. 贴着右缘上下滑，鲸鱼就能唤出调高 (2.2.4)
-4. 修复了安装后打开就闪退的问题 (2.2.3)
-5. 键盘必弹根修：排队后点会话框也弹得出 (2.2.2)
-6. 移除键盘上方辅助条，正文多出约一行 (2.2.2)
-7. 下载改全球 CDN 优先，外网下载明显提速 (2.2.1)
-8. 线路慢或卡住自动换下一条，不用手动 (2.2.1)
-9. 装包前自动校验指纹，坏包绝不安装 (2.2.1)
-10. 服务配置一键分享给别的手机，免重复配 (2.1.21)
-11. 备用线路不限条数，逗号顿号分号都认 (2.1.21)
-12. 服务连不上自动换备用线路，不用手动切 (2.1.20)
-13. 服务编辑里可填最多 4 条备用线路 (2.1.20)
-14. 服务列表内置 ZCode 手机页入口 (2.1.19)
-15. 教程页新增 ZCode 连接第 4 步 (2.1.19)
-16. 插件面板关掉再打开不再空白 (2.1.17)
-17. 同时开好几个面板，也不会关错了 (2.1.17)
-18. 插件弹窗不再顶满屏，关得掉了 (2.1.16)
-19. 弹窗卡片头部不再挡住关闭键 (2.1.15)
-20. 所有弹层都自带一个关闭键 (2.1.14)
-21. 顶栏弹层不再跑出屏幕外面 (2.1.13)
-22. 小鲸鱼短滑换高度，跟手了 (2.1.12)
-23. 小鲸鱼不再半截挂在边上 (2.1.12)
-24. 点发送时键盘不再闪一下又缩回 (2.1.11)
-25. 抽屉顶栏不再自己上下乱跳 (2.1.11)
-26. 小鲸鱼任意高度都能拉出来 (2.1.10)
-27. 键盘收着点发送，不再弹键盘 (2.1.10)
-28. 小鲸鱼手势回到顺手的那一版 (2.1.9)
-29. 开抽屉时顶栏轻微下移，修掉了 (2.1.9)
-30. 键盘收着点发送，这次稳了 (2.1.9)
-31. 开抽屉顶栏偶尔跳一下，没了 (2.1.8)
-32. 收起键盘再点发送，不弹键盘 (2.1.8)
-33. 小鲸鱼能拖到屏幕任何角落 (2.1.8)
-34. 右侧抽屉不再把整页挤出屏幕 (2.1.7)
-35. 语音输入不再重复、也不再错序 (2.1.7)
-36. 返回键从会话框里挪到卡片下面 (2.1.7)
-37. 右缘长滑开抽屉，短滑叫出鲸鱼 (2.1.6)
-38. 表格滑块不再被边缘手势抢走 (2.1.6)
-39. 记住上次地址，别再去连旧的 (2.1.6)
-40. 本地连接与网页跳转加了安全校验 (2.1.6)
-41. 左缘滑动不再带着整页上下跑 (2.1.5)
-42. 白屏重试改成一键清脏缓存 (2.1.5)
-43. 拍照识字的结果精准填回输入框 (2.1.4)
-44. 多端同步时归档会话不再错乱 (2.1.4)
-45. 新会话标题直接取你第一句话 (2.1.3)
-46. 左侧目录不再抖，也不再闪 (2.1.3)
-47. 右侧抽屉打开时右上三键不闪了 (2.1.3)
-48. 版本号显示和重复更新提示修好 (2.1.2)
-49. 切会话不再自动弹键盘挡屏 (2.1.1)
-50. 点重命名时目录不再压住输入框 (2.1.1)
-51. 发送键不再随模型名变短而左缩 (2.1)
-52. 拍照识字，文字自动填回输入框 (2.0)
-53. 后台保活防断连，完成给横幅 (2.0)
-54. 灵动岛小鲸鱼和锁屏实时活动 (2.0)
-55. 抽屉状态栏加高，避开灵动岛 (143)
-56. 开关抽屉回会话页，按钮不出屏 (142)
-57. 开始页顶栏被挡、假按钮排修掉 (140-141)
-58. 冷启动从 5.7MB 降到 0.2MB (139)
-59. 开始页顶栏出屏，这次摁死了 (138)
-60. 工作区按钮位置与多端同步一起修 (137)
-61. 会话框加号弹层不再闪退 (136)
-62. 抽屉按钮出屏，补了值守卫 (135-136)
-63. 左右滑手势收窄，不再误关误返 (135)
+1. 修好备用线路保存后丢失，能长久记住 (2.2.7)
+2. 备用线路可加可删可排序，名字能改 (2.2.6)
+3. 会话框键盘偶尔弹不出或被收起，修了 (2.2.5)
+4. 贴着右缘上下滑，鲸鱼就能唤出调高 (2.2.4)
+5. 修复了安装后打开就闪退的问题 (2.2.3)
+6. 键盘必弹根修：排队后点会话框也弹得出 (2.2.2)
+7. 移除键盘上方辅助条，正文多出约一行 (2.2.2)
+8. 下载改全球 CDN 优先，外网下载明显提速 (2.2.1)
+9. 线路慢或卡住自动换下一条，不用手动 (2.2.1)
+10. 装包前自动校验指纹，坏包绝不安装 (2.2.1)
+11. 服务配置一键分享给别的手机，免重复配 (2.1.21)
+12. 备用线路不限条数，逗号顿号分号都认 (2.1.21)
+13. 服务连不上自动换备用线路，不用手动切 (2.1.20)
+14. 服务编辑里可填最多 4 条备用线路 (2.1.20)
+15. 服务列表内置 ZCode 手机页入口 (2.1.19)
+16. 教程页新增 ZCode 连接第 4 步 (2.1.19)
+17. 插件面板关掉再打开不再空白 (2.1.17)
+18. 同时开好几个面板，也不会关错了 (2.1.17)
+19. 插件弹窗不再顶满屏，关得掉了 (2.1.16)
+20. 弹窗卡片头部不再挡住关闭键 (2.1.15)
+21. 所有弹层都自带一个关闭键 (2.1.14)
+22. 顶栏弹层不再跑出屏幕外面 (2.1.13)
+23. 小鲸鱼短滑换高度，跟手了 (2.1.12)
+24. 小鲸鱼不再半截挂在边上 (2.1.12)
+25. 点发送时键盘不再闪一下又缩回 (2.1.11)
+26. 抽屉顶栏不再自己上下乱跳 (2.1.11)
+27. 小鲸鱼任意高度都能拉出来 (2.1.10)
+28. 键盘收着点发送，不再弹键盘 (2.1.10)
+29. 小鲸鱼手势回到顺手的那一版 (2.1.9)
+30. 开抽屉时顶栏轻微下移，修掉了 (2.1.9)
+31. 键盘收着点发送，这次稳了 (2.1.9)
+32. 开抽屉顶栏偶尔跳一下，没了 (2.1.8)
+33. 收起键盘再点发送，不弹键盘 (2.1.8)
+34. 小鲸鱼能拖到屏幕任何角落 (2.1.8)
+35. 右侧抽屉不再把整页挤出屏幕 (2.1.7)
+36. 语音输入不再重复、也不再错序 (2.1.7)
+37. 返回键从会话框里挪到卡片下面 (2.1.7)
+38. 右缘长滑开抽屉，短滑叫出鲸鱼 (2.1.6)
+39. 表格滑块不再被边缘手势抢走 (2.1.6)
+40. 记住上次地址，别再去连旧的 (2.1.6)
+41. 本地连接与网页跳转加了安全校验 (2.1.6)
+42. 左缘滑动不再带着整页上下跑 (2.1.5)
+43. 白屏重试改成一键清脏缓存 (2.1.5)
+44. 拍照识字的结果精准填回输入框 (2.1.4)
+45. 多端同步时归档会话不再错乱 (2.1.4)
+46. 新会话标题直接取你第一句话 (2.1.3)
+47. 左侧目录不再抖，也不再闪 (2.1.3)
+48. 右侧抽屉打开时右上三键不闪了 (2.1.3)
+49. 版本号显示和重复更新提示修好 (2.1.2)
+50. 切会话不再自动弹键盘挡屏 (2.1.1)
+51. 点重命名时目录不再压住输入框 (2.1.1)
+52. 发送键不再随模型名变短而左缩 (2.1)
+53. 拍照识字，文字自动填回输入框 (2.0)
+54. 后台保活防断连，完成给横幅 (2.0)
+55. 灵动岛小鲸鱼和锁屏实时活动 (2.0)
+56. 抽屉状态栏加高，避开灵动岛 (143)
+57. 开关抽屉回会话页，按钮不出屏 (142)
+58. 开始页顶栏被挡、假按钮排修掉 (140-141)
+59. 冷启动从 5.7MB 降到 0.2MB (139)
+60. 开始页顶栏出屏，这次摁死了 (138)
+61. 工作区按钮位置与多端同步一起修 (137)
+62. 会话框加号弹层不再闪退 (136)
+63. 抽屉按钮出屏，补了值守卫 (135-136)
+64. 左右滑手势收窄，不再误关误返 (135)
 """
 
         let contentLabel = UILabel()
