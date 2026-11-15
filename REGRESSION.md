@@ -841,6 +841,18 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - **兼容**：旧 `[String]` 数据自动升级为带名条目；新 App 导出的 `[FallbackItem]` 发给旧 App 时旧 App 静默丢弃 fallbacks（不崩）——按需提示更新双方版本。C 条目见 IOS_COMPATIBILITY.md C14。
 - **教训**：①「逗号分隔」是用户近似描述，真需求是结构化列表（名称 + 有序 + 增删改排），别顺着字面去优化分隔符解析；② 模型字段类型升级必须做双分支容错解码，先保读旧数据不崩，再谈迁移。
 
+### R78 备用线路保存后丢失：主弹窗未关就 present 列表编辑器被隐式关闭（v2.2.7 根治）
+
+- **症状**（老总 2026-11-15）：「坑货，添加了备用2，备用3，保存了，再次打开就丢失了，无法保存啊」——编辑服务里把备用线路加进列表、点保存、重开服务编辑，备用线路全部消失，等于没保存。
+- **真因**：iOS `UIAlertController` 的 action 处理器里直接 `present` 另一个 VC，UIKit 会**先隐式 dismiss 当前 alert**。R77 落地时「备用线路」按钮正是在**主编辑 alert 的 action handler 里**直接 present 列表编辑器 → 主 alert（含名字/URL/备注输入框与「保存」按钮）被系统悄悄关掉 → 用户看到的只是列表编辑器，编辑完点「完成」回写的是 `draftFallbacks`，但主编辑弹窗**已不在屏幕上、「保存」永不可达** → `draftFallbacks` 从未交给 `ServiceStore.update/add` 持久化 → 重开自然全部丢失。
+- **解法（v2.2.7，App 层三处配合）**：
+  1. 「备用线路」handler 先 `dismiss` 主 alert，`afterDone:` 里再 `presentEditor(resume:)` 把名字/URL/备注原样带回 → 保存按钮重新可达 → `normalizedFallbacks(from: draftFallbacks, mainURL:)` → `ServiceStore` 落盘。
+  2. 列表编辑器改 `.fullScreen`（原来 `.pageSheet` 可被交互下刷拖走而无确认），完成/取消两个按钮统一 `dismiss(animated:)` 完成回调里再 `onDone` 回写，杜绝「取消却静默丢弃」。
+  3. 回写顺序固定：`onDone` 先 `draftFallbacks = items`，再 `afterDone()` 恢复主弹窗；`resume != nil` 时 `draftFallbacks` 不重置。
+- **回归防御**：闸门/文案 1..64（v2.2.7 首条「修好备用线路保存后丢失，能长久记住」）；`presentFallbackEditor` 全仓唯一调用点 L763。
+- **兼容**：本次只改编辑展示层与关闭/回写时序，`[FallbackItem]` 持久化结构不变，旧数据照常读。
+- **教训**：① 「present 里有 present」在 UIKit 会被系统隐式接管，凡「弹窗 A 内打开弹窗 B 再回来操作 A」必须走 先关 A → 开 B → 关 B 后恢复 A 的时序，不能叠放；② 交互可下刷关掉的 `.pageSheet` 会让「取消语义」失真，需要用户确认的编辑态应换 `.fullScreen` + 显式 dismiss 回写。
+
 ### R75 鲸鱼必须按住图标才能拖，右缘竖滑唤不出（2026-11-12，v2.2.4(159)）
 
 - **症状**：老总报告「鲸鱼位置是半固定了。不能在右侧屏幕任何滑动就出来，还得选中图标滑动上下才行」。
@@ -1099,7 +1111,8 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.2.3 | 158 | GitHub CI `42939190659`（成功） | **R74 安装即闪退根治（真因=KVC `keyboardDisplayRequiresUserAction` 在部分 iOS 上无此键 → NSUnknownKeyException 启动即崩；解法=`responds(to: setter)` 守卫，无 setter 跳过）** + 版本文案 1..60 |
 | 2.2.4 | 159 | GitHub CI `43073788190`（成功） | **R75 鲸鱼右缘竖滑唤出（UIScreenEdgePan 只认贴边横向起手 → 补 24pt 右缘条带竖向 pan：上下滑即唤出并全程跟手调高；横向短滑鲸鱼、长滑抽屉两档不变）** + 版本文案 1..61 |
 | 2.2.5 | 160 | GitHub CI `43463898744`（成功，2026-11-14 已发） | **R76 会话框键盘间歇性弹不出/弹出被收三层根治（R54/R59 抑制窗用户手势盲区→pointerdown 命中输入框立即 disarm + activeBlur 补 suppressUntil 前置检查；R73 inputAccessoryView nil→零高空 UIView 保 iOS15/16 键盘事务完整；R40 长后台 1.5s 强刷聚焦态让路 ≤8s）** + 版本文案 1..62 |
-| 2.2.6 | 161 | （待出包） | **R77 备用线路列表编辑器：逗号分隔文本框 → 添加/删除/排序 + 备用1-6自定义名称 + 不限条数（数据模型 `[String]→[FallbackItem]` 双分支容错解码，兜底引擎改读 `.url`）** + 版本文案 1..63 |
+| 2.2.6 | 161 | GitHub CI `43715960629`（成功，2026-11-15 已发） | **R77 备用线路列表编辑器：逗号分隔文本框 → 添加/删除/排序 + 备用1-6自定义名称 + 不限条数（数据模型 `[String]→[FallbackItem]` 双分支容错解码，兜底引擎改读 `.url`）** + 版本文案 1..63 |
+| 2.2.7 | 162 | GitHub CI `43729988314`（成功，2026-11-15 已发） | **R78 备用线路保存后丢失根治：禁用当前库存存储在弹窗关闭/重开间丢失（真因=主 `UIAlertController` 未关即 present 列表编辑器被 UIKit 隐式关闭 → SVC 将从零起步 → `draftFallbacks` 从未到达 `ServiceStore`）**；解法=先关主弹窗→全屏列表编辑器→完成/取消统一 先 dismiss 再 onDone 回写 → resume 恢复主弹窗续存 + 版本文案 1..64 |
 
 
 ## 七、闸门自身踩过的坑（复用必读）
