@@ -3,6 +3,19 @@ import Network
 
 // MARK: - 服务条目与存储
 
+/// 备用线路条目：主线路连续 3 次连接失败后按顺序自动兜底切换（v2.1.20）。
+/// 🔴 v2.1.22：从「纯字符串数组」升级为「带名称条目」——用户在列表里点 添加/删除/排序，
+///    名称默认 备用1/备用2…可自行改名（不再靠逗号/顿号/分号手写分隔）。
+struct FallbackItem: Codable, Equatable {
+    var name: String
+    var url: String
+
+    init(name: String, url: String) {
+        self.name = name
+        self.url = url
+    }
+}
+
 struct ServiceItem: Codable, Equatable {
     var name: String
     var url: String
@@ -10,15 +23,15 @@ struct ServiceItem: Codable, Equatable {
     var note: String?
     /// 外网入口专用：电脑端 token 每次重启都会变，先在局域网内向仪表盘换最新地址。
     var resolverURL: String?
-    /// 备用线路（可选，不限条数）：主线路连续 3 次连接失败后按顺序自动兜底切换（v2.1.20）。
-    /// 外网/局域网不用手动切换 —— 例如主线路填 192.168.x.x:3090/rc，备用填 Tailscale 域名同名径。
-    var fallbacks: [String]?
+    /// 备用线路（可选，不限条数）：主线路连续 3 次连接失败后按顺序自动兜底切换。
+    /// 每条带名称（默认 备用1/备用2…，可自定义）；外网/局域网不用手动切换。
+    var fallbacks: [FallbackItem]?
 
     enum CodingKeys: String, CodingKey {
         case name, url, note, resolverURL, fallbacks
     }
 
-    init(name: String, url: String, note: String? = nil, resolverURL: String? = nil, fallbacks: [String]? = nil) {
+    init(name: String, url: String, note: String? = nil, resolverURL: String? = nil, fallbacks: [FallbackItem]? = nil) {
         self.name = name
         self.url = url
         self.note = note
@@ -33,7 +46,15 @@ struct ServiceItem: Codable, Equatable {
         self.url = (try? container.decode(String.self, forKey: .url)) ?? ""
         self.note = try? container.decodeIfPresent(String.self, forKey: .note)
         self.resolverURL = try? container.decodeIfPresent(String.self, forKey: .resolverURL)
-        self.fallbacks = try? container.decodeIfPresent([String].self, forKey: .fallbacks)
+        // 🔴 v2.1.22 备用线路格式升级：优先解码「带名称条目数组」；
+        //   兼容旧版纯字符串数组，自动命名 备用1/备用2…（按原顺序），绝不因字段格式变化覆盖用户已有配置。
+        if let objs = try? container.decodeIfPresent([FallbackItem].self, forKey: .fallbacks) {
+            self.fallbacks = objs
+        } else if let strs = try? container.decodeIfPresent([String].self, forKey: .fallbacks) {
+            self.fallbacks = strs.enumerated().map { FallbackItem(name: "备用\($0.offset + 1)", url: $0.element) }
+        } else {
+            self.fallbacks = nil
+        }
     }
 }
 
@@ -351,6 +372,9 @@ final class SettingsViewController: UIViewController {
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     /// 原生在线状态探测：不依赖 web 会话，打开列表即用 TCP 探活，绿点=端口通。
     private var online: [String: Bool] = [:]
+    /// 🔴 v2.1.22 编辑器草稿：当前正在编辑的服务其备用线路列表（跨主 Alert ⇄ 列表编辑器存活，
+    ///   从列表编辑器返回主 Alert 再点保存时取这里的值，主 Alert 关掉重开也不丢已输入）。
+    private var draftFallbacks: [FallbackItem] = []
 
     init(currentURL: String = "", onSave: @escaping (String) -> Void, onSelect: @escaping (String) -> Void) {
         self.currentURL = currentURL
@@ -702,6 +726,11 @@ final class SettingsViewController: UIViewController {
             return host == "127.0.0.1" || host == "localhost" ? "本机服务" : host
         }()
 
+        // 🔴 v2.1.22：备用线路从「逗号分隔文本框」升级为「独立列表编辑」。
+        //   用户在列表里逐条添加/删除/排序，每条带名称（默认 备用1/备用2…，可自定义），
+        //   不再靠逗号/顿号/分号手写分隔。这里用一个可编辑草稿，主 Alert 关掉重开也不丢已输入内容。
+        draftFallbacks = existing?.item.fallbacks ?? []
+
         alert.addTextField { tf in
             tf.placeholder = "名称（如：我的电脑）"
             tf.text = existing?.item.name ?? suggestedName
@@ -719,14 +748,11 @@ final class SettingsViewController: UIViewController {
             tf.text = existing?.item.note
             tf.autocorrectionType = .no
         }
-        // v2.1.21 备用线路：逗号/顿号/分号分隔，不限条数；主线路连不上时自动按顺序兜底
-        alert.addTextField { tf in
-            tf.placeholder = "备用线路（可选，逗号/顿号/分号分隔，不限条数）"
-            tf.text = existing?.item.fallbacks?.joined(separator: ", ")
-            tf.autocorrectionType = .no
-            tf.autocapitalizationType = .none
-            tf.keyboardType = .URL
-        }
+
+        // 备用线路管理入口：弹出独立列表编辑器（添加/删除/排序）。
+        alert.addAction(UIAlertAction(title: fallbackSummaryTitle, style: .default) { [weak self] _ in
+            self?.presentFallbackEditor(baseURL: alert.textFields?[1].text)
+        })
 
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self] _ in
@@ -739,17 +765,8 @@ final class SettingsViewController: UIViewController {
                 url = "http://" + url
             }
             let note = alert.textFields?[2].text?.trimmingCharacters(in: .whitespaces)
-            // v2.1.21：备用线路不限条数；分隔符自由度高——英文/中文逗号、顿号、英文/中文分号、换行全认
-            var fallbacks: [String] = []
-            let separators = CharacterSet(charactersIn: ",，、;；\n\r")
-            for raw in (alert.textFields?[3].text ?? "").components(separatedBy: separators) {
-                var f = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !f.isEmpty else { continue }
-                if !f.lowercased().hasPrefix("http://"), !f.lowercased().hasPrefix("https://") {
-                    f = "http://" + f
-                }
-                if !fallbacks.contains(f), f != url { fallbacks.append(f) }
-            }
+            // 保存时用用户在主地址里填的最新 url 兜底判重/补满（避免切换到列表编辑器后主地址改了不同步）。
+            var fallbacks = self.normalizedFallbacks(from: self.draftFallbacks, mainURL: url)
             // 编辑已有条目时保留其换票地址（外网入口专用，用户改地址不改换票逻辑）。
             let item = ServiceItem(name: name, url: url,
                                    note: (note?.isEmpty ?? true) ? nil : note,
@@ -766,6 +783,47 @@ final class SettingsViewController: UIViewController {
             self.updateEmptyState()
         })
         present(alert, animated: true)
+    }
+
+    /// 备用线路管理弹窗标题：简要告知当前条数（0 条时提示「还没配备用线路」）。
+    private var fallbackSummaryTitle: String {
+        let n = draftFallbacks.count
+        return n == 0 ? "🔁 备用线路（未设置）" : "🔁 备用线路（已设 \(n) 条）"
+    }
+
+    /// 打开备用线路列表编辑器（添加/删除/排序），编辑结果写回 draftFallbacks。
+    private func presentFallbackEditor(baseURL: String?) {
+        let editor = FallbackListEditorViewController(
+            items: draftFallbacks,
+            mainURLHint: baseURL,
+            onDone: { [weak self] items in
+                self?.draftFallbacks = items
+            })
+        let nav = UINavigationController(rootViewController: editor)
+        nav.modalPresentationStyle = .pageSheet
+        present(nav, animated: true)
+    }
+
+    /// 备用线路规范化为带名称条目：补 http://、剔除空串/重复/与主地址相同的项。
+    /// 空名称的自动命名为「备用N」。返回整理后的列表（nil→[]）。
+    private func normalizedFallbacks(from raw: [FallbackItem], mainURL: String) -> [FallbackItem] {
+        var out: [FallbackItem] = []
+        var seen = Set<String>()
+        let normMain = mainURL.trimmingCharacters(in: .whitespaces)
+        for fb in raw {
+            var u = fb.url.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !u.isEmpty else { continue }
+            if !u.lowercased().hasPrefix("http://"), !u.lowercased().hasPrefix("https://") {
+                u = "http://" + u
+            }
+            let cmp = u.lowercased()
+            if seen.contains(cmp) || cmp == normMain.lowercased() { continue }
+            seen.insert(cmp)
+            var nm = fb.name.trimmingCharacters(in: .whitespaces)
+            if nm.isEmpty { nm = "备用\(out.count + 1)" }
+            out.append(FallbackItem(name: nm, url: u))
+        }
+        return out
     }
 }
 
@@ -966,6 +1024,310 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         }
         edit.backgroundColor = .systemBlue
         return UISwipeActionsConfiguration(actions: [delete, edit])
+    }
+}
+
+// MARK: - 备用线路列表编辑器（v2.1.22）
+
+/// 🔴 v2.1.22 备用线路管理页：主线路连不上时按顺序自动兜底切换。
+/// 老总指定：「应该有添加删除排序按钮，备用1-2-3-456自定义，而不是靠逗号分隔。」
+/// 本页是一个独立列表 —— 逐条添加 / 删除 / 排序（上移下移最前末尾），
+/// 每条名称默认 备用1/备用2/…，可点条目自行改名；改完点「完成」回写调用方。
+final class FallbackListEditorViewController: UIViewController {
+
+    private var items: [FallbackItem]
+    private let mainURLHint: String?
+    private let onDone: ([FallbackItem]) -> Void
+    private let tableView = UITableView(frame: .zero, style: .insetGrouped)
+
+    init(items: [FallbackItem], mainURLHint: String?, onDone: @escaping ([FallbackItem]) -> Void) {
+        self.items = items
+        self.mainURLHint = mainURLHint
+        self.onDone = onDone
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "备用线路"
+        view.backgroundColor = .systemBackground
+
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            title: "取消", style: .plain, target: self, action: #selector(cancelTapped))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .done, target: self, action: #selector(doneTapped))
+        navigationItem.rightBarButtonItem?.isEnabled = false // 未改任何东西时置灰，无脑点「完成」不产生脏保存
+
+        // 顶部提示
+        let tip = UILabel()
+        tip.text = mainURLHint.map { "主线路：\($0)\n主线路连不上时，自动按下面顺序逐条切换。" }
+                        ?? "主线路连不上时，自动按下面顺序逐条切换。"
+        tip.font = .preferredFont(forTextStyle: .footnote)
+        tip.textColor = .secondaryLabel
+        tip.numberOfLines = 0
+        tip.translatesAutoresizingMaskIntoConstraints = false
+
+        // 底部添加按钮（老总指定：必须有添加）
+        let addButton = UIButton(type: .system)
+        addButton.setTitle("＋ 添加备用线路", for: .normal)
+        addButton.setImage(UIImage(systemName: "plus.circle"), for: .normal)
+        addButton.tintColor = .systemBlue
+        addButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+        addButton.translatesAutoresizingMaskIntoConstraints = false
+        addButton.addTarget(self, action: #selector(addTapped), for: .touchUpInside)
+
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "fb")
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        // 长按行弹排序菜单（与右下 ☰ 按钮双入口）
+        let lp = UILongPressGestureRecognizer(target: self, action: #selector(rowLongPressed(_:)))
+        lp.minimumPressDuration = 0.45
+        tableView.addGestureRecognizer(lp)
+
+        view.addSubview(tip)
+        view.addSubview(tableView)
+        view.addSubview(addButton)
+        NSLayoutConstraint.activate([
+            tip.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            tip.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            tip.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+
+            tableView.topAnchor.constraint(equalTo: tip.bottomAnchor, constant: 8),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: addButton.topAnchor, constant: -8),
+
+            addButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            addButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            addButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+            addButton.heightAnchor.constraint(equalToConstant: 48)
+        ])
+
+        updateEmptyState()
+    }
+
+    private func updateEmptyState() {
+        navigationItem.rightBarButtonItem?.isEnabled = true
+        if items.isEmpty {
+            let label = UILabel()
+            label.text = "还没有备用线路\n点下方「＋ 添加备用线路」开始\n（可添加多条，自动按顺序兜底）"
+            label.numberOfLines = 0
+            label.textAlignment = .center
+            label.font = .preferredFont(forTextStyle: .subheadline)
+            label.textColor = .secondaryLabel
+            tableView.backgroundView = label
+        } else {
+            tableView.backgroundView = nil
+        }
+        tableView.reloadData()
+    }
+
+    // MARK: - 动作
+
+    @objc private func addTapped() {
+        // 名称默认 备用N（N=当前条数+1），用户可在编辑里自己改。
+        let next = items.count + 1
+        presentItemEditor(nil, defaultName: "备用\(next)")
+    }
+
+    @objc private func doneTapped() {
+        // 回写统一走 onDone；返回前把已改的条目规范一遍（去重/补 http/剔除空）。
+        onDone(normalized())
+        dismiss(animated: true)
+    }
+
+    @objc private func cancelTapped() {
+        dismiss(animated: true)
+    }
+
+    /// 统一整理：补 http://，剔除空串/重复/与主地址相同的项；空名称自动补 备用N。
+    private func normalized() -> [FallbackItem] {
+        var out: [FallbackItem] = []
+        var seen = Set<String>()
+        let main = (mainURLHint ?? "").trimmingCharacters(in: .whitespaces)
+        for fb in items {
+            var u = fb.url.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !u.isEmpty else { continue }
+            if !u.lowercased().hasPrefix("http://"), !u.lowercased().hasPrefix("https://") {
+                u = "http://" + u
+            }
+            let cmp = u.lowercased()
+            if seen.contains(cmp) || cmp == main.lowercased() { continue }
+            seen.insert(cmp)
+            let nm = fb.name.trimmingCharacters(in: .whitespaces).isEmpty ? "备用\(out.count + 1)" : fb.name.trimmingCharacters(in: .whitespaces)
+            out.append(FallbackItem(name: nm, url: u))
+        }
+        return out
+    }
+
+    /// 点某条 → 编辑名称/地址。
+    private func presentItemEditor(_ index: Int?, defaultName: String = "") {
+        let isNew = (index == nil)
+        let title = isNew ? "添加备用线路" : "编辑备用线路"
+        let alert = UIAlertController(title: title, message: "名称与地址", preferredStyle: .alert)
+        alert.addTextField { tf in
+            tf.placeholder = "名称（如：备用1 / 移动宽带）"
+            tf.text = (index.map { self.items[$0].name } ?? defaultName)
+            tf.autocapitalizationType = .none
+        }
+        alert.addTextField { tf in
+            tf.placeholder = "http://192.168.1.100:3083/"
+            tf.text = index.map { self.items[$0].url }
+            tf.autocorrectionType = .no
+            tf.autocapitalizationType = .none
+            tf.keyboardType = .URL
+        }
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "保存", style: .default) { _ in
+            let name = alert.textFields?[0].text?.trimmingCharacters(in: .whitespaces) ?? ""
+            var url = alert.textFields?[1].text?.trimmingCharacters(in: .whitespaces) ?? ""
+            if !url.isEmpty && !url.lowercased().hasPrefix("http://"), !url.lowercased().hasPrefix("https://") {
+                url = "http://" + url
+            }
+            guard !url.isEmpty else { return }
+            let item = FallbackItem(name: name.isEmpty ? "备用\(self.items.isEmpty ? 1 : self.items.count + 1)" : name, url: url)
+            if let index {
+                if self.items.indices.contains(index) { self.items[index] = item }
+            } else {
+                self.items.append(item)
+            }
+            self.updateEmptyState()
+        })
+        present(alert, animated: true)
+    }
+
+    /// 右下 ☰ 排序按钮：上移/下移/移到最前/移到末尾（与长按菜单同源）。
+    @objc private func orderTapped(_ sender: UIButton) {
+        let center = CGPoint(x: sender.bounds.midX, y: sender.bounds.midY)
+        let point = sender.convert(center, to: tableView)
+        guard let indexPath = tableView.indexPathForRow(at: point) else { return }
+        showOrderMenu(forRowAt: indexPath)
+    }
+
+    @objc private func rowLongPressed(_ g: UILongPressGestureRecognizer) {
+        guard g.state == .began else { return }
+        let point = g.location(in: tableView)
+        guard let indexPath = tableView.indexPathForRow(at: point) else { return }
+        showOrderMenu(forRowAt: indexPath)
+    }
+
+    private func showOrderMenu(forRowAt indexPath: IndexPath) {
+        let row = indexPath.row
+        let last = items.count - 1
+        guard items.indices.contains(row) else { return }
+        let sheet = UIAlertController(title: "排序备用线路", message: nil, preferredStyle: .actionSheet)
+        if row > 0 {
+            sheet.addAction(UIAlertAction(title: "⬆️ 上移", style: .default) { [weak self] _ in
+                self?.move(from: row, to: row - 1)
+            })
+        }
+        if row < last {
+            sheet.addAction(UIAlertAction(title: "⬇️ 下移", style: .default) { [weak self] _ in
+                self?.move(from: row, to: row + 1)
+            })
+        }
+        if row > 0 {
+            sheet.addAction(UIAlertAction(title: "⏫ 移到最前", style: .default) { [weak self] _ in
+                self?.move(from: row, to: 0)
+            })
+        }
+        if row < last {
+            sheet.addAction(UIAlertAction(title: "⏬ 移到末尾", style: .default) { [weak self] _ in
+                self?.move(from: row, to: last)
+            })
+        }
+        let edit = UIAlertAction(title: "✏️ 编辑名称/地址", style: .default) { [weak self] _ in
+            self?.presentItemEditor(row)
+        }
+        sheet.addAction(edit)
+        let del = UIAlertAction(title: "🗑 删除此条", style: .destructive) { [weak self] _ in
+            guard let self, self.items.indices.contains(row) else { return }
+            self.items.remove(at: row)
+            self.updateEmptyState()
+        }
+        sheet.addAction(del)
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        if let anchor = tableView.cellForRow(at: indexPath) {
+            sheet.popoverPresentationController?.sourceView = anchor
+            sheet.popoverPresentationController?.sourceRect = anchor.bounds
+        }
+        present(sheet, animated: true)
+    }
+
+    private func move(from: Int, to: Int) {
+        guard items.indices.contains(from), items.indices.contains(to) else { return }
+        let it = items.remove(at: from)
+        items.insert(it, at: to)
+        updateEmptyState()
+    }
+}
+
+extension FallbackListEditorViewController: UITableViewDataSource, UITableViewDelegate {
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        items.count
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "fb", for: indexPath)
+        let fb = items[indexPath.row]
+        var config = cell.defaultContentConfiguration()
+        config.text = fb.name
+        config.textProperties.color = .label
+        config.textProperties.font = .preferredFont(forTextStyle: .body)
+        config.secondaryText = fb.url
+        config.secondaryTextProperties.color = .secondaryLabel
+        config.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
+        config.secondaryTextProperties.numberOfLines = 2
+        cell.contentConfiguration = config
+        // 排序按钮（☰）＋ 编辑按钮
+        let orderButton = UIButton(type: .system)
+        orderButton.setImage(UIImage(systemName: "arrow.up.arrow.down"), for: .normal)
+        orderButton.tintColor = .systemOrange
+        orderButton.addTarget(self, action: #selector(orderTapped(_:)), for: .touchUpInside)
+        let editButton = UIButton(type: .system)
+        editButton.setImage(UIImage(systemName: "square.and.pencil"), for: .normal)
+        editButton.tintColor = .systemBlue
+        editButton.addTarget(self, action: #selector(editButtonTapped(_:)), for: .touchUpInside)
+        let accessory = UIStackView(arrangedSubviews: [orderButton, editButton])
+        accessory.axis = .horizontal
+        accessory.spacing = 12
+        cell.accessoryView = accessory
+        return cell
+    }
+
+    @objc private func editButtonTapped(_ sender: UIButton) {
+        let center = CGPoint(x: sender.bounds.midX, y: sender.bounds.midY)
+        let point = sender.convert(center, to: tableView)
+        guard let indexPath = tableView.indexPathForRow(at: point) else { return }
+        presentItemEditor(indexPath.row)
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        presentItemEditor(indexPath.row)
+    }
+
+    func tableView(_ tableView: UITableView,
+                   trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        let delete = UIContextualAction(style: .destructive, title: "删除") { [weak self] _, _, done in
+            guard let self, self.items.indices.contains(indexPath.row) else { done(false); return }
+            self.items.remove(at: indexPath.row)
+            self.updateEmptyState()
+            done(true)
+        }
+        let moveToFront = UIContextualAction(style: .normal, title: "置顶") { [weak self] _, _, done in
+            guard let self, self.items.indices.contains(indexPath.row) else { done(false); return }
+            self.move(from: indexPath.row, to: 0)
+            done(true)
+        }
+        moveToFront.backgroundColor = .systemOrange
+        return UISwipeActionsConfiguration(actions: [delete, moveToFront])
     }
 }
 
@@ -1409,68 +1771,69 @@ final class ConnectionGuideViewController: UIViewController {
         //   ① 一条一行、序号从 1 严格递增不重复；② 每行 ≤ 40 字；③ 只写结果不写过程；
         //   ④ 闸门 [文案·R46] 机械校验：序号断链 / 超长 / 缺左对齐 = 红条禁打包。
         let logContent = """
-1. 会话框键盘偶尔弹不出或被收起，修了 (2.2.5)
-2. 贴着右缘上下滑，鲸鱼就能唤出调高 (2.2.4)
-3. 修复了安装后打开就闪退的问题 (2.2.3)
-4. 键盘必弹根修：排队后点会话框也弹得出 (2.2.2)
-5. 移除键盘上方辅助条，正文多出约一行 (2.2.2)
-6. 下载改全球 CDN 优先，外网下载明显提速 (2.2.1)
-7. 线路慢或卡住自动换下一条，不用手动 (2.2.1)
-8. 装包前自动校验指纹，坏包绝不安装 (2.2.1)
-9. 服务配置一键分享给别的手机，免重复配 (2.1.21)
-10. 备用线路不限条数，逗号顿号分号都认 (2.1.21)
-11. 服务连不上自动换备用线路，不用手动切 (2.1.20)
-12. 服务编辑里可填最多 4 条备用线路 (2.1.20)
-13. 服务列表内置 ZCode 手机页入口 (2.1.19)
-14. 教程页新增 ZCode 连接第 4 步 (2.1.19)
-15. 插件面板关掉再打开不再空白 (2.1.17)
-16. 同时开好几个面板，也不会关错了 (2.1.17)
-17. 插件弹窗不再顶满屏，关得掉了 (2.1.16)
-18. 弹窗卡片头部不再挡住关闭键 (2.1.15)
-19. 所有弹层都自带一个关闭键 (2.1.14)
-20. 顶栏弹层不再跑出屏幕外面 (2.1.13)
-21. 小鲸鱼短滑换高度，跟手了 (2.1.12)
-22. 小鲸鱼不再半截挂在边上 (2.1.12)
-23. 点发送时键盘不再闪一下又缩回 (2.1.11)
-24. 抽屉顶栏不再自己上下乱跳 (2.1.11)
-25. 小鲸鱼任意高度都能拉出来 (2.1.10)
-26. 键盘收着点发送，不再弹键盘 (2.1.10)
-27. 小鲸鱼手势回到顺手的那一版 (2.1.9)
-28. 开抽屉时顶栏轻微下移，修掉了 (2.1.9)
-29. 键盘收着点发送，这次稳了 (2.1.9)
-30. 开抽屉顶栏偶尔跳一下，没了 (2.1.8)
-31. 收起键盘再点发送，不弹键盘 (2.1.8)
-32. 小鲸鱼能拖到屏幕任何角落 (2.1.8)
-33. 右侧抽屉不再把整页挤出屏幕 (2.1.7)
-34. 语音输入不再重复、也不再错序 (2.1.7)
-35. 返回键从会话框里挪到卡片下面 (2.1.7)
-36. 右缘长滑开抽屉，短滑叫出鲸鱼 (2.1.6)
-37. 表格滑块不再被边缘手势抢走 (2.1.6)
-38. 记住上次地址，别再去连旧的 (2.1.6)
-39. 本地连接与网页跳转加了安全校验 (2.1.6)
-40. 左缘滑动不再带着整页上下跑 (2.1.5)
-41. 白屏重试改成一键清脏缓存 (2.1.5)
-42. 拍照识字的结果精准填回输入框 (2.1.4)
-43. 多端同步时归档会话不再错乱 (2.1.4)
-44. 新会话标题直接取你第一句话 (2.1.3)
-45. 左侧目录不再抖，也不再闪 (2.1.3)
-46. 右侧抽屉打开时右上三键不闪了 (2.1.3)
-47. 版本号显示和重复更新提示修好 (2.1.2)
-48. 切会话不再自动弹键盘挡屏 (2.1.1)
-49. 点重命名时目录不再压住输入框 (2.1.1)
-50. 发送键不再随模型名变短而左缩 (2.1)
-51. 拍照识字，文字自动填回输入框 (2.0)
-52. 后台保活防断连，完成给横幅 (2.0)
-53. 灵动岛小鲸鱼和锁屏实时活动 (2.0)
-54. 抽屉状态栏加高，避开灵动岛 (143)
-55. 开关抽屉回会话页，按钮不出屏 (142)
-56. 开始页顶栏被挡、假按钮排修掉 (140-141)
-57. 冷启动从 5.7MB 降到 0.2MB (139)
-58. 开始页顶栏出屏，这次摁死了 (138)
-59. 工作区按钮位置与多端同步一起修 (137)
-60. 会话框加号弹层不再闪退 (136)
-61. 抽屉按钮出屏，补了值守卫 (135-136)
-62. 左右滑手势收窄，不再误关误返 (135)
+1. 备用线路可加可删可排序，名字能改 (2.2.6)
+2. 会话框键盘偶尔弹不出或被收起，修了 (2.2.5)
+3. 贴着右缘上下滑，鲸鱼就能唤出调高 (2.2.4)
+4. 修复了安装后打开就闪退的问题 (2.2.3)
+5. 键盘必弹根修：排队后点会话框也弹得出 (2.2.2)
+6. 移除键盘上方辅助条，正文多出约一行 (2.2.2)
+7. 下载改全球 CDN 优先，外网下载明显提速 (2.2.1)
+8. 线路慢或卡住自动换下一条，不用手动 (2.2.1)
+9. 装包前自动校验指纹，坏包绝不安装 (2.2.1)
+10. 服务配置一键分享给别的手机，免重复配 (2.1.21)
+11. 备用线路不限条数，逗号顿号分号都认 (2.1.21)
+12. 服务连不上自动换备用线路，不用手动切 (2.1.20)
+13. 服务编辑里可填最多 4 条备用线路 (2.1.20)
+14. 服务列表内置 ZCode 手机页入口 (2.1.19)
+15. 教程页新增 ZCode 连接第 4 步 (2.1.19)
+16. 插件面板关掉再打开不再空白 (2.1.17)
+17. 同时开好几个面板，也不会关错了 (2.1.17)
+18. 插件弹窗不再顶满屏，关得掉了 (2.1.16)
+19. 弹窗卡片头部不再挡住关闭键 (2.1.15)
+20. 所有弹层都自带一个关闭键 (2.1.14)
+21. 顶栏弹层不再跑出屏幕外面 (2.1.13)
+22. 小鲸鱼短滑换高度，跟手了 (2.1.12)
+23. 小鲸鱼不再半截挂在边上 (2.1.12)
+24. 点发送时键盘不再闪一下又缩回 (2.1.11)
+25. 抽屉顶栏不再自己上下乱跳 (2.1.11)
+26. 小鲸鱼任意高度都能拉出来 (2.1.10)
+27. 键盘收着点发送，不再弹键盘 (2.1.10)
+28. 小鲸鱼手势回到顺手的那一版 (2.1.9)
+29. 开抽屉时顶栏轻微下移，修掉了 (2.1.9)
+30. 键盘收着点发送，这次稳了 (2.1.9)
+31. 开抽屉顶栏偶尔跳一下，没了 (2.1.8)
+32. 收起键盘再点发送，不弹键盘 (2.1.8)
+33. 小鲸鱼能拖到屏幕任何角落 (2.1.8)
+34. 右侧抽屉不再把整页挤出屏幕 (2.1.7)
+35. 语音输入不再重复、也不再错序 (2.1.7)
+36. 返回键从会话框里挪到卡片下面 (2.1.7)
+37. 右缘长滑开抽屉，短滑叫出鲸鱼 (2.1.6)
+38. 表格滑块不再被边缘手势抢走 (2.1.6)
+39. 记住上次地址，别再去连旧的 (2.1.6)
+40. 本地连接与网页跳转加了安全校验 (2.1.6)
+41. 左缘滑动不再带着整页上下跑 (2.1.5)
+42. 白屏重试改成一键清脏缓存 (2.1.5)
+43. 拍照识字的结果精准填回输入框 (2.1.4)
+44. 多端同步时归档会话不再错乱 (2.1.4)
+45. 新会话标题直接取你第一句话 (2.1.3)
+46. 左侧目录不再抖，也不再闪 (2.1.3)
+47. 右侧抽屉打开时右上三键不闪了 (2.1.3)
+48. 版本号显示和重复更新提示修好 (2.1.2)
+49. 切会话不再自动弹键盘挡屏 (2.1.1)
+50. 点重命名时目录不再压住输入框 (2.1.1)
+51. 发送键不再随模型名变短而左缩 (2.1)
+52. 拍照识字，文字自动填回输入框 (2.0)
+53. 后台保活防断连，完成给横幅 (2.0)
+54. 灵动岛小鲸鱼和锁屏实时活动 (2.0)
+55. 抽屉状态栏加高，避开灵动岛 (143)
+56. 开关抽屉回会话页，按钮不出屏 (142)
+57. 开始页顶栏被挡、假按钮排修掉 (140-141)
+58. 冷启动从 5.7MB 降到 0.2MB (139)
+59. 开始页顶栏出屏，这次摁死了 (138)
+60. 工作区按钮位置与多端同步一起修 (137)
+61. 会话框加号弹层不再闪退 (136)
+62. 抽屉按钮出屏，补了值守卫 (135-136)
+63. 左右滑手势收窄，不再误关误返 (135)
 """
 
         let contentLabel = UILabel()

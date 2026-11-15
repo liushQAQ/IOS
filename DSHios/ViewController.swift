@@ -10719,7 +10719,7 @@ function applySidebarInset() {
         return t
     }
 
-    /// 组装线路链：[主线路, 备1..备4]。按地址匹配服务条目取其 fallbacks；
+    /// 组装线路链：[主线路, 备1..备N]。按地址匹配服务条目取其 fallbacks；
     /// 匹配不上（如手输的临时地址）就只有主线路一条，行为与旧版完全一致。
     private func buildFailoverChain(for urlString: String) -> [String] {
         let main = canonicalURLString(urlString)
@@ -10729,11 +10729,12 @@ function applySidebarInset() {
             let iu = norm(it.url)
             return iu.lowercased() == main.lowercased() || Self.sameEndpoint(iu, main)
         }
-        for f in (item?.fallbacks ?? []).compactMap({ $0.isEmpty ? nil : norm($0) }) {
+        for fb in (item?.fallbacks ?? []) {
+            let f = norm(fb.url)
             if !chain.contains(where: { $0.lowercased() == f.lowercased() }) {
                 chain.append(f)
             }
-        }   // v2.1.21 备用线路不限条数（去重后全量入链）
+        }   // v2.1.21 备用线路不限条数（去重后全量入链）；v2.1.22 每条带名称、按库顺序入链
         return chain
     }
 

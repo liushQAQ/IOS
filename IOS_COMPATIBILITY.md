@@ -106,6 +106,13 @@
 - **兼容铁律**：① 要「无辅助条」外观一律返回**零高空 UIView**（`UIView(frame: .zero)`），严禁返回 nil；② 与 R54 抑制窗、R72 KVC 三层叠加时，任何一层改动都要对齐三层时间窗（R72 教训③）；③ 键盘类改动 = 真机「弹出 / 收起 / 排队流」三项验收。
 - **实现**：R76（v2.2.5(160)）`dshRemoveFormAccessoryBar` 改返回 `UIView(frame: .zero)`；R54 抑制器补用户手势 disarm（R76 条目）。
 
+### C14 🔴 服务备用线路字段类型升级 `[String]→[FallbackItem]`：解码必须双分支容错（R77，2026-11-15）
+- **症状**：备用线路原为手写逗号分隔字符串数组，需升级为「带名称 + 有序 + 增删改排」的列表；旧 App 持久化数据与新 App 互传分享载荷时字段形态不同会崩/丢配置。
+- **真因**：`ServiceItem.fallbacks` 从 `[String]?` 改为 `[FallbackItem]?`，若 `init(from:)` 只认新形态，老数据升级后首次解码即抛类型错误，或整条服务被丢弃。
+- **兼容铁律**：① 模型字段结构升级一律双分支容错解码（先试新形态，再回退旧形态并做映射，最后兜底 nil），任何分支失败都不得让整条服务解码崩溃；② 旧 `[String]` 数据自动转 `[FallbackItem]`（名 `备用N`、序即库序）平滑升级，保证旧用户升级不丢配置；③ 新 App 导出的 `[FallbackItem]` 发给旧 App 时旧 App 必须静默丢弃该字段（`decodeIfPresent` 失败 → nil），绝不崩。
+- **实现**：R77（v2.2.6）`ServiceItem.init(from:)` 三分支（`[FallbackItem]` / `[String]` 映射 / nil）；`buildFailoverChain` 消费 `FallbackItem.url`。
+- **验收**：老数据升级无崩溃且备用线路仍可按序兜底；新旧 App 互导分享载荷均不崩。
+
 ---
 
 ## 三、发版前兼容自检清单（照抄执行）
@@ -123,6 +130,7 @@
 □ 10. 真机（iOS 16.3 基准机）装机验收，截图对拍
 □ 11. 原生私有 KVC/私选（setValue(forKey:)）已 responds(to:) 守卫 + 真机首启验证（C12）→ 保启动不闪退
 □ 12. inputAccessoryView 返回零高空 UIView 而非 nil（C13/R76）+ 抑制窗用户手势 disarm 在位 → 保键盘稳定弹出
+□ 13. 服务模型字段类型升级走双分支容错解码（C14/R77 备用线路 `[String]→[FallbackItem]`）→ 旧数据升级不崩、新旧互导安全
 ```
 
 ---
