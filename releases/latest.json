@@ -1,23 +1,23 @@
 {
-  "version": "2.2.8",
-  "build": 163,
-  "updated_at": "2026-11-16 13:50:00",
-  "title": "v2.2.8(163) 修复点备用线路秒闪弹出去、编辑器打不开",
-  "changelog": "1. 修复点备用线路秒闪弹出去、编辑器打不开的问题 (2.2.8)\n2. 修复了备用线路保存后丢失的问题，新增的能记住 (2.2.7)\n3. 备用线路可加可删可排序，名字能改 (2.2.6)\n4. 备用线路最多 6 条，从备用1到备用6，每条名称可自己改 (2.2.6)\n5. 长按备用线路可调顺序，点×可删除，点+可新增 (2.2.6)\n6. 保留 2.2.5 全部修复：键盘不弹/秒收根治、长后台回前台输入态保留等",
-  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.8/releases/DSHios-public-2.2.8-163.tipa",
-  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.8/releases/DSHios-public-2.2.8-163.tipa",
-  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.8/DSHios-public-2.2.8-163.tipa",
+  "version": "2.2.9",
+  "build": 164,
+  "updated_at": "2026-11-17 02:00:00",
+  "title": "v2.2.9(164) 修复待发消息多时键盘弹不出",
+  "changelog": "1. 待发消息多时键盘弹不出，修好了 (2.2.9)\n2. 修复点备用线路秒闪弹出去、编辑器打不开的问题 (2.2.8)\n3. 修复了备用线路保存后丢失的问题，新增的能记住 (2.2.7)\n4. 备用线路可加可删可排序，名字能改 (2.2.6)\n5. 长按备用线路可调顺序，点×可删除，点+可新增 (2.2.6)\n6. 保留 2.2.5 全部修复：键盘不弹/秒收根治、长后台回前台输入态保留等",
+  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.9/releases/DSHios-public-2.2.9-164.tipa",
+  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.9/releases/DSHios-public-2.2.9-164.tipa",
+  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.9/DSHios-public-2.2.9-164.tipa",
   "tipa_mirrors": [
-    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.8/releases/DSHios-public-2.2.8-163.tipa",
-    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.8/releases/DSHios-public-2.2.8-163.tipa",
-    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.8/releases/DSHios-public-2.2.8-163.tipa",
-    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.8/DSHios-public-2.2.8-163.tipa",
-    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.8/releases/DSHios-public-2.2.8-163.tipa",
-    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.8/DSHios-public-2.2.8-163.tipa",
-    "https://github.com/liushQAQ/IOS/releases/download/v2.2.8/DSHios-public-2.2.8-163.tipa",
-    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.8-163.tipa"
+    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.9/releases/DSHios-public-2.2.9-164.tipa",
+    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.9/releases/DSHios-public-2.2.9-164.tipa",
+    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.9/releases/DSHios-public-2.2.9-164.tipa",
+    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.9/DSHios-public-2.2.9-164.tipa",
+    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.9/releases/DSHios-public-2.2.9-164.tipa",
+    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.9/DSHios-public-2.2.9-164.tipa",
+    "https://github.com/liushQAQ/IOS/releases/download/v2.2.9/DSHios-public-2.2.9-164.tipa",
+    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.9-164.tipa"
   ],
-  "size_bytes": 4943051,
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.8",
-  "md5": "340cf4683251dd59ff99c3a1222e74f6"
+  "size_bytes": 4943802,
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.9",
+  "md5": "c71a9afb1ddb9502844a4d56865407f3"
 }
