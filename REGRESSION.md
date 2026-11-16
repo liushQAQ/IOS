@@ -861,6 +861,14 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - **回归防御**：闸门/文案 1..65（v2.2.8 首条「修好备用线路一点就闪退/打不开，点了就能进配置」）；入口 handler 严禁在 `.default` 里同时写手动 `dismiss` + 立即 `present`。
 - **教训**：`.default`/`.cancel` 按钮点了 UIKit 会**自动 dismiss alert**——在 handler 里再手动 dismiss 是多余且有害的，会和后续 present 抢转场队列。凡「alert 按钮关自己后要立刻开另一个 modal」，一律让系统先收 alert、异步延时再 present。
 
+### R80 待发消息超过 2 条时点会话框键盘弹不出来（v2.2.9 根治）
+
+- **症状**（老总 2026-11-16）：「超过待发消息超过2条还是无法弹出键盘」——连发/排队多条消息后，再点会话框输入，键盘一直弹不出来。
+- **真因**：「超过 2 条」是连发多条的**伴生结果**，不是独立的计数规则。每次发送都会让 composer 整卡重挂载/重排，消息越多重挂载越频繁。用户点会话框那一刻 `pointerdown` 的 `e.target` 常常落在刚重挂载的容器/空白节点上（瞬时不在输入框上）→ R76 的「手势一票否决」实现只认 `isInput(e.target)` 判不命中 → 抑制窗整个 1200ms 窗口不解防 → 随后前端 refocus 输入框被原型桩拦掉 `focus()` → 键盘永不弹。重挂载次数越多、此路径命中率越高，所以只在排队 >2 条时才可见。
+- **解法（v2.2.9，`setupSendBlurGuard` pointerdown 捕获内）**：把 R76 的「用户手势一票否决」命中判定从「只在输入框上」放宽到「命中整张 composer 卡」（含输入框、工具栏、卡片空白，`closest('[class*="composerStack"], [class*="uWtHQG_input"], textarea')` 命中即当场 `suppressUntil = 0; unpatchAll();`）。发送按钮路径（`hitSend`/`arm`）与 `hadFocus` 记账逻辑一行未动。
+- **回归防御**：闸门/文案 1..66（v2.2.9 首条「待发消息多时键盘弹不出，修好了 (2.2.9)」）。
+- **教训**：① 「手势一票否决」的命中判定不能只看 `e.target` 是否是输入框——composer 卡片在回合流式回写时会整卡重挂载，点中的节点瞬时是容器而非输入框；② 判定要给「重新挂载的容器留一层 closest 兜底」，用户点卡片任何部位都算真手势。
+
 ### R75 鲸鱼必须按住图标才能拖，右缘竖滑唤不出（2026-11-12，v2.2.4(159)）
 
 - **症状**：老总报告「鲸鱼位置是半固定了。不能在右侧屏幕任何滑动就出来，还得选中图标滑动上下才行」。
@@ -1121,7 +1129,8 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.2.5 | 160 | GitHub CI `43463898744`（成功，2026-11-14 已发） | **R76 会话框键盘间歇性弹不出/弹出被收三层根治（R54/R59 抑制窗用户手势盲区→pointerdown 命中输入框立即 disarm + activeBlur 补 suppressUntil 前置检查；R73 inputAccessoryView nil→零高空 UIView 保 iOS15/16 键盘事务完整；R40 长后台 1.5s 强刷聚焦态让路 ≤8s）** + 版本文案 1..62 |
 | 2.2.6 | 161 | GitHub CI `43715960629`（成功，2026-11-15 已发） | **R77 备用线路列表编辑器：逗号分隔文本框 → 添加/删除/排序 + 备用1-6自定义名称 + 不限条数（数据模型 `[String]→[FallbackItem]` 双分支容错解码，兜底引擎改读 `.url`）** + 版本文案 1..63 |
 | 2.2.7 | 162 | GitHub CI `43729988314`（成功，2026-11-15 已发） | **R78 备用线路保存后丢失根治：禁用当前库存存储在弹窗关闭/重开间丢失（真因=主 `UIAlertController` 未关即 present 列表编辑器被 UIKit 隐式关闭 → SVC 将从零起步 → `draftFallbacks` 从未到达 `ServiceStore`）**；解法=先关主弹窗→全屏列表编辑器→完成/取消统一 先 dismiss 再 onDone 回写 → resume 恢复主弹窗续存 + 版本文案 1..64 |
-| 2.2.8 | 163 | GitHub CI（待跑） | **R79 备用线路编辑器「秒闪弹出去」根治（真因=R78 的 `.default` handler 里手动 `dismiss` + 立即 `present` 撞同一条转场队列，alert 自动收起动画未走完，present 被 UIKit 取消 → 编辑器一闪而没；解法=不再手动 dismiss，异步 0.45s 等 alert 收起动画结束再 present + `presentedViewController==nil` 守复）** + 版本文案 1..65 |
+| 2.2.8 | 163 | GitHub CI run `43810071271` | **R79 备用线路编辑器「秒闪弹出去」根治（真因=R78 的 `.default` handler 里手动 `dismiss` + 立即 `present` 撞同一条转场队列，alert 自动收起动画未走完，present 被 UIKit 取消 → 编辑器一闪而没；解法=不再手动 dismiss，异步 0.45s 等 alert 收起动画结束再 present + `presentedViewController==nil` 守复）** + 版本文案 1..65 |
+| 2.2.9 | 164 | GitHub CI run `CI_RUN_ID_PENDING` | **R80 待发消息超过 2 条时键盘弹不出根治（真因=连发多条致 composer 整卡反复重挂载，手势一票否决只认 `isInput(e.target)` 判不中 → 抑制窗 1200ms 不解防 → 前端 refocus 被原型桩拦掉；解法=命中判定放宽到命中整张 composer 卡，用户点卡片任何部位当场解防）** + 版本文案 1..66 |
 
 
 ## 七、闸门自身踩过的坑（复用必读）
