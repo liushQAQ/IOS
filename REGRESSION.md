@@ -853,6 +853,14 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - **兼容**：本次只改编辑展示层与关闭/回写时序，`[FallbackItem]` 持久化结构不变，旧数据照常读。
 - **教训**：① 「present 里有 present」在 UIKit 会被系统隐式接管，凡「弹窗 A 内打开弹窗 B 再回来操作 A」必须走 先关 A → 开 B → 关 B 后恢复 A 的时序，不能叠放；② 交互可下刷关掉的 `.pageSheet` 会让「取消语义」失真，需要用户确认的编辑态应换 `.fullScreen` + 显式 dismiss 回写。
 
+### R79 备用线路编辑器「秒闪弹出去」打不开（v2.2.7 遗留，v2.2.8 根治）
+
+- **症状**（老总 2026-11-16）：「切换，选择链接，点击备用线路，根本打不开配置呀。秒闪弹出去」——主编辑弹窗里点「备用线路」，列表编辑器刚出现就瞬间被撤掉，根本进不去。
+- **真因**：R78 把「备用线路」入口放进 `.default` 按钮 handler 后，UIKit 会**自动收起主 alert**（`.default` 被点即触发隐式 dismiss）。handler 里再写 `self.dismiss(animated:true) { presentFallbackEditor }`，两路基元 dismiss 与立即的 `present` 撞在同一条转场队列上——当 present 发起时 alert 的 dismiss 动画尚未走完，UIKit 视其为「转场冲突」直接取消这次 present，编辑器刚弹起就被撤 → 秒闪。
+- **解法（v2.2.8，App 层）**：备用线路入口的 `.default` handler 里**不再手动 dismiss** alert（交给系统的自动收起），改 `DispatchQueue.main.asyncAfter(deadline: .now() + 0.45)` **等到 alert 收起动画（约 0.4s）结束后再 present**，并加 `presentedViewController == nil` 守卫防重复 present；`afterDone:` 恢复主弹窗（`presentEditor(resume:)`）的时序与 `draftFallbacks` 写回逻辑一行未动。
+- **回归防御**：闸门/文案 1..65（v2.2.8 首条「修好备用线路一点就闪退/打不开，点了就能进配置」）；入口 handler 严禁在 `.default` 里同时写手动 `dismiss` + 立即 `present`。
+- **教训**：`.default`/`.cancel` 按钮点了 UIKit 会**自动 dismiss alert**——在 handler 里再手动 dismiss 是多余且有害的，会和后续 present 抢转场队列。凡「alert 按钮关自己后要立刻开另一个 modal」，一律让系统先收 alert、异步延时再 present。
+
 ### R75 鲸鱼必须按住图标才能拖，右缘竖滑唤不出（2026-11-12，v2.2.4(159)）
 
 - **症状**：老总报告「鲸鱼位置是半固定了。不能在右侧屏幕任何滑动就出来，还得选中图标滑动上下才行」。
@@ -1113,6 +1121,7 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.2.5 | 160 | GitHub CI `43463898744`（成功，2026-11-14 已发） | **R76 会话框键盘间歇性弹不出/弹出被收三层根治（R54/R59 抑制窗用户手势盲区→pointerdown 命中输入框立即 disarm + activeBlur 补 suppressUntil 前置检查；R73 inputAccessoryView nil→零高空 UIView 保 iOS15/16 键盘事务完整；R40 长后台 1.5s 强刷聚焦态让路 ≤8s）** + 版本文案 1..62 |
 | 2.2.6 | 161 | GitHub CI `43715960629`（成功，2026-11-15 已发） | **R77 备用线路列表编辑器：逗号分隔文本框 → 添加/删除/排序 + 备用1-6自定义名称 + 不限条数（数据模型 `[String]→[FallbackItem]` 双分支容错解码，兜底引擎改读 `.url`）** + 版本文案 1..63 |
 | 2.2.7 | 162 | GitHub CI `43729988314`（成功，2026-11-15 已发） | **R78 备用线路保存后丢失根治：禁用当前库存存储在弹窗关闭/重开间丢失（真因=主 `UIAlertController` 未关即 present 列表编辑器被 UIKit 隐式关闭 → SVC 将从零起步 → `draftFallbacks` 从未到达 `ServiceStore`）**；解法=先关主弹窗→全屏列表编辑器→完成/取消统一 先 dismiss 再 onDone 回写 → resume 恢复主弹窗续存 + 版本文案 1..64 |
+| 2.2.8 | 163 | GitHub CI（待跑） | **R79 备用线路编辑器「秒闪弹出去」根治（真因=R78 的 `.default` handler 里手动 `dismiss` + 立即 `present` 撞同一条转场队列，alert 自动收起动画未走完，present 被 UIKit 取消 → 编辑器一闪而没；解法=不再手动 dismiss，异步 0.45s 等 alert 收起动画结束再 present + `presentedViewController==nil` 守复）** + 版本文案 1..65 |
 
 
 ## 七、闸门自身踩过的坑（复用必读）
