@@ -1130,7 +1130,7 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.2.6 | 161 | GitHub CI `43715960629`（成功，2026-11-15 已发） | **R77 备用线路列表编辑器：逗号分隔文本框 → 添加/删除/排序 + 备用1-6自定义名称 + 不限条数（数据模型 `[String]→[FallbackItem]` 双分支容错解码，兜底引擎改读 `.url`）** + 版本文案 1..63 |
 | 2.2.7 | 162 | GitHub CI `43729988314`（成功，2026-11-15 已发） | **R78 备用线路保存后丢失根治：禁用当前库存存储在弹窗关闭/重开间丢失（真因=主 `UIAlertController` 未关即 present 列表编辑器被 UIKit 隐式关闭 → SVC 将从零起步 → `draftFallbacks` 从未到达 `ServiceStore`）**；解法=先关主弹窗→全屏列表编辑器→完成/取消统一 先 dismiss 再 onDone 回写 → resume 恢复主弹窗续存 + 版本文案 1..64 |
 | 2.2.8 | 163 | GitHub CI run `43810071271` | **R79 备用线路编辑器「秒闪弹出去」根治（真因=R78 的 `.default` handler 里手动 `dismiss` + 立即 `present` 撞同一条转场队列，alert 自动收起动画未走完，present 被 UIKit 取消 → 编辑器一闪而没；解法=不再手动 dismiss，异步 0.45s 等 alert 收起动画结束再 present + `presentedViewController==nil` 守复）** + 版本文案 1..65 |
-| 2.2.9 | 164 | GitHub CI run `CI_RUN_ID_PENDING` | **R80 待发消息超过 2 条时键盘弹不出根治（真因=连发多条致 composer 整卡反复重挂载，手势一票否决只认 `isInput(e.target)` 判不中 → 抑制窗 1200ms 不解防 → 前端 refocus 被原型桩拦掉；解法=命中判定放宽到命中整张 composer 卡，用户点卡片任何部位当场解防）** + 版本文案 1..66 |
+| 2.2.9 | 164 | GitHub CI `43919398535`（成功，2026-11-17 已发） | **R80 待发消息超过 2 条时键盘弹不出根治（真因=连发多条致 composer 整卡反复重挂载，手势一票否决只认 `isInput(e.target)` 判不中 → 抑制窗 1200ms 不解防 → 前端 refocus 被原型桩拦掉；解法=命中判定放宽到命中整张 composer 卡，用户点卡片任何部位当场解防）** + 版本文案 1..66 |
 
 
 ## 七、闸门自身踩过的坑（复用必读）
