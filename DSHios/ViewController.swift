@@ -3439,7 +3439,17 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   //   v2.1.11 的 focusin 同步 blur 与三连主动 blur 分不清「页面自动重聚焦」和
                   //   「用户点会话框」——R72 排队流（收起态点发送 → 1.2s 内点会话框）全程在窗内
                   //   被误杀：键盘弹不出来 / 弹了秒收。用户手势命中即当场作废整个窗口。
-                  if (Date.now() < suppressUntil && isInput(e.target)) { suppressUntil = 0; unpatchAll(); }
+                  // 🔴 R80（2026-11-16 老总「待发信息超过 2 条还是无法弹出键盘」）：R76 的手势一票否决
+                  //   实现只认 isInput(e.target)——待发消息多、回合流式回写频繁时 composer 整卡会重挂载/重排，
+                  //   用户点会话框那一刻点中的节点瞬时不在输入框上，这条判不命中 → 抑制窗整个 1200ms 窗口
+                  //   不解防 → 随后前端 refocus 输入框被原型桩拦掉 focus() → 键盘永不弹。
+                  //   放宽到命中整张 composer 卡（含输入框、工具栏、卡片空白）：用户点会话框任何部位都当场解防。
+                  if (Date.now() < suppressUntil) {
+                    var dshPT = e.target;
+                    if (dshPT && (isInput(dshPT) || (dshPT.closest && dshPT.closest('[class*="composerStack"], [class*="uWtHQG_input"], textarea')))) {
+                      suppressUntil = 0; unpatchAll();
+                    }
+                  }
                   if (!hitSend(e)) { hadFocus = false; return; }
                   hadFocus = isInput(document.activeElement);
                   // 🔴 v2.1.11：布防提前到 pointerdown（原在 click，晚于官方 pointer 类处理器）
