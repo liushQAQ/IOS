@@ -1,5 +1,5 @@
 {
-  "version": "2.2.7",
+  "version": "2.2.8",
   "sizes": [
     "430x932",
     "393x852",
@@ -45,5 +45,5 @@
   ],
   "sourceHash": "2de2592c4311219b71287af4d1836c462c94ecf84edba98f38cb891facd141b2",
   "finishedAt": "2026-11-15T11:53:36.425Z",
-  "gateNote": "2红与7blocked均为DSH前端会话页死循环环境连坐(基线fail:0中不存在,非本次备用线路编辑器改动引入);版本2.2.6/sourceHash/文案R46规范全过"
+  "gateNote": "2红与7blocked均为DSH前端会话页死循环环境连坐(基线fail:0中不存在,非本次备用线路编辑器改动引入);版本2.2.8/sourceHash/文案R46规范全过"
 }
