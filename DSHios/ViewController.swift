@@ -2258,10 +2258,49 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             //   但旧逻辑只认「点到输入框本体」，按钮触发的自动聚焦全被吞掉 → 那些地方也要手点两下。
             var lastAnyTap = 0;
 
+            // 🔴 R81 加固（v2.2.10 全面排查）：一份「用户还在场」的全局授权窗，本层 focus 放行
+            //   与长后台 reload 避让共用。切回会话点时点的是会话列表项，不在 composer 卡上，
+            //   旧逻辑连「用户刚摸过屏幕」这件事都没记录 → 之后弹层输入框的自动聚焦也一并被吞。
+            var dshForceSeq = 0;
+            function dshForceComposerFocus(seed) {
+              var mySeq = ++dshForceSeq;
+              var tries = [0, 300, 800, 1600];
+              for (var ti = 0; ti < tries.length; ti++) {
+                (function (delay) {
+                  setTimeout(function () {
+                    try {
+                      if (mySeq !== dshForceSeq) return;                     // 有更新的手指动作，本次作废
+                      if (document.visibilityState !== 'visible') return;
+                      var ae = document.activeElement;
+                      if (ae && ae.tagName) {
+                        var t0 = String(ae.tagName).toLowerCase();
+                        if ((t0 === 'textarea' || t0 === 'input' || ae.isContentEditable === true) &&
+                            ae.closest && ae.closest('[class*="composerStack"], [class*="uWtHQG_input"]')) {
+                          return;                                            // 已经聚焦上了，收工
+                        }
+                      }
+                      var host = (seed && seed.isConnected && seed.closest) ? seed : null;
+                      var card = host ? host.closest('[class*="composerStack"], [class*="uWtHQG_input"]') : null;
+                      var root = card || document.querySelector('[class*="composerStack"]') || document.body;
+                      if (!root) return;
+                      var edit = null;
+                      if (root.matches && root.matches('[contenteditable="true"], textarea')) edit = root;
+                      if (!edit) edit = root.querySelector('[class*="uWtHQG_input"][contenteditable="true"], [class*="composerStack"] [contenteditable="true"], [class*="uWtHQG_input"] textarea, [class*="composerStack"] textarea');
+                      if (!edit) return;
+                      if (edit.disabled === true || edit.readOnly === true || (edit.getAttribute && edit.getAttribute('aria-disabled') === 'true')) return;
+                      origFocus.call(edit);
+                    } catch (eFC) {}
+                  }, delay);
+                })(tries[ti]);
+              }
+            }
+
             function handleUserTouch(e) {
               var target = e.target;
               if (!target) return;
               lastAnyTap = Date.now();
+              window.__dshLastTouchAt = Date.now();
+              window.__dshTouchAuthUntil = Date.now() + 5000;
 
               // 如果用户点击的是 + 号按钮、命令弹窗菜单内部、或者模型快捷选择按钮/菜单，严禁唤起虚拟键盘
               if (target.closest('.uWtHQG_add') || target.closest('[class*="_add"]') || target.closest('[data-trigger-menu]') || target.closest('.bqwvaa_menu') || target.closest('.VYXhfG_trigger') || target.closest('.VYXhfG_root')) {
@@ -2288,7 +2327,13 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               if (dshMenu) {
                 try {
                   var dshMR = dshMenu.getBoundingClientRect();
-                  dshMenuOpen = dshMR.width > 0 && dshMR.height > 0 && getComputedStyle(dshMenu).visibility !== 'hidden';
+                  var dshMS = getComputedStyle(dshMenu);
+                  // 🔴 R81 加固：必须「真的看得见、且真的参与布局」。display:none 的残留节点
+                  //   旧写法在部分浏览器里 rect 仍非零 → 判成菜单开着 → 用户点会话框被 disarm，
+                  //   于是「切回会话点会话框键盘弹不出」。getClientRects() 为空即彻底不采信。
+                  dshMenuOpen = dshMR.width > 0 && dshMR.height > 0 &&
+                    dshMS.visibility !== 'hidden' && dshMS.display !== 'none' &&
+                    dshMS.opacity !== '0' && dshMenu.getClientRects().length > 0;
                 } catch (eM) { dshMenuOpen = true; }
               }
               if (dshMenuOpen) {
@@ -2318,19 +2363,12 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 clearTimeout(touchResetTimer);
                 touchResetTimer = setTimeout(function() { allowUserTouchFocus = false; }, 4000);
 
-                // 语音按钮等工具按钮要靠页面自己 focus() 才能把文字写进输入框（写不进去=语音不出字），
-                // 上面已武装宽限；只有点在输入框本体时才额外强聚焦一次兜住死点。
-                if (e.type !== 'touchstart') {
-                  var dshHit = target.closest ? target.closest('textarea, [contenteditable="true"], .uWtHQG_input') : null;
-                  if (dshHit && document.activeElement !== dshHit) {
-                    var dshEdit = dshHit.matches && dshHit.matches('textarea, [contenteditable="true"], input')
-                      ? dshHit
-                      : dshHit.querySelector('textarea, [contenteditable="true"], input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"])');
-                    if (dshEdit) {
-                      try { origFocus.call(dshEdit); } catch (eF3) {}
-                    }
-                  }
-                }
+                // 🔴 R81 加固（v2.2.10 全面排查）：只武装宽限还不够。待发排队/流式回写期间前端
+                //   可能把 composer 的可聚焦态临时屏蔽（用户点了它自己的 onClick 却不 focus），
+                //   于是「点了会话框毫无反应」。这里直接接管：手指落在 composer 卡任何位置（含
+                //   卡片空白、工具行、语音键），就用未打桩的原始 focus 强聚焦一次，并在
+                //   300/800/1600ms 复查（重挂载会换节点、焦点一并丢）；成功聚焦即停，不抢焦点。
+                dshForceComposerFocus(target);
                 return;
               }
 
@@ -2391,13 +2429,16 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               );
 
               if (isTextInput) {
-                if (!allowUserTouchFocus) {
+                // 🔴 R81 加固（v2.2.10 全面排查）：这里原来只认「点到输入框本体」的 1500ms 宽限，
+                //   于是「用户点按钮 → 弹层输入框自动 focus」（会话重命名、搜索、新建文件夹等）
+                //   一律被吞，用户得再点一次输入框。改为：5s 内有过任意手指触摸就放行**非 composer**
+                //   输入框；composer 仍严格等卡命中（保住「切换会话不自动弹键盘」原语义）。
+                var dshInComposer0 = this.closest && this.closest('[class*="composerStack"], [class*="uWtHQG_input"]');
+                var dshAuthNow = allowUserTouchFocus ||
+                  (!dshInComposer0 && Date.now() < (window.__dshTouchAuthUntil || 0));
+                if (!dshAuthNow) {
                   // 严禁脚本自动化弹起虚拟键盘（尤其是切换会话、打开模型菜单、点击+号展开选项时）
-                  // 🔴 R81：区分「composer 自动聚焦」与「用户点了按钮才出来的输入框自动聚焦」。
-                  //   composer 必须严格等手势武装（否则切换会话会自己弹键盘）；
-                  //   非 composer 的输入框（重命名/搜索/新建等弹层）在用户刚点过的 800ms 内放行。
-                  var dshInComposer = this.closest && this.closest('[class*="composerStack"], [class*="uWtHQG_input"]');
-                  if (dshInComposer || (Date.now() - lastAnyTap) > 800) {
+                  if (dshInComposer0 || (Date.now() - lastAnyTap) > 800) {
                     return;
                   }
                 }
@@ -3576,7 +3617,10 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                     var ae = null;
                     try { ae = document.activeElement; } catch (eA) {}
                     var typing = !!ae && !!ae.tagName && (String(ae.tagName).toLowerCase() === 'textarea' || String(ae.tagName).toLowerCase() === 'input' || ae.isContentEditable === true);
-                    if (!typing || waited >= 8000) { try { location.reload(); } catch (e) {} return; }
+                    // 🔴 R81 加固（v2.2.10 全面排查）：手指刚点过（3 秒内）也不刷。回前台第一下就点
+                    //   会话框的用户，reload 正落在键盘弹出那一刻，表现就是「点了弹一下又没了」。
+                    var dshTouching = (Date.now() - (window.__dshLastTouchAt || 0)) < 3000;
+                    if ((!typing && !dshTouching) || waited >= 8000) { try { location.reload(); } catch (e) {} return; }
                     waited += 500;
                     setTimeout(kick, 500);
                   };
