@@ -869,6 +869,21 @@ DSH 是第三方闭源前端，我们只能在 App 侧靠注入 CSS/JS 打补丁
 - **回归防御**：闸门/文案 1..66（v2.2.9 首条「待发消息多时键盘弹不出，修好了 (2.2.9)」）。
 - **教训**：① 「手势一票否决」的命中判定不能只看 `e.target` 是否是输入框——composer 卡片在回合流式回写时会整卡重挂载，点中的节点瞬时是容器而非输入框；② 判定要给「重新挂载的容器留一层 closest 兜底」，用户点卡片任何部位都算真手势。
 
+### R81 会话切出去再点进来（已有待发消息>2 条）键盘还是弹不出来（v2.2.10 根治）
+
+- **症状**（老总 2026-11-16）：「本会话一直发消息待发超过2条，可以弹键盘。但是会话切出去再次点进来（已有待发消息超过2条），还是无法弹键盘。」——R80 修好了「同一会话内连发>2条再点」，但**切出会话再点回**时，即使待发>2条键盘仍弹不出来。
+- **真因**：「切回」与「本会话内连发」是两条不同的触发路径。切回会话时 React 会**整棵重挂载 composer 并自动 focus 一次**；待发>2 条让待发队列重排 + 流式回写把这次 mount 的 auto-focus 推得比用户手势晚（常 >1500ms）。R80 只解防了 `setupSendBlurGuard`（Layer C）的 1200ms 抑制窗，但**另外两层**各自把这次迟到的 auto-focus 拒掉了：Layer A（`fixMobileInputAndSearchFocus`）的 `allowUserTouchFocus` 只认输入框近旁的触碰且 **1500ms 就过期**；Layer B（`setupAutoFocusSuppressor`）的 `!userTappedComposer` 只在点了 composer 输入框本体的 1200ms 内放行。用户切回时点的是「会话项」（不在 composer 上），两层都没给宽限 → mount 的 auto-focus 被吞 → 被拒之后前端**不会再次 focus** → 键盘永不弹。待发>2 只是让 mount 的 auto-focus 更晚、正好跌出两层窗口，所以只在待发多时暴露。
+- **解法（v2.2.10）**：
+  - **Layer A**（`fixMobileInputAndSearchFocus` `handleUserTouch`，命中整张 composer 卡即视为用户要输入）：`allowUserTouchFocus = true` + 宽限窗拉到 **4000ms**（覆盖 >1500ms 的延迟自动聚焦）；**点中输入框本体时再用未打桩的原始 `focus()` 强聚焦一次**，绕过 Layer A 的 override / Layer B 的原型桩 / Layer C 的实例桩，直接消灭「前端被拒一次就不再重试」的死点（点发送按钮不在此列，沿用 R54/R76 抑制窗语义）。
+  - **Layer B**（`setupAutoFocusSuppressor`）：宽限窗只认「用户点了 composer 卡」，1200ms → **4000ms** 与 Layer A 对齐；点会话列表/抽屉不武装宽限，保住 2.1.1「切换会话不自动弹键盘」。
+  - **全链路补漏（同一版一并修，均为「点也弹不出」的死路）**：
+    ① 模型选择菜单判活由「节点存在」改成「真的可见」（`getBoundingClientRect` + `visibility`）——菜单关闭后节点常留在 DOM 里，旧写法一残留就把 composer 触碰永久判成误触并 disarm；
+    ② 非 composer 输入框（会话重命名/搜索/新建等弹层）在任意用户触碰后 800ms 内放行自动聚焦，修「点了按钮弹出输入框还得手点第二下」；
+    ③ 双击缩放拦截不再对输入区内的 `touchend` 调 `preventDefault`（否则连点第二下拿不到合成 click，编辑器不聚焦、键盘不弹）。
+  - 原生层同步核查：`keyboardDisplayRequiresUserAction` 已设 false、键盘辅助条为零高空视图、全项目无 `endEditing`/`resignFirstResponder`/收起键盘的手势，故原生侧无第二条阻断。
+- **回归防御**：闸门/文案 1..67（v2.2.10 首条「会话切出去再进来键盘弹不出，也修好了 (2.2.10)」）。
+- **教训**：① 同一种键盘症状可能由**不止一层**抑制窗叠加造成，修完一层要在真机验证另一条触发路径（本会话内连发 vs 切出再进）；② 「切回会话」的自动聚焦是延迟聚焦——手势宽限窗必须覆盖它；③ 抑制逻辑只判「节点存在/目标是不是输入框」都不可靠（节点残留、卡片重挂载），要么判可见性，要么给真实手势留一条直接放行的路。
+
 ### R75 鲸鱼必须按住图标才能拖，右缘竖滑唤不出（2026-11-12，v2.2.4(159)）
 
 - **症状**：老总报告「鲸鱼位置是半固定了。不能在右侧屏幕任何滑动就出来，还得选中图标滑动上下才行」。
@@ -1131,6 +1146,7 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.2.7 | 162 | GitHub CI `43729988314`（成功，2026-11-15 已发） | **R78 备用线路保存后丢失根治：禁用当前库存存储在弹窗关闭/重开间丢失（真因=主 `UIAlertController` 未关即 present 列表编辑器被 UIKit 隐式关闭 → SVC 将从零起步 → `draftFallbacks` 从未到达 `ServiceStore`）**；解法=先关主弹窗→全屏列表编辑器→完成/取消统一 先 dismiss 再 onDone 回写 → resume 恢复主弹窗续存 + 版本文案 1..64 |
 | 2.2.8 | 163 | GitHub CI run `43810071271` | **R79 备用线路编辑器「秒闪弹出去」根治（真因=R78 的 `.default` handler 里手动 `dismiss` + 立即 `present` 撞同一条转场队列，alert 自动收起动画未走完，present 被 UIKit 取消 → 编辑器一闪而没；解法=不再手动 dismiss，异步 0.45s 等 alert 收起动画结束再 present + `presentedViewController==nil` 守复）** + 版本文案 1..65 |
 | 2.2.9 | 164 | GitHub CI `43919398535`（成功，2026-11-17 已发） | **R80 待发消息超过 2 条时键盘弹不出根治（真因=连发多条致 composer 整卡反复重挂载，手势一票否决只认 `isInput(e.target)` 判不中 → 抑制窗 1200ms 不解防 → 前端 refocus 被原型桩拦掉；解法=命中判定放宽到命中整张 composer 卡，用户点卡片任何部位当场解防）** + 版本文案 1..66 |
+| 2.2.10 | 165 | GitHub CI `PENDING_CI` | **R81 会话切出去再点进来（已有待发消息>2 条）键盘仍弹不出根治（真因=切回时 React 重挂载 composer 并自动 focus 一次，待发>2 让这次 auto-focus 推得比手势晚（常>1500ms），R80 只解防 Layer C，Layer A 的 1500ms 宽限与 Layer B 的 `!userTappedComposer` 都把迟到的 auto-focus 拒掉且被拒后前端不再 focus；解法=Layer A 命中整张 composer 卡宽限窗拉到 4000ms 且点中输入框时用原始 focus() 强聚焦一次（绕过三层桩，消灭「被拒一次不再重试」死点），Layer B 宽限窗只认 composer 卡并拉到 4000ms（保住切会话不自动弹），另修菜单残留误判/弹层输入框自动聚焦/输入区双击被 preventDefault 三条死路）** + 版本文案 1..67 |
 
 
 ## 七、闸门自身踩过的坑（复用必读）

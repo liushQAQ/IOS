@@ -2253,10 +2253,15 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             var origFocus = HTMLElement.prototype.focus;
             var allowUserTouchFocus = false;
             var touchResetTimer = null;
+            // 🔴 R81：最近一次「任意用户触碰」的时刻。用于放行「用户点了按钮才弹出来的输入框」
+            //   （会话重命名、搜索、新建等弹层/抽屉里的自动聚焦）——这类自动聚焦属正常交互，
+            //   但旧逻辑只认「点到输入框本体」，按钮触发的自动聚焦全被吞掉 → 那些地方也要手点两下。
+            var lastAnyTap = 0;
 
             function handleUserTouch(e) {
               var target = e.target;
               if (!target) return;
+              lastAnyTap = Date.now();
 
               // 如果用户点击的是 + 号按钮、命令弹窗菜单内部、或者模型快捷选择按钮/菜单，严禁唤起虚拟键盘
               if (target.closest('.uWtHQG_add') || target.closest('[class*="_add"]') || target.closest('[data-trigger-menu]') || target.closest('.bqwvaa_menu') || target.closest('.VYXhfG_trigger') || target.closest('.VYXhfG_root')) {
@@ -2275,16 +2280,63 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                             target.closest('input:not([type="button"]):not([type="submit"]):not([type="radio"]):not([type="checkbox"])');
 
               // 如果正在显示模型选择菜单，严禁将附近的会话输入框误判为触碰目标！
-              if (document.querySelector('.VYXhfG_menu')) {
+              // 🔴 R81：只认「真的看得见」的菜单。菜单关闭后节点常留在 DOM 里（display:none /
+              //   0 尺寸），旧写法只判存在 → 一旦残留就永久把 composer 触碰判成「误触」并 disarm，
+              //   用户之后点会话框永远弹不出键盘（这正是另一条「无法弹键盘」的死路）。
+              var dshMenu = document.querySelector('.VYXhfG_menu');
+              var dshMenuOpen = false;
+              if (dshMenu) {
+                try {
+                  var dshMR = dshMenu.getBoundingClientRect();
+                  dshMenuOpen = dshMR.width > 0 && dshMR.height > 0 && getComputedStyle(dshMenu).visibility !== 'hidden';
+                } catch (eM) { dshMenuOpen = true; }
+              }
+              if (dshMenuOpen) {
                 if (!target.classList.contains('VYXhfG_search') && target.getAttribute('role') !== 'searchbox') {
                   allowUserTouchFocus = false;
                   return;
                 }
               }
 
+              // 🔴 R81（v2.2.10，老总「会话切出去再点进来（已有待发消息>2）键盘还是弹不出」）：
+              //   切回会话时前端把 composer 重挂载，待发队列多让重排/流式回写把前端的 focus()
+              //   推得比手势晚（常>1500ms），旧 allowUserTouchFocus 只认输入框近旁的触碰且 1500ms 就
+              //   过期 → 迟到的 focus 被本层 override 吞掉 → 键盘永不弹。本会话内连发走 R80 的
+              //   即时解防所以是好的，唯独切回是「延迟聚焦」触不到。
+              //   解法：① 命中整张 composer 卡（含输入框/工具栏/卡片空白）即视为用户要输入，
+              //        宽限窗拉到 4000ms 覆盖延迟聚焦；
+              //        ② 点的是输入框本体时，直接用「未打桩前的原始 focus」强聚焦一次 ——
+              //        绕过本层 override / Layer B 原型桩 / Layer C 实例桩，杜绝「前端被拒一次
+              //        就不再重试」的死点。
+              var dshCard = target.closest ? target.closest('[class*="composerStack"], [class*="uWtHQG_input"], textarea') : null;
+              if (dshCard) {
+                // 点「发送」不算「要输入」：沿用 R54/R76 的抑制窗语义，不武装宽限、不强聚焦
+                var dshSend = target.closest ? target.closest('[aria-label*="发送"], [class*="composerStack"] button[class*="_primary"], [class*="composerStack"] [class*="trailing"] button:last-of-type') : null;
+                if (dshSend) return;
+
+                allowUserTouchFocus = true;
+                clearTimeout(touchResetTimer);
+                touchResetTimer = setTimeout(function() { allowUserTouchFocus = false; }, 4000);
+
+                // 语音按钮等工具按钮要靠页面自己 focus() 才能把文字写进输入框（写不进去=语音不出字），
+                // 上面已武装宽限；只有点在输入框本体时才额外强聚焦一次兜住死点。
+                if (e.type !== 'touchstart') {
+                  var dshHit = target.closest ? target.closest('textarea, [contenteditable="true"], .uWtHQG_input') : null;
+                  if (dshHit && document.activeElement !== dshHit) {
+                    var dshEdit = dshHit.matches && dshHit.matches('textarea, [contenteditable="true"], input')
+                      ? dshHit
+                      : dshHit.querySelector('textarea, [contenteditable="true"], input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"])');
+                    if (dshEdit) {
+                      try { origFocus.call(dshEdit); } catch (eF3) {}
+                    }
+                  }
+                }
+                return;
+              }
+
               // v1.0.86：豆包验证码是点外层格子，再由页面自己调用 focus()。
               // 点的位置附近有输入框，也算用户主动要输入，放行随后的聚焦，键盘才能弹。
-              if (!inputEl && e.touches && e.touches.length && !document.querySelector('.VYXhfG_menu')) {
+              if (!inputEl && e.touches && e.touches.length && !dshMenuOpen) {
                 var touch = e.touches[0];
                 var near = document.elementsFromPoint(touch.clientX, touch.clientY) || [];
                 for (var k = 0; k < near.length && k < 8; k++) {
@@ -2341,7 +2393,13 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               if (isTextInput) {
                 if (!allowUserTouchFocus) {
                   // 严禁脚本自动化弹起虚拟键盘（尤其是切换会话、打开模型菜单、点击+号展开选项时）
-                  return;
+                  // 🔴 R81：区分「composer 自动聚焦」与「用户点了按钮才出来的输入框自动聚焦」。
+                  //   composer 必须严格等手势武装（否则切换会话会自己弹键盘）；
+                  //   非 composer 的输入框（重命名/搜索/新建等弹层）在用户刚点过的 800ms 内放行。
+                  var dshInComposer = this.closest && this.closest('[class*="composerStack"], [class*="uWtHQG_input"]');
+                  if (dshInComposer || (Date.now() - lastAnyTap) > 800) {
+                    return;
+                  }
                 }
               }
               return origFocus.apply(this, arguments);
@@ -2455,7 +2513,10 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   event.target.closest('[data-image-preview]') ||
                   event.target.closest('[data-document-zoom-surface]')
                 );
-                if (!inImageLightbox) {
+                // 🔴 R81：输入区内的连点（双击定位/快速补字）不拦 —— 拦掉 touchend 会连坐合成
+                //   click，编辑器拿不到这次点击就不再聚焦，键盘自然弹不出。
+                var inComposer = event.target && event.target.closest && event.target.closest('[class*="composerStack"], textarea, [contenteditable="true"]');
+                if (!inImageLightbox && !inComposer) {
                   event.preventDefault();
                 }
               }
@@ -4072,22 +4133,32 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
 
             var userTappedComposer = false;
             var tapTimer = null;
-
+            // 🔴 R81（v2.2.10，老总「会话切出去再次点进来（已有待发消息>2）还是无法弹键盘」）：
+            //   切回会话时 React 重挂载 composer 并自动 focus 一次；待发>2 让待发队列重排/流式回写
+            //   把这次 mount 的 auto-focus 推得比手势晚（常 >1200ms），本层 1200ms 宽限已过期 →
+            //   迟到的 focus() 被原型桩吞掉；一旦被拒，前端认为「已聚焦」不再重试 → 键盘永不弹。
+            //   解法：宽限窗只认「用户点了 composer 卡」（含卡片空白/工具行，不只是输入框本体），
+            //   窗口与 Layer A 对齐拉到 4000ms，覆盖延迟自动聚焦。点会话列表/抽屉不武装宽限，
+            //   保住 2.1.1「切换会话不自动弹键盘」的原始语义。
             function markUserTap(e) {
               var target = e.target;
               if (target && target.closest && target.closest('[class*="composerStack"], [class*="uWtHQG_input"], textarea')) {
                 userTappedComposer = true;
                 clearTimeout(tapTimer);
-                tapTimer = setTimeout(function() { userTappedComposer = false; }, 1200);
+                tapTimer = setTimeout(function() { userTappedComposer = false; }, 4000);
               }
             }
 
             document.addEventListener('touchstart', markUserTap, { passive: true, capture: true });
             document.addEventListener('mousedown', markUserTap, { passive: true, capture: true });
 
+            function dshComposerGrace() {
+              return userTappedComposer;
+            }
+
             document.addEventListener('focusin', function(e) {
               var isComposer = e.target && e.target.closest && e.target.closest('[class*="composerStack"], [class*="uWtHQG_input"], textarea');
-              if (isComposer && !userTappedComposer) {
+              if (isComposer && !dshComposerGrace()) {
                 if (typeof e.target.blur === 'function') {
                   e.target.blur();
                 }
@@ -4097,7 +4168,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             var origFocus = HTMLTextAreaElement.prototype.focus;
             HTMLTextAreaElement.prototype.focus = function() {
               var isComposer = this.closest && this.closest('[class*="composerStack"], [class*="uWtHQG_input"]');
-              if (isComposer && !userTappedComposer) {
+              if (isComposer && !dshComposerGrace()) {
                 return;
               }
               return origFocus.apply(this, arguments);
