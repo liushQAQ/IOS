@@ -164,6 +164,7 @@ final class AboutViewController: UIViewController {
         let points = """
         【本版要点】
         1. 优化了长时间开着的发热，手机明显降温
+        2. 修复了内容顶进状态栏和弹层越界的问题
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)

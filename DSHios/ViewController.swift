@@ -783,6 +783,69 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
           }, 100);
         })();
         """,
+        // ================= R85 状态栏纯净带（2026-11-19，v2.2.12）=================
+        // 老总令：「页面超过 iOS 灵动岛状态栏高度，还有一些按钮弹出页面也超过（不要超过
+        // APP 自己的顶栏高度），DSH 和 zcode 页面都有这个问题。」
+        // 口径：App 顶栏顶缘 = __dshNativeStatusBar - 2 - __dshTopShift（与 R29 顶栏校正同一
+        // 公式，iPhone 14 Pro Max = 59-2-18 = 39）。顶栏顶缘以上只允许两样东西：
+        // 系统状态栏/灵动岛（系统层，永远压在一切之上）和页面底色本身。
+        // 实现只有一个：状态栏纯净遮罩带 #dsh-topmask —— fixed 0..顶栏顶缘，背景实时取
+        // body/html 底色（深浅色切换即随），pointer-events:none 纯视觉。任何滚动内容/弹层
+        // 画进灵动岛区一律被遮，不依赖逐个堵弹层选择器。
+        // 🔴 特意不做「弹层 JS 钳制」：沙箱实测（_r85_trap.cjs）存在平台侧不走 inline style
+        //   的弹层位置管理者（测试元素被移到垂直居中位、钩子零命中）——再加一个 top 写入者
+        //   就是三方互删互插（R90/91 同根禁止模式）。遮罩带是唯一无冲突的通用兜底。
+        // DSH 与 ZCode 页通用（原生对所有页面统一下发 __dshNativeStatusBar）。
+        // 无原生值（纯浏览器环境）时整体静默，零干预。
+        """
+        (function () {
+          if (window.top !== window) { return; }
+          if (window.__dshTopMask) { return; }
+          window.__dshTopMask = true;
+          function topbarTop() {
+            var sb = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 0;
+            if (!(sb > 0)) { return 0; }
+            var shift = (typeof window.__dshTopShift === 'number') ? window.__dshTopShift : 18;
+            return Math.max(0, sb - 2 - shift);
+          }
+          var mask = null;
+          function maskBg() {
+            var bg = '';
+            try { bg = getComputedStyle(document.body || document.documentElement).backgroundColor || ''; } catch (eB) {}
+            if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+              try { bg = getComputedStyle(document.documentElement).backgroundColor || ''; } catch (eC) {}
+            }
+            return (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') ? bg : 'rgba(0,0,0,0.92)';
+          }
+          function runMask() {
+            var tt = topbarTop();
+            if (!(tt > 8)) { if (mask && mask.isConnected) { mask.style.display = 'none'; } return; }
+            if (mask && !mask.isConnected) { mask = null; }
+            var host = document.body || document.documentElement;
+            if (!host) { return; }
+            if (!mask || !mask.isConnected) {
+              mask = document.createElement('div');
+              mask.id = 'dsh-topmask';
+              host.appendChild(mask);
+            }
+            var css = 'position:fixed;left:0;right:0;top:0;height:' + tt + 'px;z-index:2147483000;pointer-events:none;display:block;background:' + maskBg() + ';';
+            if (mask.__dshCss === css) { return; }
+            mask.__dshCss = css;
+            mask.style.cssText = css;
+          }
+          runMask();
+          try {
+            if (window.__dshPoll) {
+              // 🔴 不限扫（scan=false）：原生状态栏值到达/页面 bootstrap 清节点都不是 DOM
+              //    突变，scan 门控会因「脏标记陈旧竞态」永不重跑（R85 沙箱实锤）。
+              //    变更检测在 runMask 内部兜底：css 没变零写入、节点被清自动重建，稳态零开销。
+              window.__dshPoll(runMask, 500, false);
+            } else {
+              setInterval(runMask, 500);
+            }
+          } catch (eP) {}
+        })();
+        """,
         // 移动端视觉与对比度增强：
         // 1. 消除所有浮层/弹窗（包括Token用量弹窗、模型选择、右键菜单、设置面板）过透导致的文字重叠与背景干扰，
         //    提升至 98% 接近纯色的高对比度背景（浅色模式白底 / 深色模式沉浸黑底），并辅以柔和阴影，字迹清晰锐利。
@@ -5477,6 +5540,9 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
           // 写成 CSS 变量，顶栏 padding 用它，换机型、转屏都跟着变。
           window.__dshSetStatusBar = function (px) {
             var h = Math.max(0, px || 0);
+            // 🔴 R85：原生值到达/变更属于布局相关事件，主动刷新统一脏标记 ——
+            //   否则 scan 门控任务（弹层钳制等）会因「脏标记陈旧竞态」错过这次变化。
+            try { if (typeof window.__dshPageDirtyAt === 'number') { window.__dshPageDirtyAt = Date.now(); } } catch (eSbD) {}
             document.documentElement.style.setProperty('--dsh-statusbar', h + 'px');
             // 🔴 v1.0.128：原生专属状态栏变量。DSH 自己也会写 --dsh-statusbar 且写得偏大（实测 75），
             //   CSS 直修的列顶公式必须用原生下发的这份，绝不能被 DSH 的值带偏。
