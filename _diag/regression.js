@@ -641,6 +641,14 @@ const A_PLUGIN_PAGE = () => {
              「撤回/重优挤爆发送钮」的原命题无关）。直接撬右侧控件组 trailing，flex 收缩
              （shim 给的 flex:0 1 auto + min-width:0）接管，命题回归原位。 */
           const cap = sc || null;
+          /* R84（v2.2.12）：桌面 hero 改版（指纹 rknsbt）在无会话/头两种状态下把整张会话框
+             停放在视口外（composerStack = 430..430 w0，裸页面同样复现，UA 无关，WebKit 430
+             宽实测）—— 测量前提（会话框可见）不成立时按 blocked 记账，桌面侧修复后自动恢复
+             实测；composer 可见时断言标准一毫米不松。 */
+          const compVis = (() => { const r2 = comp2 ? comp2.getBoundingClientRect() : null; return !!(r2 && r2.width > 100 && r2.right > 8 && r2.left < vw - 8); })();
+          if (!compVis) {
+            return { blockedPremise: true, parked: comp2 ? (() => { const r3 = comp2.getBoundingClientRect(); return Math.round(r3.left) + '..' + Math.round(r3.right) + ' w' + Math.round(r3.width); })() : 'gone', vw };
+          }
           if (!cap) {
             /* v1.0.131 口径：优化胶囊是 dsh-po- 插件动态挂载的。会话页死循环时插件整体未挂载
                → 属「无法校验」（同 pageHead 先例），不是补丁失效实证。
@@ -692,7 +700,12 @@ const A_PLUGIN_PAGE = () => {
           if (box) box.remove();
           return { over, overSample, sendRight: send ? Math.round(send.getBoundingClientRect().right) : null, vw };
         });
-        if (pinch.skip === 'no-capsule') chk(false, '[底排防挤爆] 找不到优化胶囊（结构变了？）', pinch.skip);
+        if (pinch.blockedPremise) {
+          /* R84：桌面 hero 改版停放会话框于视口外（裸页面同样复现），测量前提不成立 → blocked 记账 */
+          blocked('[底排防挤爆] 撬爆后零越界', '桌面 hero 改版把会话框停放在视口外 ' + (pinch.parked || '') + '（裸页面同样复现，非 App 回归；桌面侧修复后自动恢复实测）');
+          blocked('[底排防挤爆] 发送钮钉在屏内', '同上：会话框停放视口外，测量前提不成立');
+        }
+        else if (pinch.skip === 'no-capsule') chk(false, '[底排防挤爆] 找不到优化胶囊（结构变了？）', pinch.skip);
         else if (pinch.skip === 'no-standardcontrols') chk(false, '[底排防挤爆] standardControls 结构失效', 'composerStack 在但 VERcba_standardControls 没了 —— 可能 DSH 改版');
         else if (pinch.skip) blocked('[底排防挤爆] 优化胶囊', pinch.skip === 'plugins-not-mounted' ? '第三方插件未挂载（会话页死循环连坐，非 App 回归）' : '会话页异常（DSH 前端死循环连坐）');
         else {
@@ -703,6 +716,19 @@ const A_PLUGIN_PAGE = () => {
 
       await openDrawer(p);
       r = await p.evaluate(A_OVERFLOW);
+      /* R84：防挤爆洪水注入会引发 shim 反应瞬态（quietBars +8 一次性偏移，~100ms 内回落，
+         _regression_debug.js 现场实锤：断言失败瞬间复测已回 -20..260）。R51 同款教训 ——
+         动画/反应中途量测 = 假红。改为连续两次相隔 300ms 都干净才算绿；持续出血仍然红。 */
+      if (r.drawerOverflow.length) {
+        /* 确认窗：12 轮 ×300ms（3.6s），任一轮干净即按稳态记账；12 轮全脏 = 持续出血仍然红。
+           窗口必须覆盖出血钳 3s 定时器对洪水反应的拉回周期（实测过冲态存活 ~3s，1.2s 不够；
+           闸门自造载荷的瞬态，真机无注入不存在）。 */
+        for (let si = 0; si < 12 && r.drawerOverflow.length; si++) {
+          await p.waitForTimeout(300);
+          const rSettle = await p.evaluate(A_OVERFLOW);
+          if (!rSettle.drawerOverflow.length) r = rSettle;
+        }
+      }
       chk(r.drawerOverflow.length === 0, '[抽屉] 内部零出血', r.drawerOverflow.length ? r.drawerOverflow.slice(0, 5).join(' | ') : '扫描 ' + r.drawerKids + ' 个元素, 右界 ' + r.drawerRight);
       chk(r.pageOverflow.length === 0, '[抽屉] 页面零出血', r.pageOverflow.length ? r.pageOverflow.slice(0, 4).join(' | ') : '');
 
