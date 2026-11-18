@@ -6881,10 +6881,45 @@ function applySidebarInset() {
           //     ① 观察器（由后面那个 IIFE 的 MutationObserver 驱动，见 __dshApplyDrawerWidth 调用）；
           //     ② 任意点击后 350ms（老总点 fab 展开抽屉，滑入动画约 300ms 完成）；
           //     ③ 60 秒内的低频兜底（1s × 60），确保冷启动阶段万无一失。
+          // 🔴 R84（v2.2.12，桌面 hero 改版 rknsbt）：抽屉内容不得超列宽。桌面给抽屉内部件
+          //   写死内联宽度（quietBars 实测 280px），塞进 App 钳制的 252px 抽屉列 → 出列 8px
+          //   （闸门 [抽屉] 内部零出血 quietBars +8 实锤，裸页面无此宽度=桌面侧新行为）。
+          //   🔴 两版方案踩坑记录：样式表规则先被页面 head 管理清掉（R85 遮罩同款病），
+          //      改成样式表 max-width:100%!important 又被既有 398px!important 规则后序压住
+          //      （同权重比顺序=互删互插温床）—— 最终形态=「内联 !important 直写」
+          //      （内联 important 恒赢样式表 important，一次写稳、__dshFitMw 标记防churn），
+          //      由 __dshApplyDrawerWidth 每次调用对超列子元素就地钳制 + 主拍脏标记驱动。
+          function fitDrawerChildren() {
+            try {
+              var cols = document.querySelectorAll('[class*="sidebarCol"], [class*="rightbarCol"]');
+              for (var ci = 0; ci < cols.length && ci < 3; ci++) {
+                var col = cols[ci];
+                var cr = col.getBoundingClientRect();
+                if (!(cr.width > 40)) { continue; }
+                var all = col.getElementsByTagName('*');
+                var lim = Math.min(all.length, 220);
+                for (var i = 0; i < lim; i++) {
+                  var el = all[i];
+                  var stAttr = el.getAttribute && el.getAttribute('style');
+                  if (!stAttr || stAttr.indexOf('width') < 0) { continue; }
+                  if (el.__dshFitMw === '1') { continue; }
+                  var r = el.getBoundingClientRect();
+                  if (r.width > cr.width + 0.5 && r.right > cr.right - 0.5) {
+                    el.style.setProperty('max-width', '100%', 'important');
+                    el.__dshFitMw = '1';
+                  }
+                }
+              }
+            } catch (eFd) {}
+          }
           window.__dshApplyDrawerWidth = function () {
             try { applySidebarInset(); } catch (e) {}
             try { applyDrawerWidth(); } catch (e) {}
+            try { fitDrawerChildren(); } catch (eFc) {}
           };
+          try {
+            if (window.__dshPoll) { window.__dshPoll(function () { try { window.__dshApplyDrawerWidth(); } catch (eDw) {} }, 800, true); }
+          } catch (eDwP) {}
           try {
             document.addEventListener('click', function () {
               setTimeout(function () { try { window.__dshApplyDrawerWidth(); } catch (e) {} }, 350);

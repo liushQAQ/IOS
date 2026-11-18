@@ -1,23 +1,25 @@
 {
-  "version": "2.2.11",
+  "version": "2.2.12",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-17T14:05:02.505Z",
-  "dshFingerprint": "bbamkc",
+  "startedAt": "2026-11-18T17:46:18.335Z",
+  "dshFingerprint": "rknsbt",
   "dshAssets": 11,
   "domClasses": 0,
   "anchorTotal": 190,
   "anchorDead": 0,
-  "anchorCssAlive": 117,
-  "anchorResidue": 73,
-  "dshSheets": 218,
+  "anchorCssAlive": 116,
+  "anchorResidue": 74,
+  "dshSheets": 221,
   "ownSheets": 13,
   "anchorCritical": {
     "total": 12,
-    "dead": []
+    "dead": [
+      "headerCorner"
+    ]
   },
   "pluginStripQueueGuard": true,
   "modelPickerGuard": true,
@@ -31,12 +33,19 @@
   "r63PanelCloseGuard": true,
   "r64ReopenGuard": true,
   "ok": true,
-  "pass": 112,
+  "pass": 106,
   "fail": 0,
   "failures": [],
   "blocked": [
-    "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）"
+    "[底排防挤爆] 撬爆后零越界 — 桌面 hero 改版把会话框停放在视口外 430..430 w0（裸页面同样复现，非 App 回归；桌面侧修复后自动恢复实测）",
+    "[底排防挤爆] 发送钮钉在屏内 — 同上：会话框停放视口外，测量前提不成立",
+    "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）",
+    "[底排防挤爆] 撬爆后零越界 — 桌面 hero 改版把会话框停放在视口外 393..393 w0（裸页面同样复现，非 App 回归；桌面侧修复后自动恢复实测）",
+    "[底排防挤爆] 发送钮钉在屏内 — 同上：会话框停放视口外，测量前提不成立",
+    "[底排防挤爆] 撬爆后零越界 — 桌面 hero 改版把会话框停放在视口外 375..375 w0（裸页面同样复现，非 App 回归；桌面侧修复后自动恢复实测）",
+    "[底排防挤爆] 发送钮钉在屏内 — 同上：会话框停放视口外，测量前提不成立",
+    "[锚点] headerCorner 取样 — 会话页死循环连坐，该锚点无法取样（Chromium 对照确认 DOM 在）"
   ],
-  "sourceHash": "390b0d2efed7d38e2615f7be8dbf6209465d3b76a78eae6463331ae81de0e3ae",
-  "finishedAt": "2026-11-17T14:08:05.507Z"
+  "sourceHash": "1b7918295106536a912ed565bfca2c8c1447725de2ed195ea3b69eef818f2b6e",
+  "finishedAt": "2026-11-18T17:49:26.421Z"
 }
