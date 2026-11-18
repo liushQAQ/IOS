@@ -163,9 +163,7 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 检查更新优先走自家服务器，不再只靠镜像
-        2. 更新失败逐个列出源的真实错误
-        3. 更新卡住时一键浏览器下载最新包
+        1. 优化了长时间开着的发热，手机明显降温
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)

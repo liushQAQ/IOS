@@ -738,6 +738,51 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
           }, 400);
         })();
         """,
+        // ================= R83 发热治理·统一轮询调度（2026-11-18，v2.2.12）=================
+        // 老总报告「app 开着，手机发烫」。沙箱 A/B 化验（_diag/_heat_ab.cjs，带原生桥模拟，
+        // 详见 REGRESSION.md R83）实锤：页面 JS 三家分账 —— 官方前端 ~1.0s/25s、App shim
+        // 空转轮询 ~1.0s/25s、流式期间插件观察者 ~3.2s/25s。shim 的 14 个纯扫描环（菜单✕/
+        // 灯箱/语音键/enterkeyhint/enrich/scanAndClean/CSS 安装器/旧版拆除器等）在页面静止
+        // 时也在满周期扫 DOM，占 idle 页面 JS 约 4 成，是「开着不用也温热」的 App 侧主因。
+        // 本块只提供两个公共设施，各环自己改装（fallback 原生 setInterval，永不破坏时序）：
+        //   ① window.__dshPoll(fn, period, scan) —— 100ms 主拍统一调度器，document.hidden
+        //      一票全停（锁屏/切后台 App 侧轮询即刻归零，不等 WebKit 节流）；
+        //   ② window.__dshPageDirtyAt —— 全页脏时间戳（单个全页观察者，回调只写一个数，
+        //      零成本）。scan=true 的环：距上次运行页面无任何突变 → 本拍只做一次比较即跳过；
+        //      流式输出/页面交互期间突变不断、脏标记恒新 → 行为与旧 setInterval 完全一致
+        //      （流式零回归）。
+        //   几何/守卫/状态环一律保持原生 setInterval 分毫不动：fixAll 300ms（R39/R50/R53
+        //   毒写兜底）、syncPanelNav 300ms（R35b 几何重锚）、checkStatus 1.5s（原生状态
+        //   喂食）、出血钳 3s（静止页收敛兜底，本职就是跑静态页）、dock 900ms、toast 清理
+        //   1s（2 秒收走承诺不依赖突变）、启动限期环（400ms×30 / 1s×60 / 1s×30）。
+        """
+        (function () {
+          if (window.top !== window) { return; }
+          if (window.__dshMasterPoll) { return; }
+          window.__dshMasterPoll = true;
+          window.__dshPageDirtyAt = Date.now();
+          try {
+            new MutationObserver(function () { window.__dshPageDirtyAt = Date.now(); })
+              .observe(document.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
+          } catch (eD) {}
+          var jobs = [];
+          window.__dshPoll = function (fn, period, scan) {
+            jobs.push({ fn: fn, period: period, last: 0, checked: 0, scan: !!scan });
+          };
+          setInterval(function () {
+            if (document.hidden) { return; }
+            var now = Date.now();
+            for (var i = 0; i < jobs.length; i++) {
+              var j = jobs[i];
+              if (now - j.last < j.period) { continue; }
+              j.last = now;
+              if (j.scan && window.__dshPageDirtyAt <= j.checked) { continue; }
+              j.checked = now;
+              try { j.fn(); } catch (eJ) {}
+            }
+          }, 100);
+        })();
+        """,
         // 移动端视觉与对比度增强：
         // 1. 消除所有浮层/弹窗（包括Token用量弹窗、模型选择、右键菜单、设置面板）过透导致的文字重叠与背景干扰，
         //    提升至 98% 接近纯色的高对比度背景（浅色模式白底 / 深色模式沉浸黑底），并辅以柔和阴影，字迹清晰锐利。
@@ -2467,7 +2512,8 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             };
 
             // 自动为弹出命令/选项菜单以及模型快捷选择面板右上角挂载明显的 ✕ 关闭按钮
-            setInterval(function() {
+            // R83：转统一调度器 scan=true（页面无突变时跳过；菜单出现必带突变，不漏）
+            (window.__dshPoll || setInterval)(function() {
               var menu = document.querySelector('.bqwvaa_menu, [data-trigger-menu]');
               if (menu && !menu.querySelector('.dsh-mobile-menu-close-btn')) {
                 var closeBtn = document.createElement('button');
@@ -2511,7 +2557,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 modelCloseBtn.addEventListener('touchend', handleModelClose, true);
                 modelMenu.appendChild(modelCloseBtn);
               }
-            }, 150);
+            }, 150, true);
 
             // 监听 blur 事件捕获阶段：当搜索框失去焦点（比如用户轻触关闭软键盘、完成输入）时，
             // 阻止该 blur 冒泡，避免 React 的 ModelSelect 组件触发 onBlur -> close() 将整个面板关闭！
@@ -2709,7 +2755,8 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               }, { passive: false });
             }
 
-            setInterval(function() {
+            // R83：转统一调度器 scan=true（新弹层/新图片必带突变，不漏）
+            (window.__dshPoll || setInterval)(function() {
               // 1. 对话流点击图片弹出的全屏 ImageLightbox (role="dialog" + img)
               var dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
               dialogs.forEach(function(dlg) {
@@ -2724,7 +2771,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 var container = img.closest('[data-image-preview]') || img.parentElement;
                 bindImageZoom(img, container);
               });
-            }, 250);
+            }, 250, true);
           })();
 
           // 移动端会话输入框原生语音输入按钮注入与文本流式输入处理
@@ -2845,7 +2892,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               }
             }
 
-            setInterval(ensureVoiceButton, 600);
+            (window.__dshPoll || setInterval)(ensureVoiceButton, 600, true);
           })();
 
           // 移动端右侧边栏智能关闭辅助（遮罩与退出逻辑）
@@ -3045,7 +3092,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 });
               }
               setInputEnterKeyHint();
-              setInterval(setInputEnterKeyHint, 500);
+              (window.__dshPoll || setInterval)(setInputEnterKeyHint, 500, true);
             })();
 
             // 关闭右侧面板函数
@@ -3425,18 +3472,31 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                   //   就是「偶尔一下」。补 childList：新增节点在**渲染前微任务**里整树预检
                   //   （只扫 style 属性里真带 --dsh- 的元素，上限封顶，流式小文本节点零开销），
                   //   首帧即正确值，跳动根除。
+                  // 🔴 R83（v2.2.12，2026-11-18 真机发烫归因 _diag/_heat_ab.cjs A/B 实测）：本观察者
+                  //   占 shim 层 JS 总耗时 79%（桌面 WebKit 25s 实测 5.45s / 232 批 / 单批 worst
+                  //   558ms；裸页面同位观察者仅 231ms）—— 手机发热第一元凶。两刀，毒写三路径
+                  //   （R39① 整段覆写 / R39③ 深层容器 / R53 出生带毒）的「渲染前微任务同步回写」
+                  //   语义一字不动：
+                  //   ① fixDeepTree 的 JS TreeWalker 逐点 getAttribute（≤400 节点 × ≤24 新增 =
+                  //      单批最坏近万次调用）换成原生选择器 '[style*="--dsh-"]' 一趟扫完，
+                  //      同语义（只命中内联 style 真带 --dsh- 的元素，含根自身），快 10~50 倍；
+                  //   ② 批末 fixAll() 去抖 120ms —— 每批必跑 fixAll 与 300ms 兜底环纯重复；
+                  //      html/body 层毒写改在属性突变分支里**同步** fixLevel(t)（仍在同一微任务、
+                  //      先于渲染，R39① 整段覆写语义不变），深层毒写仍在 childList 分支同步回写。
                   function fixDeepTree(root) {
                     try {
                       if (!root || root.nodeType !== 1) return;
-                      var count = 0;
-                      var walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
-                      var el = root;
-                      while (el && count <= 400) {
-                        if (el.getAttribute && (el.getAttribute('style') || '').indexOf('--dsh-') >= 0) fixDeep(el);
-                        el = walker.nextNode();
-                        count++;
-                      }
+                      if (nativeVal() <= 0) return;
+                      fixDeep(root);
+                      var hits = root.querySelectorAll('[style*="--dsh-"]');
+                      for (var i = 0; i < hits.length && i < 200; i++) fixDeep(hits[i]);
                     } catch (eT) {}
+                  }
+                  var fixAllDue = false;
+                  function scheduleFixAll() {
+                    if (fixAllDue) return;
+                    fixAllDue = true;
+                    setTimeout(function () { fixAllDue = false; try { fixAll(); } catch (eF) {} }, 120);
                   }
                   var mo = new MutationObserver(function (muts) {
                     for (var i = 0; i < muts.length; i++) {
@@ -3446,10 +3506,10 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                         continue;
                       }
                       var t = m.target;
-                      if (t === document.documentElement || t === document.body) continue;
+                      if (t === document.documentElement || t === document.body) { try { fixLevel(t); } catch (eL) {} continue; }
                       fixDeep(t);
                     }
-                    fixAll();
+                    scheduleFixAll();
                   });
                   // R50：盯住右栏开合属性 —— 抽屉切换正是 DSH 毒写状态栏变量的高发时机，
                   // 属性一变同微任务先恢复三变量，渲染帧里永远只见正确值（零跳变窗口）。
@@ -4167,7 +4227,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             }
 
             scanAndClean();
-            setInterval(scanAndClean, 4000);
+            (window.__dshPoll || setInterval)(scanAndClean, 4000, true);
           })();
 
           // 2.1.1 修复一：切换会话防自动弹键盘（只有手指真实点击输入框才弹键盘）
@@ -4716,11 +4776,11 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             }
           }, true);
 
-          setInterval(function() {
+          (window.__dshPoll || setInterval)(function() {
             enrichDeliverableCards();
             enrichPreviewHeader();
             enrichFilesTree();
-          }, 800);
+          }, 800, true);
 
           // 拦截试图在宿主电脑上打开外部程序/链接的操作（如在电脑端打开、WPS、浏览器、终端等），弹窗提醒用户在手机端禁止此操作
           (function interceptExternalDesktopLaunches() {
@@ -7930,7 +7990,7 @@ function applySidebarInset() {
             } catch (e) {}
           }
           apply();
-          setInterval(function () { apply(); }, 3000);
+          (window.__dshPoll || setInterval)(function () { apply(); }, 3000, true);
         })();
         """
         ,
@@ -8057,7 +8117,7 @@ function applySidebarInset() {
             } catch (e) {}
           }
           apply();
-          setInterval(function () { apply(); }, 3000);
+          (window.__dshPoll || setInterval)(function () { apply(); }, 3000, true);
         })();
 
         """
@@ -8120,7 +8180,7 @@ function applySidebarInset() {
             return;
           }
           apply();
-          setInterval(function () { apply(); }, 3000);
+          (window.__dshPoll || setInterval)(function () { apply(); }, 3000, true);
         })();
 
         """
@@ -8174,7 +8234,7 @@ function applySidebarInset() {
             return;
           }
           apply();
-          setInterval(function () { apply(); }, 3000);
+          (window.__dshPoll || setInterval)(function () { apply(); }, 3000, true);
         })();
 
         """
@@ -8264,7 +8324,7 @@ function applySidebarInset() {
             return;
           }
           apply();
-          setInterval(function () { apply(); }, 3000);
+          (window.__dshPoll || setInterval)(function () { apply(); }, 3000, true);
         })();
 
         """
@@ -8661,7 +8721,7 @@ function applySidebarInset() {
             // 🔴 v1.0.131(91)：layout() 不再调用 —— 引擎搬位整体停用，布局交回 DSH 官方
           }
           tick();
-          setInterval(tick, 900);
+          (window.__dshPoll || setInterval)(tick, 900, true);
         })();
 
 
@@ -8739,7 +8799,7 @@ function applySidebarInset() {
             } catch (e) {}
           }
           apply();
-          setInterval(function () { apply(); }, 3000);
+          (window.__dshPoll || setInterval)(function () { apply(); }, 3000, true);
         })();
 """,
 """
@@ -8815,7 +8875,7 @@ function applySidebarInset() {
           }
           if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', boot); } else { boot(); }
           window.addEventListener('load', boot);
-          setInterval(function () { installCss(); fixOnce(); }, 3000);
+          (window.__dshPoll || setInterval)(function () { installCss(); fixOnce(); }, 3000, true);
         })();
 """,
 """
