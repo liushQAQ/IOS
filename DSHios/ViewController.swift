@@ -905,53 +905,86 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             var sb = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 0;
             return (sb > 0) ? sb : 59;
           }
+          // 🔴 R86 v2（真机截图复训，2026-11-19 深夜）：老总真机抽屉仍右缘越界 —— 三个漏点全堵：
+          //   ① 关键词候选网（overlay/modal/dialog 系）罩不住 Tailwind 命名 + 嵌套的抽屉
+          //     （实测 r86caught 全 false）→ 改全元素两段式扫描（rect 廉价预筛 1600 节点，
+          //     单次布局成本 1~3ms，写操作全部在预筛后）；
+          //   ② 容差 8px 太宽（真机抽屉越界 9~20px 正好被吞）→ 收紧到 2px；
+          //   ③ transform 定位的弹层此前直接跳过 → 改 margin 补偿（右出血 margin-left 负值
+          //      拉回 / 左出血正值 / 顶出血正值 / 底出血负值——margin 与 transform 可叠加，
+          //      不破坏滑入动画的 transform 语义，也不互删互插）。
           function fitFloats() {
             if (isDSHPage()) { return; }
             var vw = window.innerWidth || 430;
             var vh = window.innerHeight || 932;
             var sb = safeTop();
             var root = document.getElementById('root');
-            var els;
-            try { els = document.querySelectorAll('body > div, body > dialog, [class*="overlay"], [class*="Overlay"], [class*="modal"], [class*="Modal"], [class*="dialog"], [class*="Dialog"], [class*="popup"], [class*="Popup"], [role="dialog"]'); } catch (eQ) { return; }
-            // 两段式（R86 实锤教训）：ZCode 页 Tailwind 类名会让 overlay/modal 系选择器命中
-            // 上百个元素 —— 廉价 rect 预筛最多 300 个，getComputedStyle 只跑真正越界的候选
-            // （旧版 60 上限把队尾的真弹层裁掉了）。
+            var all;
+            try { all = document.querySelectorAll('body *'); } catch (eQ) { return; }
             var cand = [];
-            for (var i = 0; i < els.length && i < 300; i++) {
-              var el0 = els[i];
+            for (var i = 0; i < all.length && i < 1600; i++) {
+              var el0 = all[i];
               if (el0.id === 'dsh-topmask') { continue; }
               if (root && (el0 === root || el0.contains(root))) { continue; }
               var r0 = el0.getBoundingClientRect();
               if (r0.width < 120 && r0.height < 80) { continue; }
               if (r0.right < 0 || r0.left > vw) { continue; }
-              if (!(r0.width > vw + 8 || r0.left < -8 || r0.right > vw + 8 || r0.top < sb - 8 || r0.bottom > vh + 8)) { continue; }
+              if (!(r0.width > vw + 2 || r0.left < -2 || r0.right > vw + 2 || r0.top < sb - 2 || r0.bottom > vh + 2)) { continue; }
               cand.push(el0);
+              if (cand.length >= 14) { break; }
             }
-            for (var j = 0; j < cand.length && j < 12; j++) {
+            for (var j = 0; j < cand.length; j++) {
               var el = cand[j];
               var st;
               try { st = getComputedStyle(el); } catch (eS) { continue; }
               if (st.position !== 'fixed' && st.position !== 'absolute') { continue; }
               if (st.visibility === 'hidden' || st.display === 'none' || parseFloat(st.opacity) < 0.05) { continue; }
-              if (st.transform && st.transform !== 'none') { continue; }
               var r = el.getBoundingClientRect();
-              var overW = r.width > vw + 8 || r.left < -8 || r.right > vw + 8;
-              var overT = r.top < sb - 8;
-              var overB = r.bottom > vh + 8;
-              if (!overW && !overT && !overB) { continue; }
+              var overW = r.width > vw + 2;
+              var overL = r.left < -2;
+              var overR = r.right > vw + 2;
+              var overT = r.top < sb - 2;
+              var overB = r.bottom > vh + 2;
+              if (!overW && !overL && !overR && !overT && !overB) { continue; }
+              var hasTf = st.transform && st.transform !== 'none';
               if (overW) {
-                el.style.setProperty('width', 'auto', 'important');
+                el.style.setProperty('box-sizing', 'border-box', 'important');
                 el.style.setProperty('max-width', (vw - 20) + 'px', 'important');
+                if (hasTf) { continue; }
+                el.style.setProperty('width', 'auto', 'important');
                 if (st.position === 'fixed') {
                   el.style.setProperty('left', '10px', 'important');
                   el.style.setProperty('right', '10px', 'important');
                 }
-                el.style.setProperty('box-sizing', 'border-box', 'important');
+                continue;
+              }
+              if (hasTf) {
+                // margin 补偿：与 transform 叠加生效，不硬掰动画语义
+                if (overR) { el.style.setProperty('margin-left', (10 - r.right) + 'px', 'important'); }
+                else if (overL) { el.style.setProperty('margin-left', (10 - r.left) + 'px', 'important'); }
+                if (overT) { el.style.setProperty('margin-top', (sb - r.top) + 'px', 'important'); }
+                else if (overB) { el.style.setProperty('margin-top', (vh - 12 - r.bottom) + 'px', 'important'); }
+                continue;
+              }
+              if (overR || overL) {
+                if (st.left !== 'auto') {
+                  el.style.setProperty('left', Math.max(10, vw - 10 - r.width) + 'px', 'important');
+                } else if (st.right !== 'auto') {
+                  el.style.setProperty('right', '10px', 'important');
+                } else {
+                  el.style.setProperty('margin-left', (overR ? (10 - r.right) : (10 - r.left)) + 'px', 'important');
+                }
               }
               if (overT) { el.style.setProperty('top', sb + 'px', 'important'); }
-              if (overB && r.height > 80) {
-                el.style.setProperty('max-height', (vh - Math.max(sb, Math.round(r.top)) - 12) + 'px', 'important');
-                el.style.setProperty('overflow-y', 'auto', 'important');
+              if (overB) {
+                if (st.height !== 'auto' && r.height > 80) {
+                  el.style.setProperty('max-height', (vh - Math.max(sb, Math.round(r.top)) - 12) + 'px', 'important');
+                  el.style.setProperty('overflow-y', 'auto', 'important');
+                } else if (st.bottom !== 'auto') {
+                  el.style.setProperty('bottom', '12px', 'important');
+                } else {
+                  el.style.setProperty('margin-top', (vh - 12 - r.bottom) + 'px', 'important');
+                }
               }
             }
           }
