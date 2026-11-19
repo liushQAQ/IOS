@@ -1,23 +1,23 @@
 {
-  "version": "2.2.12",
-  "build": 167,
-  "updated_at": "2026-11-19 02:00:00",
-  "title": "v2.2.12(167) 发热治理+状态栏纯净带",
-  "changelog": "1. 优化了长时间开着的发热，手机明显降温 (2.2.12)\n2. 修复了内容顶进状态栏和弹层越界的问题 (2.2.12)\n3. 键盘弹不出的其他几种情况也一起修了 (2.2.11)\n4. 会话切出去再进来键盘弹不出，也修好了 (2.2.10)\n5. 待发消息多时键盘弹不出，修好了 (2.2.9)\n6. 修复点备用线路秒闪弹出去、编辑器打不开的问题 (2.2.8)",
-  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.12/releases/DSHios-public-2.2.12-167.tipa",
-  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.12/releases/DSHios-public-2.2.12-167.tipa",
-  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.12/DSHios-public-2.2.12-167.tipa",
+  "version": "2.2.13",
+  "build": 168,
+  "updated_at": "2026-11-19 08:55:00",
+  "title": "v2.2.13(168) zcode页弹层超屏根治",
+  "changelog": "1. 修复了zcode页面和弹层超出屏幕的问题 (2.2.13)\n2. 优化了长时间开着的发热，手机明显降温 (2.2.12)\n3. 修复了内容顶进状态栏和弹层越界的问题 (2.2.12)\n4. 键盘弹不出的其他几种情况也一起修了 (2.2.11)\n5. 会话切出去再进来键盘弹不出，也修好了 (2.2.10)\n6. 待发消息多时键盘弹不出，修好了 (2.2.9)",
+  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.13/releases/DSHios-public-2.2.13-168.tipa",
+  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.13/releases/DSHios-public-2.2.13-168.tipa",
+  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.13/DSHios-public-2.2.13-168.tipa",
   "tipa_mirrors": [
-    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.12/releases/DSHios-public-2.2.12-167.tipa",
-    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.12/releases/DSHios-public-2.2.12-167.tipa",
-    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.12/releases/DSHios-public-2.2.12-167.tipa",
-    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.12/DSHios-public-2.2.12-167.tipa",
-    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.12/releases/DSHios-public-2.2.12-167.tipa",
-    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.12/DSHios-public-2.2.12-167.tipa",
-    "https://github.com/liushQAQ/IOS/releases/download/v2.2.12/DSHios-public-2.2.12-167.tipa",
-    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.12-167.tipa"
+    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.13/releases/DSHios-public-2.2.13-168.tipa",
+    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.13/releases/DSHios-public-2.2.13-168.tipa",
+    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.13/releases/DSHios-public-2.2.13-168.tipa",
+    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.13/DSHios-public-2.2.13-168.tipa",
+    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.13/releases/DSHios-public-2.2.13-168.tipa",
+    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.13/DSHios-public-2.2.13-168.tipa",
+    "https://github.com/liushQAQ/IOS/releases/download/v2.2.13/DSHios-public-2.2.13-168.tipa",
+    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.13-168.tipa"
   ],
-  "size_bytes": 4948924,
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.12",
-  "md5": "459da6a8e54a69e9d68e61d37c94b51b"
+  "size_bytes": 4951734,
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.13",
+  "md5": "be316311a63551eff8f01cb52622937d"
 }
