@@ -4892,6 +4892,7 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.2.12 | 167 | GitHub CI `44363195027`（成功，2026-11-19 已发） | **R83 发热治理（真因=shim ~20 个常驻轮询环静止期空转扫 DOM，占 idle 页面 JS 约 4 成；沙箱化验踩「未模拟原生 __dshSetStatusBar 桥→nativeVal 每次 getComputedStyle 强制重算、守卫观察者成本虚增 7 倍」的测量陷阱；解法=统一轮询调度 __dshPoll 100ms 主拍+全页脏标记，14 个纯扫描环静止跳过、document.hidden 一票全停、流式零回归，idle shim JS 实测 -67%；原生层排除：无常驻定时器、DSHConnectionManager 死代码）** + **R85 状态栏纯净遮罩带 #dsh-topmask（0..顶栏顶缘 39px，底色自适应/自愈重建，DSH+ZCode 双页通用；特意不做弹层 JS 钳制——平台侧有无 inline 式弹层位置管理者，避免三写者互删互插）** + **R84 桌面 hero 改版适配（抽屉内容不超列：quietBars 280px 内联钳回 252 列宽；防挤爆会话框停放视口外→blocked 带证据、出血断言改 12×300ms 稳态确认窗，断言标准不松）** + 版本文案 1..70 | MD5 `459da6a8e54a69e9d68e61d37c94b51b` |
 
 | 2.2.13 | 168 | GitHub CI `44430951113`（成功，2026-11-19 已发） | **R86 ZCode 页+弹层超屏根治（三层根因：①R61 防出屏网未覆盖 ZCode 页；②扫描上限裁尾——Tailwind 类名致选择器命中上百、真弹层排队尾被裁，改两段式 rect 预筛+精确钳制；③🔴文档换代哨兵——/rc→302→/remote/v4 同窗口换 document，window 级安装标志跨导航存活致全部 shim 新文档上集体死亡，bundle 首块 __dshDocMark 检测换代删标志重装）+ 附带根治真机 scan 任务饿死（init 时 documentElement=null，observe(null) 抛错被静默吞，脏观察者从未存在，闸门 eval 注入测不到=「闸门绿≠真机好」init 时序版；armDirty 每主拍重试挂载）** + 版本文案 1..71 | MD5 `be316311a63551eff8f01cb52622937d` |
+| 2.2.14 | 169 | GitHub CI `44557238461`（成功，2026-11-19 已发） | **R86 v2 真机抽屉仍超屏三漏点全堵（老总真机截图复训：①Tailwind 命名+嵌套元素关键词候选网全 miss→全元素两段式扫描；②真机越界 9~20px 被 8px 容差吞→容差 2px；③transform 弹层跳过→margin 补偿与 transform 叠加不打架+宽超屏只限 max-width 防塌缩）** + 版本文案 1..72 | MD5 `88c1b012b66912370ab15d881b7679c1` |
 
 
 
