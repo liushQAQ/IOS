@@ -685,6 +685,23 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
         // 3. 判据与 App 侧注入隔离完全一致：#root + DSH 移动框架特征。
         //    外部大模型网页、9009 自建仪表盘、WorkBuddy 等一律零命中 → 不锁、不注入，保持原生滚动。
         """
+        // 🔴🔴 R86（2026-11-19，ZCode 页全 shim 死亡的真凶）：window 级安装标志（__dshXxx）
+        //   跨「同窗口导航」存活 —— /rc → 302 → /remote/v4 是同一个 window 换了个 document，
+        //   所有 shim 的「if (window.__dshXxx) return; 防重装守卫」在新文档上一律早退，
+        //   = ZCode 最终页上遮罩/主拍/防出屏网/全部适配 shim 集体死亡（沙箱实锤：
+        //   脏标记观察者 11 秒零触发、fitFloats 不钳、老总真机「zcode 页面+弹出超出屏幕范围」）。
+        //   修复：文档换代哨兵 —— window.__dshDocMark !== document 时，删除全部 __dsh* 安装
+        //   标志（保 __dshNativeStatusBar/__dshSafeArea 系原生下发值），让后续 shim 在新文档
+        //   上重新初始化。DSH 无重定向不受影响，本块零成本（一次属性比较）。
+        if (window.__dshDocMark !== document) {
+          var keepFlags = { __dshDocMark: 1, __dshNativeStatusBar: 1, __dshSafeArea: 1, __dshSafeAreaReady: 1, __dshSafeAreaDebug: 1, __dshSbMemory: 1, __dshNativeBottomInset: 1 };
+          try {
+            for (var dshK in window) {
+              if (dshK.indexOf('__dsh') === 0 && !keepFlags[dshK]) { try { delete window[dshK]; } catch (eDel) {} }
+            }
+          } catch (eMark) {}
+          window.__dshDocMark = document;
+        }
         (function () {
           if (window.top !== window) { return; }   // 只认主文档，iframe 一律不参与判定
           var POSTED = 0;
@@ -761,15 +778,32 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
           if (window.__dshMasterPoll) { return; }
           window.__dshMasterPoll = true;
           window.__dshPageDirtyAt = Date.now();
-          try {
-            new MutationObserver(function () { window.__dshPageDirtyAt = Date.now(); })
-              .observe(document.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
-          } catch (eD) {}
+          var dirtyMo = new MutationObserver(function () { window.__dshPageDirtyAt = Date.now(); });
+          window.__dshDirtyObserver = dirtyMo;
+          var dirtyTarget = null;
+          // 🔴🔴 R86 终局（真凶定位）：init 脚本（文档起点）运行时 documentElement 还是 null
+          //   （HTML 未开始解析），observe(null) 抛 TypeError 被 catch 静默吞掉 → 真机上脏
+          //   观察者从未存在过，所有 scan 门控任务只跑首轮就饿死（R83 的「流式零回归」在
+          //   真机不成立！闸门是加载后 eval 注入所以测不到 —— 又一次「闸门绿≠真机好」）。
+          //   修复：armDirty 每次主拍（100ms）重试挂载 —— documentElement 一出现即挂；
+          //   文档换代（target 变了）自动重挂；已挂准直接返回（零成本）。
+          function armDirty() {
+            try {
+              var t = document.documentElement;
+              if (!t || dirtyTarget === t) { return; }
+              dirtyMo.disconnect();
+              dirtyMo.observe(t, { childList: true, subtree: true, attributes: true, characterData: true });
+              dirtyTarget = t;
+              window.__dshPageDirtyAt = Date.now();
+            } catch (eD2) {}
+          }
+          armDirty();
           var jobs = [];
           window.__dshPoll = function (fn, period, scan) {
             jobs.push({ fn: fn, period: period, last: 0, checked: 0, scan: !!scan });
           };
           setInterval(function () {
+            armDirty();
             if (document.hidden) { return; }
             var now = Date.now();
             for (var i = 0; i < jobs.length; i++) {
@@ -844,6 +878,91 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               setInterval(runMask, 500);
             }
           } catch (eP) {}
+        })();
+        """,
+        // ================= R86 非 DSH 页浮层防出屏网（2026-11-19，v2.2.13）=================
+        // 老总报障：「zcode 页面 + 弹出超出屏幕范围」。R61 防出屏双通道只覆盖 DSH 插件
+        // 元素（.dshp-dock 系），ZCode 页（/remote/v4）弹层零覆盖 —— 且 ZCode 是普通 React
+        // 应用、没有 DSH 那种不走 inline style 的弹层位置管理者（R85 trap 实锤只在 DSH 页），
+        // 这里加 JS 钳制不会互删互插。沙箱实测 ZCode 页本体干净（docW=430、容器 0,59 430x839），
+        // 超屏的是弹层形态：宽超视口的桌面尺寸弹窗、底部超屏的高面板。
+        // 钳制四向（安全界：上=状态栏底 sb，下=vh-12，左右=10px；容差 8px 才动手）：
+        //   宽超屏 → width:auto + left/right 10px；顶过界 → top:sb；底超屏 → max-height + 滚动；
+        //   transform 定位的不硬掰（R85 同款谨慎）；含 #root 的整页框架绝不碰。
+        // DSH 页（isDSH() 命中）直接 return —— DSH 有 R61/R63 自己的体系，避免写入者打架。
+        """
+        (function () {
+          if (window.top !== window) { return; }
+          if (window.__dshZcFit) { return; }
+          window.__dshZcFit = true;
+          function isDSHPage() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e0) { return false; }
+          }
+          function safeTop() {
+            var sb = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 0;
+            return (sb > 0) ? sb : 59;
+          }
+          function fitFloats() {
+            if (isDSHPage()) { return; }
+            var vw = window.innerWidth || 430;
+            var vh = window.innerHeight || 932;
+            var sb = safeTop();
+            var root = document.getElementById('root');
+            var els;
+            try { els = document.querySelectorAll('body > div, body > dialog, [class*="overlay"], [class*="Overlay"], [class*="modal"], [class*="Modal"], [class*="dialog"], [class*="Dialog"], [class*="popup"], [class*="Popup"], [role="dialog"]'); } catch (eQ) { return; }
+            // 两段式（R86 实锤教训）：ZCode 页 Tailwind 类名会让 overlay/modal 系选择器命中
+            // 上百个元素 —— 廉价 rect 预筛最多 300 个，getComputedStyle 只跑真正越界的候选
+            // （旧版 60 上限把队尾的真弹层裁掉了）。
+            var cand = [];
+            for (var i = 0; i < els.length && i < 300; i++) {
+              var el0 = els[i];
+              if (el0.id === 'dsh-topmask') { continue; }
+              if (root && (el0 === root || el0.contains(root))) { continue; }
+              var r0 = el0.getBoundingClientRect();
+              if (r0.width < 120 && r0.height < 80) { continue; }
+              if (r0.right < 0 || r0.left > vw) { continue; }
+              if (!(r0.width > vw + 8 || r0.left < -8 || r0.right > vw + 8 || r0.top < sb - 8 || r0.bottom > vh + 8)) { continue; }
+              cand.push(el0);
+            }
+            for (var j = 0; j < cand.length && j < 12; j++) {
+              var el = cand[j];
+              var st;
+              try { st = getComputedStyle(el); } catch (eS) { continue; }
+              if (st.position !== 'fixed' && st.position !== 'absolute') { continue; }
+              if (st.visibility === 'hidden' || st.display === 'none' || parseFloat(st.opacity) < 0.05) { continue; }
+              if (st.transform && st.transform !== 'none') { continue; }
+              var r = el.getBoundingClientRect();
+              var overW = r.width > vw + 8 || r.left < -8 || r.right > vw + 8;
+              var overT = r.top < sb - 8;
+              var overB = r.bottom > vh + 8;
+              if (!overW && !overT && !overB) { continue; }
+              if (overW) {
+                el.style.setProperty('width', 'auto', 'important');
+                el.style.setProperty('max-width', (vw - 20) + 'px', 'important');
+                if (st.position === 'fixed') {
+                  el.style.setProperty('left', '10px', 'important');
+                  el.style.setProperty('right', '10px', 'important');
+                }
+                el.style.setProperty('box-sizing', 'border-box', 'important');
+              }
+              if (overT) { el.style.setProperty('top', sb + 'px', 'important'); }
+              if (overB && r.height > 80) {
+                el.style.setProperty('max-height', (vh - Math.max(sb, Math.round(r.top)) - 12) + 'px', 'important');
+                el.style.setProperty('overflow-y', 'auto', 'important');
+              }
+            }
+          }
+          fitFloats();
+          try {
+            if (window.__dshPoll) {
+              window.__dshPoll(function () { try { fitFloats(); } catch (eF) {} }, 400, true);
+            } else {
+              setInterval(function () { try { fitFloats(); } catch (eF2) {} }, 400);
+            }
+          } catch (eP2) {}
         })();
         """,
         // 移动端视觉与对比度增强：

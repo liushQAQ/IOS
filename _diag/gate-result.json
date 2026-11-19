@@ -1,17 +1,17 @@
 {
-  "version": "2.2.12",
+  "version": "2.2.13",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-18T17:46:18.335Z",
+  "startedAt": "2026-11-19T00:37:27.860Z",
   "dshFingerprint": "rknsbt",
   "dshAssets": 11,
   "domClasses": 0,
-  "anchorTotal": 190,
+  "anchorTotal": 191,
   "anchorDead": 0,
-  "anchorCssAlive": 116,
+  "anchorCssAlive": 117,
   "anchorResidue": 74,
   "dshSheets": 221,
   "ownSheets": 13,
@@ -46,6 +46,6 @@
     "[底排防挤爆] 发送钮钉在屏内 — 同上：会话框停放视口外，测量前提不成立",
     "[锚点] headerCorner 取样 — 会话页死循环连坐，该锚点无法取样（Chromium 对照确认 DOM 在）"
   ],
-  "sourceHash": "1b7918295106536a912ed565bfca2c8c1447725de2ed195ea3b69eef818f2b6e",
-  "finishedAt": "2026-11-18T17:49:26.421Z"
+  "sourceHash": "fe5f595b75956a86b649edf326250f067eb14facf14ec7797097f136eeef87fa",
+  "finishedAt": "2026-11-19T00:40:38.527Z"
 }
