@@ -163,7 +163,7 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 修复了zcode弹层超出屏幕右缘的问题
+        1. 修复了zcode页面内容重叠和漂移的问题
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)
