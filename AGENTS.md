@@ -73,7 +73,7 @@
   → CI「Verify regression gate」硬校验 → 打包
 ```
 
-- 闸门环境前置：DSH Desktop 必须在线（3083），**只能计划任务拉起** `Start-ScheduledTask -TaskName "DSHDesktop-Launch"`（沙箱内直接启动一律被回收）。
+- 闸门环境前置：DSH Desktop 必须在线（3083），**只能计划任务拉起** `Start-ScheduledTask -TaskName "DSH-Boot"`（跑 6066 restart_dsh.py --ensure：健康即不动、不健康才拉起；⚠️ 旧任务名 DSHDesktop-Launch 已随 11-18 桌面更新废除，现有任务族=DSH-Boot/DSH-Stack-Watchdog 等）。
 - 跑任何本地 HTTP/Playwright 化验前**必清代理环境变量**（否则 127.0.0.1 全 404/502，把代理污染误判成服务挂了）。
 - 打包：**禁 `gh workflow run`，仅老总当场明令才可例外一次，用后恢复禁令**（曾封号）。
 
@@ -86,7 +86,7 @@
 | 真机乱但沙箱全绿 | 原生层（铁律 1/4） | 真机截图逐条带对拍 → 查 `updateTopSafeAreaFor`/归属标记 |
 | 整页/整块平移 N pt | 原生 `webViewTopConstraint`/contentInset | 查归属标记是否被写坏（R18） |
 | 下载网关 502 | dshstat(9071) 死了 | `Start-ScheduledTask -TaskName "DSH-Stat-Server"`（R20） |
-| 3083 无响应 | DSH Desktop 挂了 | `Start-ScheduledTask -TaskName "DSHDesktop-Launch"`，等 15~20 秒 |
+| 3083 无响应 | DSH Desktop 挂了 | `Start-ScheduledTask -TaskName "DSH-Boot"`，等 15~20 秒（--ensure 健康即不动；⚠️ DSHDesktop-Launch 已废除；3083=200 ≠ 页面能渲染，白屏另查 R87） |
 | CI exit 65 | Swift 多行字符串 JS `\(` 转义 | 双写 `\\(` 或不用正则（REGRESSION.md 铁律 8） |
 | CI macos-14 停机限流 / GitHub Actions 排队卡死 | GitHub 正在下线 macos-14 | 已升级为 macos-15 + Xcode 16.4；备用通道可调用 Codemagic API (node tools/trigger_codemagic.cjs) |
 | CI 校验凭证被拒 | 凭证过期/sourceHash 不符 | 重跑闸门 |
