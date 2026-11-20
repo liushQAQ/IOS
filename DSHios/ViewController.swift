@@ -908,6 +908,58 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
           } catch (eP) {}
         })();
         """,
+        // ================= R89 非 DSH 页弹卡限高（2026-11-20，v2.2.16）=================
+        // 老总令（2026-11-20 真机）：「+ 号所有内容都弹出，还是超出屏幕范围。直接限制
+        // + 出来的卡片高度不行啊」—— 方向明确：弹卡限高 + 内部滚动，不再做任何搬迁类钳制。
+        // 窄口径设计（R88 反噬教训：只做一件事）：
+        //   仅非 DSH 页（__dshPageKind === 'other'，页面分流判定后）；仅 fixed/absolute、
+        //   卡片级（宽≥160 且 高>62%视口）的弹卡；动作只有一个——max-height=62%视口 +
+        //   overflow-y:auto（一次写稳，__dshHCap 标记防 churn）。宽度/位置/transform 零干预。
+        // 自带 400ms 定时器（非 DSH 页没有主拍服务）；DSH 页双重守卫零干预。
+        """
+        (function () {
+          if (window.top !== window) { return; }
+          if (window.__dshHCapBlk) { return; }
+          window.__dshHCapBlk = true;
+          function isDSHPage() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e0) { return false; }
+          }
+          function capTallCards() {
+            if (window.__dshPageKind !== 'other') { return; }
+            if (isDSHPage()) { return; }
+            var vh = window.innerHeight || 932;
+            var sb = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 0;
+            if (!(sb > 0)) {
+              try { sb = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-sb-native')) || 0; } catch (eSb) {}
+            }
+            if (!(sb > 0)) { sb = 59; }
+            var maxH = Math.round(vh * 0.62);
+            var root = document.getElementById('root');
+            var all;
+            try { all = document.querySelectorAll('body *'); } catch (eQ) { return; }
+            for (var i = 0; i < all.length && i < 1600; i++) {
+              var el = all[i];
+              if (el.id === 'dsh-topmask') { continue; }
+              if (root && (el === root || el.contains(root))) { continue; }
+              if (el.__dshHCap === '1') { continue; }
+              var r = el.getBoundingClientRect();
+              if (r.width < 160 || r.height < 200) { continue; }
+              if (r.height <= maxH) { continue; }
+              var cs;
+              try { cs = getComputedStyle(el); } catch (eC) { continue; }
+              if (cs.position !== 'fixed' && cs.position !== 'absolute') { continue; }
+              if (cs.visibility === 'hidden' || cs.display === 'none') { continue; }
+              el.style.setProperty('max-height', maxH + 'px', 'important');
+              el.style.setProperty('overflow-y', 'auto', 'important');
+              el.__dshHCap = '1';
+            }
+          }
+          setInterval(function () { try { capTallCards(); } catch (eH) {} }, 400);
+        })();
+        """,
         // 移动端视觉与对比度增强：
         // 1. 消除所有浮层/弹窗（包括Token用量弹窗、模型选择、右键菜单、设置面板）过透导致的文字重叠与背景干扰，
         //    提升至 98% 接近纯色的高对比度背景（浅色模式白底 / 深色模式沉浸黑底），并辅以柔和阴影，字迹清晰锐利。
