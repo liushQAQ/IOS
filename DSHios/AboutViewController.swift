@@ -163,7 +163,7 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 修复了zcode页面只显示一半的问题
+        1. 更新检查改为优先从自家电脑直取清单
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)

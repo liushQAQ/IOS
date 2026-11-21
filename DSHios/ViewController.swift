@@ -12279,7 +12279,19 @@ extension ViewController: UIDocumentInteractionControllerDelegate {
             loadingAlert = alert
         }
 
-        let mirrorURLs = Self.updateMetadataMirrorURLs
+        // 🔴 R95（v2.2.24，2026-11-22）：更新清单第一候选 = 自家电脑的 dshstat 直取
+        //   （当前服务地址的主机 + :9071/dl/latest.json —— dshstat 的 LOCAL_RELEASES 就是
+        //   仓库 releases 目录，服务器本地直出**永远新鲜**的清单）。动机：ghfast 等加速
+        //   CDN 按地区边缘缓存清单，桌面已换版而手机边缘仍是旧清单 → App 永远下到旧版
+        //   （老总真机「下载几次一直 2.2.20」实锤）。局域网直取 1ms 级、无 CDN 层；
+        //   失败自动落回 ②③④ 镜像竞速（现有逻辑不变）。外部网/玩家设备无 9071 →
+        //   该候选自然失败落回，零副作用。
+        var lanManifestURL: String? = nil
+        if let saved = DSHPersistenceCenter.loadLastURL() ?? UserDefaults.standard.string(forKey: Keys.lastURL),
+           let svcHost = URL(string: saved)?.host, !svcHost.isEmpty {
+            lanManifestURL = "http://\(svcHost):9071/dl/latest.json"
+        }
+        let mirrorURLs = ([lanManifestURL].compactMap { $0 } + Self.updateMetadataMirrorURLs).map { $0 }
         let lock = NSLock()
         var bestInfo: AppReleaseInfo?
         var completedCount = 0
