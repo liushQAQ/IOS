@@ -990,6 +990,57 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
         })();
         """,
 
+        // ================= R92 非 DSH 页暗黑白底守卫（2026-11-21，v2.2.19）=================
+        // 🔴 老总真机（20:33 截图）：ZCode 的 + 弹卡在暗黑下白底白字（跨 2.2.12~14 一直在），
+        //   沙箱无法复现（会话视图连不稳）且拿不到该弹层 DOM —— 上症状靶向守卫：
+        //   非 DSH 页 + html.dark（页面自报暗黑）时，任何**白底**可见元素一律把底色压成
+        //   页面深色底（文字本就是浅色，底修好即可读）。纯颜色修复零布局搬迁（R88 教训），
+        //   一次写稳 __dshDarkFix 标记防 churn；浅色模式（无 html.dark）整块静默零干预。
+        //   亮度阈值 0.82（白/近白才动手）；DSH 页双重守卫零干预。
+        """
+        (function () {
+          if (window.top !== window) { return; }
+          if (window.__dshDarkGuard) { return; }
+          window.__dshDarkGuard = true;
+          function isDSHPage() {
+            try {
+              if (!document.getElementById('root')) { return false; }
+              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
+            } catch (e0) { return false; }
+          }
+          function lum(bg) {
+            var m = bg.match(/rgba?\\(\\s*(\\d+)[,\\s]+(\\d+)[,\\s]+(\\d+)/);
+            if (!m) { return -1; }
+            return (0.2126 * (+m[1]) + 0.7152 * (+m[2]) + 0.0722 * (+m[3])) / 255;
+          }
+          function darkGuard() {
+            if (window.__dshPageKind !== 'other') { return; }
+            if (isDSHPage()) { return; }
+            if (!document.documentElement.classList.contains('dark')) { return; }
+            var surface = '';
+            try { surface = getComputedStyle(document.body).backgroundColor || ''; } catch (eB) {}
+            if (!surface || lum(surface) < 0 || lum(surface) > 0.4) { surface = 'rgb(24, 24, 27)'; }
+            var all;
+            try { all = document.querySelectorAll('body *'); } catch (eQ) { return; }
+            for (var i = 0; i < all.length && i < 1600; i++) {
+              var el = all[i];
+              if (el.id === 'dsh-topmask') { continue; }
+              if (el.__dshDarkFix === '1') { continue; }
+              var r = el.getBoundingClientRect();
+              if (r.width < 40 || r.height < 16) { continue; }
+              if (r.right < 0 || r.left > (window.innerWidth || 430) || r.bottom < 0 || r.top > (window.innerHeight || 932)) { continue; }
+              var cs;
+              try { cs = getComputedStyle(el); } catch (eC) { continue; }
+              if (cs.display === 'none' || cs.visibility === 'hidden') { continue; }
+              var L = lum(cs.backgroundColor);
+              if (L < 0.82) { continue; }
+              el.style.setProperty('background-color', surface, 'important');
+              el.__dshDarkFix = '1';
+            }
+          }
+          setInterval(function () { try { darkGuard(); } catch (eG) {} }, 500);
+        })();
+        """,
         // ================= R91 换版缓存混载自动自愈（2026-11-21，v2.2.18）=================
         // 🔴 根治 R87/R42 系疼痛：桌面每次换版，手机端缓存里的旧 index.html 指向已更新
         //   的 chunk → 白屏/样式错配（混载）。本块在页面加载完成后 fetch('/')（cache:no-store
