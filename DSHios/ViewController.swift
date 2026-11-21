@@ -150,6 +150,34 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
         }
     }
 
+    /// 🔴 R91（v2.2.18）换版缓存混载自动自愈桥：页面侧检测到「本页 chunk 与服务器当前
+    ///    HTML 引用不一致」（桌面已换版、手机缓存混载）时 postMessage 本桥 → 原生清缓存重载。
+    ///    限频：10 分钟一次（防服务器端本身错配时的无限重载循环）。
+    private static var lastCacheHealAt: Date = .distantPast
+    private static func makeCacheHealBridge(owner: ViewController) -> WKScriptMessageHandler {
+        return CacheHealBridge { [weak owner] in
+            let since = Date().timeIntervalSince(lastCacheHealAt)
+            guard since > 600 else {
+                NSLog("[R91] 缓存自愈请求被限频（距上次 %.0fs）", since)
+                return
+            }
+            lastCacheHealAt = Date()
+            NSLog("[R91] 缓存混载确认 → 自动清缓存重载")
+            DispatchQueue.main.async {
+                owner?.clearWebCacheAndReload()
+            }
+        }
+    }
+
+    private final class CacheHealBridge: NSObject, WKScriptMessageHandler {
+        let onHeal: () -> Void
+        init(onHeal: @escaping () -> Void) { self.onHeal = onHeal }
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            onHeal()
+        }
+    }
+
     private final class ErrorBridge: NSObject, WKScriptMessageHandler {
         let onMessage: (String) -> Void
         init(onMessage: @escaping (String) -> Void) { self.onMessage = onMessage }
@@ -777,6 +805,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             tries++;
             tick();
             if (tries > 150 || (POSTED && tries > 80)) { clearInterval(timer); }
+
           }, 400);
         })();
         """,
@@ -958,6 +987,55 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             }
           }
           setInterval(function () { try { capTallCards(); } catch (eH) {} }, 400);
+        })();
+        """,
+
+        // ================= R91 换版缓存混载自动自愈（2026-11-21，v2.2.18）=================
+        // 🔴 根治 R87/R42 系疼痛：桌面每次换版，手机端缓存里的旧 index.html 指向已更新
+        //   的 chunk → 白屏/样式错配（混载）。本块在页面加载完成后 fetch('/')（cache:no-store
+        //   绕过缓存）取服务器当前 HTML 的 chunk 清单，与本页实际加载的 chunk 比对 ——
+        //   服务器引用了本页没加载的 chunk = 缓存混载（反向不算：懒加载本就比 index 多）
+        //   → postMessage 原生限频清缓存重载。DSH 与非 DSH 页通用；外部页懒加载不误报。
+        """
+        (function () {
+          if (window.top !== window) { return; }
+          function loadedRefs() {
+            var refs = [];
+            try {
+              document.querySelectorAll('script[src], link[href]').forEach(function (el) {
+                var u = el.src || el.href || '';
+                var m = u.match(/assets\/[A-Za-z0-9_.\-]+[.](?:js|css)/);
+                if (m) { refs.push(m[0]); }
+              });
+            } catch (eL) {}
+            return refs.sort();
+          }
+          function heal() {
+            try {
+              var loaded = loadedRefs();
+              if (!loaded.length) { return; }
+              fetch('/', { credentials: 'omit', cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (html) {
+                var cur = [];
+                var reG = /assets\/[A-Za-z0-9_.\-]+[.](?:js|css)/g;
+                var m;
+                while ((m = reG.exec(html))) { if (cur.indexOf(m[0]) < 0) { cur.push(m[0]); } }
+                cur.sort();
+                var stale = false;
+                for (var i = 0; i < cur.length; i++) {
+                  if (loaded.indexOf(cur[i]) < 0) { stale = true; break; }
+                }
+                if (!stale) { return; }
+                var last = 0;
+                try { last = parseInt(sessionStorage.getItem('__dshCacheHealAt') || '0', 10) || 0; } catch (eS) {}
+                var now = Date.now();
+                if (now - last < 600000) { return; }
+                try { sessionStorage.setItem('__dshCacheHealAt', String(now)); } catch (eS2) {}
+                try { window.webkit.messageHandlers.dshCacheHeal.postMessage({}); } catch (eH) {}
+              }).catch(function () {});
+            } catch (eH2) {}
+          }
+          if (document.readyState === 'complete') { setTimeout(heal, 5000); }
+          else { window.addEventListener('load', function () { setTimeout(heal, 5000); }, { once: true }); }
         })();
         """,
         // 移动端视觉与对比度增强：
@@ -9785,6 +9863,11 @@ function applySidebarInset() {
         webView.scrollView.maximumZoomScale = 1.0
         webView.scrollView.bouncesZoom = false
         config.userContentController.add(Self.makeErrorBridge(owner: self), name: "dshErrors")
+        // 🔴 R91（v2.2.18，2026-11-21）：换版缓存混载自动自愈桥——页面侧比对「本页已加载
+        //    chunk」vs「服务器当前 HTML 引用 chunk」，不一致即缓存混载（桌面已换版）→
+        //    页面 postMessage 本桥 → 原生限频清缓存重载（R87 决策树的自动化，根治每次
+        //    桌面换版后手机端白屏/样式错配的固定疼痛）。
+        config.userContentController.add(Self.makeCacheHealBridge(owner: self), name: "dshCacheHeal")
         // v1.0.129：页内探针回报「这是不是 DSH 主控页」，原生据此决定锁不锁整页滚动
         config.userContentController.add(Self.makePageKindBridge(owner: self), name: "dshPage")
         config.userContentController.add(Self.makeFileTransferBridge(owner: self), name: "dshFileTransfer")

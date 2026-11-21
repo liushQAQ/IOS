@@ -163,7 +163,7 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 修复了暗黑模式下弹卡白底白字的问题
+        1. 修复了桌面换版后手机白屏和样式错乱的问题
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)
