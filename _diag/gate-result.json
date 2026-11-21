@@ -5,7 +5,7 @@
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-21T01:02:48.685Z",
+  "startedAt": "2026-11-21T01:08:15.469Z",
   "dshFingerprint": "is1kex",
   "dshAssets": 11,
   "domClasses": 0,
@@ -40,6 +40,6 @@
     "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）",
     "[锚点] headerCorner 取样 — 会话页死循环连坐，该锚点无法取样（Chromium 对照确认 DOM 在）"
   ],
-  "sourceHash": "b548446fbea26c38d53d6aab1079925bcb56a9b676365f0f377055d4b0c4390a",
-  "finishedAt": "2026-11-21T01:05:56.662Z"
+  "sourceHash": "9330eb319bcd47349c068f1d0393539cf00cc54cc00a68188a7d88a84410b565",
+  "finishedAt": "2026-11-21T01:11:24.678Z"
 }
