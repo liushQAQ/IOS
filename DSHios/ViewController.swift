@@ -1004,7 +1004,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             try {
               document.querySelectorAll('script[src], link[href]').forEach(function (el) {
                 var u = el.src || el.href || '';
-                var m = u.match(/assets\/[A-Za-z0-9_.\-]+[.](?:js|css)/);
+                var m = u.match(/assets\/[A-Za-z0-9_.-]+[.](?:js|css)/);
                 if (m) { refs.push(m[0]); }
               });
             } catch (eL) {}
@@ -1016,7 +1016,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               if (!loaded.length) { return; }
               fetch('/', { credentials: 'omit', cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (html) {
                 var cur = [];
-                var reG = /assets\/[A-Za-z0-9_.\-]+[.](?:js|css)/g;
+                var reG = /assets\/[A-Za-z0-9_.-]+[.](?:js|css)/g;
                 var m;
                 while ((m = reG.exec(html))) { if (cur.indexOf(m[0]) < 0) { cur.push(m[0]); } }
                 cur.sort();
