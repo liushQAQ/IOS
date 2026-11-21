@@ -39214,6 +39214,7 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.2.15 | 170 | GitHub CI `44562769409`（成功，2026-11-20 已发） | **R88 ZCode 页内容重叠+漂移回滚根治（总根因=文档换代哨兵唤醒整套 DSH shim 军团在异页写样式；铁证=Safari 零注入完美 vs App 内嵌崩坏；解法=页面分流——__dshPageKind 延迟到 DOM 成熟判定，主拍扫描任务只服务 dsh 页、非 DSH 页回 pristine 只留遮罩带自愈，R86 钳制块整块移除）** + 版本文案 1..73 | MD5 `2438a6c9f898de423bfe802f4ba71f46` |
 
 | 2.2.16 | 171 | GitHub CI `44648729489`（成功，2026-11-20 已发） | **R89 按老总指定修法——非 DSH 页弹卡限高内滚（max-height 62%vh + overflow-y auto，单动作窄口径；仅 fixed/absolute 宽≥160 高超限的弹卡；宽度/位置/transform 零干预——R88 反噬教训不再做搬迁类动作；DSH 页双重守卫零干预实测）** + 版本文案 1..74 | MD5 `2b126e2dd399f470c486f7222a12b1ab` |
+| 2.2.17 | 172 | GitHub CI `44843269289`（成功，2026-11-21 已发） | **R90 暗黑模式弹卡白底白字原生根修（真因=.unspecified 在窗口未挂载前创建的 WebView 缓存 light trait 且无任何同步→页面 prefers-color-scheme 恒 light→弹层白底白字；沙箱 dark 下同抽屉正常证明 ZCode UI 无缺陷=原生层；解法=显式跟随系统 trait+traitCollectionDidChange 实时同步+viewSafeAreaInsetsDidChange 兜底）** + 版本文案 1..75 | MD5 `30d74748bcd4285203763c56fc94793e` |
 
 
 
