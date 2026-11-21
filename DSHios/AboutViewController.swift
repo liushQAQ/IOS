@@ -163,7 +163,7 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 修复了弹卡超宽和位置出屏的收进问题
+        1. 修复了暗黑弹卡首帧闪白的问题
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)

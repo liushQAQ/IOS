@@ -1002,6 +1002,47 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
           if (window.top !== window) { return; }
           if (window.__dshDarkGuard) { return; }
           window.__dshDarkGuard = true;
+          // 🔴 R92 v3（v2.2.22）：CSS 预 paint 层 —— 在 html.dark 作用域覆写 ZCode UI 的
+          //   shadcn 语义变量（弹层走 --popover/--background 等），弹层第一帧的配色由 CSS
+          //   决定 = 从根上没有白色可画（JS 守卫降级为兜底）。radix 传送门/对话框/菜单/
+          //   列表框全作用域覆盖；浅色模式与 DSH 页零干预。样式元素随 500ms 轮询自愈重建。
+          function ensureDarkVarsCss() {
+            try {
+              if (window.__dshPageKind !== 'other') { return; }
+              if (document.getElementById('dsh-dark-vars')) { return; }
+              var host = document.head || document.documentElement;
+              if (!host) { return; }
+              var st = document.createElement('style');
+              st.id = 'dsh-dark-vars';
+              st.textContent = [
+                'html.dark [data-radix-popper-content-wrapper],',
+                'html.dark [data-radix-portal],',
+                'html.dark [data-state="open"][role="dialog"],',
+                'html.dark [data-state="open"][role="menu"],',
+                'html.dark [data-state="open"][role="listbox"],',
+                'html.dark [data-state="open"][role="alertdialog"],',
+                'html.dark [data-state="open"][data-radix-dialog-content],',
+                'html.dark [role="dialog"][class*="z-50"] {',
+                '  --popover: #18181b !important;',
+                '  --popover-foreground: #fafafa !important;',
+                '  --background: #18181b !important;',
+                '  --foreground: #fafafa !important;',
+                '  --card: #18181b !important;',
+                '  --card-foreground: #fafafa !important;',
+                '  --primary: #fafafa !important;',
+                '  --primary-foreground: #18181b !important;',
+                '  --muted: #26262b !important;',
+                '  --muted-foreground: #a1a1aa !important;',
+                '  --accent: #26262b !important;',
+                '  --accent-foreground: #fafafa !important;',
+                '  --border: #3f3f46 !important;',
+                '  --input: #27272a !important;',
+                '  color-scheme: dark !important;',
+                '}'
+              ].join('\\n');
+              host.appendChild(st);
+            } catch (eV) {}
+          }
           function isDSHPage() {
             try {
               if (!document.getElementById('root')) { return false; }
@@ -1150,6 +1191,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
           }
           setInterval(function () {
             try { window.__dshDarkArm(); } catch (eA2) {}
+            try { ensureDarkVarsCss(); } catch (eV2) {}
             try { darkGuard(); } catch (eG) {}
           }, 500);
         })();
