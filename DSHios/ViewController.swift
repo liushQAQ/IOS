@@ -1038,7 +1038,89 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               el.__dshDarkFix = '1';
             }
           }
-          setInterval(function () { try { darkGuard(); } catch (eG) {} }, 500);
+          // 🔴 R92 v2（2026-11-21 深夜，老总「打开半秒左右是白色，然后再变成黑色」）：500ms
+          //   轮询让弹卡先白一帧再压暗 = 闪白。MutationObserver 回调在**绘制前**的微任务里
+          //   运行 —— 挂载瞬间就把白底压掉，第一帧即深色，零闪烁。观察者只盯「新增子树 +
+          //   属性变化目标」，流式输出的微小文本节点在尺寸预筛处即返，零额外成本；
+          //   500ms 轮询保留为兜底（覆盖类翻转等非挂载形态）。
+          try {
+            var darkMo = new MutationObserver(function (muts) {
+              try {
+                if (window.__dshPageKind !== 'other') { return; }
+                if (!document.documentElement.classList.contains('dark')) { return; }
+                for (var mi = 0; mi < muts.length; mi++) {
+                  var m0 = muts[mi];
+                  if (m0.type === 'childList' && m0.addedNodes && m0.addedNodes.length) {
+                    for (var aj = 0; aj < m0.addedNodes.length; aj++) {
+                      var an = m0.addedNodes[aj];
+                      if (an.nodeType === 1) { darkFixSubtree(an); }
+                    }
+                  } else if (m0.type === 'attributes' && m0.target && m0.target.nodeType === 1) {
+                    var at = m0.target;
+                    var ar = at.getBoundingClientRect();
+                    if (ar.width >= 120 && ar.height >= 80) { darkFixSubtree(at); }
+                  }
+                }
+              } catch (eMo) {}
+            });
+            window.__dshDarkMo = darkMo;
+            var darkArmTarget = null;
+            window.__dshDarkArm = function () {
+              try {
+                var t = document.documentElement;
+                if (!t || darkArmTarget === t) { return; }
+                darkMo.disconnect();
+                darkMo.observe(t, { childList: true, subtree: true, attributes: true });
+                darkArmTarget = t;
+              } catch (eDk) {}
+            };
+            window.__dshDarkArm();
+          } catch (eObs) {}
+          function darkFixSubtree(rootEl) {
+            try {
+              var vw = window.innerWidth || 430;
+              var vh = window.innerHeight || 932;
+              var sb = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 59;
+              var maxH = Math.round(vh * 0.62);
+              var els = [rootEl];
+              try { if (rootEl.querySelectorAll) { var ds = rootEl.querySelectorAll('*'); for (var di = 0; di < ds.length && di < 120; di++) { els.push(ds[di]); } } } catch (eDq) {}
+              for (var ei = 0; ei < els.length && ei < 160; ei++) {
+                var el = els[ei];
+                if (el.id === 'dsh-topmask') { continue; }
+                if (el.__dshDarkFix === '1' || el.__dshHCap === '1') { continue; }
+                var r = el.getBoundingClientRect();
+                if (r.width < 40 || r.height < 16) { continue; }
+                if (r.right < 0 || r.left > vw || r.bottom < 0 || r.top > vh) { continue; }
+                var cs;
+                try { cs = getComputedStyle(el); } catch (eCe) { continue; }
+                if (cs.display === 'none' || cs.visibility === 'hidden') { continue; }
+                // 🔴 暗黑修复与限高独立判定（互不跳过）
+                if (el.__dshDarkFix !== '1') {
+                  var mL = (function (bg) { var m = bg.match(/rgba?[ ]?\\(?[ ]*(\\d+)[, ]+(\\d+)[, ]+(\\d+)/); if (!m) { return -1; } return (0.2126 * (+m[1]) + 0.7152 * (+m[2]) + 0.0722 * (+m[3])) / 255; })(cs.backgroundColor);
+                  // 白底 → 压成页面深色底
+                  if (mL > 0.82) {
+                    var surface = '';
+                    try { surface = getComputedStyle(document.body).backgroundColor || ''; } catch (eB2) {}
+                    if (!surface || lum(surface) < 0 || lum(surface) > 0.4) { surface = 'rgb(24, 24, 27)'; }
+                    el.style.setProperty('background-color', surface, 'important');
+                    el.__dshDarkFix = '1';
+                  }
+                }
+                // 超高弹卡 → 限高内滚（R89 同款）
+                if (el.__dshHCap !== '1' && (cs.position === 'fixed' || cs.position === 'absolute')) {
+                  if (r.height > maxH && r.width >= 160) {
+                    el.style.setProperty('max-height', maxH + 'px', 'important');
+                    el.style.setProperty('overflow-y', 'auto', 'important');
+                    el.__dshHCap = '1';
+                  }
+                }
+              }
+            } catch (eFs) {}
+          }
+          setInterval(function () {
+            try { window.__dshDarkArm(); } catch (eA2) {}
+            try { darkGuard(); } catch (eG) {}
+          }, 500);
         })();
         """,
         // ================= R91 换版缓存混载自动自愈（2026-11-21，v2.2.18）=================

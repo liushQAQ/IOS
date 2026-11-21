@@ -163,7 +163,7 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 修复了暗黑模式下zcode弹层白底的问题
+        1. 修复了暗黑弹卡先闪白色再变深色的问题
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)
