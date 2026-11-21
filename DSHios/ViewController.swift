@@ -9389,6 +9389,24 @@ function applySidebarInset() {
     override var prefersStatusBarHidden: Bool { false }
     override var preferredStatusBarStyle: UIStatusBarStyle { .default }
 
+    /// 🔴 R90（v2.2.17，2026-11-21 真机「暗黑模式下弹卡白底白字反了」）：显式跟随系统外观并
+    ///    在 trait 变化时同步 —— `.unspecified` 在窗口未挂载前创建的 WebView 会缓存 light
+    ///    trait 且不随窗口真实 trait 刷新 → 页面 prefers-color-scheme 恒 light → ZCode 弹层
+    ///    白底白字（页面主色走网关种子类名所以主 UI 是暗的，弹层走媒体查询才暴露此病）。
+    ///    显式值不会被错误缓存，trait 变化（系统切换深浅色 / 进出倍圈）实时同步。
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if isViewLoaded, traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+            syncWebViewInterfaceStyle()
+        }
+    }
+
+    private func syncWebViewInterfaceStyle() {
+        if isViewLoaded {
+            webView.overrideUserInterfaceStyle = (traitCollection.userInterfaceStyle == .dark) ? .dark : .light
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
@@ -9645,6 +9663,8 @@ function applySidebarInset() {
         super.viewSafeAreaInsetsDidChange()
         // webView 可能尚未创建（viewDidLoad 之前系统就会回调一次）
         guard webView != nil, webViewTopConstraint != nil else { return }
+        // 🔴 R90 兜底：视图挂窗后安全区首次变化时再同步一次外观（trait 传播时序保险）
+        syncWebViewInterfaceStyle()
         // 旋转/刘海变化时，外部网页页面的顶部避让量跟着刷新
         updateTopSafeAreaFor(url: webView.url)
         // 状态栏高度随机型变化（无刘海 20pt、刘海 47pt、灵动岛 59pt），
@@ -9741,7 +9761,10 @@ function applySidebarInset() {
         //   撤回 11-08 的「WebView 恒暗」——改回跟随系统外观（白天白 / 夜里黑）。
         //   页面侧同步撤回恒暗（网关 v31 种子 zcode-theme=system、插件 meta 改 light dark），
         //   各模块仍同一套外观，不会再一黑一白。
-        webView.overrideUserInterfaceStyle = .unspecified
+        //   🔴 R90（v2.2.17）：.unspecified 改为「显式跟随系统 + trait 变化同步」——
+        //      unspecified 在窗口未挂载前创建的 WebView 会缓存 light trait 且不再刷新，
+        //      prefers-color-scheme 恒 light → 暗黑模式下 ZCode 弹层白底白字（真机实锤）。
+        webView.overrideUserInterfaceStyle = (traitCollection.userInterfaceStyle == .dark) ? .dark : .light
         // 🟢 R72（v2.2.2）键盘必弹根修：WKWebView 默认只认「用户手势内同步 focus()」
         //   （keyboardDisplayRequiresUserAction 默认 true），待发送排队后点会话框，
         //   链路上任何一环吞掉聚焦键盘就永远不弹。关掉限制后页面/原生任何聚焦都弹键盘；
