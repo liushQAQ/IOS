@@ -1,9 +1,9 @@
 {
-  "version": "2.2.22",
-  "build": 178,
-  "updated_at": "2026-11-21 22:35:00",
-  "title": "v2.2.22(178) 暗黑弹卡CSS预paint",
-  "changelog": "1. 修复了暗黑弹卡首帧闪白的问题 (2.2.22)\n2. 修复了暗黑弹卡先闪白色再变深色的问题 (2.2.20)\n3. 修复了暗黑模式下zcode弹层白底的问题 (2.2.19)\n4. 修复了zcode加号弹卡超出屏幕的问题 (2.2.16)\n5. 修复了zcode页面内容重叠和漂移的问题 (2.2.15)\n6. 优化了长时间开着的发热，手机明显降温 (2.2.12)",
+  "version": "2.2.23",
+  "build": 180,
+  "updated_at": "2026-11-22 00:30:00",
+  "title": "v2.2.23(180) zcode半屏黑修复",
+  "changelog": "1. 修复了zcode页面只显示一半的问题 (2.2.23)\n2. 修复了暗黑弹卡首帧闪白的问题 (2.2.22)\n3. 修复了暗黑弹卡先闪白色再变深色的问题 (2.2.20)\n4. 修复了暗黑模式下zcode弹层白底的问题 (2.2.19)\n5. 修复了zcode加号弹卡超出屏幕的问题 (2.2.16)\n6. 修复了zcode页面内容重叠和漂移的问题 (2.2.15)",
   "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.20/releases/DSHios-public-2.2.20-177.tipa",
   "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.20/releases/DSHios-public-2.2.20-177.tipa",
   "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.20/DSHios-public-2.2.20-177.tipa",
@@ -17,7 +17,7 @@
     "https://github.com/liushQAQ/IOS/releases/download/v2.2.20/DSHios-public-2.2.20-177.tipa",
     "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.20-177.tipa"
   ],
-  "size_bytes": 4956212,
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.22",
-  "md5": "f00e359f6625c378d25b180e6011079c"
+  "size_bytes": 4956387,
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.23",
+  "md5": "12a9e3aceba766b5e013b9864cd04ad8"
 }
