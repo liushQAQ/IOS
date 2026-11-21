@@ -1114,6 +1114,37 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                     el.__dshHCap = '1';
                   }
                 }
+                // 🔴 宽超屏 → max-width 收进（tf/非tf 通用；居中类靠 translate 自动回位）
+                if (el.__dshWC !== '1' && (cs.position === 'fixed' || cs.position === 'absolute') && r.width > vw + 2) {
+                  el.style.setProperty('max-width', (vw - 20) + 'px', 'important');
+                  el.style.setProperty('box-sizing', 'border-box', 'important');
+                  el.__dshWC = '1';
+                  r = el.getBoundingClientRect();
+                }
+                // 🔴 横向残余出屏 → left calc 补偿（transform 元素 calc 与 transform 正确叠加；
+                //   非 transform 用显式 left/right；一次写稳防 churn；只收不出）
+                if (el.__dshTfFix !== '1' && (cs.position === 'fixed' || cs.position === 'absolute')) {
+                  var hasTf = cs.transform && cs.transform !== 'none';
+                  var safeR = vw - 10;
+                  var safeL = 10;
+                  var pull = 0;
+                  if (r.right > safeR + 2) { pull = -(r.right - safeR); }
+                  else if (r.left < safeL - 2) { pull = safeL - r.left; }
+                  if (pull !== 0 && r.width <= vw - 16) {
+                    if (hasTf) {
+                      if (cs.left !== 'auto') {
+                        el.style.setProperty('left', 'calc(' + cs.left + ' + ' + Math.round(pull) + 'px)', 'important');
+                        el.__dshTfFix = '1';
+                      }
+                    } else if (cs.left !== 'auto') {
+                      el.style.setProperty('left', Math.round(r.left + pull) + 'px', 'important');
+                      el.__dshTfFix = '1';
+                    } else if (cs.right !== 'auto') {
+                      el.style.setProperty('right', '10px', 'important');
+                      el.__dshTfFix = '1';
+                    }
+                  }
+                }
               }
             } catch (eFs) {}
           }
