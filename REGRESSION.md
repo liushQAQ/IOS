@@ -78439,6 +78439,7 @@ node --check app_inject.js   # 语法体检，不通过就是 Swift 里 \\( 之�
 | 2.2.16 | 171 | GitHub CI `44648729489`（成功，2026-11-20 已发） | **R89 按老总指定修法——非 DSH 页弹卡限高内滚（max-height 62%vh + overflow-y auto，单动作窄口径；仅 fixed/absolute 宽≥160 高超限的弹卡；宽度/位置/transform 零干预——R88 反噬教训不再做搬迁类动作；DSH 页双重守卫零干预实测）** + 版本文案 1..74 | MD5 `2b126e2dd399f470c486f7222a12b1ab` |
 
 | 2.2.17 | 172 | GitHub CI `44843269289`（成功，2026-11-21 已发） | **R90 暗黑模式弹卡白底白字原生根修（真因=.unspecified 在窗口未挂载前创建的 WebView 缓存 light trait 且无任何同步→页面 prefers-color-scheme 恒 light→弹层白底白字；沙箱 dark 下同抽屉正常证明 ZCode UI 无缺陷=原生层；解法=显式跟随系统 trait+traitCollectionDidChange 实时同步+viewSafeAreaInsetsDidChange 兜底）** + 版本文案 1..75 | MD5 `30d74748bcd4285203763c56fc94793e` |
+| 2.2.18 | 175 | GitHub CI `44848671181`（成功，2026-11-21 已发；run#173/174 两次 exit 65=R91 块 `\/` `\-` 非法转义，hex 字节直写修复=铁律 8 新形态：JSON→bash→python 三层转义各吃一半，必须 hex 直写+复核） | **R91 换版缓存混载自动自愈（fetch no-store 比对 chunk 清单+原生限频清缓存重载；根治桌面每次换版后手机白屏/样式错配）** + R90 暗黑弹卡配色原生根修 + 版本文案 1..76 | MD5 `71ddb4979ee542f13f7f7f72526d5260` |
 
 
 

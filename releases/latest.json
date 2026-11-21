@@ -1,23 +1,23 @@
 {
-  "version": "2.2.17",
-  "build": 172,
-  "updated_at": "2026-11-21 08:40:00",
-  "title": "v2.2.17(172) 暗黑模式弹卡配色原生根修",
-  "changelog": "1. 修复了暗黑模式下弹卡白底白字的问题 (2.2.17)\n2. 修复了zcode加号弹卡超出屏幕的问题 (2.2.16)\n3. 修复了zcode页面内容重叠和漂移的问题 (2.2.15)\n4. 修复了zcode弹层超出屏幕右缘的问题 (2.2.14)\n5. 修复了zcode页面和弹层超出屏幕的问题 (2.2.13)\n6. 优化了长时间开着的发热，手机明显降温 (2.2.12)",
-  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.17/releases/DSHios-public-2.2.17-172.tipa",
-  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.17/releases/DSHios-public-2.2.17-172.tipa",
-  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.17/DSHios-public-2.2.17-172.tipa",
+  "version": "2.2.18",
+  "build": 175,
+  "updated_at": "2026-11-21 09:30:00",
+  "title": "v2.2.18(175) 换版缓存混载自动自愈",
+  "changelog": "1. 修复了桌面换版后手机白屏和样式错乱的问题 (2.2.18)\n2. 修复了暗黑模式下弹卡白底白字的问题 (2.2.17)\n3. 修复了zcode加号弹卡超出屏幕的问题 (2.2.16)\n4. 修复了zcode页面内容重叠和漂移的问题 (2.2.15)\n5. 修复了zcode弹层超出屏幕右缘的问题 (2.2.14)\n6. 修复了zcode页面和弹层超出屏幕的问题 (2.2.13)",
+  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.18/releases/DSHios-public-2.2.18-175.tipa",
+  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.18/releases/DSHios-public-2.2.18-175.tipa",
+  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.18/DSHios-public-2.2.18-175.tipa",
   "tipa_mirrors": [
-    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.17/releases/DSHios-public-2.2.17-172.tipa",
-    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.17/releases/DSHios-public-2.2.17-172.tipa",
-    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.17/releases/DSHios-public-2.2.17-172.tipa",
-    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.17/DSHios-public-2.2.17-172.tipa",
-    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.17/releases/DSHios-public-2.2.17-172.tipa",
-    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.17/DSHios-public-2.2.17-172.tipa",
-    "https://github.com/liushQAQ/IOS/releases/download/v2.2.17/DSHios-public-2.2.17-172.tipa",
-    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.17-172.tipa"
+    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.18/releases/DSHios-public-2.2.18-175.tipa",
+    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.18/releases/DSHios-public-2.2.18-175.tipa",
+    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.18/releases/DSHios-public-2.2.18-175.tipa",
+    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.18/DSHios-public-2.2.18-175.tipa",
+    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.18/releases/DSHios-public-2.2.18-175.tipa",
+    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.18/DSHios-public-2.2.18-175.tipa",
+    "https://github.com/liushQAQ/IOS/releases/download/v2.2.18/DSHios-public-2.2.18-175.tipa",
+    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.18-175.tipa"
   ],
-  "size_bytes": 4952237,
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.17",
-  "md5": "30d74748bcd4285203763c56fc94793e"
+  "size_bytes": 4954493,
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.18",
+  "md5": "71ddb4979ee542f13f7f7f72526d5260"
 }
