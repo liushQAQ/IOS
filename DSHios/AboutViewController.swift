@@ -163,7 +163,7 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 修复了暗黑弹卡首帧闪白的问题
+        1. 修复了zcode页面只显示一半的问题
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)

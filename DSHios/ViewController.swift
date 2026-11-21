@@ -976,12 +976,14 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               if (el.__dshHCap === '1') { continue; }
               var r = el.getBoundingClientRect();
               if (r.width < 160 || r.height < 200) { continue; }
-              if (r.height <= maxH) { continue; }
+              // 🔴 R94：只收「底部真的超出屏幕」的弹卡（主框架 0..839 不超屏 → 不误伤半屏黑）
+              if (r.bottom <= vh + 2) { continue; }
+              if (r.top >= vh) { continue; }
               var cs;
               try { cs = getComputedStyle(el); } catch (eC) { continue; }
               if (cs.position !== 'fixed' && cs.position !== 'absolute') { continue; }
               if (cs.visibility === 'hidden' || cs.display === 'none') { continue; }
-              el.style.setProperty('max-height', maxH + 'px', 'important');
+              el.style.setProperty('max-height', Math.round(vh - r.top - 12) + 'px', 'important');
               el.style.setProperty('overflow-y', 'auto', 'important');
               el.__dshHCap = '1';
             }
@@ -1147,10 +1149,10 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                     el.__dshDarkFix = '1';
                   }
                 }
-                // 超高弹卡 → 限高内滚（R89 同款）
+                // 超高弹卡 → 限高内滚（🔴 R94 同款：只收底部真超屏的，主框架不误伤）
                 if (el.__dshHCap !== '1' && (cs.position === 'fixed' || cs.position === 'absolute')) {
-                  if (r.height > maxH && r.width >= 160) {
-                    el.style.setProperty('max-height', maxH + 'px', 'important');
+                  if (r.bottom > vh + 2 && r.top < vh && r.width >= 160) {
+                    el.style.setProperty('max-height', Math.round(vh - r.top - 12) + 'px', 'important');
                     el.style.setProperty('overflow-y', 'auto', 'important');
                     el.__dshHCap = '1';
                   }
