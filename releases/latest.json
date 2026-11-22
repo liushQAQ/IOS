@@ -1,23 +1,23 @@
 {
-  "version": "2.2.25",
-  "build": 182,
-  "updated_at": "2026-11-22 08:40:00",
-  "title": "v2.2.25(182) 弹卡限高失效修复",
-  "changelog": "1. 修复了弹卡限高失效导致页面被压半截的问题 (2.2.25)\n2. 修复了检查更新总拿到旧版本包的问题 (2.2.24)\n3. 修复了zcode页面只显示一半的问题 (2.2.23)\n4. 修复了暗黑弹卡首帧闪白的问题 (2.2.22)\n5. 修复了暗黑弹卡先闪白色再变深色的问题 (2.2.20)\n6. 修复了暗黑模式下zcode弹层白底的问题 (2.2.19)",
-  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.25/releases/DSHios-public-2.2.25-182.tipa",
-  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.25/releases/DSHios-public-2.2.25-182.tipa",
-  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.25/DSHios-public-2.2.25-182.tipa",
+  "version": "2.2.26",
+  "build": 183,
+  "updated_at": "2026-11-22 11:26:24",
+  "title": "v2.2.26(183)",
+  "changelog": "",
+  "tipa_url": "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.26/releases/DSHios-public-2.2.26-183.tipa",
+  "public_tipa_url": "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.26/releases/DSHios-public-2.2.26-183.tipa",
+  "tipa_url_fallback": "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.26/DSHios-public-2.2.26-183.tipa",
   "tipa_mirrors": [
-    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.25/releases/DSHios-public-2.2.25-182.tipa",
-    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.25/releases/DSHios-public-2.2.25-182.tipa",
-    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.25/releases/DSHios-public-2.2.25-182.tipa",
-    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.25/DSHios-public-2.2.25-182.tipa",
-    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.25/releases/DSHios-public-2.2.25-182.tipa",
-    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.25/DSHios-public-2.2.25-182.tipa",
-    "https://github.com/liushQAQ/IOS/releases/download/v2.2.25/DSHios-public-2.2.25-182.tipa",
-    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.25-182.tipa"
+    "https://jsd.onmicrosoft.cn/gh/liushQAQ/IOS@v2.2.26/releases/DSHios-public-2.2.26-183.tipa",
+    "https://gcore.jsdelivr.net/gh/liushQAQ/IOS@v2.2.26/releases/DSHios-public-2.2.26-183.tipa",
+    "https://testingcf.jsdelivr.net/gh/liushQAQ/IOS@v2.2.26/releases/DSHios-public-2.2.26-183.tipa",
+    "https://ghfast.top/https://github.com/liushQAQ/IOS/releases/download/v2.2.26/DSHios-public-2.2.26-183.tipa",
+    "https://cdn.jsdmirror.com/gh/liushQAQ/IOS@v2.2.26/releases/DSHios-public-2.2.26-183.tipa",
+    "https://gh-proxy.com/https://github.com/liushQAQ/IOS/releases/download/v2.2.26/DSHios-public-2.2.26-183.tipa",
+    "https://github.com/liushQAQ/IOS/releases/download/v2.2.26/DSHios-public-2.2.26-183.tipa",
+    "https://liu-gw.tail2a9309.ts.net:8443/dl/DSHios-public-2.2.26-183.tipa"
   ],
-  "size_bytes": 4957188,
-  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.25",
-  "md5": "20dffaedf865db3cfd8d682c4c548eea"
+  "size_bytes": 4953843,
+  "release_url": "https://github.com/liushQAQ/IOS/releases/tag/v2.2.26",
+  "md5": "4855aa3b06f3f909d88cba4680f826af"
 }
