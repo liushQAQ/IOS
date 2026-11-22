@@ -163,8 +163,8 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 修复了打开时偶尔提示网络连接中断的问题
-        2. 修复了侧边栏点外部无法关闭和背景块问题
+        1. 修复了侧边栏背景模块重叠和点外部关闭的问题
+        2. 修复了打开时偶尔提示网络连接中断的问题
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)
