@@ -163,7 +163,7 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 更新检查改为优先从自家电脑直取清单
+        1. 修复了弹卡限高失效页面被压半截的问题
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)

@@ -967,18 +967,20 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             if (!(sb > 0)) { sb = 59; }
             var maxH = Math.round(vh * 0.62);
             var root = document.getElementById('root');
+            // 🔴 R94 v2：主壳豁免——含主内容（输入区/主列表）的框架绝不钳（R94 首版「底部真超屏」
+            //   条件把顶到屏底的弹卡全放过了=+ 弹卡满屏超出；改成主壳豁免后弹卡恢复限高、主框架不误伤）
+            var mainShell = document.querySelector('[class*="inset-0"][class*="min-h-0"]') || document.querySelector('[class*="h-dvh"]');
             var all;
             try { all = document.querySelectorAll('body *'); } catch (eQ) { return; }
             for (var i = 0; i < all.length && i < 1600; i++) {
               var el = all[i];
               if (el.id === 'dsh-topmask') { continue; }
               if (root && (el === root || el.contains(root))) { continue; }
+              if (mainShell && (el === mainShell || el.contains(mainShell))) { continue; }
               if (el.__dshHCap === '1') { continue; }
               var r = el.getBoundingClientRect();
               if (r.width < 160 || r.height < 200) { continue; }
-              // 🔴 R94：只收「底部真的超出屏幕」的弹卡（主框架 0..839 不超屏 → 不误伤半屏黑）
-              if (r.bottom <= vh + 2) { continue; }
-              if (r.top >= vh) { continue; }
+              if (r.height <= maxH) { continue; }
               var cs;
               try { cs = getComputedStyle(el); } catch (eC) { continue; }
               if (cs.position !== 'fixed' && cs.position !== 'absolute') { continue; }
@@ -1130,7 +1132,7 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               for (var ei = 0; ei < els.length && ei < 160; ei++) {
                 var el = els[ei];
                 if (el.id === 'dsh-topmask') { continue; }
-                if (el.__dshDarkFix === '1' || el.__dshHCap === '1') { continue; }
+                if (el.__dshDarkFix === '1' && el.__dshHCap === '1') { continue; }
                 var r = el.getBoundingClientRect();
                 if (r.width < 40 || r.height < 16) { continue; }
                 if (r.right < 0 || r.left > vw || r.bottom < 0 || r.top > vh) { continue; }
@@ -1149,10 +1151,12 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                     el.__dshDarkFix = '1';
                   }
                 }
-                // 超高弹卡 → 限高内滚（🔴 R94 同款：只收底部真超屏的，主框架不误伤）
+                // 超高弹卡 → 限高内滚（🔴 R94 v2 同款：主壳豁免 + 高度>62% 恢复）
                 if (el.__dshHCap !== '1' && (cs.position === 'fixed' || cs.position === 'absolute')) {
-                  if (r.bottom > vh + 2 && r.top < vh && r.width >= 160) {
-                    el.style.setProperty('max-height', Math.round(vh - r.top - 12) + 'px', 'important');
+                  var mainShell2 = document.querySelector('[class*="inset-0"][class*="min-h-0"]') || document.querySelector('[class*="h-dvh"]');
+                  if (mainShell2 && (el === mainShell2 || el.contains(mainShell2))) { continue; }
+                  if (r.height > maxH && r.width >= 160) {
+                    el.style.setProperty('max-height', maxH + 'px', 'important');
                     el.style.setProperty('overflow-y', 'auto', 'important');
                     el.__dshHCap = '1';
                   }

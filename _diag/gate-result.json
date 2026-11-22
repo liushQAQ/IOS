@@ -1,18 +1,18 @@
 {
-  "version": "2.2.24",
+  "version": "2.2.25",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-21T16:32:47.511Z",
+  "startedAt": "2026-11-22T00:25:53.246Z",
   "dshFingerprint": "iwwdt9",
   "dshAssets": 11,
   "domClasses": 0,
-  "anchorTotal": 191,
+  "anchorTotal": 194,
   "anchorDead": 0,
   "anchorCssAlive": 117,
-  "anchorResidue": 74,
+  "anchorResidue": 77,
   "dshSheets": 223,
   "ownSheets": 14,
   "anchorCritical": {
@@ -37,6 +37,6 @@
   "blocked": [
     "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）"
   ],
-  "sourceHash": "8c6fb7d16a793b1aae1c74ea3f844a8a6792a829111c8f5b35fea4c5d7471b40",
-  "finishedAt": "2026-11-21T16:36:01.669Z"
+  "sourceHash": "3425269f35db93ad2000b11ba95ebcbb20e8c4747cd31aeb61b7d2238c3a036f",
+  "finishedAt": "2026-11-22T00:29:08.485Z"
 }
