@@ -50,6 +50,8 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
     private var failoverRetryWork: DispatchWorkItem?
     /// 轻提示条（线路切换过程对用户可见）。
     private var failoverToast: UILabel?
+    /// R99（v2.2.27）：-1005 瞬时闪断的静默自动重试额度（didCommit 网络腿成功即复位；用尽才弹错误浮层）。
+    private var connLostAutoRetriesLeft: Int = 2
     /// 同一线路的最大尝试次数。
     private let failoverMaxFails = 3
     /// 401 token 页自动换票重试的防重入标志（防止 didFinish→重载→didFinish 死循环）。
@@ -11327,7 +11329,25 @@ function applySidebarInset() {
     /// 加载失败统一入口（didFail / didFailProvisionalNavigation / 连接超时）。
     /// 规范：同一线路累计 3 次失败 → 切下一条；链尽 → 停在错误浮层，下次手动重试从主线路开始。
     /// 没配备用线路的服务（链长 1）维持旧版行为：失败直接弹错误浮层。
-    private func handleLoadFailure(_ detail: String) {
+    private func handleLoadFailure(_ detail: String, transientError: Error? = nil) {
+        // R99（v2.2.27）：-1005（NSURLErrorNetworkConnectionLost）= 瞬时闪断（Wi-Fi/VPN 冷启动收尾期常见，
+        // Safari 同样自动重试），页面明明能进却先盖错误浮层 = 3090/rc 首载「中断一次再进才正常」的根因。
+        // 静默自动重试至多 2 次（隔 1.2s；didCommit 网络腿成功即复位额度），用尽才走下方原流程。
+        if (transientError as NSError?)?.code == NSURLErrorNetworkConnectionLost, connLostAutoRetriesLeft > 0 {
+            connLostAutoRetriesLeft -= 1
+            showToast("网络闪断，正在自动重连…")
+            let target = failoverChain.indices.contains(failoverIndex)
+                ? failoverChain[failoverIndex]
+                : (UserDefaults.standard.string(forKey: Keys.lastURL) ?? "")
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.loadForFailover(target)
+            }
+            failoverRetryWork?.cancel()
+            failoverRetryWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
+            return
+        }
         guard failoverChain.count > 1 else {
             showError(detail: detail)
             return
@@ -11610,6 +11630,8 @@ extension ViewController: WKNavigationDelegate {
         // v2.1.20：网络腿成功 = 当前线路可用，重置连续失败计数；
         // failoverIndex 保持不动（记住线路），下次启动从它起步。
         failoverFails = 0
+        // R99：网络腿活了一次 = 闪断重试额度复位（只在真成功后补弹药，防无限循环）。
+        connLostAutoRetriesLeft = 2
         // v1.0.106：此刻起 #root 一定属于新文档，武装首屏探测，出首帧即显形，不再死等 didFinish。
         startEarlyRevealProbe()
     }
@@ -11730,14 +11752,14 @@ extension ViewController: WKNavigationDelegate {
         activityIndicator.stopAnimating()
         stopNavigationTimeout()
         // v2.1.20：统一走兜底引擎（没配备用线路的服务在引擎内直接回落为原 showError）
-        handleLoadFailure(readableMessage(for: error))
+        handleLoadFailure(readableMessage(for: error), transientError: error)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         activityIndicator.stopAnimating()
         stopNavigationTimeout()
         // v2.1.20：连接阶段失败（DNS/超时/拒绝）——兜底切换的主入口
-        handleLoadFailure(readableMessage(for: error))
+        handleLoadFailure(readableMessage(for: error), transientError: error)
     }
 
     // MARK: - 原生语音输入（SFSpeechRecognizer + AVAudioEngine）
