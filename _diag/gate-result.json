@@ -1,11 +1,11 @@
 {
-  "version": "2.2.26",
+  "version": "2.2.27",
   "sizes": [
     "430x932",
     "393x852",
     "375x812"
   ],
-  "startedAt": "2026-11-22T00:44:48.919Z",
+  "startedAt": "2026-11-22T05:26:13.488Z",
   "dshFingerprint": "iwwdt9",
   "dshAssets": 11,
   "domClasses": 0,
@@ -37,6 +37,6 @@
   "blocked": [
     "[dock] 费用部件取样 — 60 秒内费用部件未出现 —— cm-* 为插件动态挂载，会话页死循环连坐（零注入裸页面同样复现，非 App 回归）"
   ],
-  "sourceHash": "5b13c1c3210fec8ee84545de488f7b4eeebb9efe544d4e7f55a280b8fc8ae7b8",
-  "finishedAt": "2026-11-22T00:48:02.826Z"
+  "sourceHash": "1adff1bbd7f5767e941d66d465898e020ca07be5c7491393aeec04c258ea412e",
+  "finishedAt": "2026-11-22T05:29:13.529Z"
 }

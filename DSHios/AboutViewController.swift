@@ -163,7 +163,7 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 修复了zcode页面滚动时内容突然上跳的问题
+        1. 修复了侧边栏点外部无法关闭和背景块问题
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)

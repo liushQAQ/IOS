@@ -1618,6 +1618,23 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
             '  opacity: 1;',
             '  pointer-events: auto;',
             '}',
+            '/* 🔴 R98（v2.2.27）：左抽屉全屏遮罩（点击外部关闭）——与右栏 backdrop 同款视觉，',
+            '   z=1150 压在官方 drawerMask(z=1200) 之下=只盖页面不盖抽屉；默认隐藏不拦截。 */',
+            '.dsh-left-drawer-backdrop {',
+            '  position: fixed;',
+            '  inset: 0;',
+            '  background: rgba(0, 0, 0, 0.45);',
+            '  backdrop-filter: blur(4px);',
+            '  -webkit-backdrop-filter: blur(4px);',
+            '  z-index: 1150;',
+            '  opacity: 0;',
+            '  pointer-events: none;',
+            '  transition: opacity 0.2s ease;',
+            '}',
+            '.dsh-left-drawer-backdrop.active {',
+            '  opacity: 1;',
+            '  pointer-events: auto;',
+            '}',
             '/* v1.0.78：不再注入「返回对话」蓝按钮和右上角「✕」，旧版本残留的直接隐藏 */',
             '.dsh-mobile-back-to-chat-btn,',
             '.dsh-mobile-panel-close-btn,',
@@ -4271,6 +4288,32 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 document.querySelector('[class*="sidebarCol"] button[aria-label="收起目录"]')
               ]);
             }
+            // 🔴 R98（2026-11-22，v2.2.27）：左抽屉全屏遮罩 + 点击外部关闭 —— 官方壳的
+            //   mobile-nav backdrop（data-mobile-nav="backdrop"）常驻 pe:none 死态，抽屉开着
+            //   点屏幕中间关不掉（老总 2.2.26 真机报障；WebKit 430×932 仿真 3083 干净环境
+            //   实锤复现：vcssFG_drawerMask 仅盖抽屉列 232px，右侧页面无任何可点遮罩）。
+            //   右栏早有同款机制（R35 系 .dsh-mobile-sidebar-backdrop），左栏对称补齐：
+            //   仅显隐切换 + click→closeDir，零布局/零颜色写入，不违反 R97 终局。
+            //   开态判定复用 isDirOpen()，轮询兜底覆盖官方按钮/手势两种开抽屉路径。
+            (function setupLeftDrawerBackdrop() {
+              var lbBackdrop = document.createElement('div');
+              lbBackdrop.className = 'dsh-left-drawer-backdrop';
+              function lbAttach() {
+                if (!document.body) { setTimeout(lbAttach, 16); return; }
+                document.body.appendChild(lbBackdrop);
+              }
+              lbAttach();
+              lbBackdrop.addEventListener('click', function (eLb) {
+                eLb.preventDefault();
+                eLb.stopPropagation();
+                closeDir();
+              });
+              function lbSync() {
+                try { lbBackdrop.classList.toggle('active', isDirOpen()); } catch (eLs) {}
+              }
+              if (window.__dshPoll) { window.__dshPoll(lbSync, 400, false); }
+              else { setInterval(lbSync, 400); }
+            })();
             function isRightPanelOpen() {
               var p = document.querySelector('[data-sidebar-right-open="true"], .dMHGga_panel[data-sidebar-right-open]');
               return !!p;
