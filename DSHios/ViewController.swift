@@ -937,82 +937,22 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
           } catch (eP) {}
         })();
         """,
-        // ================= R89 非 DSH 页弹卡限高（2026-11-20，v2.2.16）=================
-        // 老总令（2026-11-20 真机）：「+ 号所有内容都弹出，还是超出屏幕范围。直接限制
-        // + 出来的卡片高度不行啊」—— 方向明确：弹卡限高 + 内部滚动，不再做任何搬迁类钳制。
-        // 窄口径设计（R88 反噬教训：只做一件事）：
-        //   仅非 DSH 页（__dshPageKind === 'other'，页面分流判定后）；仅 fixed/absolute、
-        //   卡片级（宽≥160 且 高>62%视口）的弹卡；动作只有一个——max-height=62%视口 +
-        //   overflow-y:auto（一次写稳，__dshHCap 标记防 churn）。宽度/位置/transform 零干预。
-        // 自带 400ms 定时器（非 DSH 页没有主拍服务）；DSH 页双重守卫零干预。
-        """
-        (function () {
-          if (window.top !== window) { return; }
-          if (window.__dshHCapBlk) { return; }
-          window.__dshHCapBlk = true;
-          function isDSHPage() {
-            try {
-              if (!document.getElementById('root')) { return false; }
-              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
-            } catch (e0) { return false; }
-          }
-          function capTallCards() {
-            if (window.__dshPageKind !== 'other') { return; }
-            if (isDSHPage()) { return; }
-            var vh = window.innerHeight || 932;
-            var sb = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 0;
-            if (!(sb > 0)) {
-              try { sb = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-sb-native')) || 0; } catch (eSb) {}
-            }
-            if (!(sb > 0)) { sb = 59; }
-            var maxH = Math.round(vh * 0.62);
-            var root = document.getElementById('root');
-            // 🔴 R94 v2：主壳豁免——含主内容（输入区/主列表）的框架绝不钳（R94 首版「底部真超屏」
-            //   条件把顶到屏底的弹卡全放过了=+ 弹卡满屏超出；改成主壳豁免后弹卡恢复限高、主框架不误伤）
-            var mainShell = document.querySelector('[class*="inset-0"][class*="min-h-0"]') || document.querySelector('[class*="h-dvh"]');
-            var all;
-            try { all = document.querySelectorAll('body *'); } catch (eQ) { return; }
-            for (var i = 0; i < all.length && i < 1600; i++) {
-              var el = all[i];
-              if (el.id === 'dsh-topmask') { continue; }
-              if (root && (el === root || el.contains(root))) { continue; }
-              if (mainShell && (el === mainShell || el.contains(mainShell))) { continue; }
-              if (el.__dshHCap === '1') { continue; }
-              var r = el.getBoundingClientRect();
-              if (r.width < 160 || r.height < 200) { continue; }
-              if (r.height <= maxH) { continue; }
-              var cs;
-              try { cs = getComputedStyle(el); } catch (eC) { continue; }
-              if (cs.position !== 'fixed' && cs.position !== 'absolute') { continue; }
-              if (cs.visibility === 'hidden' || cs.display === 'none') { continue; }
-              el.style.setProperty('max-height', Math.round(vh - r.top - 12) + 'px', 'important');
-              el.style.setProperty('overflow-y', 'auto', 'important');
-              el.__dshHCap = '1';
-            }
-          }
-          setInterval(function () { try { capTallCards(); } catch (eH) {} }, 400);
-        })();
-        """,
 
-        // ================= R92 非 DSH 页暗黑白底守卫（2026-11-21，v2.2.19）=================
-        // 🔴 老总真机（20:33 截图）：ZCode 的 + 弹卡在暗黑下白底白字（跨 2.2.12~14 一直在），
-        //   沙箱无法复现（会话视图连不稳）且拿不到该弹层 DOM —— 上症状靶向守卫：
-        //   非 DSH 页 + html.dark（页面自报暗黑）时，任何**白底**可见元素一律把底色压成
-        //   页面深色底（文字本就是浅色，底修好即可读）。纯颜色修复零布局搬迁（R88 教训），
-        //   一次写稳 __dshDarkFix 标记防 churn；浅色模式（无 html.dark）整块静默零干预。
-        //   亮度阈值 0.82（白/近白才动手）；DSH 页双重守卫零干预。
+        // ================= R92 非 DSH 页暗黑 CSS 变量层（2026-11-21，v2.2.26 精简版）=================
+        // 🔴 R96 回滚定版：非 DSH 页撤销全部 JS 布局/颜色干预（R89 限高/R92 暗黑守卫/
+        //   darkFixSubtree/观察者——滚动途中改写容器高度=会话内容突然上跳的真凶，
+        //   老总真机 2026-11-22 实锤；R86→R88→R94 三次同款模式：对不熟悉的页面做
+        //   全元素搬迁类干预必反噬）。非 DSH 页仅保留两层零布局风险的东西：
+        //   ① R85 遮罩带（元素1分支内）② 本块 CSS 变量预 paint（html.dark 作用域覆写
+        //   shadcn 语义变量，弹层第一帧即深色，纯 CSS 零时序风险）。样式随轮询自愈重建。
+        //   + 弹卡的高度/位置归 ZCode UI 自身（Safari 参照系里它本来就正常）。
         """
         (function () {
           if (window.top !== window) { return; }
-          if (window.__dshDarkGuard) { return; }
-          window.__dshDarkGuard = true;
-          // 🔴 R92 v3（v2.2.22）：CSS 预 paint 层 —— 在 html.dark 作用域覆写 ZCode UI 的
-          //   shadcn 语义变量（弹层走 --popover/--background 等），弹层第一帧的配色由 CSS
-          //   决定 = 从根上没有白色可画（JS 守卫降级为兜底）。radix 传送门/对话框/菜单/
-          //   列表框全作用域覆盖；浅色模式与 DSH 页零干预。样式元素随 500ms 轮询自愈重建。
+          if (window.__dshDarkVars) { return; }
+          window.__dshDarkVars = true;
           function ensureDarkVarsCss() {
             try {
-              if (window.__dshPageKind !== 'other') { return; }
               if (document.getElementById('dsh-dark-vars')) { return; }
               var host = document.head || document.documentElement;
               if (!host) { return; }
@@ -1033,8 +973,6 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
                 '  --foreground: #fafafa !important;',
                 '  --card: #18181b !important;',
                 '  --card-foreground: #fafafa !important;',
-                '  --primary: #fafafa !important;',
-                '  --primary-foreground: #18181b !important;',
                 '  --muted: #26262b !important;',
                 '  --muted-foreground: #a1a1aa !important;',
                 '  --accent: #26262b !important;',
@@ -1047,159 +985,8 @@ final class ViewController: UIViewController, UIImagePickerControllerDelegate, U
               host.appendChild(st);
             } catch (eV) {}
           }
-          function isDSHPage() {
-            try {
-              if (!document.getElementById('root')) { return false; }
-              return !!document.querySelector('[data-mobile-nav="frame"], [class*="composerStack"], [class*="headerCorner"]');
-            } catch (e0) { return false; }
-          }
-          function lum(bg) {
-            var m = bg.match(/rgba?\\(\\s*(\\d+)[,\\s]+(\\d+)[,\\s]+(\\d+)/);
-            if (!m) { return -1; }
-            return (0.2126 * (+m[1]) + 0.7152 * (+m[2]) + 0.0722 * (+m[3])) / 255;
-          }
-          function darkGuard() {
-            if (window.__dshPageKind !== 'other') { return; }
-            if (isDSHPage()) { return; }
-            if (!document.documentElement.classList.contains('dark')) { return; }
-            var surface = '';
-            try { surface = getComputedStyle(document.body).backgroundColor || ''; } catch (eB) {}
-            if (!surface || lum(surface) < 0 || lum(surface) > 0.4) { surface = 'rgb(24, 24, 27)'; }
-            var all;
-            try { all = document.querySelectorAll('body *'); } catch (eQ) { return; }
-            for (var i = 0; i < all.length && i < 1600; i++) {
-              var el = all[i];
-              if (el.id === 'dsh-topmask') { continue; }
-              if (el.__dshDarkFix === '1') { continue; }
-              var r = el.getBoundingClientRect();
-              if (r.width < 40 || r.height < 16) { continue; }
-              if (r.right < 0 || r.left > (window.innerWidth || 430) || r.bottom < 0 || r.top > (window.innerHeight || 932)) { continue; }
-              var cs;
-              try { cs = getComputedStyle(el); } catch (eC) { continue; }
-              if (cs.display === 'none' || cs.visibility === 'hidden') { continue; }
-              var L = lum(cs.backgroundColor);
-              if (L < 0.82) { continue; }
-              el.style.setProperty('background-color', surface, 'important');
-              el.__dshDarkFix = '1';
-            }
-          }
-          // 🔴 R92 v2（2026-11-21 深夜，老总「打开半秒左右是白色，然后再变成黑色」）：500ms
-          //   轮询让弹卡先白一帧再压暗 = 闪白。MutationObserver 回调在**绘制前**的微任务里
-          //   运行 —— 挂载瞬间就把白底压掉，第一帧即深色，零闪烁。观察者只盯「新增子树 +
-          //   属性变化目标」，流式输出的微小文本节点在尺寸预筛处即返，零额外成本；
-          //   500ms 轮询保留为兜底（覆盖类翻转等非挂载形态）。
-          try {
-            var darkMo = new MutationObserver(function (muts) {
-              try {
-                if (window.__dshPageKind !== 'other') { return; }
-                if (!document.documentElement.classList.contains('dark')) { return; }
-                for (var mi = 0; mi < muts.length; mi++) {
-                  var m0 = muts[mi];
-                  if (m0.type === 'childList' && m0.addedNodes && m0.addedNodes.length) {
-                    for (var aj = 0; aj < m0.addedNodes.length; aj++) {
-                      var an = m0.addedNodes[aj];
-                      if (an.nodeType === 1) { darkFixSubtree(an); }
-                    }
-                  } else if (m0.type === 'attributes' && m0.target && m0.target.nodeType === 1) {
-                    var at = m0.target;
-                    var ar = at.getBoundingClientRect();
-                    if (ar.width >= 120 && ar.height >= 80) { darkFixSubtree(at); }
-                  }
-                }
-              } catch (eMo) {}
-            });
-            window.__dshDarkMo = darkMo;
-            var darkArmTarget = null;
-            window.__dshDarkArm = function () {
-              try {
-                var t = document.documentElement;
-                if (!t || darkArmTarget === t) { return; }
-                darkMo.disconnect();
-                darkMo.observe(t, { childList: true, subtree: true, attributes: true });
-                darkArmTarget = t;
-              } catch (eDk) {}
-            };
-            window.__dshDarkArm();
-          } catch (eObs) {}
-          function darkFixSubtree(rootEl) {
-            try {
-              var vw = window.innerWidth || 430;
-              var vh = window.innerHeight || 932;
-              var sb = (typeof window.__dshNativeStatusBar === 'number' && window.__dshNativeStatusBar > 0) ? window.__dshNativeStatusBar : 59;
-              var maxH = Math.round(vh * 0.62);
-              var els = [rootEl];
-              try { if (rootEl.querySelectorAll) { var ds = rootEl.querySelectorAll('*'); for (var di = 0; di < ds.length && di < 120; di++) { els.push(ds[di]); } } } catch (eDq) {}
-              for (var ei = 0; ei < els.length && ei < 160; ei++) {
-                var el = els[ei];
-                if (el.id === 'dsh-topmask') { continue; }
-                if (el.__dshDarkFix === '1' && el.__dshHCap === '1') { continue; }
-                var r = el.getBoundingClientRect();
-                if (r.width < 40 || r.height < 16) { continue; }
-                if (r.right < 0 || r.left > vw || r.bottom < 0 || r.top > vh) { continue; }
-                var cs;
-                try { cs = getComputedStyle(el); } catch (eCe) { continue; }
-                if (cs.display === 'none' || cs.visibility === 'hidden') { continue; }
-                // 🔴 暗黑修复与限高独立判定（互不跳过）
-                if (el.__dshDarkFix !== '1') {
-                  var mL = (function (bg) { var m = bg.match(/rgba?[ ]?\\(?[ ]*(\\d+)[, ]+(\\d+)[, ]+(\\d+)/); if (!m) { return -1; } return (0.2126 * (+m[1]) + 0.7152 * (+m[2]) + 0.0722 * (+m[3])) / 255; })(cs.backgroundColor);
-                  // 白底 → 压成页面深色底
-                  if (mL > 0.82) {
-                    var surface = '';
-                    try { surface = getComputedStyle(document.body).backgroundColor || ''; } catch (eB2) {}
-                    if (!surface || lum(surface) < 0 || lum(surface) > 0.4) { surface = 'rgb(24, 24, 27)'; }
-                    el.style.setProperty('background-color', surface, 'important');
-                    el.__dshDarkFix = '1';
-                  }
-                }
-                // 超高弹卡 → 限高内滚（🔴 R94 v2 同款：主壳豁免 + 高度>62% 恢复）
-                if (el.__dshHCap !== '1' && (cs.position === 'fixed' || cs.position === 'absolute')) {
-                  var mainShell2 = document.querySelector('[class*="inset-0"][class*="min-h-0"]') || document.querySelector('[class*="h-dvh"]');
-                  if (mainShell2 && (el === mainShell2 || el.contains(mainShell2))) { continue; }
-                  if (r.height > maxH && r.width >= 160) {
-                    el.style.setProperty('max-height', maxH + 'px', 'important');
-                    el.style.setProperty('overflow-y', 'auto', 'important');
-                    el.__dshHCap = '1';
-                  }
-                }
-                // 🔴 宽超屏 → max-width 收进（tf/非tf 通用；居中类靠 translate 自动回位）
-                if (el.__dshWC !== '1' && (cs.position === 'fixed' || cs.position === 'absolute') && r.width > vw + 2) {
-                  el.style.setProperty('max-width', (vw - 20) + 'px', 'important');
-                  el.style.setProperty('box-sizing', 'border-box', 'important');
-                  el.__dshWC = '1';
-                  r = el.getBoundingClientRect();
-                }
-                // 🔴 横向残余出屏 → left calc 补偿（transform 元素 calc 与 transform 正确叠加；
-                //   非 transform 用显式 left/right；一次写稳防 churn；只收不出）
-                if (el.__dshTfFix !== '1' && (cs.position === 'fixed' || cs.position === 'absolute')) {
-                  var hasTf = cs.transform && cs.transform !== 'none';
-                  var safeR = vw - 10;
-                  var safeL = 10;
-                  var pull = 0;
-                  if (r.right > safeR + 2) { pull = -(r.right - safeR); }
-                  else if (r.left < safeL - 2) { pull = safeL - r.left; }
-                  if (pull !== 0 && r.width <= vw - 16) {
-                    if (hasTf) {
-                      if (cs.left !== 'auto') {
-                        el.style.setProperty('left', 'calc(' + cs.left + ' + ' + Math.round(pull) + 'px)', 'important');
-                        el.__dshTfFix = '1';
-                      }
-                    } else if (cs.left !== 'auto') {
-                      el.style.setProperty('left', Math.round(r.left + pull) + 'px', 'important');
-                      el.__dshTfFix = '1';
-                    } else if (cs.right !== 'auto') {
-                      el.style.setProperty('right', '10px', 'important');
-                      el.__dshTfFix = '1';
-                    }
-                  }
-                }
-              }
-            } catch (eFs) {}
-          }
-          setInterval(function () {
-            try { window.__dshDarkArm(); } catch (eA2) {}
-            try { ensureDarkVarsCss(); } catch (eV2) {}
-            try { darkGuard(); } catch (eG) {}
-          }, 500);
+          ensureDarkVarsCss();
+          setInterval(function () { try { ensureDarkVarsCss(); } catch (eV2) {} }, 1500);
         })();
         """,
         // ================= R91 换版缓存混载自动自愈（2026-11-21，v2.2.18）=================

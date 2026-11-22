@@ -163,7 +163,7 @@ final class AboutViewController: UIViewController {
 
         let points = """
         【本版要点】
-        1. 修复了弹卡限高失效页面被压半截的问题
+        1. 修复了zcode页面滚动时内容突然上跳的问题
         """
         textView.text = points
         textView.font = .preferredFont(forTextStyle: .subheadline)
